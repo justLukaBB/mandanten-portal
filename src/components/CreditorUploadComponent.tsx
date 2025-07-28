@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { CloudArrowUpIcon, DocumentIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { API_BASE_URL } from '../config/api';
 
 interface Client {
   id?: string;
@@ -99,7 +100,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         );
       });
 
-      xhr.open('POST', `http://localhost:3001/api/clients/${client?.id || '12345'}/documents`);
+      xhr.open('POST', `${API_BASE_URL}/clients/${client?.id || '12345'}/documents`);
       xhr.send(formData);
 
     } catch (error) {
