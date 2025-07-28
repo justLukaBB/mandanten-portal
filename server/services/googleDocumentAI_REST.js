@@ -6,19 +6,36 @@ const ClaudeAI = require('./claudeAI');
 class GoogleDocumentAI_REST {
   constructor() {
     try {
-      // Initialize Google Auth for getting access tokens
-      const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
-      console.log('Setting up REST API with credentials:', credentialsPath);
-      
-      // Verify credentials file exists
-      if (!fs.existsSync(credentialsPath)) {
-        throw new Error(`Service account key file not found: ${credentialsPath}`);
+      let authConfig = {
+        scopes: ['https://www.googleapis.com/auth/cloud-platform']
+      };
+
+      // Check if we have service account credentials as environment variable (for Render)
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        try {
+          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+          authConfig.credentials = credentials;
+          console.log('Setting up REST API with environment credentials');
+        } catch (error) {
+          console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', error);
+          throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY format');
+        }
+      } 
+      // Fallback to file-based credentials (for local development)
+      else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        console.log('Setting up REST API with credentials file:', credentialsPath);
+        
+        if (!fs.existsSync(credentialsPath)) {
+          throw new Error(`Service account key file not found: ${credentialsPath}`);
+        }
+        
+        authConfig.keyFile = credentialsPath;
+      } else {
+        throw new Error('No Google Cloud credentials provided. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS');
       }
       
-      this.auth = new GoogleAuth({
-        keyFile: credentialsPath,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
+      this.auth = new GoogleAuth(authConfig);
       
       this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
       this.location = process.env.GOOGLE_CLOUD_LOCATION;
