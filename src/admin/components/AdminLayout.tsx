@@ -20,16 +20,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 
   const navigation = [
     { 
-      name: 'Hybrid Dashboard', 
-      key: 'hybrid-dashboard' as const, 
-      icon: ChartBarIcon,
-      description: 'Moderne strukturierte Übersicht'
-    },
-    { 
-      name: 'Legacy Dashboard', 
+      name: 'Dashboard', 
       key: 'dashboard' as const, 
       icon: ChartBarIcon,
-      description: 'Klassische Übersicht und Statistiken'
+      description: 'Übersicht und Statistiken'
     },
     { 
       name: 'Mandanten', 
