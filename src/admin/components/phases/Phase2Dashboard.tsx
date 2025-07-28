@@ -77,7 +77,7 @@ const Phase2Dashboard: React.FC<Phase2DashboardProps> = ({ clientId }) => {
           });
         }
       } catch (debtError) {
-        console.log('Debt data not yet available:', debtError);
+        // Debt data not yet available - this is expected for clients not yet in phase 2
       }
 
       // Check for existing financial data

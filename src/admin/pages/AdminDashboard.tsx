@@ -48,10 +48,6 @@ const AdminDashboard: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Debug loading state changes
-  useEffect(() => {
-    console.log('🔄 AdminDashboard loading state changed to:', loading);
-  }, [loading]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -61,12 +57,9 @@ const AdminDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      console.log('🔄 Fetching dashboard data...');
       // Fetch all clients from MongoDB
       const response = await api.get('/admin/clients');
-      console.log('📊 API Response:', response.data);
       const clientsData = response.data.clients || [];
-      console.log('👥 Clients found:', clientsData.length);
       setClients(clientsData);
       
       // Calculate stats from all clients
@@ -105,15 +98,10 @@ const AdminDashboard: React.FC = () => {
         recentActivity: allRecentActivity.slice(0, 10)
       };
       
-      console.log('📈 Dashboard stats:', dashboardStats);
       setStats(dashboardStats);
-      
-      console.log('✅ About to set loading to false...');
       setLoading(false);
-      console.log('✅ setLoading(false) called');
     } catch (error) {
-      console.error('❌ Error fetching dashboard data:', error);
-      console.log('🛑 Setting loading to false due to error');
+      console.error('Error fetching dashboard data:', error);
       setLoading(false);
     }
   };
@@ -135,10 +123,7 @@ const AdminDashboard: React.FC = () => {
     return new Date(timestamp).toLocaleString('de-DE');
   };
 
-  console.log('🔍 AdminDashboard render - loading:', loading, 'clients:', clients.length);
-
   if (loading) {
-    console.log('🔄 Rendering loading spinner - loading is true');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -149,7 +134,6 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
-  console.log('✅ Rendering dashboard content - loading is false');
 
   return (
     <div className="min-h-screen bg-gray-50">

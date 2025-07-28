@@ -90,7 +90,7 @@ const HybridDashboard: React.FC = () => {
         const debtResponse = await api.get(`/clients/${selectedClient}/total-debt`);
         clientStatus.totalDebt = debtResponse.data.totalDebt;
       } catch (error) {
-        console.log('No debt data available yet');
+        // Debt data not yet available - this is expected for new clients
       }
 
       setClients([clientStatus]);

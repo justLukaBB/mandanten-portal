@@ -120,7 +120,6 @@ export const PersonalPortal = ({
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
-    console.log('Documents uploaded:', newDocuments);
     // Add new documents to existing documents list
     setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
   };

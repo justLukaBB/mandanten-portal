@@ -121,10 +121,18 @@ clientSchema.pre('save', function(next) {
   next();
 });
 
-// Index for faster queries
+// Indexes for faster queries
 clientSchema.index({ email: 1 });
 clientSchema.index({ aktenzeichen: 1 });
 clientSchema.index({ workflow_status: 1 });
 clientSchema.index({ session_token: 1 });
+clientSchema.index({ created_at: -1 }); // For recent clients
+clientSchema.index({ updated_at: -1 }); // For recently updated
+clientSchema.index({ 'documents.processing_status': 1 }); // For document filtering
+clientSchema.index({ zendesk_ticket_id: 1 }); // For Zendesk integration
+
+// Compound indexes for common queries
+clientSchema.index({ workflow_status: 1, created_at: -1 }); // Admin dashboard
+clientSchema.index({ email: 1, aktenzeichen: 1 }); // Login verification
 
 module.exports = mongoose.model('Client', clientSchema);

@@ -49,28 +49,35 @@ const mockClient = {
   ]
 };
 
+// Conditional logging function
+const log = (message: string, ...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(message, ...args);
+  }
+};
+
 // API Base URL - automatically detects environment
 const getApiBaseUrl = () => {
   // Force production URL if on Render
   if (window.location.hostname.includes('onrender.com')) {
-    console.log('🌐 Using production API URL');
+    log('🌐 Using production API URL');
     return 'https://mandanten-portal-backend.onrender.com/api';
   }
   
   // If explicitly set in environment
   if (process.env.REACT_APP_API_URL) {
-    console.log('🌐 Using environment API URL:', process.env.REACT_APP_API_URL);
+    log('🌐 Using environment API URL:', process.env.REACT_APP_API_URL);
     return process.env.REACT_APP_API_URL;
   }
   
   // Production detection
   if (process.env.NODE_ENV === 'production') {
-    console.log('🌐 Using production mode API URL');
+    log('🌐 Using production mode API URL');
     return 'https://mandanten-portal-backend.onrender.com/api';
   }
   
   // Development default
-  console.log('🌐 Using development API URL');
+  log('🌐 Using development API URL');
   return 'http://localhost:3001/api';
 };
 

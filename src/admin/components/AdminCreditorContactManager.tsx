@@ -95,13 +95,9 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       setProcessing(true);
       setError(null);
       
-      console.log(`Starting creditor contact process for client ${clientId}`);
-      
       const response = await api.post(`/clients/${clientId}/start-creditor-contact`);
       
       if (response.data.success) {
-        console.log('✅ Creditor contact process started successfully');
-        console.log(`📊 Results:`, response.data);
         
         // Refresh status
         await fetchCreditorContactStatus();
@@ -147,13 +143,9 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       setProcessing(true);
       setError(null);
       
-      console.log(`Re-sending creditor emails for client ${clientId}`);
-      
       const response = await api.post(`/clients/${clientId}/resend-creditor-emails`);
       
       if (response.data.success) {
-        console.log('✅ Creditor emails re-sent successfully');
-        console.log(`📊 Results:`, response.data);
         
         // Refresh status
         await fetchCreditorContactStatus();

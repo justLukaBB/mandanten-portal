@@ -6,6 +6,12 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
+// Import configuration and middleware
+const config = require('./config');
+const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
+const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
+const healthRoutes = require('./routes/health');
+
 // MongoDB
 const databaseService = require('./services/database');
 const Client = require('./models/Client');
@@ -17,7 +23,7 @@ const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalcula
 const TestDataService = require('./services/testDataService');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = config.PORT;
 
 // Initialize services
 const documentProcessor = new DocumentProcessor();
@@ -26,16 +32,22 @@ const debtAmountExtractor = new DebtAmountExtractor();
 const garnishmentCalculator = new GermanGarnishmentCalculator();
 const testDataService = new TestDataService();
 
-// Middleware
+// Security middleware
+app.use(securityHeaders);
+app.use(rateLimits.general);
+
+// CORS middleware
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://mandanten-portal.onrender.com',
-    'https://mandanten-portal-frontend.onrender.com'
-  ],
+  origin: config.CORS_ORIGINS,
   credentials: true
 }));
-app.use(express.json());
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health check routes (no auth required)
+app.use('/', healthRoutes);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -78,7 +90,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: config.MAX_FILE_SIZE
   },
   fileFilter: fileFilter
 });
@@ -191,7 +203,11 @@ app.get('/api/clients/:clientId', async (req, res) => {
 });
 
 // Upload creditor documents with AI processing
-app.post('/api/clients/:clientId/documents', upload.array('documents', 10), async (req, res) => {
+app.post('/api/clients/:clientId/documents', 
+  rateLimits.upload,
+  upload.array('documents', 10), 
+  validateFileUpload,
+  async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
@@ -986,7 +1002,10 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
 });
 
 // Admin: Get all clients for dashboard
-app.get('/api/admin/clients', async (req, res) => {
+app.get('/api/admin/clients', 
+  rateLimits.admin,
+  // authenticateAdmin, // Commented out for now - add proper admin auth later
+  async (req, res) => {
   try {
     let clients = [];
     
@@ -1554,7 +1573,13 @@ app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
 });
 
 // Portal login endpoint
-app.post('/api/portal/login', async (req, res) => {
+app.post('/api/portal/login', 
+  rateLimits.auth, 
+  validateRequest([
+    validationRules.email,
+    validationRules.aktenzeichen
+  ]), 
+  async (req, res) => {
   try {
     const { email, aktenzeichen } = req.body;
     
@@ -1602,8 +1627,9 @@ app.post('/api/portal/login', async (req, res) => {
       });
     }
     
-    // Generate session token
-    const sessionToken = uuidv4();
+    // Generate JWT token instead of simple session token
+    const jwtToken = generateClientToken(foundClient.id, foundClient.email);
+    const sessionToken = uuidv4(); // Keep for backward compatibility
     
     // Update client with session token
     foundClient.session_token = sessionToken;
@@ -1627,7 +1653,8 @@ app.post('/api/portal/login', async (req, res) => {
         workflow_status: foundClient.workflow_status,
         documents_count: foundClient.documents?.length || 0
       },
-      session_token: sessionToken
+      session_token: sessionToken, // Backward compatibility
+      token: jwtToken // New JWT token
     });
     
   } catch (error) {
