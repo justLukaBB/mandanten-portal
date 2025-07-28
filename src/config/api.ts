@@ -59,7 +59,7 @@ const getApiBaseUrl = () => {
   // Production detection
   if (process.env.NODE_ENV === 'production') {
     // Replace with your Render backend URL
-    return 'https://mandanten-portal-backend-x16l.onrender.com/api';
+    return 'https://mandanten-portal-backend.onrender.com/api';
   }
   
   // Development default
