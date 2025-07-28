@@ -10,6 +10,10 @@ const createRateLimit = (windowMs, max, message) => {
     message: { error: message },
     standardHeaders: true,
     legacyHeaders: false,
+    // Skip rate limiting in development
+    skip: (req) => process.env.NODE_ENV === 'development',
+    // Handle proxy headers properly
+    keyGenerator: (req) => req.ip,
   });
 };
 

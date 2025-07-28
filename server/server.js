@@ -25,6 +25,9 @@ const TestDataService = require('./services/testDataService');
 const app = express();
 const PORT = config.PORT;
 
+// Trust proxy for Render deployment
+app.set('trust proxy', true);
+
 // Initialize services
 const documentProcessor = new DocumentProcessor();
 const creditorContactService = new CreditorContactService();
