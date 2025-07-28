@@ -13,11 +13,15 @@ class GoogleDocumentAI_REST {
       // Check if we have service account credentials as environment variable (for Render)
       if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
         try {
+          console.log('GOOGLE_SERVICE_ACCOUNT_KEY length:', process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.length);
+          console.log('GOOGLE_SERVICE_ACCOUNT_KEY preview:', process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.substring(0, 50) + '...');
+          
           const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
           authConfig.credentials = credentials;
           console.log('Setting up REST API with environment credentials');
         } catch (error) {
           console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', error);
+          console.error('Raw value:', process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
           throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY format');
         }
       } 
