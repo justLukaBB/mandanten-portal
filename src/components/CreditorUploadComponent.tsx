@@ -4,6 +4,8 @@ import { API_BASE_URL } from '../config/api';
 
 interface Client {
   id?: string;
+  aktenzeichen?: string;
+  _id?: string;
 }
 
 interface CreditorUploadComponentProps {
@@ -45,6 +47,12 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
   const uploadFile = async (uploadedFile: UploadedFile) => {
     const formData = new FormData();
     formData.append('documents', uploadedFile.file);
+
+    // Debug: Log client information
+    console.log('Upload: Client Object:', client);
+    console.log('Upload: Client ID:', client?.id);
+    console.log('Upload: Client Aktenzeichen:', client?.aktenzeichen);
+    console.log('Upload: Client _id:', client?._id);
 
     try {
       const xhr = new XMLHttpRequest();
@@ -100,11 +108,24 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         );
       });
 
-      xhr.open('POST', `${API_BASE_URL}/clients/${client?.id || '12345'}/documents`);
+      // Use client ID, aktenzeichen, or _id as fallback
+      const clientIdentifier = client?.id || client?.aktenzeichen || client?._id;
+      
+      if (!clientIdentifier) {
+        throw new Error('Keine gültige Client-ID verfügbar. Bitte melden Sie sich erneut an.');
+      }
+      
+      xhr.open('POST', `${API_BASE_URL}/clients/${clientIdentifier}/documents`);
       xhr.send(formData);
 
     } catch (error) {
       console.error('Upload error:', error);
+      
+      // Show specific error message to user
+      if (error instanceof Error && error.message.includes('Client-ID')) {
+        alert('Fehler: ' + error.message);
+      }
+      
       setUploadedFiles(prev => 
         prev.map(f => 
           f.id === uploadedFile.id 

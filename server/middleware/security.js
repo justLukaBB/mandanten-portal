@@ -15,17 +15,17 @@ const createRateLimit = (windowMs, max, message) => {
 
 // Different rate limits for different endpoints
 const rateLimits = {
-  // General API rate limit
-  general: createRateLimit(15 * 60 * 1000, 100, 'Too many requests, please try again later'),
+  // General API rate limit - increased for dashboard usage
+  general: createRateLimit(15 * 60 * 1000, 500, 'Too many requests, please try again later'),
   
   // Authentication endpoints - more restrictive
-  auth: createRateLimit(15 * 60 * 1000, 5, 'Too many login attempts, please try again in 15 minutes'),
+  auth: createRateLimit(15 * 60 * 1000, 10, 'Too many login attempts, please try again in 15 minutes'),
   
-  // Upload endpoints - very restrictive
-  upload: createRateLimit(60 * 60 * 1000, 10, 'Too many uploads, please try again in 1 hour'),
+  // Upload endpoints - reasonable limit
+  upload: createRateLimit(60 * 60 * 1000, 20, 'Too many uploads, please try again in 1 hour'),
   
-  // Admin endpoints
-  admin: createRateLimit(15 * 60 * 1000, 50, 'Too many admin requests, please try again later')
+  // Admin endpoints - high limit for dashboard
+  admin: createRateLimit(15 * 60 * 1000, 200, 'Too many admin requests, please try again later')
 };
 
 // Security headers middleware
