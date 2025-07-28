@@ -56,9 +56,12 @@ const AdminDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('🔄 Fetching dashboard data...');
       // Fetch all clients from MongoDB
       const response = await api.get('/admin/clients');
+      console.log('📊 API Response:', response.data);
       const clientsData = response.data.clients || [];
+      console.log('👥 Clients found:', clientsData.length);
       setClients(clientsData);
       
       // Calculate stats from all clients
@@ -88,18 +91,23 @@ const AdminDashboard: React.FC = () => {
       // Sort by upload time and take last 10
       allRecentActivity.sort((a, b) => new Date(b.uploadedAt || b.created_at).getTime() - new Date(a.uploadedAt || a.created_at).getTime());
       
-      setStats({
+      const dashboardStats = {
         totalClients: clientsData.length,
         totalDocuments,
         processingDocuments,
         completedDocuments,
         failedDocuments,
         recentActivity: allRecentActivity.slice(0, 10)
-      });
+      };
       
+      console.log('📈 Dashboard stats:', dashboardStats);
+      setStats(dashboardStats);
+      
+      console.log('✅ Setting loading to false');
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('❌ Error fetching dashboard data:', error);
+      console.log('🛑 Setting loading to false due to error');
       setLoading(false);
     }
   };
@@ -121,13 +129,21 @@ const AdminDashboard: React.FC = () => {
     return new Date(timestamp).toLocaleString('de-DE');
   };
 
+  console.log('🔍 Dashboard render - loading:', loading, 'clients:', clients.length);
+
   if (loading) {
+    console.log('🔄 Rendering loading spinner...');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Wird klassifiziert...</p>
+        </div>
       </div>
     );
   }
+
+  console.log('✅ Rendering dashboard content...');
 
   return (
     <div className="min-h-screen bg-gray-50">
