@@ -47,6 +47,11 @@ const AdminDashboard: React.FC = () => {
   });
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Debug loading state changes
+  useEffect(() => {
+    console.log('🔄 AdminDashboard loading state changed to:', loading);
+  }, [loading]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -103,8 +108,9 @@ const AdminDashboard: React.FC = () => {
       console.log('📈 Dashboard stats:', dashboardStats);
       setStats(dashboardStats);
       
-      console.log('✅ Setting loading to false');
+      console.log('✅ About to set loading to false...');
       setLoading(false);
+      console.log('✅ setLoading(false) called');
     } catch (error) {
       console.error('❌ Error fetching dashboard data:', error);
       console.log('🛑 Setting loading to false due to error');
@@ -129,16 +135,21 @@ const AdminDashboard: React.FC = () => {
     return new Date(timestamp).toLocaleString('de-DE');
   };
 
+  console.log('🔍 AdminDashboard render - loading:', loading, 'clients:', clients.length);
+
   if (loading) {
+    console.log('🔄 Rendering loading spinner - loading is true');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Dashboard wird geladen...</p>
+          <p className="text-gray-600">Wird klassifiziert...</p>
         </div>
       </div>
     );
   }
+
+  console.log('✅ Rendering dashboard content - loading is false');
 
   return (
     <div className="min-h-screen bg-gray-50">
