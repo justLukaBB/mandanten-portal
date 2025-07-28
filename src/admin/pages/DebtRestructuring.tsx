@@ -59,7 +59,7 @@ interface CreditorQuota {
 }
 
 const DebtRestructuring: React.FC = () => {
-  const [clientId] = useState('12345'); // Demo client
+  const [clientId] = useState('MAND_TEST_001'); // TODO: Get from context/props
   const [financialData, setFinancialData] = useState<ClientFinancialData>({
     netIncome: '',
     maritalStatus: 'ledig',

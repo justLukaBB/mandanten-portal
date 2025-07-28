@@ -46,7 +46,7 @@ interface AdminWorkflowManagerProps {
   clientId?: string;
 }
 
-const AdminWorkflowManager: React.FC<AdminWorkflowManagerProps> = ({ clientId = '12345' }) => {
+const AdminWorkflowManager: React.FC<AdminWorkflowManagerProps> = ({ clientId }) => {
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [creditorList, setCreditorList] = useState<Creditor[]>([]);
   const [loading, setLoading] = useState(true);

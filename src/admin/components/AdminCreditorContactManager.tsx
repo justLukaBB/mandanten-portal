@@ -61,7 +61,7 @@ interface AdminCreditorContactManagerProps {
 }
 
 const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = ({ 
-  clientId = '12345' 
+  clientId 
 }) => {
   const [creditorStatus, setCreditorStatus] = useState<ClientCreditorStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +77,12 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   }, [clientId]);
 
   const fetchCreditorContactStatus = async () => {
+    if (!clientId) {
+      setError('Keine Client-ID verfügbar');
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
       const response = await api.get(`/clients/${clientId}/creditor-contact-status`);

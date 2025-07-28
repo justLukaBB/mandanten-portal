@@ -63,7 +63,7 @@ interface AdminDocumentViewerProps {
 }
 
 const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({ 
-  clientId = '12345' 
+  clientId 
 }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);

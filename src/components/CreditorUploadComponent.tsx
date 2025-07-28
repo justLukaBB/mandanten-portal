@@ -53,6 +53,11 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
     console.log('Upload: Client ID:', client?.id);
     console.log('Upload: Client Aktenzeichen:', client?.aktenzeichen);
     console.log('Upload: Client _id:', client?._id);
+    
+    // Show debug info to user temporarily
+    if (!client?.id && !client?.aktenzeichen && !client?._id) {
+      alert('Debug: Kein Client-Objekt verfügbar! Client: ' + JSON.stringify(client));
+    }
 
     try {
       const xhr = new XMLHttpRequest();
