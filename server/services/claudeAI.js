@@ -162,17 +162,39 @@ WICHTIG:
       // Parse JSON response
       let result;
       try {
-        // Extract JSON from response
+        // Extract JSON from response and clean it
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          result = JSON.parse(jsonMatch[0]);
-        } else {
-          result = JSON.parse(responseText);
-        }
+        let jsonText = jsonMatch ? jsonMatch[0] : responseText;
+        
+        // Clean the JSON text from control characters and fix formatting
+        jsonText = jsonText
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+          .replace(/\n\s*/g, ' ') // Replace newlines with spaces
+          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+          .trim();
+        
+        console.log('Cleaned JSON length:', jsonText.length);
+        console.log('First 200 chars:', jsonText.substring(0, 200));
+        
+        result = JSON.parse(jsonText);
+        console.log('✅ Successfully parsed cleaned JSON');
       } catch (parseError) {
         console.error('Failed to parse Claude response as JSON:', parseError);
-        console.error('Raw response:', responseText);
-        throw new Error(`Claude response parsing failed: ${parseError.message}`);
+        console.error('Raw response length:', responseText.length);
+        console.error('Raw response preview:', responseText.substring(0, 600));
+        
+        // Create fallback result
+        result = {
+          is_creditor_document: false,
+          confidence: 0.0,
+          reasoning: `JSON parsing failed: ${parseError.message}. Raw response available for manual review.`,
+          workflow_status: 'PARSING_ERROR',
+          status_reason: 'Claude AI response could not be parsed - manual review required',
+          manual_review_required: true,
+          error: parseError.message,
+          raw_response: responseText.substring(0, 1000)
+        };
+        console.log('📝 Created fallback result due to parsing error');
       }
       
       // Add processing metadata
