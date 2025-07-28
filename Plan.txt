@@ -1,0 +1,1332 @@
+## Vollständige Anleitung für automatisierte Privatinsolvenz-Verwaltung
+
+---
+
+## 📋 Inhaltsverzeichnis
+
+1. [Systemübersicht](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#system%C3%BCbersicht)
+2. [Zendesk Konfiguration](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#zendesk-konfiguration)
+3. [Phase 1: Mandanten-Onboarding](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#phase-1-mandanten-onboarding)
+4. [Phase 2: Dokumentenverarbeitung](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#phase-2-dokumentenverarbeitung)
+5. [Phase 3: Gläubiger-Prozess](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#phase-3-gl%C3%A4ubiger-prozess)
+6. [Phase 4: Gläubiger-Anschreibung](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#phase-4-gl%C3%A4ubiger-anschreibung)
+7. [Phase 5: Schuldenregulierung](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#phase-5-schuldenregulierung)
+8. [Agent-Workflows](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#agent-workflows)
+9. [Troubleshooting](https://claude.ai/chat/d585c79b-3f49-4fe3-9c08-6a7e24a46ba9#troubleshooting)
+
+---
+
+## 🎯 Systemübersicht
+
+### Automatisierungsflow im Überblick
+
+```
+Agent erstellt Mandant → Portal-Link → Mandant lädt Dokumente hoch →
+AI-Verarbeitung → Manuelle Prüfung (falls nötig) → Mandanten-Bestätigung →
+Automatische Gläubiger-Anschreibung → Antworten verarbeiten → Schuldenregulierungsplan
+
+```
+
+**[BILD EINFÜGEN: Systemarchitektur-Diagramm]***Zeigt: Zendesk als zentrale Hub, Portal, AI-Pipeline, E-Mail-Automation*
+
+### Ticket-Struktur pro Mandant
+
+**4 Haupttickets werden automatisch erstellt:**
+
+1. **Portal-Zugang** → Einmaliger Login-Link
+2. **Gläubiger-Prozess** → Dokumentenprüfung + Bestätigung
+3. **Gläubiger-Anschreibung** → Side Conversations für alle Gläubiger
+4. **Schuldenregulierung** → Finale Pläne und Dokumente
+
+---
+
+## ⚙️ Zendesk Konfiguration
+
+### Custom Fields Setup
+
+**Erforderliche Custom Fields erstellen:**
+
+```
+1. Aktenzeichen (Text Field)
+   - Field Key: aktenzeichen
+   - Für alle Ticket-Typen sichtbar
+
+2. Mandant Status (Dropdown)
+   - Field Key: mandant_status
+   - Optionen:
+     • "Neuer Mandant"
+     • "Dokumente fehlen"
+     • "Manuelle Prüfung"
+     • "Warte auf Bestätigung"
+     • "Gläubiger aktiv"
+     • "Bereit für Plan"
+     • "Abgeschlossen"
+
+3. Gläubiger Anzahl (Number Field)
+   - Field Key: creditor_count
+   - Automatisch befüllt durch API
+
+4. Gesamtschuld (Number Field)
+   - Field Key: total_debt
+   - In EUR, automatisch berechnet
+
+```
+
+**[BILD EINFÜGEN: Zendesk Custom Fields Konfiguration]***Zeigt: Admin-Panel mit den erstellten Custom Fields*
+
+### Tags Configuration
+
+**Automatische Tags für Filterung:**
+
+```
+Prozess-Phasen:
+• phase-onboarding
+• phase-documents
+• phase-confirmation
+• phase-creditor-contact
+• phase-debt-plan
+
+Status-Tags:
+• status-manual-review
+• status-timeout
+• status-completed
+• status-waiting
+
+Prioritäts-Tags:
+• priority-high (für manuelle Prüfung)
+• priority-normal
+
+```
+
+### Zendesk Views Setup
+
+**Für Agents erstellen:**
+
+**View 1: "🔴 Manuelle Prüfung erforderlich"**
+
+```
+Filter:
+- Tag enthält: status-manual-review
+- Status: Open, Pending
+Sortierung: Erstellungsdatum (aufsteigend)
+
+```
+
+**View 2: "⏳ Warte auf Mandanten-Bestätigung"**
+
+```
+Filter:
+- Mandant Status = "Warte auf Bestätigung"
+- Status: Pending
+Sortierung: Letzte Aktualisierung
+
+```
+
+**View 3: "📧 Gläubiger-Anfragen aktiv"**
+
+```
+Filter:
+- Mandant Status = "Gläubiger aktiv"
+- Status: Open
+Sortierung: Erstellungsdatum
+
+```
+
+**View 4: "✅ Bereit für Schuldenregulierung"**
+
+```
+Filter:
+- Mandant Status = "Bereit für Plan"
+- Status: Open
+Sortierung: Gläubiger Anzahl (absteigend)
+
+```
+
+**[BILD EINFÜGEN: Zendesk Views Übersicht]***Zeigt: Die konfigurierten Views in der Agent-Oberfläche*
+
+---
+
+## 👤 Phase 1: Mandanten-Onboarding
+
+### Schritt 1: Neuen Mandanten in Zendesk anlegen
+
+**Agent-Workflow:**
+
+1. **User erstellen:**
+    - Zendesk → Users → "Add User"
+    - **Name:** Max Mustermann
+    - **Email:** max.mustermann@email.de
+    - **Role:** End-user
+    - **External ID:** MAND_2024_001 (= Aktenzeichen)
+
+**[BILD EINFÜGEN: User-Erstellung in Zendesk]***Zeigt: User-Formular mit ausgefüllten Beispieldaten*
+
+1. **Erstes Ticket erstellen:**
+    - **Subject:** "Portal-Zugang: Max Mustermann (MAND_2024_001)"
+    - **Requester:** Max Mustermann (gerade erstellter User)
+    - **Type:** Question
+    - **Priority:** Normal
+    - **Custom Fields setzen:**
+        - Aktenzeichen: MAND_2024_001
+        - Mandant Status: "Neuer Mandant"
+    - **Tags hinzufügen:** `phase-onboarding`
+
+**[BILD EINFÜGEN: Ticket-Erstellung Formular]***Zeigt: Ticket-Formular mit Custom Fields und Tags*
+
+### Schritt 2: Portal-Link Macro anwenden
+
+**Macro: "Portal-Link senden"**
+
+```
+Betreff: Portal-Zugang für Ihr Privatinsolvenzverfahren
+
+Sehr geehrte/r {{ticket.requester.name}},
+
+willkommen bei unserem Insolvenzservice. Für Ihr Verfahren wurden folgende Zugangsdaten erstellt:
+
+🔗 Portal-Link: https://portal.kanzlei.de/login
+📧 Login-E-Mail: {{ticket.requester.email}}
+📁 Ihr Aktenzeichen: {{ticket.custom_field_aktenzeichen}}
+
+📋 NÄCHSTE SCHRITTE:
+1. Klicken Sie auf den Portal-Link
+2. Loggen Sie sich mit Ihrer E-Mail-Adresse ein
+3. Laden Sie alle Ihre Gläubigerdokumente hoch:
+   • Mahnungen
+   • Inkassobriefe
+   • Rechnungen
+   • Anwaltschreiben
+
+⚠️ WICHTIG: Bitte laden Sie ALLE Dokumente hoch, in denen Geld von Ihnen gefordert wird.
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+{{current_user.name}}
+{{ticket.organization.name}}
+
+---
+Actions:
+- Status → Pending
+- Mandant Status → "Dokumente fehlen"
+- Tag hinzufügen: status-waiting
+
+```
+
+**[BILD EINFÜGEN: Macro-Anwendung in Zendesk]***Zeigt: Macro-Auswahl und E-Mail-Vorschau*
+
+### Schritt 3: Ticket-Status nach E-Mail-Versand
+
+**Automatische Updates nach Macro:**
+
+- **Status:** Pending (wartend auf Mandant)
+- **Mandant Status:** "Dokumente fehlen"
+- **Tags:** `phase-onboarding`, `status-waiting`
+- **Internal Note:** "Portal-Link gesendet - Warte auf Dokumenten-Upload"
+
+---
+
+## 📄 Phase 2: Dokumentenverarbeitung
+
+### Dokumenten-Upload durch Mandant
+
+**Was passiert im Portal:**
+
+1. Mandant loggt sich ein mit E-Mail + Aktenzeichen
+2. Upload-Interface für Dokumente
+3. Nach Upload → Webhook an Zendesk API
+
+**[BILD EINFÜGEN: Portal Upload-Interface]***Zeigt: Drag & Drop Interface für Dokumenten-Upload*
+
+### Automatische Verarbeitung
+
+**API-Pipeline triggert:**
+
+1. **OCR-Verarbeitung** (Google Document AI)
+2. **LLM-Analyse** (Gläubiger-Erkennung)
+3. **Datenextraktion** (Beträge, Aktenzeichen, etc.)
+4. **Zendesk-Update** mit Ergebnissen
+
+### Automatische Ticket-Updates
+
+**Webhook erstellt interne Notiz:**
+
+```
+🤖 DOKUMENTE AUTOMATISCH VERARBEITET - {{current_date}}
+
+📊 VERARBEITUNGSSTATISTIK:
+• Hochgeladene Dokumente: 8
+• Erkannte Gläubigerdokumente: 6
+• Nicht-Gläubigerdokumente: 2
+• Manuelle Prüfung erforderlich: 2 ⚠️
+
+📋 ERKANNTE GLÄUBIGER:
+1. ✅ Sparkasse Dresden
+   • Aktenzeichen: SP/2024/123
+   • E-Mail: forderungen@sparkasse-dresden.de
+   • Betrag: 2.450,00 EUR
+   • Confidence: 95%
+
+2. ✅ Inkasso Müller GmbH
+   • Aktenzeichen: IM/456
+   • E-Mail: info@inkasso-mueller.de
+   • Betrag: 1.200,00 EUR
+   • Confidence: 92%
+
+3. ✅ Deutsche Bank AG
+   • Aktenzeichen: DB/789
+   • E-Mail: service@deutsche-bank.de
+   • Betrag: 800,00 EUR
+   • Confidence: 88%
+
+⚠️ MANUELLE PRÜFUNG ERFORDERLICH:
+• Dokument_003.pdf - Unklarer Absender (Confidence: 45%)
+• Dokument_007.pdf - Betrag nicht eindeutig erkennbar (Confidence: 30%)
+
+💰 GESAMTBETRAG (vorläufig): 4.450,00 EUR
+
+[BUTTON: Dokumente manuell prüfen]
+
+---
+SYSTEM-ACTIONS:
+- Mandant Status → "Manuelle Prüfung"
+- Tags: phase-documents, status-manual-review
+- Gläubiger Anzahl: 3
+- Gesamtschuld: 4450.00
+
+```
+
+**[BILD EINFÜGEN: Ticket mit automatischer Verarbeitungsnotiz]***Zeigt: Ticket-Übersicht mit der detaillierten Verarbeitungsnotiz*
+
+---
+
+## 🔍 Phase 3: Gläubiger-Prozess
+
+### Agent-Workflow nach Dokumenten-Upload
+
+**Agent sieht in View "Manuelle Prüfung erforderlich":**
+
+**[BILD EINFÜGEN: Zendesk View mit Tickets zur manuellen Prüfung]***Zeigt: Liste der Tickets mit status-manual-review Tag*
+
+### Schritt 1: Manuelle Prüfung (falls erforderlich)
+
+**Agent klickt "Dokumente manuell prüfen" Button:**
+
+**Popup/Modal öffnet sich mit:**
+
+```
+DOKUMENTEN-PRÜFUNG: Max Mustermann (MAND_2024_001)
+
+📄 DOKUMENT_003.pdf
+┌─────────────────────────────────────────┐
+│ [Dokumenten-Vorschau]                   │
+│                                         │
+│ OCR-Text:                              │
+│ "Sehr geehrter Herr Mustermann,        │
+│ hiermit fordern wir Sie zur Zahlung..." │
+└─────────────────────────────────────────┘
+
+🤖 AI-EXTRAKTION:
+• Absender: Unbekannt (Confidence: 45%)
+• Aktenzeichen: Nicht gefunden
+• Betrag: Nicht erkennbar
+
+✏️ MANUELLE KORREKTUR:
+□ Gläubigerdokument    □ Kein Gläubigerdokument
+Absender: [___________________]
+E-Mail:   [___________________]
+Aktenzeichen: [______________]
+Betrag:   [_______] EUR
+
+[Speichern] [Überspringen]
+
+```
+
+**[BILD EINFÜGEN: Dokumenten-Prüfung Modal]***Zeigt: Popup mit Dokumentenvorschau und Korrekturformular*
+
+### Schritt 2: Nach manueller Prüfung
+
+**Agent bestätigt/korrigiert Daten:**
+
+- Bereinigte Gläubigerliste wird automatisch aktualisiert
+- **Internal Note:** "Manuelle Prüfung abgeschlossen von [AGENT_NAME]"
+- **Tags Update:** Entfernt `status-manual-review`
+
+### Schritt 3: Gläubigerliste zur Bestätigung senden
+
+**Agent nutzt Macro: "Gläubigerliste zur Bestätigung"**
+
+```
+Betreff: Bestätigung Ihrer Gläubigerliste erforderlich
+
+Sehr geehrte/r {{ticket.requester.name}},
+
+wir haben Ihre hochgeladenen Dokumente ausgewertet und folgende Gläubiger identifiziert:
+
+📋 IHRE GLÄUBIGER-ÜBERSICHT:
+
+1. Sparkasse Dresden
+   • Aktenzeichen: SP/2024/123
+   • Forderung: 2.450,00 EUR
+
+2. Inkasso Müller GmbH
+   • Aktenzeichen: IM/456
+   • Forderung: 1.200,00 EUR
+
+3. Deutsche Bank AG
+   • Aktenzeichen: DB/789
+   • Forderung: 800,00 EUR
+
+💰 GESAMTBETRAG: 4.450,00 EUR
+
+🔗 BESTÄTIGUNG ERFORDERLICH:
+Bitte bestätigen Sie diese Liste über das Portal:
+https://portal.kanzlei.de/confirm-creditors?token={{ticket.custom_field_aktenzeichen}}
+
+⚠️ WICHTIG: Erst nach Ihrer Bestätigung können wir die Gläubiger kontaktieren.
+
+Mit freundlichen Grüßen
+{{current_user.name}}
+
+---
+Actions:
+- Status → Pending
+- Mandant Status → "Warte auf Bestätigung"
+- Tag hinzufügen: phase-confirmation
+
+```
+
+### Schritt 4: Mandanten-Bestätigung erhalten
+
+**Webhook von Portal triggert automatische Update:**
+
+```
+✅ GLÄUBIGERLISTE VOM MANDANTEN BESTÄTIGT - {{current_date}}
+
+👤 Bestätigt von: Max Mustermann
+📧 E-Mail: max.mustermann@email.de
+🕒 Bestätigt am: {{current_date}} um {{current_time}}
+
+📋 BESTÄTIGTE GLÄUBIGER (3):
+1. ✅ Sparkasse Dresden - 2.450,00 EUR
+2. ✅ Inkasso Müller GmbH - 1.200,00 EUR
+3. ✅ Deutsche Bank AG - 800,00 EUR
+
+💰 BESTÄTIGTE GESAMTSCHULD: 4.450,00 EUR
+
+🚀 NÄCHSTER SCHRITT: Automatische Gläubiger-Anschreibung wird gestartet...
+
+---
+SYSTEM-ACTIONS:
+- Neues Ticket wird erstellt: "Gläubiger-Anschreibung: Max Mustermann"
+- Mandant Status → "Gläubiger aktiv"
+- Tags: phase-creditor-contact
+
+```
+
+**[BILD EINFÜGEN: Ticket mit Bestätigungsnotiz]***Zeigt: Ticket mit der automatischen Bestätigungsnotiz*
+
+---
+
+## 📧 Phase 4: Gläubiger-Anschreibung
+
+### Automatisches neues Haupt-Ticket
+
+**Nach Mandanten-Bestätigung wird automatisch erstellt:**
+
+**Ticket: "Gläubiger-Anschreibung: Max Mustermann (MAND_2024_001)"**
+
+```
+🤖 AUTOMATISCHE GLÄUBIGER-ANFRAGEN GESTARTET
+
+👤 MANDANT: Max Mustermann
+📧 E-Mail: max.mustermann@email.de
+📁 Aktenzeichen: MAND_2024_001
+📞 Telefon: Nicht verfügbar
+🏠 Adresse: Nicht verfügbar
+
+📊 GLÄUBIGER-ÜBERSICHT (3 Gläubiger):
+
+1. Sparkasse Dresden
+   • Aktenzeichen: SP/2024/123
+   • E-Mail: forderungen@sparkasse-dresden.de
+   • Ursprungsbetrag: 2.450,00 EUR
+   • Adresse: Postplatz 2, 01008 Dresden
+   • Status: Side Conversation wird erstellt...
+
+2. Inkasso Müller GmbH
+   • Aktenzeichen: IM/456
+   • E-Mail: info@inkasso-mueller.de
+   • Ursprungsbetrag: 1.200,00 EUR
+   • Adresse: Musterstraße 123, 12345 Berlin
+   • Status: Side Conversation wird erstellt...
+
+3. Deutsche Bank AG
+   • Aktenzeichen: DB/789
+   • E-Mail: service@deutsche-bank.de
+   • Ursprungsbetrag: 800,00 EUR
+   • Adresse: Taunusanlage 12, 60325 Frankfurt
+   • Status: Side Conversation wird erstellt...
+
+💰 GESAMTBETRAG: 4.450,00 EUR
+
+📅 PROZESS-STATUS:
+• Erstellt: {{current_date}}, {{current_time}}
+• Status: Side Conversations werden erstellt
+• E-Mails: Werden an alle Gläubiger versendet
+
+🤖 Diese Anfragen wurden automatisch generiert basierend auf den verarbeiteten Gläubigerdokumenten.
+📧 Jeder Gläubiger erhält eine separate Side Conversation E-Mail von diesem Ticket.
+
+---
+INTERNE NOTIZEN:
+- Alle Gläubiger-E-Mails werden als Side Conversations von diesem Ticket versendet
+- Antworten der Gläubiger kommen als Replies zu den jeweiligen Side Conversations
+- Status-Updates werden kontinuierlich in diesem Ticket dokumentiert
+
+```
+
+**[BILD EINFÜGEN: Gläubiger-Anschreibung Haupt-Ticket]***Zeigt: Das neue Ticket mit der kompletten Gläubiger-Übersicht*
+
+### Automatische Side Conversations
+
+**Für jeden Gläubiger wird Side Conversation erstellt:**
+
+**Side Conversation 1: Sparkasse Dresden**
+
+```
+Betreff: Gläubiger-Anfrage: Sparkasse Dresden - Az: SP/2024/123
+
+Sehr geehrte Damen und Herren,
+
+wir vertreten Max Mustermann in einem Privatinsolvenzverfahren und bitten Sie um Auskunft über die aktuelle Höhe Ihrer Forderung.
+
+📋 MANDANTENDATEN:
+• Name: Max Mustermann
+• Ihr Aktenzeichen: SP/2024/123
+
+📊 BENÖTIGTE INFORMATIONEN:
+1. Aktuelle Gesamtforderung (Hauptforderung + Zinsen + Kosten)
+2. Detaillierte Aufschlüsselung der Forderungsbestandteile
+3. Datum der letzten Zahlung (falls vorhanden)
+
+Wir bitten um Übersendung einer aktuellen Forderungsaufstellung binnen 14 Tagen an diese E-Mail-Adresse.
+
+Bei Rückfragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+
+[KANZLEI_NAME]
+[ANWALT_NAME], Rechtsanwalt
+
+---
+Bitte antworten Sie direkt auf diese E-Mail. Ihre Antwort wird automatisch unserem Bearbeitungssystem zugeordnet.
+
+```
+
+### Automatische Status-Updates
+
+**Nach E-Mail-Versand - Internal Notes:**
+
+```
+📧 SIDE CONVERSATION STATUS UPDATE - {{current_date}}, {{current_time}}
+
+✅ E-MAIL VERSAND STATUS:
+• Sparkasse Dresden (forderungen@sparkasse-dresden.de): Side Conversation E-Mail versendet ✅
+  Side Conversation ID: abc123-def456-ghi789
+
+• Inkasso Müller GmbH (info@inkasso-mueller.de): Side Conversation E-Mail versendet ✅
+  Side Conversation ID: jkl012-mno345-pqr678
+
+• Deutsche Bank AG (service@deutsche-bank.de): Side Conversation E-Mail versendet ✅
+  Side Conversation ID: stu901-vwx234-yza567
+
+📈 ZUSAMMENFASSUNG:
+• Erfolgreich versendet: 3/3 E-Mails
+• Fehlgeschlagen: 0/3 E-Mails
+
+✅ Alle E-Mails erfolgreich versendet!
+
+⏰ Timeout-Überwachung gestartet: Automatisches Follow-up nach 14 Tagen ohne Antwort.
+
+---
+SYSTEM-ACTIONS:
+- Mandant Status → "Gläubiger aktiv"
+- Tags: phase-creditor-contact, status-emails-sent
+- Automated Follow-up: 14 Tage
+
+```
+
+**[BILD EINFÜGEN: Side Conversations in Zendesk]***Zeigt: Die erstellten Side Conversations im Ticket*
+
+---
+
+## 💬 Gläubiger-Antworten verarbeiten
+
+### Antwort erhalten - Automatische Verarbeitung
+
+**Gläubiger antwortet in Side Conversation:**
+
+```
+Von: forderungen@sparkasse-dresden.de
+Betreff: RE: Gläubiger-Anfrage: Sparkasse Dresden - Az: SP/2024/123
+
+Sehr geehrte Damen und Herren,
+
+bezugnehmend auf Ihr Schreiben teilen wir Ihnen die aktuelle Forderungshöhe mit:
+
+Hauptforderung: 2.200,00 EUR
+Verzugszinsen: 340,00 EUR
+Mahnkosten: 60,00 EUR
+---
+Gesamtforderung: 2.600,00 EUR
+
+Die letzte Zahlung erfolgte am 15.03.2024.
+
+Mit freundlichen Grüßen
+Sparkasse Dresden
+Forderungsmanagement
+
+```
+
+### Automatische AI-Extraktion
+
+**System erstellt automatische Internal Note:**
+
+```
+💬 GLÄUBIGER-ANTWORT ERHALTEN - Sparkasse Dresden
+
+📧 Antwort Details:
+• Gläubiger: Sparkasse Dresden
+• Aktenzeichen: SP/2024/123
+• Eingegangen: {{current_date}}, {{current_time}}
+• Side Conversation ID: abc123-def456-ghi789
+
+🤖 AI-EXTRAKTION:
+• Erkannter Betrag: 2.600,00 EUR
+• Confidence: 96%
+• Aufschlüsselung:
+  - Hauptforderung: 2.200,00 EUR
+  - Zinsen: 340,00 EUR
+  - Kosten: 60,00 EUR
+• Letzte Zahlung: 15.03.2024
+
+💰 BETRAG UPDATE:
+• Vorher: 2.450,00 EUR (aus Dokument)
+• Nachher: 2.600,00 EUR (Gläubiger-Antwort)
+• Differenz: +150,00 EUR
+
+✅ STATUS: Gläubiger abgeschlossen (Antwort erhalten)
+
+---
+SYSTEM-ACTIONS:
+- Sparkasse Dresden → Status: Responded
+- Gesamtschuld Update: 4.450,00 → 4.600,00 EUR
+- Custom Field Update: Gläubiger 1/3 abgeschlossen
+
+```
+
+### Timeout-Management
+
+**Nach 14 Tagen ohne Antwort:**
+
+```
+⏰ TIMEOUT ERREICHT - Inkasso Müller GmbH
+
+📧 Timeout Details:
+• Gläubiger: Inkasso Müller GmbH
+• Aktenzeichen: IM/456
+• E-Mail gesendet: {{sent_date}}
+• Timeout erreicht: {{current_date}}
+• Wartezeit: 14 Tage
+
+🔄 FALLBACK-REGEL ANGEWENDET:
+• Ursprungsbetrag aus Dokument: 1.200,00 EUR
+• Verwendeter Betrag: 1.200,00 EUR (Original-Dokument)
+• Grund: Gläubiger hat nicht geantwortet
+
+⚠️ STATUS: Timeout - Betrag aus Originaldokument verwendet
+
+---
+SYSTEM-ACTIONS:
+- Inkasso Müller GmbH → Status: Timeout
+- Betrag bestätigt: 1.200,00 EUR
+- Custom Field Update: Gläubiger 2/3 abgeschlossen
+
+```
+
+### Alle Gläubiger abgeschlossen
+
+**Final Status Update:**
+
+```
+✅ ALLE GLÄUBIGER ABGESCHLOSSEN - FINALE ÜBERSICHT
+
+📊 GLÄUBIGER-ABSCHLUSS STATISTIK:
+• Geantwortet: 2/3 Gläubiger (67%)
+• Timeout: 1/3 Gläubiger (33%)
+• Durchschnittliche Antwortzeit: 6 Tage
+
+💰 FINALE SCHULDSUMMEN:
+
+1. ✅ Sparkasse Dresden: 2.600,00 EUR
+   • Quelle: Gläubiger-Antwort
+   • Antwort nach: 3 Tagen
+
+2. ⏰ Inkasso Müller GmbH: 1.200,00 EUR
+   • Quelle: Original-Dokument (Timeout)
+   • Wartezeit: 14 Tage
+
+3. ✅ Deutsche Bank AG: 750,00 EUR
+   • Quelle: Gläubiger-Antwort
+   • Antwort nach: 9 Tagen
+
+💰 NEUE GESAMTSCHULD: 4.550,00 EUR
+📈 Änderung zur ursprünglichen Schätzung: +100,00 EUR (+2.2%)
+
+🚀 NÄCHSTER SCHRITT: Bereit für Schuldenregulierungsplan
+
+[BUTTON: Schuldenregulierungsplan erstellen]
+
+---
+SYSTEM-ACTIONS:
+- Mandant Status → "Bereit für Plan"
+- Tags: phase-debt-plan, status-completed
+- Gesamtschuld Final: 4550.00 EUR
+- Alle Gläubiger: Status Complete
+
+```
+
+**[BILD EINFÜGEN: Finale Gläubiger-Übersicht]***Zeigt: Ticket mit der kompletten finalen Übersicht aller Gläubiger*
+
+---
+
+## 📄 Phase 5: Schuldenregulierung
+
+### Schuldenregulierungsplan erstellen
+
+**Agent klickt "Schuldenregulierungsplan erstellen":**
+
+**Popup/Modal für Mandanten-Finanzdaten:**
+
+```
+MANDANTEN-FINANZDATEN: Max Mustermann
+
+📋 PERSÖNLICHE DATEN:
+Familienstand: [Dropdown: ledig/verheiratet/geschieden/verwitwet]
+Anzahl Kinder: [Number Input: 0]
+Beruf: [Dropdown: angestellt/selbstständig/arbeitslos/rentner]
+
+💰 EINKOMMEN:
+Netto-Monatseinkommen: [_______] EUR
+(Das System berechnet automatisch das pfändbare Einkommen)
+
+📅 PLAN-DAUER:
+Laufzeit: [Dropdown: 36/48/60] Monate
+
+[Pfändbares Einkommen berechnen] [Plan erstellen]
+
+```
+
+**[BILD EINFÜGEN: Finanzdaten-Eingabe Modal]***Zeigt: Eingabeformular für Mandanten-Finanzdaten*
+
+### Automatische Berechnung
+
+**Nach Eingabe der Daten - System berechnet:**
+
+```
+🧮 PFÄNDUNGSBERECHNUNG - Max Mustermann
+
+📊 EINGANGSDATEN:
+• Familienstand: Verheiratet
+• Anzahl Kinder: 2
+• Beruf: Angestellt
+• Netto-Einkommen: 2.900,00 EUR
+
+📈 PFÄNDUNGSTABELLE (Deutschland 2024):
+• Basis-Freibetrag: 1.410,00 EUR
+• Familien-Freibetrag: 564,02 EUR (Ehepartner)
+• Kinder-Freibetrag: 902,34 EUR (2 × 451,17 EUR)
+• Gesamtfreibetrag: 2.876,36 EUR
+• Pfändbarer Betrag: 23,64 EUR → Aufgerundet: 133,00 EUR
+
+💰 PLAN-BERECHNUNG:
+• Monatlich verfügbar: 133,00 EUR
+• Laufzeit: 36 Monate
+• Gesamtzahlungen: 4.788,00 EUR
+• Abdeckung der Schulden: 105,2% ✅
+
+📋 GLÄUBIGER-VERTEILUNG (Quotenmäßig):
+
+1. Sparkasse Dresden (57,1%):
+   • Schuld: 2.600,00 EUR
+   • Monatlich: 75,98 EUR
+   • 36 Monate: 2.735,28 EUR
+
+2. Inkasso Müller GmbH (26,4%):
+   • Schuld: 1.200,00 EUR
+   • Monatlich: 35,11 EUR
+   • 36 Monate: 1.263,96 EUR
+
+3. Deutsche Bank AG (16,5%):
+   • Schuld: 750,00 EUR
+   • Monatlich: 21,91 EUR
+   • 36 Monate: 788,76 EUR
+
+[Plan-Dokumente generieren]
+
+```
+
+### Automatische Dokument-Generierung
+
+**System erstellt 5-seitige PDFs für jeden Gläubiger:**
+
+```
+📄 DOKUMENTE ERFOLGREICH GENERIERT
+
+📊 GENERIERTE DOKUMENTE:
+• Sparkasse Dresden: Schuldenregulierungsplan_Sparkasse_Dresden_SP2024123.pdf
+• Inkasso Müller GmbH: Schuldenregulierungsplan_Inkasso_Mueller_IM456.pdf
+• Deutsche Bank AG: Schuldenregulierungsplan_Deutsche_Bank_DB789.pdf
+
+📋 DOKUMENT-INHALT (5 Seiten je Gläubiger):
+• Seite 1-2: Personalisierter Anschreibetext mit Mandanten-Daten
+• Seite 3: Vollständige Gläubigerliste aller Beteiligten
+• Seite 4-5: 36-Monats-Zahlungsplan mit monatlichen Beträgen
+
+💾 DOKUMENTE VERFÜGBAR:
+• Als Zendesk-Anhänge in diesem Ticket
+• Download-Links für Agent verfügbar
+• Bereit für E-Mail-Versand an Gläubiger
+
+[Dokumente herunterladen] [An Gläubiger senden]
+
+```
+
+### Neues Ticket für Schuldenregulierung
+
+**System erstellt automatisch neues Ticket:**
+
+**Ticket: "Schuldenregulierungsplan: Max Mustermann (MAND_2024_001)"**
+
+```
+📄 SCHULDENREGULIERUNGSPLAN ERSTELLT
+
+👤 MANDANT: Max Mustermann
+📁 Aktenzeichen: MAND_2024_001
+📅 Plan erstellt: {{current_date}}
+
+💰 PLAN-ÜBERSICHT:
+• Gesamtschuld: 4.550,00 EUR
+• Monatliche Rate: 133,00 EUR
+• Laufzeit: 36 Monate
+• Gesamtzahlungen: 4.788,00 EUR
+• Überdeckung: 238,00 EUR (5,2%)
+
+📊 MANDANTEN-SITUATION:
+• Familienstand: Verheiratet
+• Kinder: 2
+• Netto-Einkommen: 2.900,00 EUR
+• Pfändbares Einkommen: 133,00 EUR
+
+📋 BETEILIGTE GLÄUBIGER (3):
+1. Sparkasse Dresden - 75,98 EUR/Monat
+2. Inkasso Müller GmbH - 35,11 EUR/Monat
+3. Deutsche Bank AG - 21,91 EUR/Monat
+
+📄 GENERIERTE DOKUMENTE:
+• 3 individualisierte 5-Seiten-PDFs
+• Bereit für Versand an Gläubiger
+• Alle Dokumente als Anhang verfügbar
+
+🚀 STATUS: Plan vollständig - Bereit für Umsetzung
+
+---
+SYSTEM-ACTIONS:
+- Mandant Status → "Abgeschlossen"
+- Tags: phase-debt-plan, status-completed
+- Dokumente: 3 PDFs generiert
+- Process: Complete
+
+```
+
+**[BILD EINFÜGEN: Schuldenregulierungsplan Ticket]***Zeigt: Das finale Ticket mit Plan-Übersicht und Dokumenten-Anhängen*
+
+---
+
+## 👥 Agent-Workflows
+
+### Workflow 1: Payment-Agent (Zahlungsüberwachung)
+
+**Täglich prüfen:**
+
+1. Dashboard: "Erste Raten eingegangen heute"
+2. Für jeden Mandanten mit bezahlter Rate:
+    - Zendesk öffnen
+    - Mandant suchen (über Aktenzeichen)
+    - **Neues Ticket erstellen:** "Gläubiger-Prozess starten: [NAME]"
+    - **Zuweisen an:** Gläubiger-Team
+    - **Priorität:** Normal
+    - **Tags:** `phase-documents`, `payment-confirmed`
+
+**[BILD EINFÜGEN: Payment-Agent Dashboard]***Zeigt: Übersicht der eingegangenen Zahlungen*
+
+### Workflow 2: Gläubiger-Agent (Dokumentenverarbeitung)
+
+**View nutzen: "⏳ Gläubiger-Prozess Tickets"**
+
+**Für jedes Ticket:**
+
+1. **Öffnen:** Ticket "Gläubiger-Prozess starten"
+2. **Prüfen:** Wurden Dokumente hochgeladen?
+    - **JA:** Automatische Verarbeitungsnotiz vorhanden → Weiter zu Schritt 3
+    - **NEIN:** Macro "Dokumente anfordern" → Ticket auf Pending
+3. **Manuelle Prüfung (falls nötig):**
+    - Button "Dokumente manuell prüfen" klicken
+    - Modal mit Dokumentenvorschau öffnet sich
+    - Unklare Dokumente korrigieren
+    - Bestätigen und schließen
+4. **Gläubigerliste senden:**
+    - Macro "Gläubigerliste zur Bestätigung" verwenden
+    - Ticket Status → Pending
+    - Warten auf Mandanten-Bestätigung
+5. **Nach Bestätigung:**
+    - Automatisches neues Ticket wird erstellt
+    - System startet Gläubiger-Anschreibung
+    - Original-Ticket kann geschlossen werden
+
+### Workflow 3: Gläubiger-Monitoring Agent
+
+**View nutzen: "📧 Gläubiger-Anfragen aktiv"**
+
+**Täglich überwachen:**
+
+1. **Offene Gläubiger-Anschreibung Tickets prüfen**
+2. **Antworten verarbeiten:**
+    - Side Conversations prüfen
+    - AI-Extraktion kontrollieren
+    - Bei Unklarheiten manuell korrigieren
+3. **Timeout-Management:**
+    - Nach 14 Tagen automatische Fallback-Beträge prüfen
+    - Bei Bedarf manuelle Nachfass-E-Mails senden
+4. **Abschluss-Prüfung:**
+    - Wenn alle Gläubiger abgeschlossen
+    - Button "Schuldenregulierungsplan erstellen"
+    - Mandanten-Finanzdaten eingeben
+    - Plan-Generierung starten
+
+### Workflow 4: Plan-Agent (Schuldenregulierung)
+
+**View nutzen: "✅ Bereit für Schuldenregulierung"**
+
+**Für jedes bereite Ticket:**
+
+1. **Finanzdaten erfassen:**
+    - Modal mit Mandanten-Daten öffnen
+    - Einkommen, Familienstand, etc. eingeben
+    - Pfändbare Summe automatisch berechnen lassen
+2. **Plan erstellen:**
+    - Automatische Quotenberechnung prüfen
+    - Plan-Generierung starten
+    - 5-seitige PDFs für alle Gläubiger erstellen
+3. **Dokumente verwalten:**
+    - PDFs herunterladen und prüfen
+    - An Gläubiger per E-Mail senden
+    - Oder postalisch versenden
+4. **Abschluss:**
+    - Ticket als "Solved" markieren
+    - Mandant Status → "Abgeschlossen"
+    - Dokumentation vervollständigen
+
+---
+
+## 🎯 Zendesk Views für optimale Übersicht
+
+### View-Konfiguration für Agents
+
+**🔴 Manuelle Prüfung erforderlich**
+
+```
+Spalten:
+- Subject
+- Requester
+- Aktenzeichen (Custom Field)
+- Gläubiger Anzahl (Custom Field)
+- Created
+- Updated
+
+Filter:
+- Tag: status-manual-review
+- Status: Open, Pending
+
+Sortierung: Created (oldest first)
+
+```
+
+**⏳ Warte auf Mandanten-Bestätigung**
+
+```
+Spalten:
+- Subject
+- Requester
+- Mandant Status (Custom Field)
+- Gesamtschuld (Custom Field)
+- Created
+- Updated
+
+Filter:
+- Mandant Status: "Warte auf Bestätigung"
+- Status: Pending
+
+Sortierung: Updated (oldest first)
+
+```
+
+**📧 Gläubiger-Anfragen aktiv**
+
+```
+Spalten:
+- Subject
+- Requester
+- Gläubiger Anzahl (Custom Field)
+- Gesamtschuld (Custom Field)
+- Created
+- Side Conversations Count
+
+Filter:
+- Mandant Status: "Gläubiger aktiv"
+- Status: Open
+
+Sortierung: Created (newest first)
+
+```
+
+**✅ Bereit für Schuldenregulierung**
+
+```
+Spalten:
+- Subject
+- Requester
+- Gesamtschuld (Custom Field)
+- Gläubiger Anzahl (Custom Field)
+- Created
+
+Filter:
+- Mandant Status: "Bereit für Plan"
+- Status: Open
+
+Sortierung: Gesamtschuld (highest first)
+
+```
+
+**[BILD EINFÜGEN: Komplette Views-Übersicht in Zendesk]***Zeigt: Alle konfigurierten Views im Agent-Interface*
+
+---
+
+## 🔧 Troubleshooting
+
+### Häufige Probleme und Lösungen
+
+### Problem 1: Automatische Verarbeitung funktioniert nicht
+
+**Symptome:**
+
+- Mandant hat Dokumente hochgeladen
+- Keine automatische Notiz im Ticket erscheint
+- Webhook-Fehler
+
+**Lösung:**
+
+1. **Webhook-Status prüfen:**
+    - Portal-Dashboard → Webhook-Logs
+    - Fehlerhafte API-Calls identifizieren
+2. **Manuelle Verarbeitung:**
+    - Agent kann manuell "Dokumente neu verarbeiten" triggern
+    - Internal Note mit Link zum Portal-Dashboard
+3. **Ticket-Update:**
+    
+    ```
+    ⚠️ AUTOMATISCHE VERARBEITUNG FEHLGESCHLAGEN
+    
+    Fehler: Webhook-Timeout nach 30 Sekunden
+    Zeitpunkt: {{error_timestamp}}
+    
+    🔧 LÖSUNGSSCHRITTE:
+    1. Dokumente wurden erfolgreich hochgeladen
+    2. Manuelle Verarbeitung wurde gestartet
+    3. Ergebnisse folgen in separater Notiz
+    
+    Agent: Bitte Portal-Dashboard prüfen für Details
+    
+    ```
+    
+
+### Problem 2: Gläubiger-E-Mail bounce zurück
+
+**Symptome:**
+
+- Side Conversation E-Mail nicht zustellbar
+- Bounce-Nachricht erhalten
+- Gläubiger kann nicht erreicht werden
+
+**Lösung:**
+
+1. **Alternative E-Mail suchen:**
+    - Original-Dokument prüfen
+    - Google/Firmen-Website checken
+    - Telefon-Kontakt aufnehmen
+2. **Ticket-Update:**
+    
+    ```
+    📧 E-MAIL BOUNCE - Sparkasse Dresden
+    
+    ❌ Bounce-Grund: Mailbox nicht erreichbar
+    Original E-Mail: forderungen@sparkasse-dresden.de
+    
+    🔍 NÄCHSTE SCHRITTE:
+    1. Alternative E-Mail-Adresse recherchieren
+    2. Telefonische Kontaktaufnahme
+    3. Postalischer Versand als Fallback
+    
+    Agent: Bitte manuelle Nachbearbeitung
+    
+    ```
+    
+3. **Manuelle Bearbeitung:**
+    - Agent recherchiert korrekte Kontaktdaten
+    - Neue Side Conversation mit korrekter E-Mail
+    - Dokumentation der Änderung
+
+### Problem 3: AI-Extraktion ungenau
+
+**Symptome:**
+
+- Falsche Beträge erkannt
+- Gläubiger nicht korrekt identifiziert
+- Confidence-Score sehr niedrig (<60%)
+
+**Lösung:**
+
+1. **Sofortige manuelle Prüfung:**
+    - Button "Dokumente manuell prüfen"
+    - Alle Daten einzeln kontrollieren
+    - Korrekturen vornehmen
+2. **Dokumentation:**
+    
+    ```
+    🤖 AI-EXTRAKTION KORRIGIERT
+    
+    Original AI-Ergebnis:
+    • Gläubiger: "Unbekannt" (Confidence: 45%)
+    • Betrag: 0,00 EUR (Confidence: 30%)
+    
+    Manuelle Korrektur:
+    • Gläubiger: "Inkasso Müller GmbH"
+    • Betrag: 1.200,00 EUR
+    • Aktenzeichen: IM/456
+    
+    Agent: {{agent_name}}
+    Korrigiert: {{correction_timestamp}}
+    
+    ```
+    
+
+### Problem 4: Mandant bestätigt Gläubigerliste nicht
+
+**Symptome:**
+
+- E-Mail zur Bestätigung versendet
+- Keine Reaktion nach 7+ Tagen
+- Gläubiger-Prozess blockiert
+
+**Lösung:**
+
+1. **Erinnerungs-E-Mail senden:**
+    
+    ```
+    Macro: "Bestätigung Erinnerung"
+    
+    Betreff: ERINNERUNG: Bestätigung Ihrer Gläubigerliste
+    
+    Sehr geehrte/r {{requester.name}},
+    
+    vor {{days_since_sent}} Tagen haben wir Ihnen Ihre Gläubigerliste
+    zur Bestätigung gesendet.
+    
+    ⚠️ WICHTIG: Ohne Ihre Bestätigung können wir nicht fortfahren.
+    
+    Bitte loggen Sie sich ein: {{portal_link}}
+    
+    Bei Problemen kontaktieren Sie uns: {{phone_number}}
+    
+    ```
+    
+2. **Telefonische Nachfassung:**
+    - Agent ruft Mandanten an
+    - Bestätigung telefonisch einholen
+    - Interne Notiz mit Gesprächsprotokoll
+3. **Eskalation:**
+    - Nach 14 Tagen ohne Reaktion
+    - Ticket an Supervisor weiterleiten
+    - Weitere Maßnahmen prüfen
+
+---
+
+## 📊 Reporting und KPIs
+
+### Wichtige Metriken für Management
+
+**Durchlaufzeiten:**
+
+- Durchschnittliche Zeit: Upload → Gläubiger-Anschreibung
+- Durchschnittliche Zeit: Anschreibung → Alle Antworten
+- Durchschnittliche Zeit: Gesamt-Prozess pro Mandant
+
+**Qualitäts-KPIs:**
+
+- AI-Genauigkeit: % korrekte Gläubiger-Erkennungen
+- Manuelle Prüfung: % Dokumente die Korrektur benötigen
+- Gläubiger-Antwortrate: % Gläubiger die antworten
+- E-Mail-Zustellrate: % erfolgreich zugestellte E-Mails
+
+**Agent-Produktivität:**
+
+- Bearbeitete Mandanten pro Agent pro Tag
+- Durchschnittliche Bearbeitungszeit pro Phase
+- Anzahl manuelle Korrekturen pro Agent
+
+### Zendesk Reports erstellen
+
+**Report 1: Mandanten-Pipeline**
+
+```
+Widget: Count über Zeit
+Filter: Alle Gläubiger-Prozess Tickets
+Gruppierung: Mandant Status
+Zeitraum: Letzte 30 Tage
+
+```
+
+**Report 2: Gläubiger-Antwortzeiten**
+
+```
+Widget: Durchschnitt
+Metric: Zeit zwischen E-Mail-Versand und Antwort
+Filter: Side Conversations mit Antworten
+Gruppierung: Nach Gläubiger-Typ
+
+```
+
+**Report 3: Agent-Performance**
+
+```
+Widget: Count
+Metric: Bearbeitete Tickets
+Filter: Agent-Updates in Gläubiger-Tickets
+Gruppierung: Agent
+Zeitraum: Letzte 7 Tage
+
+```
+
+**[BILD EINFÜGEN: Zendesk Dashboard mit KPIs]***Zeigt: Management-Dashboard mit wichtigsten Metriken*
+
+---
+
+## 🔐 Sicherheit und Compliance
+
+### Datenschutz-Maßnahmen
+
+**Zendesk-Konfiguration:**
+
+- DSGVO-konforme Datenverarbeitung
+- Automatische Löschung nach Aufbewahrungsfristen
+- Verschlüsselte Datenübertragung
+- Zugriffsprotokolle für alle Agent-Aktionen
+
+**Portal-Integration:**
+
+- SSL/TLS-Verschlüsselung
+- Sichere Webhook-Authentifizierung
+- Mandanten-Daten nur über sichere APIs
+- Regelmäßige Sicherheits-Audits
+
+### Compliance-Anforderungen
+
+**Anwaltliche Sorgfaltspflicht:**
+
+- Vollständige Dokumentation aller Schritte
+- Audit-Trail für jeden Gläubiger-Kontakt
+- Sichere Aufbewahrung aller Dokumente
+- Nachvollziehbarkeit aller Agent-Aktionen
+
+**DSGVO-Compliance:**
+
+- Mandanten-Einwilligung zur Datenverarbeitung
+- Recht auf Löschung nach Verfahrensabschluss
+- Datenminimierung: Nur notwendige Daten
+- Meldepflichten bei Datenschutz-Vorfällen
+
+---
+
+## 🚀 Go-Live Checkliste
+
+### Vor der Produktiv-Schaltung
+
+**Zendesk-Setup:**
+
+- [ ]  Custom Fields erstellt und getestet
+- [ ]  Views konfiguriert und Agent-Zugänge geprüft
+- [ ]  Macros erstellt und E-Mail-Templates getestet
+- [ ]  Webhook-Endpoints konfiguriert und getestet
+- [ ]  Agent-Schulungen abgeschlossen
+
+**Technical Setup:**
+
+- [ ]  Portal-Integration vollständig implementiert
+- [ ]  OCR/AI-Pipeline getestet mit Beispieldokumenten
+- [ ]  E-Mail-Delivery konfiguriert und getestet
+- [ ]  PDF-Generierung für Schuldenregulierungspläne getestet
+- [ ]  Monitoring und Alerting eingerichtet
+
+**Prozess-Tests:**
+
+- [ ]  End-to-End Test mit Beispiel-Mandant durchgeführt
+- [ ]  Alle Agent-Workflows mit Test-Daten getestet
+- [ ]  Fehlerbehandlung und Fallback-Szenarien getestet
+- [ ]  Performance-Tests mit höherer Dokumenten-Anzahl
+
+**Dokumentation:**
+
+- [ ]  Agent-Handbuch vervollständigt
+- [ ]  Troubleshooting-Guide erstellt
+- [ ]  Emergency-Procedures dokumentiert
+- [ ]  Backup und Recovery-Prozesse getestet
+
+### Nach Go-Live
+
+**Ersste 48 Stunden:**
+
+- Intensive Überwachung aller Automatisierungen
+- Sofortige Unterstützung für Agents bei Problemen
+- Dokumentation von Bugs und schnelle Fixes
+- Feedback-Sammlung von allen beteiligten Agents
+
+**Erste Woche:**
+
+- Tägliche Auswertung der KPIs und Durchlaufzeiten
+- Optimierung der AI-Parameter basierend auf echten Daten
+- Anpassung der Macros basierend auf Agent-Feedback
+- Feintuning der Webhook-Performance
+
+**Erster Monat:**
+
+- Vollständige Auswertung der Prozess-Effizienz
+- Identifikation von Optimierungspotenzialen
+- Planung und Umsetzung von Verbesserungen
+- Erweiterte Schulungen für alle Agents
+
+---
+
+**🎉 Herzlichen Glückwunsch! Das Zendesk Gläubiger-Automation System ist vollständig dokumentiert und bereit für die Implementierung.**
+
+Dieses System wird Ihre Privatinsolvenz-Verwaltung revolutionieren und den kompletten Prozess von manuell auf automatisiert umstellen - von der ersten Dokumentenerfassung bis zum finalen Schuldenregulierungsplan.
