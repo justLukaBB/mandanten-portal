@@ -984,18 +984,47 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
 // Admin: Get all clients for dashboard
 app.get('/api/admin/clients', async (req, res) => {
   try {
-    const clients = await Client.find({}, {
-      firstName: 1,
-      lastName: 1,
-      email: 1,
-      aktenzeichen: 1,
-      workflow_status: 1,
-      documents: 1,
-      created_at: 1,
-      first_payment_received: 1,
-      admin_approved: 1,
-      client_confirmed_creditors: 1
-    }).sort({ created_at: -1 });
+    let clients = [];
+    
+    // Try MongoDB first
+    try {
+      if (databaseService.isHealthy()) {
+        clients = await Client.find({}, {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          aktenzeichen: 1,
+          workflow_status: 1,
+          documents: 1,
+          created_at: 1,
+          first_payment_received: 1,
+          admin_approved: 1,
+          client_confirmed_creditors: 1
+        }).sort({ created_at: -1 });
+        console.log(`📊 Found ${clients.length} clients in MongoDB`);
+      }
+    } catch (mongoError) {
+      console.error('MongoDB query failed:', mongoError);
+    }
+    
+    // Fallback to in-memory data if MongoDB is empty or failed
+    if (clients.length === 0) {
+      console.log('📊 Falling back to in-memory clients data');
+      clients = Object.values(clientsData).map(client => ({
+        _id: client.id,
+        firstName: client.firstName,
+        lastName: client.lastName,
+        email: client.email,
+        aktenzeichen: client.aktenzeichen,
+        workflow_status: client.workflow_status,
+        documents: client.documents || [],
+        created_at: client.created_at,
+        first_payment_received: client.first_payment_received,
+        admin_approved: client.admin_approved,
+        client_confirmed_creditors: client.client_confirmed_creditors
+      }));
+      console.log(`📊 Found ${clients.length} clients in memory`);
+    }
     
     res.json({ clients });
   } catch (error) {
