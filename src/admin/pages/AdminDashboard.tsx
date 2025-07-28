@@ -335,7 +335,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Workflow Manager - Show for first client if exists */}
-        {clients.length > 0 && <AdminWorkflowManager clientId={clients[0]._id} />}
+        {clients.length > 0 && <AdminWorkflowManager clientId={clients[0].aktenzeichen || clients[0]._id} />}
 
         {/* Zendesk Creditor Contact Manager */}
         <AdminCreditorContactManager />

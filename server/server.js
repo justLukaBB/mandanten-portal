@@ -133,7 +133,11 @@ const clientsData = {
 async function getClient(clientId) {
   try {
     if (databaseService.isHealthy()) {
-      const client = await Client.findOne({ id: clientId });
+      // Try to find by id first, then by aktenzeichen
+      let client = await Client.findOne({ id: clientId });
+      if (!client) {
+        client = await Client.findOne({ aktenzeichen: clientId });
+      }
       if (client) return client;
     }
   } catch (error) {
