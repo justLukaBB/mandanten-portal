@@ -4,25 +4,40 @@ const path = require('path');
 
 class GoogleDocumentAI {
   constructor() {
-    // Initialize Google Document AI client exactly as per Google documentation
+    // Initialize Google Document AI client
     try {
-      // Set environment variable for authentication
-      const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
-      console.log('Setting GOOGLE_APPLICATION_CREDENTIALS to:', credentialsPath);
-      
-      // Verify credentials file exists
-      if (!fs.existsSync(credentialsPath)) {
-        throw new Error(`Service account key file not found: ${credentialsPath}`);
+      let clientConfig = {
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
+      };
+
+      // Check if we have service account credentials as environment variable (for Render)
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        try {
+          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+          clientConfig.credentials = credentials;
+          console.log('Using service account credentials from environment variable');
+        } catch (error) {
+          console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', error);
+          throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY format');
+        }
+      } 
+      // Fallback to file-based credentials (for local development)
+      else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        const credentialsPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        console.log('Using service account key file:', credentialsPath);
+        
+        if (!fs.existsSync(credentialsPath)) {
+          throw new Error(`Service account key file not found: ${credentialsPath}`);
+        }
+        
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+        clientConfig.keyFilename = credentialsPath;
+      } else {
+        throw new Error('No Google Cloud credentials provided. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS');
       }
       
-      // Explicitly set the environment variable for Google Cloud authentication
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
-      
-      // Initialize client with explicit configuration as per Google docs
-      this.client = new DocumentProcessorServiceClient({
-        keyFilename: credentialsPath,
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
-      });
+      // Initialize client
+      this.client = new DocumentProcessorServiceClient(clientConfig);
       
       this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
       this.location = process.env.GOOGLE_CLOUD_LOCATION;

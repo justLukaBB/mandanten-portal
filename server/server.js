@@ -376,6 +376,9 @@ app.post('/api/clients/:clientId/documents', upload.array('documents', 10), asyn
           console.log(`📊 Summary: ${summary}`);
           console.log(`✅ =========================\n`);
           
+          // Save updated client to MongoDB
+          await saveClient(client);
+          
         } catch (processingError) {
           const processingTime = Date.now() - startTime;
           
@@ -406,6 +409,9 @@ app.post('/api/clients/:clientId/documents', upload.array('documents', 10), asyn
               processing_method: 'google_document_ai + claude_ai'
             };
           }
+          
+          // Save updated client to MongoDB even in error case
+          await saveClient(client);
         }
       });
     }
@@ -996,113 +1002,134 @@ app.get('/api/admin/clients', async (req, res) => {
 
 // Trigger reprocessing of a document
 app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, res) => {
-  const { clientId, documentId } = req.params;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
-  
-  if (docIndex === -1) {
-    return res.status(404).json({ error: 'Document not found' });
-  }
-  
-  const document = client.documents[docIndex];
-  const filePath = path.join(__dirname, 'uploads', clientId, document.filename);
-  
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'Document file not found' });
-  }
-  
-  // Update status to processing
-  client.documents[docIndex].processing_status = 'processing';
-  client.documents[docIndex].processing_error = null;
-  
-  // Start reprocessing in background
-  setImmediate(async () => {
-    try {
-      console.log(`Reprocessing document: ${document.name}`);
-      const extractedData = await documentProcessor.processDocument(filePath, document.name);
-      const validation = documentProcessor.validateExtraction(extractedData);
-      const summary = documentProcessor.generateSummary(extractedData);
-      
-      client.documents[docIndex] = {
-        ...client.documents[docIndex],
-        processing_status: 'completed',
-        extracted_data: extractedData,
-        validation: validation,
-        summary: summary,
-        processed_at: new Date().toISOString()
-      };
-      
-      console.log(`Reprocessing completed for: ${document.name}`);
-    } catch (error) {
-      console.error(`Reprocessing failed for ${document.name}:`, error);
-      client.documents[docIndex] = {
-        ...client.documents[docIndex],
-        processing_status: 'failed',
-        processing_error: error.message,
-        processed_at: new Date().toISOString()
-      };
+  try {
+    const { clientId, documentId } = req.params;
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
     }
-  });
-  
-  res.json({ 
-    success: true, 
-    message: 'Document reprocessing started',
-    document_id: documentId
-  });
+    
+    const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
+    
+    if (docIndex === -1) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const document = client.documents[docIndex];
+    const filePath = path.join(__dirname, 'uploads', clientId, document.filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Document file not found' });
+    }
+    
+    // Update status to processing
+    client.documents[docIndex].processing_status = 'processing';
+    client.documents[docIndex].processing_error = null;
+    await saveClient(client);
+    
+    // Start reprocessing in background
+    setImmediate(async () => {
+      try {
+        console.log(`Reprocessing document: ${document.name}`);
+        const extractedData = await documentProcessor.processDocument(filePath, document.name);
+        const validation = documentProcessor.validateExtraction(extractedData);
+        const summary = documentProcessor.generateSummary(extractedData);
+        
+        client.documents[docIndex] = {
+          ...client.documents[docIndex],
+          processing_status: 'completed',
+          extracted_data: extractedData,
+          validation: validation,
+          summary: summary,
+          processed_at: new Date().toISOString()
+        };
+        
+        await saveClient(client);
+        console.log(`Reprocessing completed for: ${document.name}`);
+      } catch (error) {
+        console.error(`Reprocessing failed for ${document.name}:`, error);
+        client.documents[docIndex] = {
+          ...client.documents[docIndex],
+          processing_status: 'failed',
+          processing_error: error.message,
+          processed_at: new Date().toISOString()
+        };
+        await saveClient(client);
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Document reprocessing started',
+      document_id: documentId
+    });
+  } catch (error) {
+    console.error('Error starting reprocessing:', error);
+    res.status(500).json({ 
+      error: 'Error starting reprocessing',
+      details: error.message 
+    });
+  }
 });
 
 // Admin: Manual document review
-app.patch('/api/admin/clients/:clientId/documents/:documentId/review', (req, res) => {
-  const { clientId, documentId } = req.params;
-  const { document_status, admin_note, reviewed_by } = req.body;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
-  
-  if (docIndex === -1) {
-    return res.status(404).json({ error: 'Document not found' });
-  }
-  
-  // Validate the new status
-  const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate_detected'];
-  if (!validStatuses.includes(document_status)) {
-    return res.status(400).json({ error: 'Invalid document status' });
-  }
-  
-  // Update document with admin review
-  client.documents[docIndex] = {
-    ...client.documents[docIndex],
-    document_status: document_status,
-    status_reason: admin_note || `Manuell geprüft: ${document_status}`,
-    admin_reviewed: true,
-    admin_reviewed_at: new Date().toISOString(),
-    admin_reviewed_by: reviewed_by || 'Admin',
-    manual_review_required: false // Clear manual review flag after admin review
-  };
-  
-  console.log(`📋 Admin Review: Document "${client.documents[docIndex].name}" marked as "${document_status}" by ${reviewed_by || 'Admin'}`);
-  
-  res.json({ 
-    success: true, 
-    message: `Dokument erfolgreich als "${document_status}" markiert`,
-    document: {
-      id: documentId,
-      document_status: document_status,
-      status_reason: admin_note,
-      admin_reviewed: true,
-      admin_reviewed_at: client.documents[docIndex].admin_reviewed_at,
-      admin_reviewed_by: reviewed_by || 'Admin'
+app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (req, res) => {
+  try {
+    const { clientId, documentId } = req.params;
+    const { document_status, admin_note, reviewed_by } = req.body;
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
     }
-  });
+    
+    const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
+    
+    if (docIndex === -1) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    // Validate the new status
+    const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate_detected'];
+    if (!validStatuses.includes(document_status)) {
+      return res.status(400).json({ error: 'Invalid document status' });
+    }
+    
+    // Update document with admin review
+    client.documents[docIndex] = {
+      ...client.documents[docIndex],
+      document_status: document_status,
+      status_reason: admin_note || `Manuell geprüft: ${document_status}`,
+      admin_reviewed: true,
+      admin_reviewed_at: new Date().toISOString(),
+      admin_reviewed_by: reviewed_by || 'Admin',
+      manual_review_required: false // Clear manual review flag after admin review
+    };
+    
+    await saveClient(client);
+    
+    console.log(`📋 Admin Review: Document "${client.documents[docIndex].name}" marked as "${document_status}" by ${reviewed_by || 'Admin'}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Dokument erfolgreich als "${document_status}" markiert`,
+      document: {
+        id: documentId,
+        document_status: document_status,
+        status_reason: admin_note,
+        admin_reviewed: true,
+        admin_reviewed_at: client.documents[docIndex].admin_reviewed_at,
+        admin_reviewed_by: reviewed_by || 'Admin'
+      }
+    });
+  } catch (error) {
+    console.error('Error reviewing document:', error);
+    res.status(500).json({ 
+      error: 'Error reviewing document',
+      details: error.message 
+    });
+  }
 });
 
 // Delete document
