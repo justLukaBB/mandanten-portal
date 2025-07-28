@@ -56,8 +56,8 @@ const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  // Production detection
-  if (process.env.NODE_ENV === 'production') {
+  // Production detection (check hostname for deployed environment)
+  if (process.env.NODE_ENV === 'production' || window.location.hostname.includes('onrender.com')) {
     // Replace with your Render backend URL
     return 'https://mandanten-portal-backend.onrender.com/api';
   }

@@ -27,7 +27,14 @@ const garnishmentCalculator = new GermanGarnishmentCalculator();
 const testDataService = new TestDataService();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://mandanten-portal.onrender.com',
+    'https://mandanten-portal-frontend.onrender.com'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // Ensure uploads directory exists
