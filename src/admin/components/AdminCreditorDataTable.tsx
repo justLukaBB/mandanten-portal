@@ -103,19 +103,27 @@ const AdminCreditorDataTable: React.FC = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      // For demo, we're fetching the single demo client
-      // In production, you'd fetch all clients
-      const clientIds = ['12345']; // Add more client IDs as needed
+      console.log('📊 Fetching all clients for creditor data table...');
+      
+      // Get all clients from admin endpoint
+      const allClientsResponse = await api.get('/admin/clients');
+      const allClients = allClientsResponse.data.clients || [];
+      console.log('👥 Found clients for creditor table:', allClients.length);
+      
       const clientsData: ClientData[] = [];
 
-      for (const clientId of clientIds) {
+      for (const clientMeta of allClients) {
         try {
+          // Use aktenzeichen as the ID for API calls
+          const clientId = clientMeta.aktenzeichen || clientMeta._id;
+          console.log('🔍 Fetching details for client:', clientId);
           const response = await api.get(`/clients/${clientId}`);
           const client = response.data;
           
           // Fetch documents separately
           const documentsResponse = await api.get(`/clients/${clientId}/documents`);
           client.documents = documentsResponse.data || [];
+          console.log(`📄 Client ${clientId} has ${client.documents.length} documents`);
           
           clientsData.push(client);
         } catch (error) {
@@ -124,6 +132,7 @@ const AdminCreditorDataTable: React.FC = () => {
       }
 
       setClients(clientsData);
+      console.log(`💾 Total clients loaded: ${clientsData.length}`);
       
       // Convert to admin creditor table rows
       const allCreditorRows: AdminCreditorTableRow[] = [];
@@ -132,6 +141,7 @@ const AdminCreditorDataTable: React.FC = () => {
         const allDocs = client.documents?.filter(doc => 
           doc.processing_status === 'completed'
         ) || [];
+        console.log(`📋 Client ${client.firstName} ${client.lastName} has ${allDocs.length} completed documents`);
         
         allDocs.forEach(doc => {
           const creditor = doc.extracted_data?.creditor_data;
@@ -215,6 +225,13 @@ const AdminCreditorDataTable: React.FC = () => {
         });
       });
 
+      console.log(`🎯 Total creditor rows created: ${allCreditorRows.length}`);
+      console.log('📊 Creditor rows:', allCreditorRows.map(row => ({ 
+        client: row.clientName, 
+        document: row.documentName, 
+        status: row.status 
+      })));
+      
       setCreditorData(allCreditorRows);
     } catch (error) {
       console.error('Error fetching admin data:', error);
