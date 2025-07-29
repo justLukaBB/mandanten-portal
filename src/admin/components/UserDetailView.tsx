@@ -383,7 +383,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       </div>
                     </div>
                   );
-                }))
+                })
               ) : (
                 <p className="text-gray-500 text-sm">No documents uploaded</p>
               )}
