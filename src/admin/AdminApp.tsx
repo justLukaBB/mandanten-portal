@@ -4,11 +4,12 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientManagement from './pages/ClientManagement';
 import DebtRestructuring from './pages/DebtRestructuring';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import api from '../config/api';
 
 const AdminApp: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'clients' | 'settings' | 'debt-restructuring'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring'>('analytics');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +32,7 @@ const AdminApp: React.FC = () => {
     setIsAuthenticated(true);
   };
 
-  const handleNavigate = (page: 'dashboard' | 'clients' | 'settings' | 'debt-restructuring') => {
+  const handleNavigate = (page: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring') => {
     setCurrentPage(page);
   };
 
@@ -39,6 +40,8 @@ const AdminApp: React.FC = () => {
     switch (currentPage) {
       case 'dashboard':
         return <AdminDashboard />;
+      case 'analytics':
+        return <AnalyticsDashboard />;
       case 'clients':
         return <ClientManagement />;
       case 'debt-restructuring':
@@ -53,7 +56,7 @@ const AdminApp: React.FC = () => {
           </div>
         );
       default:
-        return <AdminDashboard />;
+        return <AnalyticsDashboard />;
     }
   };
 

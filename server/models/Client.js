@@ -84,6 +84,23 @@ const creditorSchema = new mongoose.Schema({
   confirmed_at: Date
 }, { _id: false });
 
+// Status History Schema for tracking all status changes
+const statusHistorySchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  status: { type: String, required: true },
+  changed_by: {
+    type: String,
+    enum: ['system', 'agent', 'client'],
+    required: true
+  },
+  zendesk_ticket_id: String,
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  created_at: { type: Date, default: Date.now }
+}, { _id: false });
+
 const clientSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   aktenzeichen: { type: String, required: true, unique: true },
@@ -104,9 +121,35 @@ const clientSchema = new mongoose.Schema({
   // Zendesk integration
   zendesk_user_id: String,
   zendesk_ticket_id: String,
+  zendesk_tickets: [{
+    ticket_id: String,
+    ticket_type: {
+      type: String,
+      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact']
+    },
+    status: String,
+    created_at: { type: Date, default: Date.now }
+  }],
   
-  // Workflow
+  // Workflow - updated for Zendesk-centric approach
   phase: { type: Number, default: 1 },
+  current_status: {
+    type: String,
+    enum: [
+      'created',
+      'portal_access_sent',
+      'documents_uploaded',
+      'documents_processing',
+      'waiting_for_payment',
+      'payment_confirmed',
+      'creditor_review',
+      'awaiting_client_confirmation',
+      'creditor_contact_active',
+      'completed'
+    ],
+    default: 'created'
+  },
+  // Legacy field for backward compatibility
   workflow_status: {
     type: String,
     enum: [
@@ -119,6 +162,9 @@ const clientSchema = new mongoose.Schema({
     ],
     default: 'portal_access_sent'
   },
+  
+  // Status tracking
+  status_history: [statusHistorySchema],
   
   // Document processing
   documents: [documentSchema],

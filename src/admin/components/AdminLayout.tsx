@@ -6,13 +6,14 @@ import {
   ArrowLeftOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
-  CurrencyEuroIcon
+  CurrencyEuroIcon,
+  PresentationChartLineIcon
 } from '@heroicons/react/24/outline';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'dashboard' | 'clients' | 'settings' | 'debt-restructuring';
-  onNavigate: (page: 'dashboard' | 'clients' | 'settings' | 'debt-restructuring') => void;
+  currentPage: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring';
+  onNavigate: (page: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
@@ -20,10 +21,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 
   const navigation = [
     { 
-      name: 'Dashboard', 
+      name: 'Analytics', 
+      key: 'analytics' as const, 
+      icon: PresentationChartLineIcon,
+      description: '📊 Read-Only Monitoring & Analytics (NEU)'
+    },
+    { 
+      name: 'Dashboard (Legacy)', 
       key: 'dashboard' as const, 
       icon: ChartBarIcon,
-      description: 'Übersicht und Statistiken'
+      description: '⚠️ Alt - wird durch Analytics ersetzt'
     },
     { 
       name: 'Mandanten', 
@@ -115,7 +122,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 const SidebarContent: React.FC<{
   navigation: any[];
   currentPage: string;
-  onNavigate: (page: 'dashboard' | 'clients' | 'settings' | 'debt-restructuring') => void;
+  onNavigate: (page: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring') => void;
   onLogout: () => void;
 }> = ({ navigation, currentPage, onNavigate, onLogout }) => {
   return (

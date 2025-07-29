@@ -11,6 +11,8 @@ const config = require('./config');
 const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
 const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
 const healthRoutes = require('./routes/health');
+const zendeskWebhooks = require('./routes/zendesk-webhooks');
+const portalWebhooks = require('./routes/portal-webhooks');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -51,6 +53,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check routes (no auth required)
 app.use('/', healthRoutes);
+
+// Zendesk webhook routes (no auth required - Zendesk handles auth)
+app.use('/api/zendesk-webhook', zendeskWebhooks);
+
+// Portal webhook routes (no auth required - internal system calls)
+app.use('/api/portal-webhook', portalWebhooks);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
