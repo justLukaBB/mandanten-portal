@@ -11,8 +11,8 @@ import api from '../../config/api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'analytics' | 'settings' | 'create-user';
-  onNavigate: (page: 'analytics' | 'settings' | 'create-user') => void;
+  currentPage: 'analytics' | 'settings' | 'create-user' | 'user-list';
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
