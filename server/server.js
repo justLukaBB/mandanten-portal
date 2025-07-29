@@ -486,6 +486,34 @@ app.post('/api/clients/:clientId/documents',
                 processing_method: 'simplified_creditor_classification'
               };
             }
+            
+            // Update client status when documents are processed
+            const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
+            const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
+            
+            // Update status based on processing results
+            if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
+              if (creditorDocs.length > 0) {
+                client.current_status = 'documents_processing';
+                console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+                
+                // Add status history entry
+                client.status_history = client.status_history || [];
+                client.status_history.push({
+                  id: uuidv4(),
+                  status: 'documents_processing',
+                  changed_by: 'system',
+                  metadata: {
+                    total_documents: client.documents.length,
+                    completed_documents: completedDocs.length,
+                    creditor_documents: creditorDocs.length,
+                    processing_completed_timestamp: new Date().toISOString()
+                  },
+                  created_at: new Date()
+                });
+              }
+            }
+            
             return client;
           });
           
@@ -532,6 +560,27 @@ app.post('/api/clients/:clientId/documents',
     await safeClientUpdate(clientId, (client) => {
       client.documents = client.documents || [];
       client.documents.push(...uploadedDocuments);
+      
+      // Update status based on document upload
+      if (client.current_status === 'portal_access_sent') {
+        client.current_status = 'documents_uploaded';
+        console.log(`📊 Status updated to 'documents_uploaded' for client ${clientId}`);
+        
+        // Add status history entry
+        client.status_history = client.status_history || [];
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'documents_uploaded',
+          changed_by: 'client',
+          metadata: {
+            documents_uploaded: uploadedDocuments.length,
+            document_names: uploadedDocuments.map(doc => doc.name),
+            upload_timestamp: new Date().toISOString()
+          },
+          created_at: new Date()
+        });
+      }
+      
       return client;
     });
     

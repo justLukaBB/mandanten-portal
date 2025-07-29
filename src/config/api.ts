@@ -126,10 +126,29 @@ api.interceptors.response.use(
 // Request interceptor to add auth token if available
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token');
+    // Try different token types for different endpoints
+    let token = localStorage.getItem('auth_token'); // Primary JWT token
+    
+    // Fallback to portal session token if no auth_token
+    if (!token) {
+      token = localStorage.getItem('portal_session_token');
+    }
+    
+    // Admin token for admin endpoints
+    if (!token && config.url?.includes('/admin/')) {
+      token = localStorage.getItem('admin_token');
+    }
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      log('🔑 API request with token:', { 
+        url: config.url, 
+        hasToken: !!token,
+        tokenType: localStorage.getItem('auth_token') ? 'JWT' : 
+                  localStorage.getItem('portal_session_token') ? 'Session' : 'Admin'
+      });
     }
+    
     return config;
   },
   (error) => {

@@ -24,10 +24,17 @@ const PortalLogin: React.FC = () => {
       const response = await axios.post(`${API_BASE_URL}/portal/login`, credentials);
       
       if (response.data.success) {
-        // Store session token
+        // Store session token and JWT token for API requests
         localStorage.setItem('portal_session_token', response.data.session_token);
+        localStorage.setItem('auth_token', response.data.token || response.data.session_token); // For API requests
         localStorage.setItem('portal_client_id', response.data.client.id);
         localStorage.setItem('portal_client_data', JSON.stringify(response.data.client));
+        
+        console.log('🔑 Login successful, tokens stored:', {
+          session_token: !!response.data.session_token,
+          jwt_token: !!response.data.token,
+          client_id: response.data.client.id
+        });
         
         // Wait a brief moment to ensure localStorage is properly set
         await new Promise(resolve => setTimeout(resolve, 100));
