@@ -12,8 +12,8 @@ import {
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring';
-  onNavigate: (page: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring') => void;
+  currentPage: 'analytics' | 'settings' | 'create-user';
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
@@ -122,7 +122,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 const SidebarContent: React.FC<{
   navigation: any[];
   currentPage: string;
-  onNavigate: (page: 'dashboard' | 'analytics' | 'clients' | 'settings' | 'debt-restructuring') => void;
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user') => void;
   onLogout: () => void;
 }> = ({ navigation, currentPage, onNavigate, onLogout }) => {
   return (

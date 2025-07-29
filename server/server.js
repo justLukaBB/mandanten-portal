@@ -814,6 +814,79 @@ app.get('/api/admin/clients',
   }
 });
 
+// Admin: Create new client
+app.post('/api/admin/clients', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const clientData = req.body;
+    
+    // Validate required fields
+    if (!clientData.firstName || !clientData.lastName || !clientData.email || !clientData.aktenzeichen) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        required: ['firstName', 'lastName', 'email', 'aktenzeichen']
+      });
+    }
+    
+    // Check if client with same aktenzeichen already exists
+    const existingClient = await Client.findOne({ 
+      $or: [
+        { aktenzeichen: clientData.aktenzeichen },
+        { email: clientData.email }
+      ]
+    });
+    
+    if (existingClient) {
+      return res.status(409).json({ 
+        error: 'Client already exists',
+        details: existingClient.email === clientData.email ? 
+          'Email already in use' : 'Aktenzeichen already exists'
+      });
+    }
+    
+    // Create new client in MongoDB
+    const newClient = new Client({
+      ...clientData,
+      id: clientData.aktenzeichen, // Use aktenzeichen as ID
+      _id: undefined, // Let MongoDB generate _id
+      created_at: new Date(),
+      updated_at: new Date(),
+      documents: [],
+      final_creditor_list: [],
+      status_history: [{
+        status: clientData.current_status || 'created',
+        timestamp: new Date(),
+        updated_by: 'admin'
+      }]
+    });
+    
+    await newClient.save();
+    
+    console.log(`✅ Created new client: ${newClient.firstName} ${newClient.lastName} (${newClient.aktenzeichen})`);
+    
+    res.status(201).json({
+      id: newClient.id,
+      _id: newClient._id,
+      firstName: newClient.firstName,
+      lastName: newClient.lastName,
+      email: newClient.email,
+      aktenzeichen: newClient.aktenzeichen,
+      current_status: newClient.current_status,
+      workflow_status: newClient.workflow_status,
+      created_at: newClient.created_at
+    });
+    
+  } catch (error) {
+    console.error('Error creating client:', error);
+    res.status(500).json({ 
+      error: 'Error creating client',
+      details: error.message 
+    });
+  }
+});
+
 // Trigger reprocessing of a document
 app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, res) => {
   try {
