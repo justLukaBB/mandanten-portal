@@ -13,6 +13,7 @@ const PortalLogin: React.FC = () => {
   const [showAktenzeichen, setShowAktenzeichen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,12 +29,49 @@ const PortalLogin: React.FC = () => {
         localStorage.setItem('portal_client_id', response.data.client.id);
         localStorage.setItem('portal_client_data', JSON.stringify(response.data.client));
         
-        // Redirect to personal portal
-        navigate('/portal');
+        // Wait a brief moment to ensure localStorage is properly set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Verify that the tokens were properly stored
+        const storedToken = localStorage.getItem('portal_session_token');
+        const storedClientId = localStorage.getItem('portal_client_id');
+        
+        if (storedToken && storedClientId) {
+          // Reset retry count on successful login
+          setRetryCount(0);
+          // Redirect to personal portal
+          navigate('/portal', { replace: true });
+        } else {
+          // If localStorage didn't work, try again with a longer delay
+          if (retryCount < 2) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const retryToken = localStorage.getItem('portal_session_token');
+            const retryClientId = localStorage.getItem('portal_client_id');
+            
+            if (retryToken && retryClientId) {
+              setRetryCount(0);
+              navigate('/portal', { replace: true });
+            } else {
+              setRetryCount(prev => prev + 1);
+              throw new Error('Login data could not be stored properly');
+            }
+          } else {
+            throw new Error('Login data could not be stored properly after multiple attempts');
+          }
+        }
+      } else {
+        setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.');
       }
     } catch (error: any) {
+      console.error('Login error:', error);
       if (error.response?.data?.error) {
         setError(error.response.data.error);
+      } else if (error.message?.includes('Login data could not be stored properly')) {
+        if (retryCount >= 2) {
+          setError('Wiederholte Login-Probleme. Bitte laden Sie die Seite neu und versuchen Sie es erneut.');
+        } else {
+          setError('Login-Daten konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.');
+        }
       } else {
         setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
       }

@@ -6,10 +6,39 @@ import AdminApp from './admin/AdminApp';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const sessionToken = localStorage.getItem('portal_session_token');
-  const clientId = localStorage.getItem('portal_client_id');
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
   
-  if (!sessionToken || !clientId) {
+  React.useEffect(() => {
+    const checkAuth = () => {
+      const sessionToken = localStorage.getItem('portal_session_token');
+      const clientId = localStorage.getItem('portal_client_id');
+      
+      if (sessionToken && clientId) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+    };
+    
+    // Check immediately
+    checkAuth();
+    
+    // Also check after a short delay to handle potential localStorage timing issues
+    const timeoutId = setTimeout(checkAuth, 50);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
+  
+  // Show loading state while checking authentication
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800"></div>
+      </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   
