@@ -123,72 +123,57 @@ async function initializeDatabase() {
   }
 }
 
-// Simple in-memory storage for client data and documents metadata
-// This will be migrated to MongoDB on startup
-const clientsData = {
-  '12345': {
-    id: '12345',
-    aktenzeichen: 'MAND_2024_001',
-    firstName: 'Max',
-    lastName: 'Mustermann',
-    email: 'max.mustermann@example.com',
-    phone: '+49 123 456789',
-    address: 'Musterstraße 123, 12345 Musterstadt',
-    phase: 2,
-    documents: [],
-    workflow_status: 'documents_processing',
-    first_payment_received: false,
-    admin_approved: false,
-    admin_approved_at: null,
-    admin_approved_by: null,
-    client_confirmed_creditors: false,
-    client_confirmed_at: null,
-    final_creditor_list: [],
-    processing_notes: '',
-    portal_link_sent: true,
-    portal_token: uuidv4(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-};
+// ====================================================================
+// ALL OLD IN-MEMORY STORAGE REMOVED - USING PURE MONGODB NOW
+// Old dashboard system disconnected - Analytics Dashboard only
+// ====================================================================
 
-// Hybrid function: tries MongoDB first, falls back to in-memory
+// Block all old dashboard access - force error for old routes
+const clientsData = new Proxy({}, {
+  get(target, prop) {
+    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
+  },
+  set(target, prop, value) {
+    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
+  }
+});
+
+// Pure MongoDB function - no fallback to in-memory
 async function getClient(clientId) {
   try {
-    if (databaseService.isHealthy()) {
-      // Try to find by id first, then by aktenzeichen
-      let client = await Client.findOne({ id: clientId });
-      if (!client) {
-        client = await Client.findOne({ aktenzeichen: clientId });
-      }
-      if (client) return client;
+    if (!databaseService.isHealthy()) {
+      throw new Error('Database connection not available');
     }
+    
+    // Try to find by id first, then by aktenzeichen
+    let client = await Client.findOne({ id: clientId });
+    if (!client) {
+      client = await Client.findOne({ aktenzeichen: clientId });
+    }
+    return client;
   } catch (error) {
     console.error('Error getting client from MongoDB:', error);
+    throw error;
   }
-  
-  // Fallback to in-memory
-  return clientsData[clientId] || null;
 }
 
-// Hybrid function: tries MongoDB first, falls back to in-memory
+// Pure MongoDB function - no fallback to in-memory
 async function saveClient(clientData) {
   try {
-    if (databaseService.isHealthy()) {
-      const client = await Client.findOneAndUpdate(
-        { id: clientData.id },
-        clientData,
-        { upsert: true, new: true }
-      );
-      return client;
+    if (!databaseService.isHealthy()) {
+      throw new Error('Database connection not available');
     }
+    
+    const client = await Client.findOneAndUpdate(
+      { id: clientData.id },
+      clientData,
+      { upsert: true, new: true }
+    );
+    return client;
   } catch (error) {
     console.error('Error saving client to MongoDB:', error);
+    throw error;
   }
-  
-  // Fallback to in-memory
-  clientsData[clientData.id] = clientData;
-  return clientData;
 }
 
 // Routes
@@ -508,130 +493,13 @@ app.get('/api/clients/:clientId/documents', async (req, res) => {
   }
 });
 
-// Get specific document with extraction data
-app.get('/api/clients/:clientId/documents/:documentId/extraction', (req, res) => {
-  const { clientId, documentId } = req.params;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  const document = client.documents?.find(doc => doc.id === documentId);
-  
-  if (!document) {
-    return res.status(404).json({ error: 'Document not found' });
-  }
-  
-  res.json({
-    document_id: documentId,
-    processing_status: document.processing_status,
-    ai_pipeline_success: document.ai_pipeline_success,
-    claude_ai_success: document.claude_ai_success,
-    processing_method: document.processing_method,
-    processing_time_ms: document.processing_time_ms,
-    processing_started_at: document.processing_started_at,
-    extracted_data: document.extracted_data,
-    validation: document.validation,
-    summary: document.summary,
-    processed_at: document.processed_at,
-    processing_error: document.processing_error,
-    processing_error_details: document.processing_error_details
-  });
-});
+// OLD DASHBOARD ROUTE REMOVED - Document extraction via MongoDB now
 
-// Get simplified processing status for all documents of a client
-app.get('/api/clients/:clientId/processing-status', (req, res) => {
-  const clientId = req.params.clientId;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  const documents = client.documents || [];
-  const statusSummary = {
-    total_documents: documents.length,
-    processing: documents.filter(d => d.processing_status === 'processing').length,
-    completed: documents.filter(d => d.processing_status === 'completed').length,
-    failed: documents.filter(d => d.processing_status === 'failed').length,
-    classification_success_count: documents.filter(d => d.classification_success === true).length,
-    classification_failure_count: documents.filter(d => d.classification_success === false).length,
-    creditor_documents: documents.filter(d => d.is_creditor_document === true).length,
-    non_creditor_documents: documents.filter(d => d.is_creditor_document === false).length,
-    manual_review_required: documents.filter(d => d.manual_review_required === true).length,
-    documents: documents.map(doc => ({
-      id: doc.id,
-      name: doc.name,
-      processing_status: doc.processing_status,
-      classification_success: doc.classification_success,
-      is_creditor_document: doc.is_creditor_document,
-      confidence: doc.confidence,
-      manual_review_required: doc.manual_review_required,
-      processing_time_ms: doc.processing_time_ms,
-      processed_at: doc.processed_at,
-      processing_error: doc.processing_error,
-      summary: doc.summary
-    }))
-  };
-  
-  res.json(statusSummary);
-});
+// OLD DASHBOARD ROUTE REMOVED - Using Analytics Dashboard only
 
-// Get simplified document classification summary
-app.get('/api/clients/:clientId/classification-summary', (req, res) => {
-  const clientId = req.params.clientId;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  const documents = client.documents || [];
-  
-  // Simple classification summary
-  const summary = {
-    total_documents: documents.length,
-    creditor_documents: documents.filter(d => d.is_creditor_document === true).length,
-    non_creditor_documents: documents.filter(d => d.is_creditor_document === false).length,
-    manual_review_required: documents.filter(d => d.manual_review_required === true).length,
-    high_confidence: documents.filter(d => (d.confidence || 0) >= 0.9).length,
-    medium_confidence: documents.filter(d => (d.confidence || 0) >= 0.8 && (d.confidence || 0) < 0.9).length,
-    low_confidence: documents.filter(d => (d.confidence || 0) < 0.8).length,
-    
-    documents: documents.map(doc => ({
-      id: doc.id,
-      name: doc.name,
-      processing_status: doc.processing_status,
-      is_creditor_document: doc.is_creditor_document || false,
-      confidence: doc.confidence || 0.0,
-      manual_review_required: doc.manual_review_required || false,
-      summary: doc.summary || 'No summary available',
-      creditor_data: doc.extracted_data?.creditor_data || null
-    }))
-  };
-  
-  res.json(summary);
-});
+// OLD DASHBOARD ROUTE REMOVED - Using Analytics Dashboard only
 
-// Admin: Mark first payment as received and move to admin review
-app.post('/api/admin/clients/:clientId/mark-payment-received', (req, res) => {
-  const clientId = req.params.clientId;
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  client.first_payment_received = true;
-  client.workflow_status = 'admin_review';
-  
-  res.json({ 
-    success: true, 
-    message: 'Erste Rate als erhalten markiert - bereit für Admin-Prüfung',
-    workflow_status: client.workflow_status
-  });
-});
+// OLD DASHBOARD ROUTE REMOVED - Zendesk handles workflow now
 
 // Admin: Generate final creditor list (deduplicated and approved)
 app.post('/api/admin/clients/:clientId/generate-creditor-list', (req, res) => {
@@ -790,133 +658,9 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
   }
 });
 
-// Client: Confirm creditor list
-app.post('/api/clients/:clientId/confirm-creditors', (req, res) => {
-  const clientId = req.params.clientId;
-  const { confirmed_creditors } = req.body; // Array of creditor IDs
-  const client = clientsData[clientId];
-  
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
-  
-  if (client.workflow_status !== 'client_confirmation') {
-    return res.status(400).json({ 
-      error: 'Bestätigung in diesem Status nicht möglich',
-      current_status: client.workflow_status
-    });
-  }
-  
-  // Update creditor statuses based on client confirmation
-  client.final_creditor_list.forEach(creditor => {
-    if (confirmed_creditors.includes(creditor.id)) {
-      creditor.status = 'confirmed';
-      creditor.confirmed_at = new Date().toISOString();
-    } else {
-      creditor.status = 'rejected';
-      creditor.rejected_at = new Date().toISOString();
-    }
-  });
-  
-  // Update client status
-  client.client_confirmed_creditors = true;
-  client.client_confirmed_at = new Date().toISOString();
-  client.workflow_status = 'creditor_contact_ready'; // Ready for admin to start Zendesk process
-  
-  const confirmedCount = client.final_creditor_list.filter(c => c.status === 'confirmed').length;
-  
-  res.json({
-    success: true,
-    message: `${confirmedCount} Gläubiger bestätigt - Bereit für Gläubiger-Kontaktaufnahme`,
-    confirmed_count: confirmedCount,
-    total_count: client.final_creditor_list.length,
-    workflow_status: client.workflow_status,
-    next_step: 'admin_zendesk_contact'
-  });
-});
+// OLD DASHBOARD ROUTE REMOVED - Zendesk handles creditor confirmation now
 
-// Admin: Start Zendesk creditor contact process
-app.post('/api/admin/clients/:clientId/start-creditor-contact', async (req, res) => {
-  try {
-    const clientId = req.params.clientId;
-    const client = clientsData[clientId];
-    
-    if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    if (client.workflow_status !== 'creditor_contact_ready') {
-      return res.status(400).json({
-        error: 'Client not ready for creditor contact',
-        current_status: client.workflow_status,
-        required_status: 'creditor_contact_ready'
-      });
-    }
-    
-    console.log(`🚀 Starting Zendesk creditor contact process for client: ${clientId}`);
-    
-    // Get confirmed creditors
-    const confirmedCreditors = client.final_creditor_list.filter(c => c.status === 'confirmed');
-    
-    if (confirmedCreditors.length === 0) {
-      return res.status(400).json({
-        error: 'No confirmed creditors found',
-        total_creditors: client.final_creditor_list.length
-      });
-    }
-    
-    // Prepare client data for creditor contact service
-    const clientData = {
-      name: `${client.firstName} ${client.lastName}`,
-      email: client.email,
-      reference: clientId,
-      confirmed_creditors: confirmedCreditors
-    };
-    
-    console.log(`📋 Processing ${confirmedCreditors.length} confirmed creditors`);
-    
-    // Start the creditor contact process
-    const contactResult = await creditorContactService.processClientCreditorConfirmation(
-      clientId,
-      clientData
-    );
-    
-    if (contactResult.success) {
-      // Update client workflow status
-      client.workflow_status = 'creditor_contact_in_progress';
-      client.creditor_contact_started = true;
-      client.creditor_contact_started_at = new Date().toISOString();
-      
-      console.log('✅ Creditor contact process started successfully');
-      
-      res.json({
-        success: true,
-        message: `Zendesk-Tickets erstellt für ${confirmedCreditors.length} Gläubiger`,
-        creditors_contacted: confirmedCreditors.length,
-        workflow_status: client.workflow_status,
-        zendesk_result: contactResult,
-        next_step: 'wait_for_creditor_responses'
-      });
-    } else {
-      console.error('❌ Failed to start creditor contact process:', contactResult.error);
-      
-      res.status(500).json({
-        success: false,
-        error: 'Failed to start creditor contact process',
-        details: contactResult.error,
-        workflow_status: client.workflow_status
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Error starting creditor contact:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to start creditor contact',
-      details: error.message
-    });
-  }
-});
+// OLD DASHBOARD ROUTE REMOVED - Zendesk handles creditor contact now
 
 // Admin: Mark payment received
 app.post('/api/admin/clients/:clientId/mark-payment-received', async (req, res) => {
