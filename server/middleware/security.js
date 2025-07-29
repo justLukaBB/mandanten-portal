@@ -92,6 +92,12 @@ const validationRules = {
     .isLength({ min: 1, max: 255 })
     .withMessage('Document name must be 1-255 characters'),
     
+  password: body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
+    
   // Sanitize any text input
   textField: (fieldName) => body(fieldName)
     .optional()

@@ -4,6 +4,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientManagement from './pages/ClientManagement';
 import DebtRestructuring from './pages/DebtRestructuring';
+import api from '../config/api';
 
 const AdminApp: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -13,7 +14,16 @@ const AdminApp: React.FC = () => {
   useEffect(() => {
     // Check if user is authenticated
     const authToken = localStorage.getItem('admin_auth');
-    setIsAuthenticated(authToken === 'true');
+    const adminToken = localStorage.getItem('admin_token');
+    
+    if (authToken === 'true' && adminToken) {
+      // Set API auth header
+      api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+    
     setLoading(false);
   }, []);
 

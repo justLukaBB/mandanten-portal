@@ -1007,7 +1007,7 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
 // Admin: Get all clients for dashboard
 app.get('/api/admin/clients', 
   rateLimits.admin,
-  // authenticateAdmin, // Commented out for now - add proper admin auth later
+  authenticateAdmin,
   async (req, res) => {
   try {
     let clients = [];
@@ -1488,18 +1488,30 @@ app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
       throw new Error('Missing ticket or requester information');
     }
     
+    // Validate required fields
+    if (!requester.email) {
+      throw new Error('Requester email is required');
+    }
+    
     // Extract Aktenzeichen and Email from the webhook
     const aktenzeichen = requester?.aktenzeichen || 
                         ticket.external_id || 
+                        ticket.id || 
                         `MAND_${Date.now()}`;
     
-    const email = requester.email;
+    const email = requester.email.toLowerCase().trim();
     const name = requester.name || 'Unknown';
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error(`Invalid email format: ${email}`);
+    }
     
     console.log(`📋 Creating portal user: ${name} (${email}) - Aktenzeichen: ${aktenzeichen}`);
     
-    // Generate unique client ID based on Aktenzeichen
-    const clientId = aktenzeichen.replace(/[^a-zA-Z0-9]/g, '_');
+    // Generate unique client ID - use Aktenzeichen directly if alphanumeric, otherwise create safe version
+    const clientId = aktenzeichen;
     
     // Check if client already exists
     const existingClient = await getClient(clientId);
@@ -1662,6 +1674,50 @@ app.post('/api/portal/login',
     
   } catch (error) {
     console.error('Error during portal login:', error);
+    res.status(500).json({ 
+      error: 'Anmeldefehler',
+      details: error.message 
+    });
+  }
+});
+
+// Admin login endpoint
+app.post('/api/admin/login',
+  rateLimits.auth,
+  validateRequest([
+    validationRules.email,
+    validationRules.password
+  ]),
+  async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // TODO: Replace with proper admin user management
+    // For now, use environment variables for admin credentials
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@mandanten-portal.de';
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // CHANGE THIS!
+    
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ 
+        error: 'Ungültige Admin-Anmeldedaten' 
+      });
+    }
+    
+    // Generate admin JWT token
+    const token = generateAdminToken(email);
+    
+    res.json({
+      success: true,
+      message: 'Admin-Anmeldung erfolgreich',
+      token,
+      user: {
+        email,
+        role: 'admin'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error during admin login:', error);
     res.status(500).json({ 
       error: 'Anmeldefehler',
       details: error.message 

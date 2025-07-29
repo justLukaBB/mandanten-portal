@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import api from '../../config/api';
 
 interface AdminLoginProps {
   onLogin: () => void;
@@ -7,7 +8,7 @@ interface AdminLoginProps {
 
 const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -19,16 +20,29 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
-    // Simple demo authentication
-    // In production, you'd call your authentication API
-    if (credentials.username === 'admin' && credentials.password === 'admin123') {
-      localStorage.setItem('admin_auth', 'true');
-      onLogin();
-    } else {
-      setError('Ungültige Anmeldedaten');
+    try {
+      const response = await api.post('/admin/login', {
+        email: credentials.email,
+        password: credentials.password
+      });
+
+      if (response.data.success) {
+        // Store admin token
+        localStorage.setItem('admin_token', response.data.token);
+        localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_email', response.data.user.email);
+        
+        // Set API auth header for future requests
+        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        
+        onLogin();
+      }
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      setError(error.response?.data?.error || 'Anmeldefehler');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,17 +68,17 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="sr-only">
-                Benutzername
+              <label htmlFor="email" className="sr-only">
+                E-Mail
               </label>
               <input
-                id="username"
-                name="username"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Benutzername"
-                value={credentials.username}
+                placeholder="E-Mail"
+                value={credentials.email}
                 onChange={handleInputChange}
               />
             </div>
@@ -121,7 +135,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
           <div className="text-center">
             <div className="text-sm text-gray-600 bg-gray-100 p-3 rounded-md">
               <strong>Demo-Anmeldedaten:</strong><br />
-              Benutzername: <code className="bg-white px-1 py-0.5 rounded">admin</code><br />
+              E-Mail: <code className="bg-white px-1 py-0.5 rounded">admin@mandanten-portal.de</code><br />
               Passwort: <code className="bg-white px-1 py-0.5 rounded">admin123</code>
             </div>
           </div>
