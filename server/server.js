@@ -13,6 +13,7 @@ const { authenticateClient, authenticateAdmin, generateClientToken, generateAdmi
 const healthRoutes = require('./routes/health');
 const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
+const agentReviewRoutes = require('./routes/agent-review');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -104,6 +105,9 @@ app.use('/api/zendesk-webhook', zendeskWebhooks);
 
 // Portal webhook routes (no auth required - internal system calls)
 app.use('/api/portal-webhook', portalWebhooks);
+
+// Agent review routes (admin auth required)
+app.use('/api/agent-review', agentReviewRoutes);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');

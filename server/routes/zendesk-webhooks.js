@@ -170,17 +170,31 @@ router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
   }
 });
 
-// Zendesk Webhook: Payment Confirmed
+// Zendesk Webhook: Payment Confirmed (Phase 2)
 // Triggered when agent checks "erste_rate_bezahlt" checkbox
 router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
   try {
     console.log('💰 Zendesk Webhook: Payment-Confirmed received', req.body);
     
-    const {
-      aktenzeichen,
-      zendesk_ticket_id,
-      agent_email
-    } = req.body;
+    // Handle both direct format and Zendesk webhook format
+    let aktenzeichen, zendesk_ticket_id, agent_email;
+    
+    if (req.body.ticket && req.body.ticket.requester) {
+      // Zendesk webhook format
+      const requester = req.body.ticket.requester;
+      const ticket = req.body.ticket;
+      
+      aktenzeichen = requester.aktenzeichen;
+      zendesk_ticket_id = ticket.id;
+      agent_email = req.body.current_user?.email || 'system';
+    } else {
+      // Direct format (for backward compatibility)
+      ({
+        aktenzeichen,
+        zendesk_ticket_id,
+        agent_email
+      } = req.body);
+    }
 
     if (!aktenzeichen) {
       return res.status(400).json({
@@ -220,31 +234,194 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
 
     await client.save();
 
-    // Generate response for Zendesk ticket
+    // Analyze documents and creditors for review
     const documents = client.documents || [];
     const creditors = client.final_creditor_list || [];
     const completedDocs = documents.filter(d => d.processing_status === 'completed');
     const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+    
+    // Check which creditors need manual review (confidence < 80%)
+    const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+    const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
+    
+    // Generate automatic review ticket content
+    const reviewTicketContent = generateCreditorReviewTicketContent(
+      client, documents, creditors, needsReview.length > 0
+    );
 
-    const ticketContent = generateGlaeubierProcessContent(client, documents, creditors);
-
-    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Documents: ${documents.length}, Creditors: ${creditors.length}`);
+    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
 
     res.json({
       success: true,
-      message: 'Payment confirmation processed',
+      message: 'Payment confirmation processed - Creditor review ticket ready',
       client_status: 'payment_confirmed',
       documents_count: documents.length,
       creditor_documents: creditorDocs.length,
       extracted_creditors: creditors.length,
-      ticket_content: ticketContent,
-      next_step: creditors.length > 0 ? 'Create creditor process ticket' : 'Request document upload'
+      creditors_need_review: needsReview.length,
+      creditors_confidence_ok: confidenceOk.length,
+      manual_review_required: needsReview.length > 0,
+      review_ticket_content: reviewTicketContent,
+      review_dashboard_url: needsReview.length > 0 
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        : null,
+      next_step: needsReview.length > 0 
+        ? 'Create review ticket - Manual correction needed' 
+        : 'All creditors verified - Send confirmation request to client'
     });
 
   } catch (error) {
     console.error('❌ Error in payment-confirmed webhook:', error);
     res.status(500).json({
       error: 'Failed to process payment confirmation',
+      details: error.message
+    });
+  }
+});
+
+// Zendesk Webhook: Start Manual Review (Phase 2)
+// Triggered when agent clicks "Manuelle Prüfung starten" button
+router.post('/start-manual-review', rateLimits.general, async (req, res) => {
+  try {
+    console.log('🔍 Zendesk Webhook: Start-Manual-Review received', req.body);
+    
+    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+
+    if (!aktenzeichen) {
+      return res.status(400).json({
+        error: 'Missing required field: aktenzeichen'
+      });
+    }
+
+    const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        aktenzeichen: aktenzeichen
+      });
+    }
+
+    // Update client status to indicate review in progress
+    client.current_status = 'under_manual_review';
+    client.updated_at = new Date();
+
+    // Add status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'under_manual_review',
+      changed_by: 'agent',
+      zendesk_ticket_id: zendesk_ticket_id,
+      metadata: {
+        agent_email: agent_email,
+        agent_action: 'Started manual creditor review',
+        review_started_at: new Date()
+      }
+    });
+
+    await client.save();
+
+    const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`;
+
+    console.log(`✅ Manual review started for ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: 'Manual review session started',
+      client_status: 'under_manual_review',
+      review_dashboard_url: reviewUrl,
+      documents_to_review: (client.documents || []).filter(d => d.is_creditor_document).length,
+      creditors_need_review: (client.final_creditor_list || []).filter(c => (c.confidence || 0) < 0.8).length,
+      next_step: 'Agent should open review dashboard and correct AI extractions'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in start-manual-review webhook:', error);
+    res.status(500).json({
+      error: 'Failed to start manual review',
+      details: error.message
+    });
+  }
+});
+
+// Zendesk Webhook: Manual Review Complete (Phase 2)
+// Triggered when agent completes manual review and clicks "Review abgeschlossen"
+router.post('/manual-review-complete', rateLimits.general, async (req, res) => {
+  try {
+    console.log('✅ Zendesk Webhook: Manual-Review-Complete received', req.body);
+    
+    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+
+    if (!aktenzeichen) {
+      return res.status(400).json({
+        error: 'Missing required field: aktenzeichen'
+      });
+    }
+
+    const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        aktenzeichen: aktenzeichen
+      });
+    }
+
+    // Update client status
+    client.current_status = 'manual_review_complete';
+    client.updated_at = new Date();
+
+    // Add status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'manual_review_complete',
+      changed_by: 'agent',
+      zendesk_ticket_id: zendesk_ticket_id,
+      metadata: {
+        agent_email: agent_email,
+        agent_action: 'Completed manual creditor review',
+        review_completed_at: new Date()
+      }
+    });
+
+    await client.save();
+
+    // Generate final creditor summary for Zendesk ticket update
+    const creditors = client.final_creditor_list || [];
+    const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+    
+    const finalCreditorsList = creditors.map(c => 
+      `✅ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€`
+    ).join('\n');
+
+    const finalTicketContent = `✅ REVIEW ABGESCHLOSSEN
+
+📊 FINALE GLÄUBIGER-LISTE:
+${finalCreditorsList}
+
+💰 FINALE GESAMTSCHULD: ${totalDebt.toFixed(2)}€
+
+🚀 BEREIT FÜR KUNDEN-BESTÄTIGUNG
+[BUTTON: Gläubigerliste zur Bestätigung senden]
+
+📁 Mandant: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
+
+    console.log(`✅ Manual review completed for ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: 'Manual review completed successfully',
+      client_status: 'manual_review_complete',
+      creditors_count: creditors.length,
+      total_debt: totalDebt,
+      final_ticket_content: finalTicketContent,
+      next_step: 'Ready to send creditor confirmation request to client'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in manual-review-complete webhook:', error);
+    res.status(500).json({
+      error: 'Failed to complete manual review',
       details: error.message
     });
   }
@@ -316,7 +493,54 @@ router.post('/creditor-confirmation-request', rateLimits.general, async (req, re
   }
 });
 
-// Helper function to generate Zendesk ticket content
+// Helper function to generate creditor review ticket content for Phase 2
+function generateCreditorReviewTicketContent(client, documents, creditors, needsManualReview) {
+  const completedDocs = documents.filter(d => d.processing_status === 'completed');
+  const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+  const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+  
+  // Separate creditors by confidence level
+  const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
+  const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+  
+  // Generate creditor lists
+  const verifiedCreditors = confidenceOk.map(c => 
+    `✅ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.confidence || 0) * 100)}%)`
+  ).join('\n');
+  
+  const reviewCreditors = needsReview.map(c => 
+    `⚠️ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.confidence || 0) * 100)}%) → PRÜFUNG NÖTIG`
+  ).join('\n');
+
+  const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`;
+
+  return `🤖 GLÄUBIGER-ANALYSE FÜR: ${client.firstName} ${client.lastName}
+
+📊 AI-VERARBEITUNG ABGESCHLOSSEN:
+• Dokumente verarbeitet: ${completedDocs.length}/${documents.length}
+• Gläubiger erkannt: ${creditors.length}
+• Manuelle Prüfung erforderlich: ${needsReview.length} ${needsManualReview ? '⚠️' : '✅'}
+
+📋 ERKANNTE GLÄUBIGER:
+${verifiedCreditors || 'Keine verifizierten Gläubiger'}
+
+${reviewCreditors ? `🔍 MANUELLE PRÜFUNG ERFORDERLICH:
+${reviewCreditors}` : ''}
+
+💰 GESCHÄTZTE GESAMTSCHULD: ${totalDebt.toFixed(2)}€
+
+${needsManualReview ? `🔧 AGENT-AKTIONEN:
+[BUTTON: Manuelle Prüfung starten] → ${reviewUrl}
+
+Nach der manuellen Prüfung:
+[BUTTON: Gläubigerliste zur Bestätigung senden]` : `✅ ALLE GLÄUBIGER VERIFIZIERT:
+[BUTTON: Gläubigerliste zur Bestätigung senden]`}
+
+🔗 Mandant Portal: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}
+📁 Aktenzeichen: ${client.aktenzeichen}`;
+}
+
+// Helper function to generate Zendesk ticket content (legacy)
 function generateGlaeubierProcessContent(client, documents, creditors) {
   const completedDocs = documents.filter(d => d.processing_status === 'completed');
   const creditorDocs = documents.filter(d => d.is_creditor_document === true);
