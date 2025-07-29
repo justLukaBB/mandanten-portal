@@ -7,7 +7,10 @@ import {
   ChartBarIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  EyeIcon,
+  InformationCircleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 
@@ -65,10 +68,15 @@ interface Creditor {
 const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [user, setUser] = useState<DetailedUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUserDetails();
+    
+    // Auto-refresh every 10 seconds to get latest AI processing results
+    const interval = setInterval(fetchUserDetails, 10000);
+    return () => clearInterval(interval);
   }, [userId]);
 
   const fetchUserDetails = async () => {
@@ -108,6 +116,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         userData.documents = [];
       }
       
+      console.log('UserDetailView: Loaded user data:', userData);
+      console.log('UserDetailView: Documents loaded:', userData.documents);
       setUser(userData);
       
     } catch (error) {
@@ -187,12 +197,24 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           <h2 className="text-2xl font-bold text-gray-900">
             📄 User Details: {user.firstName} {user.lastName}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={fetchUserDetails}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border hover:bg-red-50 transition-colors"
+              style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+              title="Refresh user data"
+            >
+              <ArrowPathIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -265,9 +287,30 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               {doc.extracted_data.creditor_data.claim_amount && (
                                 <p><strong>Amount:</strong> €{doc.extracted_data.creditor_data.claim_amount}</p>
                               )}
+                              {doc.extracted_data.creditor_data.reference_number && (
+                                <p><strong>Ref:</strong> {doc.extracted_data.creditor_data.reference_number}</p>
+                              )}
+                            </div>
+                          )}
+                          {doc.confidence && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              <p><strong>AI Confidence:</strong> {Math.round(doc.confidence * 100)}%</p>
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            console.log('Details button clicked for document:', doc);
+                            setSelectedDocument(doc);
+                          }}
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-red-50 transition-colors"
+                          style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+                        >
+                          <EyeIcon className="w-3 h-3 mr-1" />
+                          Details
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -356,6 +399,228 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           </button>
         </div>
       </div>
+
+      {/* Document Detail Modal */}
+      {selectedDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <InformationCircleIcon className="w-8 h-8" style={{color: '#9f1a1d'}} />
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Dokument Details</h2>
+                  <p className="text-sm text-gray-600">{selectedDocument.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDocument(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Document Status & Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3 text-gray-900">📄 Dokument Information</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="font-medium text-gray-600">Status:</span>
+                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                        selectedDocument.processing_status === 'completed' ? 'bg-green-100 text-green-800' :
+                        selectedDocument.processing_status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedDocument.processing_status === 'completed' ? 'Verarbeitet' :
+                         selectedDocument.processing_status === 'processing' ? 'Wird verarbeitet...' : 'Fehler'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Hochgeladen:</span>
+                      <span className="ml-2 text-gray-900">{new Date(selectedDocument.uploadedAt).toLocaleString('de-DE')}</span>
+                    </div>
+                    {selectedDocument.processed_at && (
+                      <div>
+                        <span className="font-medium text-gray-600">Verarbeitet:</span>
+                        <span className="ml-2 text-gray-900">{new Date(selectedDocument.processed_at).toLocaleString('de-DE')}</span>
+                      </div>
+                    )}
+                    {selectedDocument.size && (
+                      <div>
+                        <span className="font-medium text-gray-600">Dateigröße:</span>
+                        <span className="ml-2 text-gray-900">{(selectedDocument.size / (1024 * 1024)).toFixed(2)} MB</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3 text-gray-900">🤖 KI-Analyse</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="font-medium text-gray-600">Gläubigerdokument:</span>
+                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                        selectedDocument.is_creditor_document ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {selectedDocument.is_creditor_document ? 'JA' : 'NEIN'}
+                      </span>
+                    </div>
+                    {selectedDocument.confidence && (
+                      <div>
+                        <span className="font-medium text-gray-600">Sicherheit:</span>
+                        <span className="ml-2 text-gray-900 font-mono">{Math.round(selectedDocument.confidence * 100)}%</span>
+                      </div>
+                    )}
+                    {selectedDocument.document_status && (
+                      <div>
+                        <span className="font-medium text-gray-600">Dokumentstatus:</span>
+                        <span className="ml-2 text-gray-900">{selectedDocument.document_status}</span>
+                      </div>
+                    )}
+                    {selectedDocument.manual_review_required && (
+                      <div>
+                        <span className="font-medium text-gray-600">Manuelle Prüfung:</span>
+                        <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Erforderlich</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Creditor Data - Show for all documents with creditor_data */}
+              {selectedDocument.extracted_data?.creditor_data && (
+                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                  <h3 className="text-lg font-semibold mb-3 text-red-900">🏛️ Gläubiger-Informationen</h3>
+                  
+                  {/* Key Information Summary */}
+                  <div className="bg-white rounded-lg p-3 mb-4 border border-red-300">
+                    <h4 className="font-semibold text-red-800 mb-2">📋 Wichtige Daten im Überblick</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-600">Aktenzeichen:</span>
+                        <p className="text-gray-900 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number || 'Nicht verfügbar'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-600">Forderungssumme:</span>
+                        <p className="text-red-700 font-bold">{selectedDocument.extracted_data.creditor_data.claim_amount ? `€${selectedDocument.extracted_data.creditor_data.claim_amount}` : 'Nicht verfügbar'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-600">Forderung gegen:</span>
+                        <p className="text-gray-900">{user?.firstName} {user?.lastName} ({user?.aktenzeichen})</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div>
+                        <span className="font-medium text-red-700">Absender/Gläubiger:</span>
+                        <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_name || 'Nicht verfügbar'}</p>
+                      </div>
+                      {selectedDocument.extracted_data.creditor_data.sender_email && (
+                        <div>
+                          <span className="font-medium text-red-700">E-Mail:</span>
+                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_email}</p>
+                        </div>
+                      )}
+                      {selectedDocument.extracted_data.creditor_data.sender_address && (
+                        <div>
+                          <span className="font-medium text-red-700">Adresse:</span>
+                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_address}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {selectedDocument.extracted_data.creditor_data.reference_number && (
+                        <div>
+                          <span className="font-medium text-red-700">Aktenzeichen/Referenz:</span>
+                          <p className="text-red-900 mt-1 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number}</p>
+                        </div>
+                      )}
+                      {selectedDocument.extracted_data.creditor_data.claim_amount && (
+                        <div>
+                          <span className="font-medium text-red-700">Forderungssumme:</span>
+                          <p className="text-red-900 mt-1 text-xl font-bold">€{selectedDocument.extracted_data.creditor_data.claim_amount}</p>
+                        </div>
+                      )}
+                      {selectedDocument.extracted_data.creditor_data.is_representative && (
+                        <div>
+                          <span className="font-medium text-red-700">Vertreter:</span>
+                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            {selectedDocument.extracted_data.creditor_data.is_representative ? 'JA' : 'NEIN'}
+                          </span>
+                        </div>
+                      )}
+                      {selectedDocument.extracted_data.creditor_data.actual_creditor && (
+                        <div>
+                          <span className="font-medium text-red-700">Tatsächlicher Gläubiger:</span>
+                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.actual_creditor}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Reasoning */}
+              {selectedDocument.extracted_data?.reasoning && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <h3 className="text-lg font-semibold mb-3 text-blue-900">🧠 KI-Begründung</h3>
+                  <p className="text-blue-800 text-sm leading-relaxed">{selectedDocument.extracted_data.reasoning}</p>
+                </div>
+              )}
+
+              {/* Summary */}
+              {selectedDocument.summary && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3 text-gray-900">📋 Zusammenfassung</h3>
+                  <p className="text-gray-700 text-sm leading-relaxed">{selectedDocument.summary}</p>
+                </div>
+              )}
+
+              {/* Technical Details */}
+              {selectedDocument.extracted_data && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3 text-gray-900">⚙️ Technische Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    {selectedDocument.extracted_data.processing_method && (
+                      <div>
+                        <span className="font-medium text-gray-600">Verarbeitungsmethode:</span>
+                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.processing_method}</p>
+                      </div>
+                    )}
+                    {selectedDocument.extracted_data.workflow_status && (
+                      <div>
+                        <span className="font-medium text-gray-600">Workflow-Status:</span>
+                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.workflow_status}</p>
+                      </div>
+                    )}
+                    {selectedDocument.extracted_data.token_usage && (
+                      <div>
+                        <span className="font-medium text-gray-600">Token-Verbrauch:</span>
+                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.token_usage.total_tokens || 'N/A'} Tokens</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setSelectedDocument(null)}
+                  className="px-6 py-2 text-white rounded-md hover:opacity-90"
+                  style={{backgroundColor: '#9f1a1d'}}
+                >
+                  Schließen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
