@@ -27,37 +27,47 @@ const TestDataService = require('./services/testDataService');
 const app = express();
 const PORT = config.PORT;
 
-// Simple mutex for database operations to prevent race conditions
+// Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
 
 // Safe client update function to prevent race conditions
 async function safeClientUpdate(clientId, updateFunction) {
-  // Wait for any existing operations on this client
-  while (processingMutex.get(clientId)) {
-    await new Promise(resolve => setTimeout(resolve, 50));
+  // If no lock exists, create one resolved to start immediately
+  if (!processingMutex.has(clientId)) {
+    processingMutex.set(clientId, Promise.resolve());
   }
   
-  // Lock this client
-  processingMutex.set(clientId, true);
+  // Chain this operation after the previous one
+  const currentLock = processingMutex.get(clientId);
   
-  try {
-    // Get fresh client data
-    const client = await getClient(clientId);
-    if (!client) {
-      throw new Error(`Client ${clientId} not found`);
+  const newLock = currentLock.then(async () => {
+    try {
+      console.log(`🔒 Acquiring lock for client ${clientId}`);
+      
+      // Get fresh client data
+      const client = await getClient(clientId);
+      if (!client) {
+        throw new Error(`Client ${clientId} not found`);
+      }
+      
+      // Apply the update function
+      const updatedClient = await updateFunction(client);
+      
+      // Save to database
+      await saveClient(updatedClient);
+      
+      console.log(`✅ Lock released for client ${clientId}`);
+      return updatedClient;
+    } catch (error) {
+      console.error(`❌ Error in safeClientUpdate for ${clientId}:`, error);
+      throw error;
     }
-    
-    // Apply the update function
-    const updatedClient = await updateFunction(client);
-    
-    // Save to database
-    await saveClient(updatedClient);
-    
-    return updatedClient;
-  } finally {
-    // Always release the lock
-    processingMutex.delete(clientId);
-  }
+  });
+  
+  // Update the lock to point to the new promise
+  processingMutex.set(clientId, newLock);
+  
+  return newLock;
 }
 
 // Trust proxy for Render deployment
@@ -518,12 +528,12 @@ app.post('/api/clients/:clientId/documents',
       });
     }
     
-    // Add to client's documents
-    client.documents = client.documents || [];
-    client.documents.push(...uploadedDocuments);
-    
-    // Save updated client to database
-    await saveClient(client);
+    // Add to client's documents using safe update to prevent race conditions
+    await safeClientUpdate(clientId, (client) => {
+      client.documents = client.documents || [];
+      client.documents.push(...uploadedDocuments);
+      return client;
+    });
     
     res.json({
       success: true,
