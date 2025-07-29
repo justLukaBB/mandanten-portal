@@ -152,6 +152,48 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
+  const getDocumentStatusInfo = (doc: Document) => {
+    if (doc.processing_status === 'processing') {
+      return {
+        badge: { color: 'bg-yellow-100 text-yellow-800', text: 'Wird verarbeitet...' },
+        showCreditorInfo: false
+      };
+    }
+    
+    if (doc.processing_status === 'failed') {
+      return {
+        badge: { color: 'bg-red-100 text-red-800', text: 'Verarbeitung fehlgeschlagen' },
+        showCreditorInfo: false
+      };
+    }
+
+    if (doc.processing_status === 'completed') {
+      if (doc.manual_review_required) {
+        return {
+          badge: { color: 'bg-orange-100 text-orange-800', text: 'Manuelle Prüfung erforderlich' },
+          showCreditorInfo: true
+        };
+      }
+      
+      if (doc.is_creditor_document) {
+        return {
+          badge: { color: 'bg-red-100 text-red-800', text: 'Gläubigerdokument' },
+          showCreditorInfo: true
+        };
+      } else {
+        return {
+          badge: { color: 'bg-green-100 text-green-800', text: 'Kein Gläubigerdokument' },
+          showCreditorInfo: false
+        };
+      }
+    }
+
+    return {
+      badge: { color: 'bg-gray-100 text-gray-800', text: 'Unbekannt' },
+      showCreditorInfo: false
+    };
+  };
+
   const getDocumentStatusIcon = (doc: Document) => {
     if (doc.processing_status === 'processing') {
       return <ClockIcon className="w-5 h-5 text-yellow-500" />;
@@ -278,51 +320,70 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {user.documents && user.documents.length > 0 ? (
-                user.documents.map((doc) => (
-                  <div key={doc.id} className="border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-2">
-                        {getDocumentStatusIcon(doc)}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {doc.processing_status === 'completed' ? 'Processed' : 
-                             doc.processing_status === 'processing' ? 'Processing...' : 'Failed'}
-                          </p>
-                          {doc.extracted_data?.creditor_data && (
-                            <div className="mt-2 text-xs text-gray-600">
-                              <p><strong>Creditor:</strong> {doc.extracted_data.creditor_data.sender_name || 'N/A'}</p>
-                              {doc.extracted_data.creditor_data.claim_amount && (
-                                <p><strong>Amount:</strong> €{doc.extracted_data.creditor_data.claim_amount}</p>
-                              )}
-                              {doc.extracted_data.creditor_data.reference_number && (
-                                <p><strong>Ref:</strong> {doc.extracted_data.creditor_data.reference_number}</p>
-                              )}
+                user.documents.map((doc) => {
+                  const statusInfo = getDocumentStatusInfo(doc);
+                  return (
+                    <div key={doc.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-3">
+                          {getDocumentStatusIcon(doc)}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.badge.color}`}>
+                                {statusInfo.badge.text}
+                              </span>
                             </div>
-                          )}
-                          {doc.confidence && (
-                            <div className="mt-2 text-xs text-gray-500">
-                              <p><strong>AI Confidence:</strong> {Math.round(doc.confidence * 100)}%</p>
-                            </div>
-                          )}
+                            
+                            {/* AI Confidence - always show if available */}
+                            {doc.confidence && (
+                              <p className="text-xs text-gray-500 mb-2">
+                                <strong>AI-Sicherheit:</strong> {Math.round(doc.confidence * 100)}%
+                              </p>
+                            )}
+
+                            {/* Creditor Information - only show for creditor documents or manual review */}
+                            {statusInfo.showCreditorInfo && doc.extracted_data?.creditor_data && (
+                              <div className="mt-2 p-2 bg-red-50 rounded text-xs border border-red-200">
+                                <div className="space-y-1">
+                                  {doc.extracted_data.creditor_data.sender_name && (
+                                    <p><strong>Gläubiger:</strong> {doc.extracted_data.creditor_data.sender_name}</p>
+                                  )}
+                                  {doc.extracted_data.creditor_data.claim_amount && (
+                                    <p><strong>Forderung:</strong> <span className="font-semibold text-red-700">€{doc.extracted_data.creditor_data.claim_amount}</span></p>
+                                  )}
+                                  {doc.extracted_data.creditor_data.reference_number && (
+                                    <p><strong>Aktenzeichen:</strong> <span className="font-mono">{doc.extracted_data.creditor_data.reference_number}</span></p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Summary for non-creditor documents */}
+                            {!statusInfo.showCreditorInfo && doc.processing_status === 'completed' && (
+                              <div className="mt-2 text-xs text-gray-600">
+                                <p className="italic">Dieses Dokument enthält keine Gläubigerforderung</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              console.log('Details button clicked for document:', doc);
+                              setSelectedDocument(doc);
+                            }}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-red-50 transition-colors"
+                            style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+                          >
+                            <EyeIcon className="w-3 h-3 mr-1" />
+                            Details
+                          </button>
                         </div>
                       </div>
-                      <div className="flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            console.log('Details button clicked for document:', doc);
-                            setSelectedDocument(doc);
-                          }}
-                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-red-50 transition-colors"
-                          style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
-                        >
-                          <EyeIcon className="w-3 h-3 mr-1" />
-                          Details
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                }))
               ) : (
                 <p className="text-gray-500 text-sm">No documents uploaded</p>
               )}
