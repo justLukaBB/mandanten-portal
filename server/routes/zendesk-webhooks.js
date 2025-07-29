@@ -11,16 +11,42 @@ router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
   try {
     console.log('🔗 Zendesk Webhook: Portal-Link-Sent received', req.body);
     
-    const {
-      email,
-      aktenzeichen,
-      firstName,
-      lastName,
-      zendesk_ticket_id,
-      zendesk_user_id,
-      phone,
-      address
-    } = req.body;
+    // Handle both direct format and Zendesk webhook format
+    let email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id, phone, address;
+    
+    if (req.body.ticket && req.body.ticket.requester) {
+      // Zendesk webhook format
+      const requester = req.body.ticket.requester;
+      const ticket = req.body.ticket;
+      
+      email = requester.email;
+      aktenzeichen = requester.aktenzeichen;
+      zendesk_ticket_id = ticket.id;
+      zendesk_user_id = requester.id;
+      phone = requester.phone || '';
+      address = '';
+      
+      // Parse name - assume "FirstName LastName" format
+      const nameParts = (requester.name || '').split(' ');
+      firstName = nameParts[0] || '';
+      lastName = nameParts.slice(1).join(' ') || '';
+      
+      console.log('📋 Parsed Zendesk webhook data:', {
+        email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id
+      });
+    } else {
+      // Direct format (for backward compatibility)
+      ({
+        email,
+        aktenzeichen,
+        firstName,
+        lastName,
+        zendesk_ticket_id,
+        zendesk_user_id,
+        phone,
+        address
+      } = req.body);
+    }
 
     // Validate required fields
     if (!email || !aktenzeichen || !firstName || !lastName) {
