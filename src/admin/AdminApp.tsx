@@ -14,32 +14,49 @@ const AdminApp: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('🔍 AdminApp: Checking authentication...');
+      
       // Check if user is authenticated
       const authToken = localStorage.getItem('admin_auth');
       const adminToken = localStorage.getItem('admin_token');
       
+      console.log('🔑 AdminApp: Auth check:', { 
+        hasAuthFlag: authToken === 'true', 
+        hasToken: !!adminToken,
+        tokenLength: adminToken?.length || 0
+      });
+      
       if (authToken === 'true' && adminToken) {
         try {
-          // Set API auth header
-          api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
+          // Don't manually set headers - let the interceptor handle it
+          // The API interceptor will automatically add the admin_token
+          
+          // Add a small delay to ensure localStorage is fully synced
+          await new Promise(resolve => setTimeout(resolve, 50));
           
           // Validate token by making a test request
+          console.log('🧪 AdminApp: Testing token with API request...');
           const response = await api.get('/admin/clients');
+          
           if (response.status === 200) {
+            console.log('✅ AdminApp: Authentication successful!');
             setIsAuthenticated(true);
           } else {
-            throw new Error('Token validation failed');
+            throw new Error(`Token validation failed with status: ${response.status}`);
           }
-        } catch (error) {
-          console.warn('Token validation failed, clearing auth:', error);
+        } catch (error: any) {
+          console.warn('❌ AdminApp: Token validation failed, clearing auth:', error.message);
+          
           // Clear invalid tokens
           localStorage.removeItem('admin_auth');
           localStorage.removeItem('admin_token');
           localStorage.removeItem('admin_email');
-          delete api.defaults.headers.common['Authorization'];
+          
+          // Don't manually delete headers, let interceptor handle it
           setIsAuthenticated(false);
         }
       } else {
+        console.log('🚫 AdminApp: No valid auth tokens found');
         setIsAuthenticated(false);
       }
       
@@ -50,11 +67,8 @@ const AdminApp: React.FC = () => {
   }, []);
 
   const handleLogin = () => {
-    // Set API auth header when logging in
-    const adminToken = localStorage.getItem('admin_token');
-    if (adminToken) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
-    }
+    // Don't manually set headers - let the interceptor handle it
+    console.log('✅ AdminApp: Login successful, authentication state updated');
     setIsAuthenticated(true);
   };
 

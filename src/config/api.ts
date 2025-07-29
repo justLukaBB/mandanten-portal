@@ -126,17 +126,40 @@ api.interceptors.response.use(
 // Request interceptor to add auth token if available
 api.interceptors.request.use(
   (config) => {
-    // Try different token types for different endpoints
-    let token = localStorage.getItem('auth_token'); // Primary JWT token
+    let token: string | null = null;
+    let tokenType = 'None';
     
-    // Fallback to portal session token if no auth_token
-    if (!token) {
-      token = localStorage.getItem('portal_session_token');
+    // Priority 1: Admin token for admin endpoints (takes precedence)
+    if (config.url?.includes('/admin/')) {
+      token = localStorage.getItem('admin_token');
+      if (token) {
+        tokenType = 'Admin';
+        log('🔑 Using admin token for admin endpoint:', config.url);
+      }
     }
     
-    // Admin token for admin endpoints
-    if (!token && config.url?.includes('/admin/')) {
+    // Priority 2: JWT token for authenticated requests
+    if (!token) {
+      token = localStorage.getItem('auth_token');
+      if (token) {
+        tokenType = 'JWT';
+      }
+    }
+    
+    // Priority 3: Portal session token as fallback
+    if (!token) {
+      token = localStorage.getItem('portal_session_token');
+      if (token) {
+        tokenType = 'Session';
+      }
+    }
+    
+    // Priority 4: Admin token as final fallback (if not admin endpoint)
+    if (!token) {
       token = localStorage.getItem('admin_token');
+      if (token) {
+        tokenType = 'Admin (fallback)';
+      }
     }
     
     if (token) {
@@ -144,9 +167,11 @@ api.interceptors.request.use(
       log('🔑 API request with token:', { 
         url: config.url, 
         hasToken: !!token,
-        tokenType: localStorage.getItem('auth_token') ? 'JWT' : 
-                  localStorage.getItem('portal_session_token') ? 'Session' : 'Admin'
+        tokenType,
+        tokenPreview: `${token.substring(0, 10)}...`
       });
+    } else {
+      log('⚠️ API request without token:', config.url);
     }
     
     return config;

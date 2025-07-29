@@ -27,14 +27,20 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
       });
 
       if (response.data.success) {
-        // Store admin token
+        console.log('🔑 AdminLogin: Login successful, storing tokens...');
+        
+        // Store admin token - let the API interceptor handle headers automatically
         localStorage.setItem('admin_token', response.data.token);
         localStorage.setItem('admin_auth', 'true');
         localStorage.setItem('admin_email', response.data.user.email);
         
-        // Set API auth header for future requests
-        api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        console.log('✅ AdminLogin: Tokens stored successfully:', {
+          hasToken: !!response.data.token,
+          tokenLength: response.data.token?.length || 0,
+          email: response.data.user.email
+        });
         
+        // Don't manually set headers - let the interceptor handle it
         onLogin();
       }
     } catch (error: any) {
