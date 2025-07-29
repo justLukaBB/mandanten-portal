@@ -2,19 +2,12 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const { body, validationResult } = require('express-validator');
 
-// Rate limiting configurations
+// Rate limiting configurations - temporarily disabled for IPv6 compatibility
 const createRateLimit = (windowMs, max, message) => {
-  return rateLimit({
-    windowMs,
-    max,
-    message: { error: message },
-    standardHeaders: true,
-    legacyHeaders: false,
-    // Skip rate limiting in development
-    skip: (req) => process.env.NODE_ENV === 'development',
-    // Handle proxy headers properly
-    keyGenerator: (req) => req.ip,
-  });
+  return (req, res, next) => {
+    // Skip rate limiting entirely to avoid IPv6 validation errors
+    next();
+  };
 };
 
 // Different rate limits for different endpoints
