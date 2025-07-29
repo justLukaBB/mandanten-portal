@@ -11,19 +11,40 @@ const AdminApp: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authToken = localStorage.getItem('admin_auth');
-    const adminToken = localStorage.getItem('admin_token');
+    const checkAuth = async () => {
+      // Check if user is authenticated
+      const authToken = localStorage.getItem('admin_auth');
+      const adminToken = localStorage.getItem('admin_token');
+      
+      if (authToken === 'true' && adminToken) {
+        try {
+          // Set API auth header
+          api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
+          
+          // Validate token by making a test request
+          const response = await api.get('/admin/clients');
+          if (response.status === 200) {
+            setIsAuthenticated(true);
+          } else {
+            throw new Error('Token validation failed');
+          }
+        } catch (error) {
+          console.warn('Token validation failed, clearing auth:', error);
+          // Clear invalid tokens
+          localStorage.removeItem('admin_auth');
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_email');
+          delete api.defaults.headers.common['Authorization'];
+          setIsAuthenticated(false);
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
+      
+      setLoading(false);
+    };
     
-    if (authToken === 'true' && adminToken) {
-      // Set API auth header
-      api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
-      setIsAuthenticated(true);
-    } else {
-      setIsAuthenticated(false);
-    }
-    
-    setLoading(false);
+    checkAuth();
   }, []);
 
   const handleLogin = () => {
