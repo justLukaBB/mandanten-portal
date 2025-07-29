@@ -1559,13 +1559,8 @@ app.post('/api/portal/login',
       });
     }
     
-    // Check if portal access was sent
-    if (!foundClient.portal_link_sent) {
-      console.log(`❌ Login failed: Portal access not yet granted for ${email}`);
-      return res.status(403).json({ 
-        error: 'Portal-Zugang wurde noch nicht freigeschaltet. Bitte warten Sie auf die Freischaltung.' 
-      });
-    }
+    // Portal access is always granted - removed access restriction
+    // This allows all valid users to access the portal immediately
     
     // Generate JWT token instead of simple session token
     const jwtToken = generateClientToken(foundClient.id, foundClient.email);
