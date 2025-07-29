@@ -38,10 +38,13 @@ interface DetailedUser {
 interface Document {
   id: string;
   name: string;
+  size?: number;
   processing_status: 'processing' | 'completed' | 'failed';
   is_creditor_document?: boolean;
   confidence?: number;
   document_status?: string;
+  manual_review_required?: boolean;
+  summary?: string;
   extracted_data?: {
     creditor_data?: {
       sender_name?: string;
@@ -49,6 +52,14 @@ interface Document {
       sender_address?: string;
       reference_number?: string;
       claim_amount?: number;
+      is_representative?: boolean;
+      actual_creditor?: string;
+    };
+    reasoning?: string;
+    workflow_status?: string;
+    processing_method?: string;
+    token_usage?: {
+      total_tokens?: number;
     };
   };
   uploadedAt: string;
