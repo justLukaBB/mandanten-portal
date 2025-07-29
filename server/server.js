@@ -42,7 +42,7 @@ async function safeClientUpdate(clientId, updateFunction) {
   
   try {
     // Get fresh client data
-    const client = await getClientById(clientId);
+    const client = await getClient(clientId);
     if (!client) {
       throw new Error(`Client ${clientId} not found`);
     }
@@ -74,10 +74,12 @@ const testDataService = new TestDataService();
 app.use(securityHeaders);
 app.use(rateLimits.general);
 
-// CORS middleware
+// CORS middleware - temporarily allow all origins for debugging
 app.use(cors({
-  origin: config.CORS_ORIGINS,
-  credentials: true
+  origin: true, // Allow all origins temporarily
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
 // Body parsing middleware
