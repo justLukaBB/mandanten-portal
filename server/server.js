@@ -866,7 +866,7 @@ app.post('/api/admin/clients',
       status_history: [{
         id: uuidv4(),
         status: clientData.current_status || 'created',
-        changed_by: 'admin',
+        changed_by: 'system',
         created_at: new Date()
       }]
     });
