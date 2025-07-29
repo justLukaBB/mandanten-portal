@@ -41,8 +41,8 @@ function App() {
                   clientId={localStorage.getItem('portal_client_id') || ''}
                   customTitle="Mandanten Portal"
                   customColors={{
-                    primary: '#1e40af',
-                    primaryHover: '#1e3a8a'
+                    primary: '#9f1a1d',
+                    primaryHover: '#7d1517'
                   }}
                 />
               </ProtectedRoute>

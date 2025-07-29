@@ -21,8 +21,8 @@ export const PersonalPortal = ({
   customLogo,
   customTitle = 'Kundenportal',
   customColors = {
-    primary: '#9c1a1b',
-    primaryHover: '#8a1718'
+    primary: '#9f1a1d',
+    primaryHover: '#7d1517'
   }
 }: {
   clientId?: string;

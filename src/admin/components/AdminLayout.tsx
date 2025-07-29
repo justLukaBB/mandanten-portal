@@ -7,6 +7,7 @@ import {
   XMarkIcon,
   PresentationChartLineIcon
 } from '@heroicons/react/24/outline';
+import api from '../../config/api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -39,7 +40,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
   ];
 
   const handleLogout = () => {
+    // Clear all admin tokens and headers
     localStorage.removeItem('admin_auth');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_email');
+    
+    // Remove authorization header
+    delete api.defaults.headers.common['Authorization'];
+    
+    // Redirect to login
     window.location.href = '/admin/login';
   };
 
