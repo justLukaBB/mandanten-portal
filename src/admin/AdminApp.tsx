@@ -4,11 +4,12 @@ import AdminLogin from './pages/AdminLogin';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import CreateUser from './pages/CreateUser';
 import Settings from './pages/Settings';
+import UserList from './pages/UserList';
 import api from '../config/api';
 
 const AdminApp: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'analytics' | 'settings' | 'create-user'>('analytics');
+  const [currentPage, setCurrentPage] = useState<'analytics' | 'settings' | 'create-user' | 'user-list'>('analytics');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,20 +58,30 @@ const AdminApp: React.FC = () => {
     setIsAuthenticated(true);
   };
 
-  const handleNavigate = (page: 'analytics' | 'settings' | 'create-user') => {
+  const handleNavigate = (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => {
     setCurrentPage(page);
+  };
+
+  const handleNavigateToUserList = () => {
+    setCurrentPage('user-list');
+  };
+
+  const handleBackToAnalytics = () => {
+    setCurrentPage('analytics');
   };
 
   const renderPage = () => {
     switch (currentPage) {
       case 'analytics':
-        return <AnalyticsDashboard />;
+        return <AnalyticsDashboard onNavigateToUserList={handleNavigateToUserList} />;
       case 'create-user':
         return <CreateUser />;
       case 'settings':
         return <Settings />;
+      case 'user-list':
+        return <UserList onBack={handleBackToAnalytics} />;
       default:
-        return <AnalyticsDashboard />;
+        return <AnalyticsDashboard onNavigateToUserList={handleNavigateToUserList} />;
     }
   };
 

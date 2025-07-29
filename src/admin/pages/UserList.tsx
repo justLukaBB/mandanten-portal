@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   UsersIcon, 
-  DocumentTextIcon, 
-  ChartBarIcon,
   FunnelIcon,
   CalendarIcon,
   MagnifyingGlassIcon,
-  EyeIcon
+  EyeIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
@@ -32,11 +31,11 @@ interface StatusFilter {
   count: number;
 }
 
-interface AnalyticsDashboardProps {
-  onNavigateToUserList?: () => void;
+interface UserListProps {
+  onBack: () => void;
 }
 
-const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUserList }) => {
+const UserList: React.FC<UserListProps> = ({ onBack }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +109,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       }));
       
       setUsers(transformedUsers);
-      console.log(`📊 Loaded ${transformedUsers.length} users for analytics dashboard`);
+      console.log(`👥 Loaded ${transformedUsers.length} users for user list`);
       
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -183,9 +182,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
 
   const statusCounts = getStatusCounts();
   const totalUsers = users.length;
-  const activeUsers = users.filter(u => u.last_login).length;
-  const totalDocuments = users.reduce((sum, u) => sum + u.documents_count, 0);
-  const totalCreditors = users.reduce((sum, u) => sum + u.creditors_count, 0);
 
   if (loading) {
     return (
@@ -199,9 +195,18 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">📊 Analytics Dashboard</h1>
-          <p className="text-gray-600 mt-1">Monitoring und Analyse - Nur zur Übersicht (Keine Aktionen)</p>
+        <div className="flex items-center">
+          <button
+            onClick={onBack}
+            className="flex items-center text-gray-600 hover:text-gray-900 mr-4"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-1" />
+            Zurück
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">👥 Alle Nutzer</h1>
+            <p className="text-gray-600 mt-1">Vollständige Benutzerliste ({totalUsers} Nutzer)</p>
+          </div>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <span>Letztes Update:</span>
@@ -209,48 +214,13 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div 
-          className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow duration-200"
-          onClick={onNavigateToUserList}
-        >
-          <div className="flex items-center">
-            <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
-            <div>
-              <p className="text-sm font-medium text-gray-600">Gesamt-Nutzer</p>
-              <p className="text-2xl font-bold text-gray-900">{totalUsers}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <DocumentTextIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
-            <div>
-              <p className="text-sm font-medium text-gray-600">Dokumente</p>
-              <p className="text-2xl font-bold text-gray-900">{totalDocuments}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <ChartBarIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
-            <div>
-              <p className="text-sm font-medium text-gray-600">Gläubiger</p>
-              <p className="text-2xl font-bold text-gray-900">{totalCreditors}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
-            <div>
-              <p className="text-sm font-medium text-gray-600">Aktive Nutzer</p>
-              <p className="text-2xl font-bold text-gray-900">{activeUsers}</p>
-            </div>
+      {/* Stats Summary */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="flex items-center">
+          <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
+          <div>
+            <p className="text-sm font-medium text-gray-600">Gesamt-Nutzer</p>
+            <p className="text-3xl font-bold text-gray-900">{totalUsers}</p>
           </div>
         </div>
       </div>
@@ -418,4 +388,4 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   );
 };
 
-export default AnalyticsDashboard;
+export default UserList;

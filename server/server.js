@@ -821,6 +821,14 @@ app.post('/api/admin/clients',
   async (req, res) => {
   try {
     const clientData = req.body;
+    console.log('📝 Received client creation request:', {
+      firstName: clientData.firstName,
+      lastName: clientData.lastName,
+      email: clientData.email,
+      aktenzeichen: clientData.aktenzeichen,
+      current_status: clientData.current_status,
+      workflow_status: clientData.workflow_status
+    });
     
     // Validate required fields
     if (!clientData.firstName || !clientData.lastName || !clientData.email || !clientData.aktenzeichen) {
@@ -879,11 +887,30 @@ app.post('/api/admin/clients',
     });
     
   } catch (error) {
-    console.error('Error creating client:', error);
-    res.status(500).json({ 
-      error: 'Error creating client',
-      details: error.message 
-    });
+    console.error('❌ Error creating client:', error);
+    
+    // Enhanced error logging
+    if (error.name === 'ValidationError') {
+      console.error('MongoDB Validation Error:', error.errors);
+      res.status(400).json({ 
+        error: 'Validation error',
+        details: error.message,
+        validation_errors: error.errors
+      });
+    } else if (error.code === 11000) {
+      console.error('MongoDB Duplicate Key Error:', error);
+      res.status(409).json({ 
+        error: 'Duplicate entry',
+        details: 'Client with this email or aktenzeichen already exists'
+      });
+    } else {
+      console.error('General Error:', error);
+      res.status(500).json({ 
+        error: 'Error creating client',
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   }
 });
 
