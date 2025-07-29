@@ -134,20 +134,46 @@ const AdminCreditorDataTable: React.FC = () => {
       const allCreditorRows: AdminCreditorTableRow[] = [];
       
       clientsData.forEach(client => {
-        const allDocs = client.documents?.filter(doc => 
-          doc.processing_status === 'completed'
-        ) || [];
+        // Show all documents, not just completed ones
+        const allDocs = client.documents || [];
+        
+        console.log(`Client ${client.firstName} ${client.lastName} has ${allDocs.length} documents:`, 
+          allDocs.map(d => ({
+            name: d.name,
+            processing_status: d.processing_status,
+            document_status: d.document_status,
+            hasCreditorData: !!d.extracted_data?.creditor_data
+          }))
+        );
         
         allDocs.forEach(doc => {
           const creditor = doc.extracted_data?.creditor_data;
           const validation = doc.validation;
           
-          // Determine row status based on new document_status system OR legacy data
+          // Debug logging for empty creditor data
+          if (!creditor && doc.processing_status === 'completed') {
+            console.warn(`Document ${doc.name} completed but no creditor data:`, {
+              docId: doc.id,
+              processing_status: doc.processing_status,
+              document_status: doc.document_status,
+              extracted_data: doc.extracted_data,
+              hasCreditorData: !!doc.extracted_data?.creditor_data
+            });
+          }
+          
+          // Determine row status based on processing and document status
           let rowStatus: 'ready' | 'needs_review' | 'incomplete' | 'duplicate' | 'non_creditor' = 'incomplete';
           let rowWarnings = validation?.warnings || [];
           
-          if (doc.document_status) {
-            // New system
+          // First check processing status
+          if (doc.processing_status === 'processing') {
+            rowStatus = 'incomplete';
+            rowWarnings = ['Dokument wird noch verarbeitet...'];
+          } else if (doc.processing_status === 'failed') {
+            rowStatus = 'incomplete';
+            rowWarnings = ['Verarbeitungsfehler aufgetreten'];
+          } else if (doc.processing_status === 'completed' && doc.document_status) {
+            // New system - document processed successfully
             switch (doc.document_status) {
               case 'creditor_confirmed':
                 rowStatus = 'ready';
@@ -173,7 +199,7 @@ const AdminCreditorDataTable: React.FC = () => {
                 rowStatus = 'needs_review';
                 break;
             }
-          } else {
+          } else if (doc.processing_status === 'completed') {
             // Legacy system - determine status from old fields
             if (doc.is_creditor_document === true) {
               const confidence = validation?.claude_confidence || doc.confidence || 0;
@@ -190,18 +216,36 @@ const AdminCreditorDataTable: React.FC = () => {
             }
           }
           
-          // Add ALL processed documents to the admin table (not just creditor docs)
-          // Admins need to see everything for review
+          // Show status based on processing state
+          let displayCreditorName = 'Wird verarbeitet...';
+          let displayEmail = 'Wird verarbeitet...';
+          let displayAddress = 'Wird verarbeitet...';
+          let displayReference = 'Wird verarbeitet...';
+          
+          if (doc.processing_status === 'completed') {
+            displayCreditorName = creditor?.sender_name || 'Nicht gefunden';
+            displayEmail = creditor?.sender_email || 'Nicht gefunden';
+            displayAddress = creditor?.sender_address || 'Nicht gefunden';
+            displayReference = creditor?.reference_number || 'Nicht gefunden';
+          } else if (doc.processing_status === 'failed') {
+            displayCreditorName = 'Verarbeitungsfehler';
+            displayEmail = 'Verarbeitungsfehler';
+            displayAddress = 'Verarbeitungsfehler';
+            displayReference = 'Verarbeitungsfehler';
+          }
+          
+          // Add ALL documents to the admin table (including processing ones)
+          // Admins need to see everything for monitoring
           allCreditorRows.push({
             clientId: client.id,
             clientName: `${client.firstName} ${client.lastName}`,
             clientEmail: client.email,
             documentId: doc.id,
             documentName: doc.name,
-            creditorName: creditor?.sender_name || 'Nicht gefunden',
-            email: creditor?.sender_email || 'Nicht gefunden',
-            address: creditor?.sender_address || 'Nicht gefunden',
-            referenceNumber: creditor?.reference_number || 'Nicht gefunden',
+            creditorName: displayCreditorName,
+            email: displayEmail,
+            address: displayAddress,
+            referenceNumber: displayReference,
             claimAmount: creditor?.claim_amount || null,
             isRepresentative: creditor?.is_representative || false,
             actualCreditor: creditor?.actual_creditor || '',
