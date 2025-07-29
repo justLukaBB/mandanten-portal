@@ -19,7 +19,10 @@ const documentSchema = new mongoose.Schema({
   },
   status_reason: String,
   is_duplicate: { type: Boolean, default: false },
+  is_creditor_document: { type: Boolean },
   confidence: { type: Number, min: 0, max: 1 },
+  classification_success: { type: Boolean },
+  manual_review_required: { type: Boolean, default: false },
   extracted_data: {
     creditor_data: {
       sender_name: String,
@@ -32,8 +35,32 @@ const documentSchema = new mongoose.Schema({
     },
     confidence: Number,
     reasoning: String,
-    workflow_status: String
-  }
+    workflow_status: String,
+    is_creditor_document: Boolean,
+    manual_review_required: Boolean,
+    document_id: String,
+    original_name: String,
+    processing_status: String,
+    timestamp: String,
+    processing_method: String,
+    token_usage: {
+      input_tokens: Number,
+      output_tokens: Number,
+      total_tokens: Number
+    }
+  },
+  validation: {
+    is_valid: Boolean,
+    warnings: [String],
+    confidence: Number,
+    claude_confidence: Number,
+    data_completeness: Number,
+    requires_manual_review: Boolean
+  },
+  summary: String,
+  processing_error: String,
+  processing_time_ms: Number,
+  duplicate_reason: String
 }, { _id: false });
 
 const creditorSchema = new mongoose.Schema({
