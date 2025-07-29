@@ -863,6 +863,9 @@ app.post('/api/admin/clients',
       updated_at: new Date(),
       documents: [],
       final_creditor_list: [],
+      // Grant immediate portal access for manually created users
+      portal_link_sent: true,
+      portal_link_sent_at: new Date(),
       status_history: [{
         id: uuidv4(),
         status: clientData.current_status || 'created',
