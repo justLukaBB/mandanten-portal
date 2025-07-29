@@ -222,7 +222,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <DocumentTextIcon className="w-6 h-6 text-blue-600" />
+            <DocumentTextIcon className="w-6 h-6 text-red-800" />
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
                 Dokument-Manager
@@ -354,7 +354,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                   
                   <button
                     onClick={() => handleDownload(document)}
-                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                    className="p-2 text-gray-400 hover:text-red-800 transition-colors"
                     title="Dokument herunterladen"
                   >
                     <ArrowDownTrayIcon className="w-5 h-5" />

@@ -264,7 +264,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
           Dateien hierher ziehen oder{' '}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="text-blue-600 hover:text-blue-700 font-medium"
+            className="text-red-800 hover:text-blue-700 font-medium"
           >
             durchsuchen
           </button>
@@ -302,7 +302,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                   {uploadedFile.status === 'uploading' && (
                     <div className="mt-1 w-full bg-gray-200 rounded-full h-1">
                       <div 
-                        className="bg-blue-600 h-1 rounded-full transition-all duration-300"
+                        className="bg-red-800 h-1 rounded-full transition-all duration-300"
                         style={{ width: `${uploadedFile.progress}%` }}
                       />
                     </div>

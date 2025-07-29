@@ -91,7 +91,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
           <div className="relative z-10 flex-shrink-0 flex h-16 bg-white shadow">
             <button
               type="button"
-              className="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 md:hidden"
+              className="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-800 md:hidden"
               onClick={() => setSidebarOpen(true)}
             >
               <Bars3Icon className="h-6 w-6" />
@@ -130,7 +130,7 @@ const SidebarContent: React.FC<{
       {/* Logo/Brand */}
       <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
         <div className="flex items-center flex-shrink-0 px-4 mb-8">
-          <ChartBarIcon className="h-8 w-8 text-blue-600 mr-3" />
+          <ChartBarIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
           <h1 className="text-xl font-bold text-gray-900">Admin Portal</h1>
         </div>
         
@@ -144,18 +144,19 @@ const SidebarContent: React.FC<{
                 onClick={() => onNavigate(item.key)}
                 className={`w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
                   isActive
-                    ? 'bg-blue-100 text-blue-900'
+                    ? 'text-white' 
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
+                style={isActive ? {backgroundColor: '#9f1a1d'} : {}}
               >
                 <item.icon
                   className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                    isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
+                    isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-500'
                   }`}
                 />
                 <div className="text-left">
                   <div>{item.name}</div>
-                  <div className="text-xs text-gray-500">{item.description}</div>
+                  <div className={`text-xs ${isActive ? 'text-gray-200' : 'text-gray-500'}`}>{item.description}</div>
                 </div>
               </button>
             );

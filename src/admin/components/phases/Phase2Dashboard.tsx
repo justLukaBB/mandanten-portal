@@ -214,10 +214,10 @@ const Phase2Dashboard: React.FC<Phase2DashboardProps> = ({ clientId }) => {
         <div className="bg-white shadow rounded-lg p-6 border-l-4 border-blue-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <UserGroupIcon className="h-8 w-8 text-blue-600" />
+              <UserGroupIcon className="h-8 w-8 text-red-800" />
             </div>
             <div className="ml-4">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-red-800">
                 {debtSummary ? debtSummary.creditorCount : clientData.final_creditor_list.length}
               </div>
               <div className="text-sm text-gray-500">Gläubiger</div>
@@ -312,7 +312,7 @@ const Phase2Dashboard: React.FC<Phase2DashboardProps> = ({ clientId }) => {
                 <div className="text-sm text-gray-500">Größte Einzelschuld</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-red-800">
                   {((debtSummary.largestDebt / debtSummary.totalDebt) * 100).toFixed(1)}%
                 </div>
                 <div className="text-sm text-gray-500">Anteil größter Gläubiger</div>
@@ -349,7 +349,7 @@ const Phase2Dashboard: React.FC<Phase2DashboardProps> = ({ clientId }) => {
         >
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <ChartBarIcon className="h-8 w-8 text-blue-600" />
+              <ChartBarIcon className="h-8 w-8 text-red-800" />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Schuldenanalyse</h3>

@@ -243,7 +243,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                         return (
                           <li key={index} className={
                             isSuccess ? 'text-green-600' : 
-                            isInfo ? 'text-blue-600' : 
+                            isInfo ? 'text-red-800' : 
                             'text-orange-600'
                           }>
                             • {warning}
@@ -259,7 +259,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                 {document.processing_status === 'completed' && (
                   <button
                     onClick={() => viewExtractionDetails(document.id)}
-                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                    className="p-1 text-gray-400 hover:text-red-800 transition-colors"
                     title="Details anzeigen"
                     disabled={loading}
                   >

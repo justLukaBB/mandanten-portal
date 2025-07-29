@@ -217,7 +217,7 @@ const AdminWorkflowManager: React.FC<AdminWorkflowManagerProps> = ({ clientId })
           </div>
           <div className="bg-blue-50 p-3 rounded-lg">
             <p className="text-sm text-gray-600">Finale Liste</p>
-            <p className="text-xl font-bold text-blue-600">{workflowStatus.stats.final_creditor_count}</p>
+            <p className="text-xl font-bold text-red-800">{workflowStatus.stats.final_creditor_count}</p>
           </div>
         </div>
       </div>
@@ -270,7 +270,7 @@ const AdminWorkflowManager: React.FC<AdminWorkflowManagerProps> = ({ clientId })
         {/* Step 3: Waiting for Client */}
         {workflowStatus.workflow_status === 'client_confirmation' && (
           <div className="mb-4">
-            <p className="text-sm text-blue-600 mb-2">
+            <p className="text-sm text-red-800 mb-2">
               ⏳ Warten auf Kundenbestätigung der Gläubigerliste
             </p>
             <p className="text-xs text-gray-500">

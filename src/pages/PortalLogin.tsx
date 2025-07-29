@@ -52,7 +52,7 @@ const PortalLogin: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <div className="bg-blue-600 p-3 rounded-full">
+            <div className="bg-red-800 p-3 rounded-full">
               <ScaleIcon className="h-12 w-12 text-white" />
             </div>
           </div>
@@ -76,7 +76,7 @@ const PortalLogin: React.FC = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-800 focus:border-red-800 focus:z-10 sm:text-sm"
                 placeholder="max.mustermann@example.com"
                 value={credentials.email}
                 onChange={handleInputChange}
@@ -93,7 +93,7 @@ const PortalLogin: React.FC = () => {
                   name="aktenzeichen"
                   type={showAktenzeichen ? 'text' : 'password'}
                   required
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-800 focus:border-red-800 focus:z-10 sm:text-sm"
                   placeholder="MAND_2024_001"
                   value={credentials.aktenzeichen}
                   onChange={handleInputChange}
@@ -128,7 +128,7 @@ const PortalLogin: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? (
                 <div className="flex items-center">
@@ -148,7 +148,7 @@ const PortalLogin: React.FC = () => {
               </p>
               <p className="mt-1">
                 Kontaktieren Sie uns unter:{' '}
-                <a href="mailto:support@kanzlei.de" className="font-medium text-blue-600 hover:text-blue-500">
+                <a href="mailto:support@kanzlei.de" className="font-medium text-red-800 hover:text-red-900">
                   support@kanzlei.de
                 </a>
               </p>

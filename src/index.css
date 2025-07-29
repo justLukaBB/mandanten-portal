@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom brand colors */
+:root {
+  --brand-primary: #9f1a1d;
+  --brand-primary-light: #b12326;
+  --brand-primary-dark: #7d1517;
+  --brand-secondary: #f8f9fa;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',

@@ -183,7 +183,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         <div className="flex items-center space-x-4">
           <button
             onClick={handleSelectAll}
-            className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+            className="text-red-800 hover:text-blue-700 font-medium text-sm"
           >
             {selectedCreditors.size === confirmationData.creditors.length ? 'Alle abwählen' : 'Alle auswählen'}
           </button>

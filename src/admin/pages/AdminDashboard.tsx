@@ -142,7 +142,7 @@ const AdminDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <ChartBarIcon className="h-8 w-8 text-blue-600 mr-3" />
+              <ChartBarIcon className="h-8 w-8 text-red-800 mr-3" />
               <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
             </div>
             <div className="text-sm text-gray-500">
@@ -326,7 +326,7 @@ const AdminDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <a
                             href={`/admin/client/${client._id}`}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-red-800 hover:text-blue-900"
                           >
                             Verwalten
                           </a>

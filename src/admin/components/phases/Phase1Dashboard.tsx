@@ -100,7 +100,7 @@ const Phase1Dashboard: React.FC<Phase1DashboardProps> = ({ clientId }) => {
 
   const getWorkflowStatusColor = (status: string) => {
     const statusMap: Record<string, { color: string; bg: string; text: string }> = {
-      'documents_processing': { color: 'text-blue-600', bg: 'bg-blue-100', text: 'Dokumente werden verarbeitet' },
+      'documents_processing': { color: 'text-red-800', bg: 'bg-blue-100', text: 'Dokumente werden verarbeitet' },
       'admin_review': { color: 'text-yellow-600', bg: 'bg-yellow-100', text: 'Admin-Prüfung erforderlich' },
       'client_confirmation': { color: 'text-purple-600', bg: 'bg-purple-100', text: 'Mandanten-Bestätigung' },
       'creditor_contact_ready': { color: 'text-orange-600', bg: 'bg-orange-100', text: 'Zendesk-Kontakt bereit' },
@@ -175,7 +175,7 @@ const Phase1Dashboard: React.FC<Phase1DashboardProps> = ({ clientId }) => {
               <div className="text-sm text-gray-500">Verarbeitet</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{clientData.final_creditor_list.length}</div>
+              <div className="text-2xl font-bold text-red-800">{clientData.final_creditor_list.length}</div>
               <div className="text-sm text-gray-500">Gläubiger identifiziert</div>
             </div>
           </div>
@@ -190,7 +190,7 @@ const Phase1Dashboard: React.FC<Phase1DashboardProps> = ({ clientId }) => {
         >
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <DocumentTextIcon className="h-8 w-8 text-blue-600" />
+              <DocumentTextIcon className="h-8 w-8 text-red-800" />
             </div>
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Dokumente verwalten</h3>
@@ -379,7 +379,7 @@ const Phase1Dashboard: React.FC<Phase1DashboardProps> = ({ clientId }) => {
                 onClick={() => setActiveTab(tab.key as any)}
                 className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   isActive
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-blue-500 text-red-800'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -387,7 +387,7 @@ const Phase1Dashboard: React.FC<Phase1DashboardProps> = ({ clientId }) => {
                 {tab.label}
                 {tab.count !== undefined && (
                   <span className={`ml-2 py-0.5 px-2 rounded-full text-xs font-medium ${
-                    isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                    isActive ? 'bg-blue-100 text-red-800' : 'bg-gray-100 text-gray-600'
                   }`}>
                     {tab.count}
                   </span>

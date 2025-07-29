@@ -245,7 +245,7 @@ const DebtRestructuring: React.FC = () => {
             ) : debtAnalysis ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-2xl font-bold text-red-800">
                     {formatCurrency(debtAnalysis.totalDebt)}
                   </div>
                   <div className="text-sm text-gray-600">Gesamtverschuldung</div>
@@ -380,7 +380,7 @@ const DebtRestructuring: React.FC = () => {
                   </div>
                   
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
+                    <div className="text-2xl font-bold text-red-800">
                       {formatCurrency(garnishmentResult.calculationDetails?.remainingIncome || 0)}
                     </div>
                     <div className="text-sm text-gray-600">Verbleibendes Einkommen</div>
@@ -416,7 +416,7 @@ const DebtRestructuring: React.FC = () => {
                   <button
                     onClick={calculateCreditorQuotas}
                     disabled={loading.quotas || !debtAnalysis}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading.quotas ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -509,7 +509,7 @@ const DebtRestructuring: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                           {formatCurrency(quota.monthly_quota)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-800">
                           {formatCurrency(quota.quota_36_months)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -526,7 +526,7 @@ const DebtRestructuring: React.FC = () => {
                       <td className="px-6 py-4 text-sm font-bold text-green-600">
                         {formatCurrency(creditorQuotas.reduce((sum, quota) => sum + quota.monthly_quota, 0))}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                      <td className="px-6 py-4 text-sm font-bold text-red-800">
                         {formatCurrency(creditorQuotas.reduce((sum, quota) => sum + quota.quota_36_months, 0))}
                       </td>
                       <td></td>
@@ -544,7 +544,7 @@ const DebtRestructuring: React.FC = () => {
                   <div className="text-sm text-gray-600">Monatliches Budget</div>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-lg text-center">
-                  <div className="text-lg font-bold text-blue-600">
+                  <div className="text-lg font-bold text-red-800">
                     {formatCurrency((garnishmentResult?.garnishableIncome || 0) * 36)}
                   </div>
                   <div className="text-sm text-gray-600">36-Monats-Zahlung</div>

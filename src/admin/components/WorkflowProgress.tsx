@@ -103,9 +103,9 @@ const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
         };
       case 'current':
         return {
-          bg: 'bg-blue-600',
+          bg: 'bg-red-800',
           border: 'border-blue-600',
-          text: 'text-blue-600',
+          text: 'text-red-800',
           icon: 'text-white'
         };
       case 'upcoming':
@@ -140,7 +140,7 @@ const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            className="bg-red-800 h-2 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -190,8 +190,8 @@ const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
                         {status === 'current' && (
                           <div className="mt-1">
                             <div className="flex items-center">
-                              <ClockIcon className="w-4 h-4 text-blue-600 mr-1" />
-                              <span className="text-xs text-blue-600 font-medium">In Bearbeitung</span>
+                              <ClockIcon className="w-4 h-4 text-red-800 mr-1" />
+                              <span className="text-xs text-red-800 font-medium">In Bearbeitung</span>
                             </div>
                           </div>
                         )}

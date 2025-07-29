@@ -236,7 +236,7 @@ const CreditorDataTable: React.FC<CreditorDataTableProps> = ({
           )}
           <button
             onClick={exportToCSV}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800"
           >
             <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
             CSV Export
@@ -253,7 +253,7 @@ const CreditorDataTable: React.FC<CreditorDataTableProps> = ({
                   type="checkbox"
                   checked={selectedRows.size === creditorData.length}
                   onChange={handleSelectAll}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-red-800 focus:ring-red-800 border-gray-300 rounded"
                 />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -284,7 +284,7 @@ const CreditorDataTable: React.FC<CreditorDataTableProps> = ({
                     type="checkbox"
                     checked={selectedRows.has(row.documentId)}
                     onChange={() => handleSelectRow(row.documentId)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-red-800 focus:ring-red-800 border-gray-300 rounded"
                   />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -396,7 +396,7 @@ const CreditorDataTable: React.FC<CreditorDataTableProps> = ({
                       <>
                         <button
                           onClick={() => handleEdit(row)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-red-800 hover:text-blue-900"
                           title="Bearbeiten"
                         >
                           <PencilIcon className="w-4 h-4" />

@@ -175,7 +175,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       case 'responded':
         return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
       case 'email_sent':
-        return <PaperAirplaneIcon className="w-5 h-5 text-blue-600" />;
+        return <PaperAirplaneIcon className="w-5 h-5 text-red-800" />;
       case 'timeout':
         return <ClockIcon className="w-5 h-5 text-orange-600" />;
       case 'failed':
@@ -273,7 +273,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <ChatBubbleLeftRightIcon className="w-6 h-6 text-blue-600" />
+            <ChatBubbleLeftRightIcon className="w-6 h-6 text-red-800" />
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
                 Zendesk Gläubiger-Kontakt Manager
@@ -304,7 +304,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
               <button
                 onClick={resendCreditorEmails}
                 disabled={processing}
-                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                className="flex items-center px-4 py-2 bg-red-800 hover:bg-red-900 disabled:bg-gray-400 text-white rounded-lg transition-colors"
               >
                 {processing ? (
                   <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
@@ -343,7 +343,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
         {!canStartProcess && creditorStatus?.client_info?.creditor_contact_started && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start">
-              <ChatBubbleLeftRightIcon className="w-5 h-5 text-blue-600 mt-0.5 mr-2" />
+              <ChatBubbleLeftRightIcon className="w-5 h-5 text-red-800 mt-0.5 mr-2" />
               <div>
                 <p className="text-sm font-medium text-blue-800 mb-1">Gläubiger-Kontakt aktiv</p>
                 <p className="text-sm text-blue-700">
@@ -365,7 +365,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
               <DocumentTextIcon className="h-8 w-8 text-blue-500 mr-3" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Gläubiger gesamt</p>
-                <p className="text-2xl font-bold text-blue-600">{creditorStatus.summary.total_creditors}</p>
+                <p className="text-2xl font-bold text-red-800">{creditorStatus.summary.total_creditors}</p>
               </div>
             </div>
           </div>

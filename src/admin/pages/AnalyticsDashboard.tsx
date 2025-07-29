@@ -151,14 +151,14 @@ const AnalyticsDashboard: React.FC = () => {
   const getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       'created': 'bg-gray-100 text-gray-800',
-      'portal_access_sent': 'bg-blue-100 text-blue-800',
-      'documents_uploaded': 'bg-purple-100 text-purple-800',
+      'portal_access_sent': 'bg-red-50 text-red-800',
+      'documents_uploaded': 'bg-red-100 text-red-800',
       'documents_processing': 'bg-yellow-100 text-yellow-800',
       'waiting_for_payment': 'bg-orange-100 text-orange-800',
       'payment_confirmed': 'bg-green-100 text-green-800',
-      'creditor_review': 'bg-indigo-100 text-indigo-800',
+      'creditor_review': 'bg-red-200 text-red-900',
       'awaiting_client_confirmation': 'bg-pink-100 text-pink-800',
-      'creditor_contact_active': 'bg-teal-100 text-teal-800',
+      'creditor_contact_active': 'bg-red-300 text-red-900',
       'completed': 'bg-emerald-100 text-emerald-800'
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
@@ -186,7 +186,7 @@ const AnalyticsDashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{borderBottomColor: '#9f1a1d'}}></div>
       </div>
     );
   }
@@ -209,7 +209,7 @@ const AnalyticsDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <UsersIcon className="h-8 w-8 text-blue-500 mr-3" />
+            <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
             <div>
               <p className="text-sm font-medium text-gray-600">Gesamt-Nutzer</p>
               <p className="text-2xl font-bold text-gray-900">{totalUsers}</p>
@@ -219,7 +219,7 @@ const AnalyticsDashboard: React.FC = () => {
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <DocumentTextIcon className="h-8 w-8 text-green-500 mr-3" />
+            <DocumentTextIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
             <div>
               <p className="text-sm font-medium text-gray-600">Dokumente</p>
               <p className="text-2xl font-bold text-gray-900">{totalDocuments}</p>
@@ -229,7 +229,7 @@ const AnalyticsDashboard: React.FC = () => {
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <ChartBarIcon className="h-8 w-8 text-purple-500 mr-3" />
+            <ChartBarIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
             <div>
               <p className="text-sm font-medium text-gray-600">Gläubiger</p>
               <p className="text-2xl font-bold text-gray-900">{totalCreditors}</p>
@@ -239,7 +239,7 @@ const AnalyticsDashboard: React.FC = () => {
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <UsersIcon className="h-8 w-8 text-orange-500 mr-3" />
+            <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
             <div>
               <p className="text-sm font-medium text-gray-600">Aktive Nutzer</p>
               <p className="text-2xl font-bold text-gray-900">{activeUsers}</p>
@@ -379,7 +379,8 @@ const AnalyticsDashboard: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => setSelectedUserId(user.aktenzeichen)}
-                      className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                      className="inline-flex items-center hover:opacity-80"
+                      style={{color: '#9f1a1d'}}
                     >
                       <EyeIcon className="w-4 h-4 mr-1" />
                       Details

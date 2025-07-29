@@ -115,7 +115,7 @@ const HybridDashboard: React.FC = () => {
   const getWorkflowStatusColor = (status: string) => {
     const statusMap: Record<string, { color: string; bg: string; text: string; icon: any }> = {
       'documents_processing': { 
-        color: 'text-blue-600', 
+        color: 'text-red-800', 
         bg: 'bg-blue-100', 
         text: 'Dokumente werden verarbeitet',
         icon: ClockIcon
@@ -203,7 +203,7 @@ const HybridDashboard: React.FC = () => {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <UserGroupIcon className="h-6 w-6 text-blue-600" />
+                <UserGroupIcon className="h-6 w-6 text-red-800" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
@@ -343,7 +343,7 @@ const HybridDashboard: React.FC = () => {
                 <div className="mt-6">
                   <button
                     onClick={nextAction.action}
-                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 transition-colors"
                   >
                     {nextAction.text}
                     <ArrowRightIcon className="ml-2 w-4 h-4" />
@@ -364,7 +364,7 @@ const HybridDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
-              <ChartBarIcon className="h-8 w-8 text-blue-600 mr-3" />
+              <ChartBarIcon className="h-8 w-8 text-red-800 mr-3" />
               <h1 className="text-2xl font-bold text-gray-900">Hybrid Dashboard</h1>
             </div>
             <div className="text-sm text-gray-500">
@@ -389,7 +389,7 @@ const HybridDashboard: React.FC = () => {
                   onClick={() => setCurrentView(tab.key as ViewMode)}
                   className={`flex items-center px-1 py-4 border-b-2 font-medium text-sm transition-colors ${
                     isActive
-                      ? 'border-blue-500 text-blue-600'
+                      ? 'border-blue-500 text-red-800'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
