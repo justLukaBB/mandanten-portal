@@ -78,7 +78,7 @@ const AnalyticsDashboard: React.FC = () => {
       // Fetch all clients from admin endpoint
       const response = await fetch(`${API_BASE_URL}/admin/clients`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
       });
       

@@ -13,7 +13,7 @@ const AdminApp: React.FC = () => {
   useEffect(() => {
     // Check if user is authenticated
     const authToken = localStorage.getItem('admin_auth');
-    const adminToken = localStorage.getItem('adminToken');
+    const adminToken = localStorage.getItem('admin_token');
     
     if (authToken === 'true' && adminToken) {
       // Set API auth header
@@ -27,6 +27,11 @@ const AdminApp: React.FC = () => {
   }, []);
 
   const handleLogin = () => {
+    // Set API auth header when logging in
+    const adminToken = localStorage.getItem('admin_token');
+    if (adminToken) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${adminToken}`;
+    }
     setIsAuthenticated(true);
   };
 

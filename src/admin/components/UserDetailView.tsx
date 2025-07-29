@@ -79,7 +79,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       // Fetch user data
       const userResponse = await fetch(`${API_BASE_URL}/clients/${userId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
       });
       
@@ -93,7 +93,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       try {
         const documentsResponse = await fetch(`${API_BASE_URL}/clients/${userId}/documents`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+            'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
           }
         });
         
