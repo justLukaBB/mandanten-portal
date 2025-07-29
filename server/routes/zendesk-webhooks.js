@@ -170,11 +170,128 @@ router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
   }
 });
 
-// Zendesk Webhook: Payment Confirmed (Phase 2)
-// Triggered when agent checks "erste_rate_bezahlt" checkbox
+// NEW: Zendesk Webhook: User Payment Confirmed (Phase 2)
+// Triggered when agent checks "erste_rate_bezahlt_user" checkbox on USER profile
+router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
+  try {
+    console.log('💰 Zendesk Webhook: User-Payment-Confirmed received', req.body);
+    
+    const {
+      user_id,        // Zendesk user ID
+      email,
+      external_id,    // This is the aktenzeichen
+      name,
+      agent_email
+    } = req.body;
+
+    if (!external_id && !email) {
+      return res.status(400).json({
+        error: 'Missing required field: external_id (aktenzeichen) or email'
+      });
+    }
+
+    // Find client by aktenzeichen (external_id) or email
+    const client = await Client.findOne({ 
+      $or: [
+        { aktenzeichen: external_id },
+        { email: email }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        external_id: external_id,
+        email: email
+      });
+    }
+
+    console.log(`📋 Processing user payment confirmation for: ${client.firstName} ${client.lastName}`);
+
+    // Update client status
+    client.first_payment_received = true;
+    client.current_status = 'payment_confirmed';
+    client.updated_at = new Date();
+
+    // Add status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'payment_confirmed',
+      changed_by: 'agent',
+      zendesk_user_id: user_id,
+      metadata: {
+        agent_email: agent_email || 'system',
+        agent_action: 'erste_rate_bezahlt_user checkbox on user profile',
+        payment_date: new Date()
+      }
+    });
+
+    await client.save();
+
+    // Analyze documents and creditors for review
+    const documents = client.documents || [];
+    const creditors = client.final_creditor_list || [];
+    const completedDocs = documents.filter(d => d.processing_status === 'completed');
+    const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+    
+    // Check which creditors need manual review (confidence < 80%)
+    const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+    const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
+    
+    // Generate automatic review ticket content
+    const reviewTicketContent = generateCreditorReviewTicketContent(
+      client, documents, creditors, needsReview.length > 0
+    );
+
+    // Prepare data for Zendesk ticket creation
+    const ticketData = {
+      subject: `Gläubiger-Review: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+      requester_email: client.email,
+      requester_id: user_id,
+      tags: ['gläubiger-review', 'payment-confirmed', needsReview.length > 0 ? 'manual-review-needed' : 'auto-approved'],
+      priority: needsReview.length > 0 ? 'normal' : 'low',
+      type: 'task',
+      comment: {
+        body: reviewTicketContent,
+        public: false // Internal note
+      }
+    };
+
+    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
+
+    res.json({
+      success: true,
+      message: 'User payment confirmation processed - Ready to create review ticket',
+      client_status: 'payment_confirmed',
+      documents_count: documents.length,
+      creditor_documents: creditorDocs.length,
+      extracted_creditors: creditors.length,
+      creditors_need_review: needsReview.length,
+      creditors_confidence_ok: confidenceOk.length,
+      manual_review_required: needsReview.length > 0,
+      zendesk_ticket_data: ticketData,
+      review_dashboard_url: needsReview.length > 0 
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        : null,
+      next_step: needsReview.length > 0 
+        ? 'Create review ticket with manual correction needed' 
+        : 'Create review ticket - All creditors verified - Ready for client confirmation'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in user-payment-confirmed webhook:', error);
+    res.status(500).json({
+      error: 'Failed to process user payment confirmation',
+      details: error.message
+    });
+  }
+});
+
+// LEGACY: Zendesk Webhook: Payment Confirmed (kept for backward compatibility)
+// This was the old ticket-based approach - keeping for existing integrations
 router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
   try {
-    console.log('💰 Zendesk Webhook: Payment-Confirmed received', req.body);
+    console.log('💰 Zendesk Webhook: Payment-Confirmed received (legacy ticket-based)', req.body);
     
     // Handle both direct format and Zendesk webhook format
     let aktenzeichen, zendesk_ticket_id, agent_email;
@@ -227,7 +344,7 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
       zendesk_ticket_id: zendesk_ticket_id,
       metadata: {
         agent_email: agent_email,
-        agent_action: 'erste_rate_bezahlt checkbox',
+        agent_action: 'erste_rate_bezahlt checkbox (legacy ticket-based)',
         payment_date: new Date()
       }
     });
