@@ -27,6 +27,39 @@ const TestDataService = require('./services/testDataService');
 const app = express();
 const PORT = config.PORT;
 
+// Simple mutex for database operations to prevent race conditions
+const processingMutex = new Map();
+
+// Safe client update function to prevent race conditions
+async function safeClientUpdate(clientId, updateFunction) {
+  // Wait for any existing operations on this client
+  while (processingMutex.get(clientId)) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  
+  // Lock this client
+  processingMutex.set(clientId, true);
+  
+  try {
+    // Get fresh client data
+    const client = await getClientById(clientId);
+    if (!client) {
+      throw new Error(`Client ${clientId} not found`);
+    }
+    
+    // Apply the update function
+    const updatedClient = await updateFunction(client);
+    
+    // Save to database
+    await saveClient(updatedClient);
+    
+    return updatedClient;
+  } finally {
+    // Always release the lock
+    processingMutex.delete(clientId);
+  }
+}
+
 // Trust proxy for Render deployment
 app.set('trust proxy', true);
 
@@ -262,32 +295,37 @@ app.post('/api/clients/:clientId/documents',
           console.log(`⏱️ =========================\n`);
           
           try {
-            // Update document with timeout status
-            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-            if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
-              client.documents[docIndex] = {
-                ...client.documents[docIndex],
-                processing_status: 'failed',
-                document_status: 'processing_timeout',
-                status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
-                processing_error: 'Processing timeout exceeded',
-                processed_at: new Date().toISOString(),
-                processing_time_ms: PROCESSING_TIMEOUT
-              };
-              await saveClient(client);
-            }
+            // Update document with timeout status using safe update
+            await safeClientUpdate(clientId, (client) => {
+              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+              if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
+                client.documents[docIndex] = {
+                  ...client.documents[docIndex],
+                  processing_status: 'failed',
+                  document_status: 'processing_timeout',
+                  status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
+                  processing_error: 'Processing timeout exceeded',
+                  processed_at: new Date().toISOString(),
+                  processing_time_ms: PROCESSING_TIMEOUT
+                };
+              }
+              return client;
+            });
           } catch (timeoutError) {
             console.error('Error handling timeout:', timeoutError);
           }
         }, PROCESSING_TIMEOUT);
         
         try {
-          // Update status to processing
-          const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-          if (docIndex !== -1) {
-            client.documents[docIndex].processing_status = 'processing';
-            client.documents[docIndex].processing_started_at = new Date().toISOString();
-          }
+          // Update status to processing using safe client update
+          await safeClientUpdate(clientId, (client) => {
+            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+            if (docIndex !== -1) {
+              client.documents[docIndex].processing_status = 'processing';
+              client.documents[docIndex].processing_started_at = new Date().toISOString();
+            }
+            return client;
+          });
           
           console.log(`🤖 Calling Google Document AI processor...`);
           const extractedData = await documentProcessor.processDocument(filePath, file.originalname);
@@ -394,28 +432,6 @@ app.post('/api/clients/:clientId/documents',
             }
           }
           
-          // Update document record with enhanced data
-          if (docIndex !== -1) {
-            client.documents[docIndex] = {
-              ...client.documents[docIndex],
-              processing_status: classificationSuccess ? 'completed' : 'failed',
-              classification_success: classificationSuccess,
-              is_creditor_document: extractedData.is_creditor_document || false,
-              confidence: extractedData.confidence || 0.0,
-              manual_review_required: extractedData.manual_review_required || false,
-              document_status: documentStatus,
-              status_reason: statusReason,
-              is_duplicate: isDuplicate,
-              duplicate_reason: duplicateReason,
-              extracted_data: extractedData,
-              validation: validation,
-              summary: summary,
-              processed_at: new Date().toISOString(),
-              processing_time_ms: processingTime,
-              processing_method: 'simplified_creditor_classification'
-            };
-          }
-          
           console.log(`\n✅ =========================`);
           console.log(`✅ CLASSIFICATION COMPLETED`);
           console.log(`✅ =========================`);
@@ -435,8 +451,31 @@ app.post('/api/clients/:clientId/documents',
           // Clear timeout on successful completion
           clearTimeout(timeoutId);
           
-          // Save updated client to MongoDB
-          await saveClient(client);
+          // Update document record with enhanced data using safe update
+          await safeClientUpdate(clientId, (client) => {
+            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+            if (docIndex !== -1) {
+              client.documents[docIndex] = {
+                ...client.documents[docIndex],
+                processing_status: classificationSuccess ? 'completed' : 'failed',
+                classification_success: classificationSuccess,
+                is_creditor_document: extractedData.is_creditor_document || false,
+                confidence: extractedData.confidence || 0.0,
+                manual_review_required: extractedData.manual_review_required || false,
+                document_status: documentStatus,
+                status_reason: statusReason,
+                is_duplicate: isDuplicate,
+                duplicate_reason: duplicateReason,
+                extracted_data: extractedData,
+                validation: validation,
+                summary: summary,
+                processed_at: new Date().toISOString(),
+                processing_time_ms: processingTime,
+                processing_method: 'simplified_creditor_classification'
+              };
+            }
+            return client;
+          });
           
         } catch (processingError) {
           // Clear timeout on error
@@ -452,27 +491,27 @@ app.post('/api/clients/:clientId/documents',
           console.log(`🔍 AI Pipeline Success: ❌ NO`);
           console.log(`❌ =========================\n`);
           
-          // Update document with error status
-          const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-          if (docIndex !== -1) {
-            client.documents[docIndex] = {
-              ...client.documents[docIndex],
-              processing_status: 'failed',
-              document_status: 'processing_failed',
-              status_reason: `Verarbeitungsfehler: ${processingError.message}`,
-              is_duplicate: false,
-              ai_pipeline_success: false,
-              claude_ai_success: false,
-              processing_error: processingError.message,
-              processing_error_details: processingError.stack,
-              processed_at: new Date().toISOString(),
-              processing_time_ms: processingTime,
-              processing_method: 'google_document_ai + claude_ai'
-            };
-          }
-          
-          // Save updated client to MongoDB even in error case
-          await saveClient(client);
+          // Update document with error status using safe update
+          await safeClientUpdate(clientId, (client) => {
+            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+            if (docIndex !== -1) {
+              client.documents[docIndex] = {
+                ...client.documents[docIndex],
+                processing_status: 'failed',
+                document_status: 'processing_failed',
+                status_reason: `Verarbeitungsfehler: ${processingError.message}`,
+                is_duplicate: false,
+                ai_pipeline_success: false,
+                claude_ai_success: false,
+                processing_error: processingError.message,
+                processing_error_details: processingError.stack,
+                processed_at: new Date().toISOString(),
+                processing_time_ms: processingTime,
+                processing_method: 'google_document_ai + claude_ai'
+              };
+            }
+            return client;
+          });
         }
       });
     }
