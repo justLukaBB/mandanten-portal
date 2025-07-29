@@ -864,9 +864,10 @@ app.post('/api/admin/clients',
       documents: [],
       final_creditor_list: [],
       status_history: [{
+        id: uuidv4(),
         status: clientData.current_status || 'created',
-        timestamp: new Date(),
-        updated_by: 'admin'
+        changed_by: 'admin',
+        created_at: new Date()
       }]
     });
     
