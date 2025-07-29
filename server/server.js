@@ -235,9 +235,11 @@ app.post('/api/clients/:clientId/documents',
       
       uploadedDocuments.push(documentRecord);
       
-      // Start AI processing in background with detailed logging
+      // Start AI processing in background with detailed logging and timeout
       setImmediate(async () => {
         const startTime = Date.now();
+        const PROCESSING_TIMEOUT = 5 * 60 * 1000; // 5 minutes timeout
+        
         console.log(`\n🚀 =========================`);
         console.log(`🚀 STARTING AI PROCESSING`);
         console.log(`🚀 =========================`);
@@ -246,7 +248,38 @@ app.post('/api/clients/:clientId/documents',
         console.log(`🔤 Type: ${file.mimetype}`);
         console.log(`🆔 Document ID: ${documentId}`);
         console.log(`⏰ Started at: ${new Date().toISOString()}`);
+        console.log(`⏱️  Timeout: ${PROCESSING_TIMEOUT / 1000}s`);
         console.log(`🚀 =========================\n`);
+        
+        // Set up timeout handler
+        const timeoutId = setTimeout(async () => {
+          console.log(`\n⏱️ =========================`);
+          console.log(`⏱️ PROCESSING TIMEOUT`);
+          console.log(`⏱️ =========================`);
+          console.log(`📁 Document: ${file.originalname}`);
+          console.log(`🆔 Document ID: ${documentId}`);
+          console.log(`⏱️ Timeout after: ${PROCESSING_TIMEOUT / 1000}s`);
+          console.log(`⏱️ =========================\n`);
+          
+          try {
+            // Update document with timeout status
+            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+            if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
+              client.documents[docIndex] = {
+                ...client.documents[docIndex],
+                processing_status: 'failed',
+                document_status: 'processing_timeout',
+                status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
+                processing_error: 'Processing timeout exceeded',
+                processed_at: new Date().toISOString(),
+                processing_time_ms: PROCESSING_TIMEOUT
+              };
+              await saveClient(client);
+            }
+          } catch (timeoutError) {
+            console.error('Error handling timeout:', timeoutError);
+          }
+        }, PROCESSING_TIMEOUT);
         
         try {
           // Update status to processing
@@ -399,10 +432,15 @@ app.post('/api/clients/:clientId/documents',
           console.log(`📊 Summary: ${summary}`);
           console.log(`✅ =========================\n`);
           
+          // Clear timeout on successful completion
+          clearTimeout(timeoutId);
+          
           // Save updated client to MongoDB
           await saveClient(client);
           
         } catch (processingError) {
+          // Clear timeout on error
+          clearTimeout(timeoutId);
           const processingTime = Date.now() - startTime;
           
           console.log(`\n❌ =========================`);
