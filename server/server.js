@@ -887,6 +887,75 @@ app.post('/api/admin/clients',
   }
 });
 
+// Admin: Clear all data from MongoDB (DANGER!)
+app.delete('/api/admin/clear-database', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    console.log('🗑️ ADMIN REQUEST: Clearing all data from MongoDB...');
+    
+    if (!databaseService.isHealthy()) {
+      return res.status(503).json({ 
+        error: 'Database not available' 
+      });
+    }
+    
+    // Get counts before deletion for confirmation
+    const clientCount = await Client.countDocuments();
+    
+    console.log(`📊 Found ${clientCount} clients in database`);
+    
+    // Delete all clients (this will cascade delete all related data)
+    const deleteResult = await Client.deleteMany({});
+    
+    console.log(`✅ Deleted ${deleteResult.deletedCount} clients from MongoDB`);
+    
+    // Also clean up any uploaded files directory
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (fs.existsSync(uploadsDir)) {
+      console.log('🗂️ Cleaning up uploads directory...');
+      const clientDirs = fs.readdirSync(uploadsDir).filter(dir => {
+        const dirPath = path.join(uploadsDir, dir);
+        return fs.statSync(dirPath).isDirectory();
+      });
+      
+      let filesDeleted = 0;
+      for (const clientDir of clientDirs) {
+        const clientDirPath = path.join(uploadsDir, clientDir);
+        try {
+          fs.removeSync(clientDirPath);
+          filesDeleted++;
+          console.log(`🗑️ Deleted directory: ${clientDir}`);
+        } catch (error) {
+          console.warn(`⚠️ Could not delete directory ${clientDir}:`, error.message);
+        }
+      }
+      console.log(`📂 Cleaned up ${filesDeleted} client directories`);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Database cleared successfully',
+      stats: {
+        clients_deleted: deleteResult.deletedCount,
+        upload_dirs_cleaned: fs.existsSync(uploadsDir) ? 
+          fs.readdirSync(uploadsDir).filter(dir => 
+            fs.statSync(path.join(uploadsDir, dir)).isDirectory()
+          ).length : 0
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error clearing database:', error);
+    res.status(500).json({ 
+      error: 'Error clearing database',
+      details: error.message 
+    });
+  }
+});
+
 // Trigger reprocessing of a document
 app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, res) => {
   try {

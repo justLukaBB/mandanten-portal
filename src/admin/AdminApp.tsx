@@ -3,6 +3,7 @@ import AdminLayout from './components/AdminLayout';
 import AdminLogin from './pages/AdminLogin';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import CreateUser from './pages/CreateUser';
+import Settings from './pages/Settings';
 import api from '../config/api';
 
 const AdminApp: React.FC = () => {
@@ -67,14 +68,7 @@ const AdminApp: React.FC = () => {
       case 'create-user':
         return <CreateUser />;
       case 'settings':
-        return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Einstellungen</h2>
-              <p className="text-gray-600">Einstellungsseite wird noch entwickelt...</p>
-            </div>
-          </div>
-        );
+        return <Settings />;
       default:
         return <AnalyticsDashboard />;
     }
