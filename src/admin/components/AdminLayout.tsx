@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  ChartBarIcon, 
   UserGroupIcon, 
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
-  CurrencyEuroIcon,
   PresentationChartLineIcon
 } from '@heroicons/react/24/outline';
 
@@ -21,34 +19,22 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 
   const navigation = [
     { 
-      name: 'Analytics', 
+      name: 'Analytics Dashboard', 
       key: 'analytics' as const, 
       icon: PresentationChartLineIcon,
-      description: '📊 Read-Only Monitoring & Analytics (NEU)'
+      description: '📊 Monitoring & Analytics'
     },
     { 
-      name: 'Dashboard (Legacy)', 
-      key: 'dashboard' as const, 
-      icon: ChartBarIcon,
-      description: '⚠️ Alt - wird durch Analytics ersetzt'
-    },
-    { 
-      name: 'Mandanten', 
-      key: 'clients' as const, 
+      name: 'User erstellen', 
+      key: 'create-user' as const, 
       icon: UserGroupIcon,
-      description: 'Mandantenverwaltung und Dokumentenanalyse'
-    },
-    { 
-      name: 'Schuldenregulierung', 
-      key: 'debt-restructuring' as const, 
-      icon: CurrencyEuroIcon,
-      description: 'Phase 2: Pfändungsberechnung & Gläubiger-Quoten'
+      description: '➕ Test-User manuell anlegen'
     },
     { 
       name: 'Einstellungen', 
       key: 'settings' as const, 
       icon: Cog6ToothIcon,
-      description: 'System- und AI-Konfiguration'
+      description: 'System-Konfiguration'
     }
   ];
 
@@ -130,7 +116,7 @@ const SidebarContent: React.FC<{
       {/* Logo/Brand */}
       <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
         <div className="flex items-center flex-shrink-0 px-4 mb-8">
-          <ChartBarIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
+          <PresentationChartLineIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
           <h1 className="text-xl font-bold text-gray-900">Admin Portal</h1>
         </div>
         
