@@ -26,22 +26,72 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
   const [successMessage, setSuccessMessage] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const validateFile = (file: File): string | null => {
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return `Datei "${file.name}" ist zu groß. Maximum: 10MB`;
+    }
+
+    // Check file type
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg', 
+      'image/jpg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      return `Dateityp "${file.type}" wird nicht unterstützt. Erlaubte Formate: PDF, JPG, PNG, DOC, DOCX`;
+    }
+
+    // Check filename
+    if (!/^[a-zA-Z0-9\s\-_\.\(\)]+$/i.test(file.name)) {
+      return `Ungültiger Dateiname: "${file.name}". Nur Buchstaben, Zahlen und einfache Sonderzeichen erlaubt.`;
+    }
+
+    return null; // File is valid
+  };
+
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
 
-    const newFiles: UploadedFile[] = Array.from(files).map(file => ({
-      file,
-      id: Math.random().toString(36).substr(2, 9),
-      progress: 0,
-      status: 'uploading' as const
-    }));
+    const validFiles: File[] = [];
+    const errors: string[] = [];
 
-    setUploadedFiles(prev => [...prev, ...newFiles]);
-
-    // Upload files to server
-    newFiles.forEach(uploadedFile => {
-      uploadFile(uploadedFile);
+    // Validate each file
+    Array.from(files).forEach(file => {
+      const error = validateFile(file);
+      if (error) {
+        errors.push(error);
+      } else {
+        validFiles.push(file);
+      }
     });
+
+    // Show validation errors
+    if (errors.length > 0) {
+      alert('Upload-Fehler:\n\n' + errors.join('\n'));
+    }
+
+    // Only upload valid files
+    if (validFiles.length > 0) {
+      const newFiles: UploadedFile[] = validFiles.map(file => ({
+        file,
+        id: Math.random().toString(36).substr(2, 9),
+        progress: 0,
+        status: 'uploading' as const
+      }));
+
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+
+      // Upload files to server
+      newFiles.forEach(uploadedFile => {
+        uploadFile(uploadedFile);
+      });
+    }
   };
 
   const uploadFile = async (uploadedFile: UploadedFile) => {
@@ -93,6 +143,18 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
             setTimeout(() => setSuccessMessage(''), 3000);
           }
         } else {
+          // Parse error response if possible
+          let errorMessage = `Upload fehlgeschlagen (HTTP ${xhr.status})`;
+          try {
+            const errorResponse = JSON.parse(xhr.responseText);
+            errorMessage = errorResponse.error || errorMessage;
+          } catch (e) {
+            // Use default message if JSON parsing fails
+          }
+          
+          console.error('Upload failed:', errorMessage);
+          alert(`Upload Fehler: ${errorMessage}`);
+          
           setUploadedFiles(prev => 
             prev.map(f => 
               f.id === uploadedFile.id 
