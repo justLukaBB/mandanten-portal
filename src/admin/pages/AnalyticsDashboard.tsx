@@ -67,8 +67,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
 
   useEffect(() => {
     fetchUsers();
-    const interval = setInterval(fetchUsers, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    // Removed auto-refresh to prevent session logout issues
   }, []);
 
   useEffect(() => {
@@ -203,9 +202,23 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
           <h1 className="text-2xl font-bold text-gray-900">📊 Analytics Dashboard</h1>
           <p className="text-gray-600 mt-1">Monitoring und Analyse - Nur zur Übersicht (Keine Aktionen)</p>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <span>Letztes Update:</span>
-          <span>{new Date().toLocaleTimeString('de-DE')}</span>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={fetchUsers}
+            disabled={loading}
+            className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border hover:bg-red-50 transition-colors"
+            style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+            title="Daten aktualisieren"
+          >
+            <svg className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+          <div className="text-sm text-gray-500">
+            <span>Letztes Update:</span>
+            <span className="ml-1">{new Date().toLocaleTimeString('de-DE')}</span>
+          </div>
         </div>
       </div>
 

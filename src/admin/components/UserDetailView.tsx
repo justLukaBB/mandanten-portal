@@ -84,10 +84,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   useEffect(() => {
     fetchUserDetails();
-    
-    // Auto-refresh every 10 seconds to get latest AI processing results
-    const interval = setInterval(fetchUserDetails, 10000);
-    return () => clearInterval(interval);
+    // Removed auto-refresh to prevent session logout issues
   }, [userId]);
 
   const fetchUserDetails = async () => {
