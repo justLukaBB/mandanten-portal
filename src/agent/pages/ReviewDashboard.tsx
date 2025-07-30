@@ -8,11 +8,13 @@ import {
   CheckIcon,
   XMarkIcon,
   ClockIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import DocumentViewer from '../components/DocumentViewer';
 import CorrectionForm from '../components/CorrectionForm';
 import ProgressBar from '../components/ProgressBar';
+import HighConfidenceSummary from '../components/HighConfidenceSummary';
 import { API_BASE_URL } from '../../config/api';
 
 interface ReviewData {
@@ -83,6 +85,7 @@ const ReviewDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reviewPhase, setReviewPhase] = useState<'manual' | 'summary'>('manual');
 
   // Check authentication
   useEffect(() => {
@@ -132,6 +135,11 @@ const ReviewDashboard: React.FC = () => {
       setReviewData(data);
       console.log(`📊 Loaded review data for ${data.client.aktenzeichen}:`, data);
       
+      // If no manual reviews needed, go straight to summary
+      if (data.documents.need_review.length === 0) {
+        setReviewPhase('summary');
+      }
+      
     } catch (error: any) {
       console.error('❌ Error loading review data:', error);
       setError(error.message || 'Failed to load review data');
@@ -169,11 +177,12 @@ const ReviewDashboard: React.FC = () => {
       const result = await response.json();
       console.log(`✅ Document ${action}ed successfully:`, result);
 
-      // Move to next document or complete session
+      // Move to next document or switch to summary phase
       if (currentDocIndex < reviewData.documents.need_review.length - 1) {
         setCurrentDocIndex(currentDocIndex + 1);
       } else {
-        handleCompleteSession();
+        // All manual reviews done, switch to summary phase
+        setReviewPhase('summary');
       }
       
     } catch (error: any) {
@@ -184,7 +193,7 @@ const ReviewDashboard: React.FC = () => {
     }
   };
 
-  const handleCompleteSession = async () => {
+  const handleConfirmAll = async () => {
     if (!reviewData) return;
     
     setSaving(true);
@@ -192,6 +201,33 @@ const ReviewDashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('agent_token');
       
+      // First, auto-confirm all high-confidence creditors
+      const highConfidenceCreditors = reviewData.creditors.verified || [];
+      for (const creditor of highConfidenceCreditors) {
+        // Find the related document
+        const relatedDoc = reviewData.documents.all.find(doc => 
+          doc.extracted_data?.creditor_data?.sender_name === creditor.sender_name ||
+          doc.name === creditor.source_document
+        );
+        
+        if (relatedDoc && !relatedDoc.manually_reviewed) {
+          // Auto-confirm high-confidence creditor
+          await fetch(`${API_BASE_URL}/agent-review/${clientId}/correct`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              document_id: relatedDoc.id,
+              corrections: {},
+              action: 'confirm'
+            })
+          });
+        }
+      }
+      
+      // Now complete the entire session
       const response = await fetch(`${API_BASE_URL}/agent-review/${clientId}/complete`, {
         method: 'POST',
         headers: {
@@ -211,10 +247,10 @@ const ReviewDashboard: React.FC = () => {
       console.log('✅ Review session completed:', result);
 
       // Show completion message and redirect
-      alert(`Review erfolgreich abgeschlossen!\n\n${result.summary?.creditors?.total_count || 0} Gläubiger verarbeitet.\n\nGläubiger-Kontakt wurde automatisch gestartet.`);
+      alert(`✅ Review erfolgreich abgeschlossen!\n\n${result.summary?.creditors?.total_count || 0} Gläubiger bestätigt.\n\n📧 Gläubigerliste wurde automatisch an den Mandanten gesendet.\n\n${result.creditor_contact?.success ? '✅ Gläubiger-Kontakt wurde gestartet.' : '⚠️ Gläubiger-Kontakt muss manuell gestartet werden.'}`);
       
-      // Redirect to agent dashboard or Zendesk
-      window.location.href = '/agent/dashboard';
+      // Redirect to agent dashboard
+      navigate('/agent/dashboard');
       
     } catch (error: any) {
       console.error('❌ Error completing session:', error);
@@ -272,23 +308,56 @@ const ReviewDashboard: React.FC = () => {
 
   const documentsToReview = reviewData.documents.need_review;
   const currentDoc = documentsToReview[currentDocIndex];
+  
+  // Get high-confidence documents and creditors
+  const highConfidenceDocuments = reviewData.documents.all.filter(doc => 
+    doc.is_creditor_document && 
+    doc.extracted_data?.confidence && 
+    doc.extracted_data.confidence >= 0.8
+  );
+  
+  const highConfidenceCreditors = reviewData.creditors.verified || [];
 
-  if (documentsToReview.length === 0) {
+  // If no manual review needed, go straight to summary
+  if (documentsToReview.length === 0 && reviewPhase === 'manual') {
+    setReviewPhase('summary');
+  }
+
+  // Show summary phase if all manual reviews are done or if no manual reviews needed
+  if (reviewPhase === 'summary') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <CheckIcon className="h-16 w-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Keine Dokumente zur Prüfung</h2>
-          <p className="text-gray-600 mb-4">
-            Alle Dokumente für {reviewData.client.firstName} {reviewData.client.lastName} wurden bereits geprüft.
-          </p>
-          <button 
-            onClick={() => navigate('/agent/dashboard')}
-            className="px-4 py-2 text-white rounded-md hover:opacity-90"
-            style={{backgroundColor: '#9f1a1d'}}
-          >
-            Zurück zum Dashboard
-          </button>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <UserIcon className="h-8 w-8 text-gray-400" />
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Review Abschluss: {reviewData.client.firstName} {reviewData.client.lastName}
+                </h1>
+                <p className="text-sm text-gray-600">
+                  Aktenzeichen: {reviewData.client.aktenzeichen}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <CheckCircleIcon className="h-6 w-6 text-green-500" />
+              <span className="text-sm font-medium text-green-600">
+                Manuelle Prüfung abgeschlossen
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Content */}
+        <div className="max-w-4xl mx-auto p-6">
+          <HighConfidenceSummary
+            documents={highConfidenceDocuments}
+            creditors={highConfidenceCreditors}
+            onConfirmAll={handleConfirmAll}
+            loading={saving}
+          />
         </div>
       </div>
     );
@@ -312,7 +381,8 @@ const ReviewDashboard: React.FC = () => {
           </div>
           <div className="flex items-center space-x-4">
             <div className="text-sm text-gray-500">
-              <span className="font-medium">{reviewData.documents.review_count}</span> Dokumente zu prüfen
+              <span className="font-medium">{reviewData.documents.review_count}</span> manuelle Prüfungen • 
+              <span className="font-medium ml-2">{reviewData.creditors.verified?.length || 0}</span> automatisch erkannt
             </div>
             {saving && (
               <div className="flex items-center text-sm text-blue-600">
