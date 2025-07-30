@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Get enhanced dashboard status for all clients
 // GET /api/dashboard-status
-router.get('/', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.get('/', rateLimits.admin, authenticateAdmin, async (req, res) => {
   try {
     console.log('📊 Dashboard Status: Getting enhanced client statuses');
 
@@ -79,7 +79,7 @@ router.get('/', authenticateAdmin, rateLimits.general, async (req, res) => {
 
 // Get detailed status for specific client
 // GET /api/dashboard-status/:clientId
-router.get('/:clientId', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.get('/:clientId', rateLimits.admin, authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
     
