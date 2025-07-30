@@ -125,8 +125,7 @@ const HighConfidenceSummary: React.FC<HighConfidenceSummaryProps> = ({
           disabled={loading}
           className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           style={{
-            backgroundColor: loading ? '#6b7280' : '#9f1a1d',
-            focusRingColor: '#9f1a1d'
+            backgroundColor: loading ? '#6b7280' : '#9f1a1d'
           }}
         >
           {loading ? (
