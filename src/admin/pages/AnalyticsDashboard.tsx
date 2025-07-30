@@ -6,7 +6,8 @@ import {
   FunnelIcon,
   CalendarIcon,
   MagnifyingGlassIcon,
-  EyeIcon
+  EyeIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
