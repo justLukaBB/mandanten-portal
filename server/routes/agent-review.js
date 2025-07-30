@@ -1,15 +1,17 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Client = require('../models/Client');
-const { authenticateAdmin } = require('../middleware/auth');
+const Agent = require('../models/Agent');
+const { authenticateAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const CreditorContactService = require('../services/creditorContactService');
+const config = require('../config');
 
 const router = express.Router();
 
 // Get review data for a specific client
 // GET /api/agent-review/:clientId
-router.get('/:clientId', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res) => {
   try {
     const { clientId } = req.params;
     
@@ -41,12 +43,12 @@ router.get('/:clientId', authenticateAdmin, rateLimits.general, async (req, res)
       // 2. Or if no creditor was extracted from this document
       return (
         doc.is_creditor_document === true && 
-        (!relatedCreditor || (relatedCreditor.confidence || 0) < 0.8)
+        (!relatedCreditor || (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
       );
     });
 
     // Get creditors that need review
-    const creditorsToReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+    const creditorsToReview = creditors.filter(c => (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
 
     console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs, ${creditorsToReview.length} creditors need review`);
 
@@ -69,7 +71,7 @@ router.get('/:clientId', authenticateAdmin, rateLimits.general, async (req, res)
       creditors: {
         all: creditors,
         need_review: creditorsToReview,
-        verified: creditors.filter(c => (c.confidence || 0) >= 0.8),
+        verified: creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD),
         total_count: creditors.length,
         review_count: creditorsToReview.length
       },
@@ -94,7 +96,7 @@ router.get('/:clientId', authenticateAdmin, rateLimits.general, async (req, res)
 
 // Save corrections for a specific document
 // POST /api/agent-review/:clientId/correct
-router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (req, res) => {
   try {
     const { clientId } = req.params;
     const { document_id, corrections, action } = req.body; // action: 'correct', 'skip', 'confirm'
@@ -145,7 +147,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
           claim_amount: corrections.claim_amount || creditors[creditorIndex].claim_amount,
           confidence: 1.0, // Manual correction = 100% confidence
           manually_reviewed: true,
-          reviewed_by: req.adminId,
+          reviewed_by: req.agentId,
           reviewed_at: new Date(),
           original_ai_data: originalData,
           correction_notes: corrections.notes || ''
@@ -164,7 +166,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
           claim_amount: parseFloat(corrections.claim_amount) || 0,
           confidence: 1.0, // Manual entry = 100% confidence
           manually_reviewed: true,
-          reviewed_by: req.adminId,
+          reviewed_by: req.agentId,
           reviewed_at: new Date(),
           created_via: 'manual_review',
           correction_notes: corrections.notes || ''
@@ -177,7 +179,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
       // Mark as skipped
       if (creditorIndex >= 0) {
         creditors[creditorIndex].manually_reviewed = true;
-        creditors[creditorIndex].reviewed_by = req.adminId;
+        creditors[creditorIndex].reviewed_by = req.agentId;
         creditors[creditorIndex].reviewed_at = new Date();
         creditors[creditorIndex].review_action = 'skipped';
       }
@@ -187,7 +189,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
       if (creditorIndex >= 0) {
         creditors[creditorIndex].confidence = 1.0; // Confirmed = 100% confidence
         creditors[creditorIndex].manually_reviewed = true;
-        creditors[creditorIndex].reviewed_by = req.adminId;
+        creditors[creditorIndex].reviewed_by = req.agentId;
         creditors[creditorIndex].reviewed_at = new Date();
         creditors[creditorIndex].review_action = 'confirmed';
       }
@@ -201,7 +203,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
     // Mark document as reviewed
     document.manually_reviewed = true;
     document.reviewed_at = new Date();
-    document.reviewed_by = req.adminId;
+    document.reviewed_by = req.agentId;
 
     await client.save();
 
@@ -235,7 +237,7 @@ router.post('/:clientId/correct', authenticateAdmin, rateLimits.general, async (
 
 // Complete the review session
 // POST /api/agent-review/:clientId/complete
-router.post('/:clientId/complete', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async (req, res) => {
   try {
     const { clientId } = req.params;
     const { zendesk_ticket_id } = req.body;
@@ -262,7 +264,7 @@ router.post('/:clientId/complete', authenticateAdmin, rateLimits.general, async 
       changed_by: 'agent',
       zendesk_ticket_id: zendesk_ticket_id,
       metadata: {
-        agent_id: req.adminId,
+        agent_id: req.agentId,
         agent_action: 'Completed manual review via dashboard',
         review_completed_at: new Date(),
         total_creditors: (client.final_creditor_list || []).length,
@@ -376,9 +378,9 @@ router.post('/:clientId/complete', authenticateAdmin, rateLimits.general, async 
   }
 });
 
-// Get document content for review (PDF/image data)
+// Get document metadata for review
 // GET /api/agent-review/:clientId/document/:documentId
-router.get('/:clientId/document/:documentId', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.general, async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
 
@@ -400,19 +402,22 @@ router.get('/:clientId/document/:documentId', authenticateAdmin, rateLimits.gene
       });
     }
 
-    // Return document metadata and download URL
+    // Return document metadata with secure file URL
     res.json({
       success: true,
       document: {
         id: document.id,
         name: document.name,
+        filename: document.filename,
         type: document.type,
         size: document.size,
-        uploaded_at: document.uploaded_at,
-        download_url: document.url || document.downloadUrl,
+        uploaded_at: document.uploadedAt || document.uploaded_at,
+        // Secure file URL through our API
+        file_url: `/api/agent-review/${clientId}/document/${documentId}/file`,
         is_creditor_document: document.is_creditor_document,
         processing_status: document.processing_status,
-        manually_reviewed: document.manually_reviewed || false
+        manually_reviewed: document.manually_reviewed || false,
+        extracted_data: document.extracted_data
       }
     });
 
@@ -420,6 +425,87 @@ router.get('/:clientId/document/:documentId', authenticateAdmin, rateLimits.gene
     console.error('❌ Error getting document:', error);
     res.status(500).json({
       error: 'Failed to get document',
+      details: error.message
+    });
+  }
+});
+
+// Secure file serving for document review
+// GET /api/agent-review/:clientId/document/:documentId/file
+router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits.general, async (req, res) => {
+  try {
+    const { clientId, documentId } = req.params;
+    const fs = require('fs');
+    const path = require('path');
+
+    // Verify agent has access to this client
+    const client = await Client.findOne({ id: clientId });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    const document = client.documents.find(d => d.id === documentId);
+    
+    if (!document) {
+      return res.status(404).json({
+        error: 'Document not found',
+        document_id: documentId
+      });
+    }
+
+    // Construct file path based on your upload structure
+    // Adjust this path based on your actual file storage structure
+    const uploadsDir = path.join(__dirname, '../uploads');
+    let filePath;
+    
+    // Try different possible paths
+    const possiblePaths = [
+      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
+      path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
+      path.join(uploadsDir, client.aktenzeichen, document.filename),
+      path.join(uploadsDir, clientId, document.filename),
+    ];
+
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        filePath = possiblePath;
+        break;
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
+      return res.status(404).json({
+        error: 'Document file not found on disk',
+        document_id: documentId
+      });
+    }
+
+    // Log access for security auditing
+    console.log(`📄 Agent ${req.agentUsername} accessing document ${documentId} for client ${client.aktenzeichen}`);
+
+    // Set appropriate headers
+    const mimeType = document.type || 'application/pdf';
+    const filename = document.filename || document.name || `document_${documentId}.pdf`;
+    
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('❌ Error serving document file:', error);
+    res.status(500).json({
+      error: 'Failed to serve document file',
       details: error.message
     });
   }
