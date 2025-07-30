@@ -44,11 +44,23 @@ When an agent checks the "erste_rate_bezahlt" checkbox on a ticket, it triggers 
    **JSON body:**
    ```json
    {
-     "aktenzeichen": "{{ticket.requester.aktenzeichen}}",
-     "zendesk_ticket_id": "{{ticket.id}}",
+     "ticket": {
+       "id": "{{ticket.id}}",
+       "subject": "{{ticket.title}}",
+       "external_id": "{{ticket.external_id}}",
+       "requester": {
+         "id": "{{ticket.requester.id}}",
+         "name": "{{ticket.requester.name}}",
+         "email": "{{ticket.requester.email}}",
+         "phone": "{{ticket.requester.phone}}",
+         "aktenzeichen": "{{ticket.ticket_field_29010052728733}}"
+       }
+     },
      "agent_email": "{{current_user.email}}"
    }
    ```
+   
+   **Note:** The `ticket_field_29010052728733` is the custom field ID for "Aktenzeichen". This ID may be different in your Zendesk instance.
 
 2. **Add tags:** `payment-confirmed`, `ready-for-review`
 

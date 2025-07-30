@@ -287,25 +287,35 @@ router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
   }
 });
 
-// LEGACY: Zendesk Webhook: Payment Confirmed (kept for backward compatibility)
-// This was the old ticket-based approach - keeping for existing integrations
+// PRIMARY: Zendesk Webhook: Payment Confirmed
+// Triggered when agent checks "erste_rate_bezahlt" checkbox on a ticket
 router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
   try {
-    console.log('💰 Zendesk Webhook: Payment-Confirmed received (legacy ticket-based)', req.body);
+    console.log('💰 Zendesk Webhook: Payment-Confirmed received', req.body);
     
-    // Handle both direct format and Zendesk webhook format
-    let aktenzeichen, zendesk_ticket_id, agent_email;
+    // Extract data from the webhook payload
+    // The aktenzeichen comes from ticket.requester.aktenzeichen (custom field)
+    let aktenzeichen, zendesk_ticket_id, requester_email, requester_name, agent_email;
     
-    if (req.body.ticket && req.body.ticket.requester) {
-      // Zendesk webhook format
-      const requester = req.body.ticket.requester;
+    if (req.body.ticket) {
+      // Standard webhook format with ticket data
       const ticket = req.body.ticket;
+      const requester = ticket.requester || {};
       
-      aktenzeichen = requester.aktenzeichen;
+      aktenzeichen = requester.aktenzeichen; // This is the custom field!
       zendesk_ticket_id = ticket.id;
-      agent_email = req.body.current_user?.email || 'system';
+      requester_email = requester.email;
+      requester_name = requester.name;
+      agent_email = req.body.agent_email || req.body.current_user?.email || 'system';
+      
+      console.log('📋 Extracted ticket data:', {
+        aktenzeichen,
+        zendesk_ticket_id,
+        requester_email,
+        requester_name
+      });
     } else {
-      // Direct format (for backward compatibility)
+      // Fallback for direct format (backward compatibility)
       ({
         aktenzeichen,
         zendesk_ticket_id,
@@ -314,8 +324,10 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
     }
 
     if (!aktenzeichen) {
+      console.error('❌ Missing aktenzeichen in webhook payload:', req.body);
       return res.status(400).json({
-        error: 'Missing required field: aktenzeichen'
+        error: 'Missing required field: aktenzeichen',
+        hint: 'Make sure ticket.requester.aktenzeichen is populated in Zendesk webhook'
       });
     }
 
