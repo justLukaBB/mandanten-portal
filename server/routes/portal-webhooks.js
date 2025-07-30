@@ -1,9 +1,41 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
 
 const router = express.Router();
+
+// Helper function to trigger processing-complete webhook
+async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
+  try {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const webhookUrl = `${baseUrl}/api/zendesk-webhook/processing-complete`;
+    
+    console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
+    
+    const response = await axios.post(webhookUrl, {
+      client_id: clientId,
+      document_id: documentId,
+      timestamp: new Date().toISOString(),
+      triggered_by: 'portal_webhook_processing_completion'
+    }, {
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'MandarenPortal-PortalWebhook/1.0'
+      }
+    });
+    
+    console.log(`✅ Processing-complete webhook triggered successfully for client ${clientId}`);
+    return response.data;
+    
+  } catch (error) {
+    console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
+    // Don't throw - webhook failure shouldn't break document processing
+    return null;
+  }
+}
 
 // Portal Webhook: Documents Uploaded
 // Triggered when client uploads documents in portal
@@ -271,6 +303,46 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
         await client.save();
         
         console.log(`✅ All documents processed for ${client.aktenzeichen}. Status: waiting_for_payment`);
+        
+        // Check if client paid first rate and is waiting for processing - trigger webhook
+        if (client.first_payment_received && client.payment_ticket_type === 'processing_wait') {
+          console.log(`🎯 All documents completed for client ${client.id} in processing_wait state - triggering webhook`);
+          
+          // Update final creditor list if needed
+          const extractedCreditors = [];
+          creditorDocs.forEach(doc => {
+            if (doc.extracted_data?.creditor_data) {
+              const creditorData = doc.extracted_data.creditor_data;
+              extractedCreditors.push({
+                id: uuidv4(),
+                sender_name: creditorData.sender_name,
+                sender_address: creditorData.sender_address,
+                sender_email: creditorData.sender_email,
+                reference_number: creditorData.reference_number,
+                claim_amount: creditorData.claim_amount || 0,
+                is_representative: creditorData.is_representative || false,
+                actual_creditor: creditorData.actual_creditor,
+                source_document: doc.name,
+                source_document_id: doc.id,
+                ai_confidence: doc.confidence || 0,
+                status: 'confirmed',
+                created_at: new Date(),
+                confirmed_at: new Date()
+              });
+            }
+          });
+          
+          if (extractedCreditors.length > 0) {
+            client.final_creditor_list = extractedCreditors;
+            console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
+            await client.save();
+          }
+          
+          // Trigger the processing-complete webhook asynchronously
+          setTimeout(async () => {
+            await triggerProcessingCompleteWebhook(client.id, document_id);
+          }, 1000); // Small delay to ensure database save completes first
+        }
       }
     }
 

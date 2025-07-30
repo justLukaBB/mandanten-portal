@@ -75,7 +75,7 @@ const EnhancedDashboard: React.FC = () => {
   const fetchData = async () => {
     try {
       setError(null);
-      const response = await api.get('/dashboard-status');
+      const response = await api.get('/admin/dashboard-status');
       
       if (response.data.success) {
         setData(response.data);

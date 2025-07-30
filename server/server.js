@@ -15,7 +15,6 @@ const healthRoutes = require('./routes/health');
 const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
 const agentReviewRoutes = require('./routes/agent-review');
-const dashboardStatusRoutes = require('./routes/dashboard-status');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -142,8 +141,7 @@ app.use('/api/portal-webhook', portalWebhooks);
 // Agent review routes (admin auth required)
 app.use('/api/agent-review', agentReviewRoutes);
 
-// Dashboard status routes (admin auth required)
-app.use('/api/dashboard-status', dashboardStatusRoutes);
+// Dashboard status routes (admin auth required) - moved inline for consistent auth
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -3496,6 +3494,169 @@ async function startServer() {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
+}
+
+// Admin: Enhanced Dashboard Status (inline for consistent auth)
+app.get('/api/admin/dashboard-status', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    console.log('📊 Dashboard Status: Getting enhanced client statuses');
+
+    const clients = await Client.find({}).sort({ updated_at: -1 });
+    
+    const clientStatuses = clients.map(client => {
+      const status = getClientDisplayStatus(client);
+      
+      return {
+        id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        name: `${client.firstName} ${client.lastName}`,
+        email: client.email,
+        created_at: client.created_at,
+        updated_at: client.updated_at,
+        
+        // Enhanced status info
+        payment: status.payment,
+        documents: status.documents,
+        processing: status.processing,
+        review: status.review,
+        overall_status: status.overall_status,
+        
+        // Raw data for detailed views
+        first_payment_received: client.first_payment_received,
+        payment_ticket_type: client.payment_ticket_type,
+        current_status: client.current_status,
+        documents_count: client.documents?.length || 0,
+        creditors_count: client.final_creditor_list?.length || 0,
+        
+        // Timestamps
+        payment_processed_at: client.payment_processed_at,
+        document_request_sent_at: client.document_request_sent_at,
+        all_documents_processed_at: client.all_documents_processed_at,
+        
+        // Actions needed
+        needs_attention: status.needs_attention,
+        next_action: status.next_action
+      };
+    });
+
+    // Statistics
+    const stats = {
+      total_clients: clients.length,
+      payment_confirmed: clients.filter(c => c.first_payment_received).length,
+      awaiting_documents: clients.filter(c => c.payment_ticket_type === 'document_request').length,
+      processing: clients.filter(c => c.payment_ticket_type === 'processing_wait').length,
+      manual_review_needed: clients.filter(c => c.payment_ticket_type === 'manual_review').length,
+      auto_approved: clients.filter(c => c.payment_ticket_type === 'auto_approved').length,
+      no_creditors: clients.filter(c => c.payment_ticket_type === 'no_creditors_found').length,
+      needs_attention: clientStatuses.filter(c => c.needs_attention).length
+    };
+
+    res.json({
+      success: true,
+      clients: clientStatuses,
+      statistics: stats,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting dashboard status:', error);
+    res.status(500).json({
+      error: 'Failed to get dashboard status',
+      details: error.message
+    });
+  }
+});
+
+// Helper function for client display status
+function getClientDisplayStatus(client) {
+  const documents = client.documents || [];
+  const creditors = client.final_creditor_list || [];
+  
+  const status = {
+    payment: client.first_payment_received ? '✅ Bezahlt' : '❌ Ausstehend',
+    documents: `${documents.length} Dokumente`,
+    processing: 'Unbekannt',
+    review: 'Ausstehend',
+    overall_status: 'created',
+    needs_attention: false,
+    next_action: 'Warten auf erste Rate'
+  };
+  
+  // Calculate processing status
+  if (documents.length === 0) {
+    status.processing = '❌ Keine Dokumente';
+  } else {
+    const completed = documents.filter(d => d.processing_status === 'completed');
+    const processing = documents.filter(d => d.processing_status === 'processing');
+    
+    if (completed.length === documents.length) {
+      status.processing = '✅ Abgeschlossen';
+    } else if (processing.length > 0) {
+      status.processing = `⏳ ${completed.length}/${documents.length}`;
+    } else {
+      status.processing = `📋 ${completed.length}/${documents.length}`;
+    }
+  }
+  
+  // Calculate review status based on payment state
+  if (!client.first_payment_received) {
+    status.overall_status = 'awaiting_payment';
+    status.review = '💰 Warte auf erste Rate';
+    status.next_action = 'Warten auf erste Rate';
+  } else if (client.payment_ticket_type) {
+    switch(client.payment_ticket_type) {
+      case 'document_request':
+        status.overall_status = 'awaiting_documents';
+        status.review = '📄 Warte auf Dokumente';
+        status.next_action = 'Mandant kontaktieren - Dokumente anfordern';
+        status.needs_attention = true;
+        break;
+        
+      case 'processing_wait':
+        status.overall_status = 'processing';
+        status.review = '⏳ AI verarbeitet';
+        status.next_action = 'Warten auf AI-Verarbeitung';
+        break;
+        
+      case 'manual_review':
+        status.overall_status = 'manual_review';
+        status.review = '🔍 Manuelle Prüfung';
+        status.next_action = 'Manuelle Gläubiger-Prüfung durchführen';
+        status.needs_attention = true;
+        break;
+        
+      case 'auto_approved':
+        status.overall_status = 'ready_for_confirmation';
+        status.review = '✅ Bereit zur Bestätigung';
+        status.next_action = 'Gläubigerliste an Mandant senden';
+        status.needs_attention = true;
+        break;
+        
+      case 'no_creditors_found':
+        status.overall_status = 'problem';
+        status.review = '⚠️ Keine Gläubiger';
+        status.next_action = 'Dokumente manuell prüfen';
+        status.needs_attention = true;
+        break;
+        
+      default:
+        status.overall_status = 'unknown';
+        status.review = '❓ Unbekannt';
+        status.next_action = 'Status prüfen';
+        status.needs_attention = true;
+    }
+  } else {
+    // Payment received but no ticket type set yet (should not happen with new system)
+    status.overall_status = 'payment_confirmed';
+    status.review = '✅ Zahlung bestätigt';
+    status.next_action = 'System prüfen - Ticket-Typ fehlt';
+    status.needs_attention = true;
+  }
+  
+  return status;
 }
 
 // Handle graceful shutdown
