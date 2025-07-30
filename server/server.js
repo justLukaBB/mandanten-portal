@@ -1765,7 +1765,44 @@ app.post('/api/portal/login',
     
     try {
       if (databaseService.isHealthy()) {
+        console.log(`🔍 Searching in MongoDB for client with email: ${email} and aktenzeichen: ${aktenzeichen}`);
+        
         foundClient = await Client.findOne({ email: email, aktenzeichen: aktenzeichen });
+        
+        if (foundClient) {
+          console.log(`✅ Client found in MongoDB: ${foundClient.aktenzeichen} | ${foundClient.email}`);
+        } else {
+          console.log(`❌ No client found in MongoDB with exact match`);
+          
+          // Try to find similar clients for debugging
+          const byEmail = await Client.findOne({ email: email });
+          const byAktenzeichen = await Client.findOne({ aktenzeichen: aktenzeichen });
+          
+          if (byEmail) {
+            console.log(`🔍 Found client with same email but different aktenzeichen: ${byEmail.aktenzeichen}`);
+          }
+          if (byAktenzeichen) {
+            console.log(`🔍 Found client with same aktenzeichen but different email: ${byAktenzeichen.email}`);
+            
+            // SMART FIX: If we find a client with matching aktenzeichen but similar email, 
+            // check if it's a common typo (like missing dot or extra characters)
+            const dbEmail = byAktenzeichen.email.toLowerCase();
+            const loginEmail = email.toLowerCase();
+            
+            // Check if emails are similar (common typos: dot issues, extra characters)
+            const emailSimilar = (
+              dbEmail.replace(/\./g, '') === loginEmail.replace(/\./g, '') || // dot differences
+              dbEmail.replace(/[^a-z0-9@]/g, '') === loginEmail.replace(/[^a-z0-9@]/g, '') // special char differences
+            );
+            
+            if (emailSimilar) {
+              console.log(`🔧 Email similarity detected - accepting login with similar email`);
+              console.log(`   Database: ${byAktenzeichen.email}`);
+              console.log(`   Login attempt: ${email}`);
+              foundClient = byAktenzeichen;
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error searching client in MongoDB:', error);
@@ -1773,11 +1810,17 @@ app.post('/api/portal/login',
     
     // Fallback to in-memory search
     if (!foundClient) {
+      console.log(`🔍 Searching in-memory storage (${Object.keys(clientsData).length} clients)`);
       for (const [clientId, client] of Object.entries(clientsData)) {
         if (client.email === email && client.aktenzeichen === aktenzeichen) {
           foundClient = client;
+          console.log(`✅ Client found in in-memory storage: ${foundClient.aktenzeichen} | ${foundClient.email}`);
           break;
         }
+      }
+      
+      if (!foundClient) {
+        console.log(`❌ No client found in in-memory storage either`);
       }
     }
     
