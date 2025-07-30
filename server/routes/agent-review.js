@@ -391,15 +391,21 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     }
 
     // Update the client with corrected data
+    console.log(`🔄 Updating client ${clientId} with corrected data...`);
     client.final_creditor_list = creditors;
     client.updated_at = new Date();
 
     // Mark document as reviewed
+    console.log(`📝 Marking document ${document_id} as reviewed...`);
     document.manually_reviewed = true;
     document.reviewed_at = new Date();
     document.reviewed_by = req.agentId;
 
+    console.log(`💾 Saving client to database...`);
     await client.save();
+    console.log(`✅ Client saved successfully`);
+
+    console.log(`📊 Calculating review progress...`);
 
     // Calculate review progress
     const documentsToReview = client.documents.filter(d => d.is_creditor_document === true);
@@ -422,9 +428,21 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
 
   } catch (error) {
     console.error('❌ Error saving corrections:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Client ID:', req.params.clientId);
+    console.error('Document ID:', req.body.document_id);
+    console.error('Action:', req.body.action);
+    console.error('Corrections:', JSON.stringify(req.body.corrections, null, 2));
+    
     res.status(500).json({
       error: 'Failed to save corrections',
-      details: error.message
+      details: error.message,
+      debug: {
+        clientId: req.params.clientId,
+        documentId: req.body.document_id,
+        action: req.body.action,
+        errorType: error.constructor.name
+      }
     });
   }
 });
