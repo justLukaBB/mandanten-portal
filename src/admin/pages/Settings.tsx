@@ -64,11 +64,23 @@ const Settings: React.FC = () => {
 
   const loadAgents = async () => {
     try {
-      // Since we don't have a list agents endpoint yet, we'll create a mock for now
-      // In production, you'd call: /api/agent-auth/list
-      setAgents([]);
+      const response = await fetch(`${API_BASE_URL}/agent-auth/list`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAgents(data.agents || []);
+        console.log(`📋 Loaded ${data.agents?.length || 0} agents`);
+      } else {
+        console.error('Failed to load agents:', response.status);
+        setAgents([]);
+      }
     } catch (error) {
       console.error('Error loading agents:', error);
+      setAgents([]);
     }
   };
 
