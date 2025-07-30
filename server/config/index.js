@@ -45,6 +45,11 @@ const config = {
   ENABLE_DEBUG_LOGS: process.env.NODE_ENV === 'development',
   ENABLE_MOCK_DATA: process.env.ENABLE_MOCK_DATA === 'true',
   
+  // Agent Review Configuration
+  MANUAL_REVIEW_CONFIDENCE_THRESHOLD: parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8,
+  AGENT_SESSION_TIMEOUT_HOURS: parseInt(process.env.AGENT_SESSION_TIMEOUT_HOURS) || 4,
+  AGENT_CREATION_KEY: process.env.AGENT_CREATION_KEY || 'change-me-in-production',
+  
   // Validation
   validate() {
     const required = ['MONGODB_URI', 'JWT_SECRET'];

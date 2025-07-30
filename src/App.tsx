@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PersonalPortal from './pages/PersonalPortal';
 import PortalLogin from './pages/PortalLogin';
 import AdminApp from './admin/AdminApp';
+import AgentApp from './agent/AgentApp';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -78,6 +79,7 @@ function App() {
             } 
           />
           <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="/agent/*" element={<AgentApp />} />
         </Routes>
       </div>
     </Router>
