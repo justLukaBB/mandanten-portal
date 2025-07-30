@@ -230,13 +230,57 @@ router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
       }
     });
 
-    await client.save();
-
-    // Analyze documents and creditors for review
+    // ANALYZE CURRENT STATE AND DETERMINE SCENARIO (same logic as payment-confirmed webhook)
     const documents = client.documents || [];
     const creditors = client.final_creditor_list || [];
     const completedDocs = documents.filter(d => d.processing_status === 'completed');
     const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+    
+    const state = {
+      hasDocuments: documents.length > 0,
+      allProcessed: documents.length > 0 && completedDocs.length === documents.length,
+      hasCreditors: creditors.length > 0,
+      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+    };
+
+    // DETERMINE PAYMENT TICKET TYPE BASED ON SCENARIO
+    let ticketType, nextAction;
+
+    if (!state.hasDocuments) {
+      // No documents uploaded yet
+      ticketType = 'document_request';
+      nextAction = 'send_document_upload_request';
+      client.payment_ticket_type = 'document_request';
+      client.document_request_sent_at = new Date();
+      
+    } else if (!state.allProcessed) {
+      // Documents uploaded but still processing
+      ticketType = 'processing_wait';
+      nextAction = 'wait_for_processing_complete';
+      client.payment_ticket_type = 'processing_wait';
+      
+    } else if (!state.hasCreditors) {
+      // Documents processed but no creditors found
+      ticketType = 'no_creditors_found';
+      nextAction = 'manual_document_check';
+      client.payment_ticket_type = 'no_creditors_found';
+      
+    } else {
+      // Documents processed, creditors found - ready for review
+      if (state.needsManualReview) {
+        ticketType = 'manual_review';
+        nextAction = 'start_manual_review';
+        client.payment_ticket_type = 'manual_review';
+      } else {
+        ticketType = 'auto_approved';
+        nextAction = 'send_confirmation_to_client';
+        client.payment_ticket_type = 'auto_approved';
+      }
+    }
+
+    // Update client with payment processing info
+    client.payment_processed_at = new Date();
+    await client.save();
     
     // Check which creditors need manual review (confidence < 80%)
     const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
@@ -261,12 +305,14 @@ router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
       }
     };
 
-    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
+    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Ticket Type: ${ticketType}, Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
 
     res.json({
       success: true,
-      message: 'User payment confirmation processed - Ready to create review ticket',
+      message: `User payment confirmation processed - ${ticketType}`,
       client_status: 'payment_confirmed',
+      payment_ticket_type: ticketType,
+      next_action: nextAction,
       documents_count: documents.length,
       creditor_documents: creditorDocs.length,
       extracted_creditors: creditors.length,
@@ -277,9 +323,12 @@ router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
       review_dashboard_url: needsReview.length > 0 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
         : null,
-      next_step: needsReview.length > 0 
-        ? 'Create review ticket with manual correction needed' 
-        : 'Create review ticket - All creditors verified - Ready for client confirmation'
+      scenario_analysis: {
+        hasDocuments: state.hasDocuments,
+        allProcessed: state.allProcessed,
+        hasCreditors: state.hasCreditors,
+        needsManualReview: state.needsManualReview
+      }
     });
 
   } catch (error) {
