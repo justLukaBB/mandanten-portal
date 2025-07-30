@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Agent = require('../models/Agent');
-const { generateAgentToken, authenticateAgent } = require('../middleware/auth');
+const { generateAgentToken, authenticateAgent, authenticateAdmin } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 
 const router = express.Router();
@@ -234,6 +234,73 @@ router.post('/logout', authenticateAgent, rateLimits.general, async (req, res) =
     console.error('❌ Agent logout error:', error);
     res.status(500).json({
       error: 'Logout failed',
+      details: error.message
+    });
+  }
+});
+
+// Create Agent via Admin Token (Alternative method)
+// POST /api/agent-auth/create-via-admin
+router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
+  try {
+    const { 
+      username, 
+      email, 
+      password, 
+      first_name, 
+      last_name, 
+      role = 'agent'
+    } = req.body;
+
+    console.log(`👤 Admin ${req.adminId} creating agent: ${username}`);
+
+    // Check if agent already exists
+    const existingAgent = await Agent.findOne({
+      $or: [
+        { username: username.toLowerCase() },
+        { email: email.toLowerCase() }
+      ]
+    });
+
+    if (existingAgent) {
+      return res.status(409).json({
+        error: 'Agent with this username or email already exists'
+      });
+    }
+
+    // Create new agent
+    const agent = new Agent({
+      id: uuidv4(),
+      username: username.toLowerCase(),
+      email: email.toLowerCase(),
+      password_hash: password, // Will be hashed by pre-save hook
+      first_name,
+      last_name,
+      role
+    });
+
+    await agent.save();
+
+    console.log(`✅ New agent created by admin: ${agent.username} (${agent.role})`);
+
+    res.json({
+      success: true,
+      message: 'Agent created successfully via admin',
+      agent: {
+        id: agent.id,
+        username: agent.username,
+        email: agent.email,
+        first_name: agent.first_name,
+        last_name: agent.last_name,
+        role: agent.role,
+        created_at: agent.created_at
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Create agent via admin error:', error);
+    res.status(500).json({
+      error: 'Failed to create agent',
       details: error.message
     });
   }
