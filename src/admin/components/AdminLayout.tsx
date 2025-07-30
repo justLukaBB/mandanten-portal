@@ -5,20 +5,27 @@ import {
   ArrowLeftOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
-  PresentationChartLineIcon
+  PresentationChartLineIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'analytics' | 'settings' | 'create-user' | 'user-list';
-  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => void;
+  currentPage: 'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list';
+  onNavigate: (page: 'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigation = [
+    { 
+      name: 'Enhanced Dashboard', 
+      key: 'enhanced' as const, 
+      icon: ChartBarIcon,
+      description: '🚀 Live Payment & Document Status'
+    },
     { 
       name: 'Analytics Dashboard', 
       key: 'analytics' as const, 

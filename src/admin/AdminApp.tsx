@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import AdminLogin from './pages/AdminLogin';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import EnhancedDashboard from './pages/EnhancedDashboard';
 import CreateUser from './pages/CreateUser';
 import Settings from './pages/Settings';
 import UserList from './pages/UserList';
@@ -9,7 +10,7 @@ import api from '../config/api';
 
 const AdminApp: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'analytics' | 'settings' | 'create-user' | 'user-list'>('analytics');
+  const [currentPage, setCurrentPage] = useState<'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list'>('enhanced');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ const AdminApp: React.FC = () => {
     setIsAuthenticated(true);
   };
 
-  const handleNavigate = (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => {
+  const handleNavigate = (page: 'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list') => {
     setCurrentPage(page);
   };
 
@@ -88,6 +89,8 @@ const AdminApp: React.FC = () => {
     switch (currentPage) {
       case 'analytics':
         return <AnalyticsDashboard onNavigateToUserList={handleNavigateToUserList} />;
+      case 'enhanced':
+        return <EnhancedDashboard />;
       case 'create-user':
         return <CreateUser />;
       case 'settings':
@@ -95,7 +98,7 @@ const AdminApp: React.FC = () => {
       case 'user-list':
         return <UserList onBack={handleBackToAnalytics} />;
       default:
-        return <AnalyticsDashboard onNavigateToUserList={handleNavigateToUserList} />;
+        return <EnhancedDashboard />;
     }
   };
 

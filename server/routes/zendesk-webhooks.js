@@ -2,8 +2,12 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
+const ZendeskService = require('../services/zendeskService');
 
 const router = express.Router();
+
+// Initialize Zendesk service
+const zendeskService = new ZendeskService();
 
 // Zendesk Webhook: Portal Link Sent
 // Triggered when agent uses "Portal-Link senden" macro
@@ -429,6 +433,61 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
     client.payment_processed_at = new Date();
     await client.save();
 
+    // AUTOMATICALLY CREATE ZENDESK TICKET
+    let zendeskTicket = null;
+    let ticketCreationError = null;
+
+    if (zendeskService.isConfigured()) {
+      try {
+        console.log('🎫 Creating automatic Zendesk ticket...');
+        
+        zendeskTicket = await zendeskService.createTicket({
+          subject: generateTicketSubject(client, ticketType),
+          content: ticketContent,
+          requesterEmail: client.email,
+          tags: tags,
+          priority: ticketType === 'manual_review' ? 'normal' : 'low',
+          type: 'task'
+        });
+
+        if (zendeskTicket.success) {
+          // Store the created ticket ID for reference
+          client.zendesk_tickets = client.zendesk_tickets || [];
+          client.zendesk_tickets.push({
+            ticket_id: zendeskTicket.ticket_id,
+            ticket_type: 'payment_review',
+            ticket_scenario: ticketType,
+            status: 'active',
+            created_at: new Date()
+          });
+          
+          // Add to status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'zendesk_ticket_created',
+            changed_by: 'system',
+            metadata: {
+              zendesk_ticket_id: zendeskTicket.ticket_id,
+              ticket_scenario: ticketType,
+              ticket_subject: generateTicketSubject(client, ticketType)
+            }
+          });
+
+          await client.save();
+          console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
+        } else {
+          ticketCreationError = zendeskTicket.error;
+          console.error('❌ Failed to create Zendesk ticket:', zendeskTicket.error);
+        }
+      } catch (error) {
+        ticketCreationError = error.message;
+        console.error('❌ Exception creating Zendesk ticket:', error);
+      }
+    } else {
+      console.log('⚠️ Zendesk service not configured - skipping automatic ticket creation');
+      ticketCreationError = 'Zendesk API not configured';
+    }
+
     console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Scenario: ${ticketType}, Documents: ${documents.length}, Creditors: ${creditors.length}`);
 
     res.json({
@@ -442,6 +501,15 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
         content: ticketContent,
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
+      },
+      zendesk_ticket: zendeskTicket ? {
+        created: zendeskTicket.success,
+        ticket_id: zendeskTicket.ticket_id,
+        ticket_url: zendeskTicket.ticket_url,
+        error: ticketCreationError
+      } : {
+        created: false,
+        error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
@@ -700,6 +768,49 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
 
     await client.save();
 
+    // AUTOMATICALLY CREATE UPDATE ZENDESK TICKET
+    let zendeskTicket = null;
+    let ticketCreationError = null;
+
+    if (zendeskService.isConfigured()) {
+      try {
+        console.log('🎫 Creating processing complete Zendesk ticket...');
+        
+        zendeskTicket = await zendeskService.createTicket({
+          subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
+          content: ticketContent,
+          requesterEmail: client.email,
+          tags: tags,
+          priority: ticketType === 'manual_review' ? 'normal' : 'low',
+          type: 'task'
+        });
+
+        if (zendeskTicket.success) {
+          // Store the created ticket ID
+          client.zendesk_tickets = client.zendesk_tickets || [];
+          client.zendesk_tickets.push({
+            ticket_id: zendeskTicket.ticket_id,
+            ticket_type: 'processing_complete',
+            ticket_scenario: ticketType,
+            status: 'active',
+            created_at: new Date()
+          });
+          
+          await client.save();
+          console.log(`✅ Processing complete ticket created: ${zendeskTicket.ticket_id}`);
+        } else {
+          ticketCreationError = zendeskTicket.error;
+          console.error('❌ Failed to create processing complete ticket:', zendeskTicket.error);
+        }
+      } catch (error) {
+        ticketCreationError = error.message;
+        console.error('❌ Exception creating processing complete ticket:', error);
+      }
+    } else {
+      console.log('⚠️ Zendesk service not configured - skipping automatic ticket creation');
+      ticketCreationError = 'Zendesk API not configured';
+    }
+
     console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
 
     res.json({
@@ -712,6 +823,15 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
         content: ticketContent,
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
+      },
+      zendesk_ticket: zendeskTicket ? {
+        created: zendeskTicket.success,
+        ticket_id: zendeskTicket.ticket_id,
+        ticket_url: zendeskTicket.ticket_url,
+        error: ticketCreationError
+      } : {
+        created: false,
+        error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
