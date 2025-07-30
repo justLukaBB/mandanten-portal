@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AgentLogin from './pages/AgentLogin';
 import ReviewDashboard from './pages/ReviewDashboard';
+import AgentDashboard from './pages/AgentDashboard';
 
 const AgentApp: React.FC = () => {
   return (
@@ -9,7 +10,7 @@ const AgentApp: React.FC = () => {
       <Routes>
         <Route path="/login" element={<AgentLogin />} />
         <Route path="/review/:clientId" element={<ReviewDashboard />} />
-        <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+        <Route path="/dashboard" element={<AgentDashboard />} />
         <Route path="/" element={<Navigate to="/agent/login" replace />} />
       </Routes>
     </div>

@@ -9,6 +9,99 @@ const config = require('../config');
 
 const router = express.Router();
 
+// Get available clients for review
+// GET /api/agent-review/available-clients
+router.get('/available-clients', authenticateAgent, rateLimits.general, async (req, res) => {
+  try {
+    console.log(`🔍 Agent Review: Getting available clients for agent ${req.agentUsername}`);
+
+    // Find clients with documents that need manual review
+    const clients = await Client.find({
+      // Only clients who have received payment (ready for review)
+      first_payment_received: true,
+      // Exclude clients that are already fully reviewed
+      current_status: { $nin: ['manual_review_complete', 'creditor_contact_initiated', 'completed'] }
+    }).sort({ payment_processed_at: -1 }).limit(20);
+
+    const availableClients = [];
+
+    for (const client of clients) {
+      const documents = client.documents || [];
+      const creditors = client.final_creditor_list || [];
+      
+      // Find documents that need review
+      const documentsToReview = documents.filter(doc => {
+        const relatedCreditor = creditors.find(c => 
+          c.document_id === doc.id || 
+          c.source_document === doc.name
+        );
+        
+        return (
+          doc.is_creditor_document === true && 
+          (!relatedCreditor || (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) &&
+          !doc.manually_reviewed
+        );
+      });
+
+      // Only include clients with documents that actually need review
+      if (documentsToReview.length > 0) {
+        // Calculate priority based on various factors
+        let priority = 'medium';
+        const daysSincePayment = (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24);
+        const avgConfidence = documentsToReview.reduce((sum, doc) => {
+          const relatedCreditor = creditors.find(c => c.document_id === doc.id);
+          return sum + (relatedCreditor?.confidence || 0);
+        }, 0) / documentsToReview.length;
+
+        // Priority logic
+        if (daysSincePayment > 3 || avgConfidence < 0.4) {
+          priority = 'high';
+        } else if (daysSincePayment > 1 || avgConfidence < 0.6) {
+          priority = 'medium';
+        } else {
+          priority = 'low';
+        }
+
+        availableClients.push({
+          id: client.id,
+          name: `${client.firstName} ${client.lastName}`,
+          aktenzeichen: client.aktenzeichen,
+          documents_to_review: documentsToReview.length,
+          total_documents: documents.length,
+          priority: priority,
+          payment_received_at: client.payment_processed_at,
+          days_since_payment: Math.round(daysSincePayment)
+        });
+      }
+    }
+
+    // Sort by priority (high first) then by days since payment
+    availableClients.sort((a, b) => {
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[b.priority] - priorityOrder[a.priority];
+      }
+      return b.days_since_payment - a.days_since_payment;
+    });
+
+    console.log(`📊 Found ${availableClients.length} clients needing review for agent ${req.agentUsername}`);
+
+    res.json({
+      success: true,
+      clients: availableClients,
+      total: availableClients.length,
+      confidence_threshold: config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting available clients:', error);
+    res.status(500).json({
+      error: 'Failed to get available clients',
+      details: error.message
+    });
+  }
+});
+
 // Get review data for a specific client
 // GET /api/agent-review/:clientId
 router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res) => {
