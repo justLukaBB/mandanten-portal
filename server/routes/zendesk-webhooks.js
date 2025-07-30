@@ -363,40 +363,94 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
 
     await client.save();
 
-    // Analyze documents and creditors for review
+    // ANALYZE CURRENT STATE AND DETERMINE SCENARIO
     const documents = client.documents || [];
     const creditors = client.final_creditor_list || [];
     const completedDocs = documents.filter(d => d.processing_status === 'completed');
     const creditorDocs = documents.filter(d => d.is_creditor_document === true);
     
-    // Check which creditors need manual review (confidence < 80%)
-    const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
-    const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
-    
-    // Generate automatic review ticket content
-    const reviewTicketContent = generateCreditorReviewTicketContent(
-      client, documents, creditors, needsReview.length > 0
-    );
+    const state = {
+      hasDocuments: documents.length > 0,
+      allProcessed: documents.length > 0 && completedDocs.length === documents.length,
+      hasCreditors: creditors.length > 0,
+      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+    };
 
-    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
+    // DETERMINE TICKET TYPE AND CONTENT BASED ON SCENARIO
+    let ticketType, ticketContent, nextAction, tags;
+
+    if (!state.hasDocuments) {
+      // SCENARIO 2: No documents uploaded yet
+      ticketType = 'document_request';
+      ticketContent = generateDocumentRequestTicket(client);
+      nextAction = 'send_document_upload_request';
+      tags = ['payment-confirmed', 'document-request', 'awaiting-documents'];
+      
+      // Track document request
+      client.payment_ticket_type = 'document_request';
+      client.document_request_sent_at = new Date();
+      
+    } else if (!state.allProcessed) {
+      // SCENARIO 3: Documents uploaded but still processing
+      ticketType = 'processing_wait';
+      ticketContent = generateProcessingWaitTicket(client, documents, completedDocs);
+      nextAction = 'wait_for_processing_complete';
+      tags = ['payment-confirmed', 'processing-wait', 'ai-processing'];
+      
+      client.payment_ticket_type = 'processing_wait';
+      
+    } else if (!state.hasCreditors) {
+      // SCENARIO: Documents processed but no creditors found
+      ticketType = 'no_creditors_found';
+      ticketContent = generateNoCreditorsTicket(client, documents);
+      nextAction = 'manual_document_check';
+      tags = ['payment-confirmed', 'no-creditors', 'manual-check-needed'];
+      
+      client.payment_ticket_type = 'no_creditors_found';
+      
+    } else {
+      // SCENARIO 1: Documents processed, creditors found - ready for review
+      if (state.needsManualReview) {
+        ticketType = 'manual_review';
+        ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, true);
+        nextAction = 'start_manual_review';
+        tags = ['payment-confirmed', 'manual-review-needed', 'creditors-found'];
+        client.payment_ticket_type = 'manual_review';
+      } else {
+        ticketType = 'auto_approved';
+        ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, false);
+        nextAction = 'send_confirmation_to_client';
+        tags = ['payment-confirmed', 'auto-approved', 'ready-for-confirmation'];
+        client.payment_ticket_type = 'auto_approved';
+      }
+    }
+
+    // Update client with payment processing info
+    client.payment_processed_at = new Date();
+    await client.save();
+
+    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Scenario: ${ticketType}, Documents: ${documents.length}, Creditors: ${creditors.length}`);
 
     res.json({
       success: true,
-      message: 'Payment confirmation processed - Creditor review ticket ready',
+      message: `Payment confirmation processed - ${ticketType} scenario`,
+      scenario: ticketType,
       client_status: 'payment_confirmed',
-      documents_count: documents.length,
-      creditor_documents: creditorDocs.length,
-      extracted_creditors: creditors.length,
-      creditors_need_review: needsReview.length,
-      creditors_confidence_ok: confidenceOk.length,
-      manual_review_required: needsReview.length > 0,
-      review_ticket_content: reviewTicketContent,
-      review_dashboard_url: needsReview.length > 0 
+      state: state,
+      ticket_data: {
+        subject: generateTicketSubject(client, ticketType),
+        content: ticketContent,
+        tags: tags,
+        priority: ticketType === 'manual_review' ? 'normal' : 'low'
+      },
+      review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
         : null,
-      next_step: needsReview.length > 0 
-        ? 'Create review ticket - Manual correction needed' 
-        : 'All creditors verified - Send confirmation request to client'
+      next_action: nextAction,
+      documents_count: documents.length,
+      creditor_documents_count: creditorDocs.length,
+      extracted_creditors_count: creditors.length,
+      processing_complete: state.allProcessed
     });
 
   } catch (error) {
@@ -556,6 +610,126 @@ ${finalCreditorsList}
   }
 });
 
+// NEW: Processing Complete Webhook
+// Triggered when AI processing finishes for a client who paid first rate
+router.post('/processing-complete', rateLimits.general, async (req, res) => {
+  try {
+    console.log('🔄 Zendesk Webhook: Processing-Complete received', req.body);
+    
+    const { client_id, document_id } = req.body;
+
+    if (!client_id) {
+      return res.status(400).json({
+        error: 'Missing required field: client_id'
+      });
+    }
+
+    const client = await Client.findOne({ id: client_id });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: client_id
+      });
+    }
+
+    // Check if this client paid first rate and is waiting for processing
+    if (!client.first_payment_received || client.payment_ticket_type !== 'processing_wait') {
+      return res.json({
+        success: true,
+        message: 'Processing complete but client not in waiting state',
+        client_status: client.current_status,
+        payment_ticket_type: client.payment_ticket_type
+      });
+    }
+
+    // Check if all documents are now processed
+    const documents = client.documents || [];
+    const completedDocs = documents.filter(d => d.processing_status === 'completed');
+    
+    if (completedDocs.length < documents.length) {
+      console.log(`Still processing: ${documents.length - completedDocs.length} documents remaining`);
+      return res.json({
+        success: true,
+        message: 'Still processing remaining documents',
+        progress: `${completedDocs.length}/${documents.length}`
+      });
+    }
+
+    // All documents processed - analyze and create review ticket
+    const creditors = client.final_creditor_list || [];
+    const state = {
+      hasCreditors: creditors.length > 0,
+      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+    };
+
+    let ticketType, ticketContent, tags;
+
+    if (!state.hasCreditors) {
+      ticketType = 'no_creditors_found';
+      ticketContent = generateNoCreditorsTicket(client, documents);
+      tags = ['processing-complete', 'no-creditors', 'manual-check-needed'];
+      client.payment_ticket_type = 'no_creditors_found';
+    } else if (state.needsManualReview) {
+      ticketType = 'manual_review';
+      ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, true);
+      tags = ['processing-complete', 'manual-review-needed', 'creditors-found'];
+      client.payment_ticket_type = 'manual_review';
+    } else {
+      ticketType = 'auto_approved';
+      ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, false);
+      tags = ['processing-complete', 'auto-approved', 'ready-for-confirmation'];
+      client.payment_ticket_type = 'auto_approved';
+    }
+
+    // Mark all documents processed timestamp
+    client.all_documents_processed_at = new Date();
+    
+    // Add status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'processing_complete',
+      changed_by: 'system',
+      metadata: {
+        documents_processed: documents.length,
+        creditors_found: creditors.length,
+        processing_duration_ms: Date.now() - new Date(client.payment_processed_at).getTime(),
+        final_ticket_type: ticketType
+      }
+    });
+
+    await client.save();
+
+    console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
+
+    res.json({
+      success: true,
+      message: 'Processing complete - Review ticket ready',
+      scenario: ticketType,
+      client_status: client.current_status,
+      ticket_data: {
+        subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
+        content: ticketContent,
+        tags: tags,
+        priority: ticketType === 'manual_review' ? 'normal' : 'low'
+      },
+      review_dashboard_url: (ticketType === 'manual_review') 
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        : null,
+      processing_duration_seconds: Math.round((Date.now() - new Date(client.payment_processed_at).getTime()) / 1000),
+      documents_processed: documents.length,
+      creditors_found: creditors.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error in processing-complete webhook:', error);
+    res.status(500).json({
+      error: 'Failed to process completion webhook',
+      details: error.message
+    });
+  }
+});
+
 // Zendesk Webhook: Creditor Confirmation Request
 // Triggered when agent uses "Gläubigerliste zur Bestätigung" macro
 router.post('/creditor-confirmation-request', rateLimits.general, async (req, res) => {
@@ -621,6 +795,140 @@ router.post('/creditor-confirmation-request', rateLimits.general, async (req, re
     });
   }
 });
+
+// Helper function to generate ticket subject based on type
+function generateTicketSubject(client, ticketType) {
+  const name = `${client.firstName} ${client.lastName}`;
+  const aktenzeichen = client.aktenzeichen;
+  
+  switch(ticketType) {
+    case 'document_request':
+      return `Dokumente benötigt: ${name} (${aktenzeichen})`;
+    case 'processing_wait':
+      return `AI-Verarbeitung läuft: ${name} (${aktenzeichen})`;
+    case 'no_creditors_found':
+      return `Keine Gläubiger gefunden: ${name} (${aktenzeichen})`;
+    case 'manual_review':
+      return `Gläubiger-Review: ${name} - Manuelle Prüfung (${aktenzeichen})`;
+    case 'auto_approved':
+      return `Gläubiger-Review: ${name} - Bereit zur Bestätigung (${aktenzeichen})`;
+    default:
+      return `Gläubiger-Review: ${name} (${aktenzeichen})`;
+  }
+}
+
+// Helper function to generate document request ticket content
+function generateDocumentRequestTicket(client) {
+  return `📄 DOKUMENTE BENÖTIGT
+
+👤 MANDANT: ${client.firstName} ${client.lastName}
+📧 E-Mail: ${client.email}
+📁 Aktenzeichen: ${client.aktenzeichen}
+✅ Erste Rate: BEZAHLT am ${client.payment_processed_at ? new Date(client.payment_processed_at).toLocaleDateString('de-DE') : 'heute'}
+
+⚠️ STATUS: Keine Dokumente hochgeladen
+
+🔧 AGENT-AKTIONEN:
+1. [BUTTON: Dokumenten-Upload-Email senden]
+2. [BUTTON: Mandant anrufen]
+3. [BUTTON: SMS senden]
+
+📝 EMAIL-VORLAGE:
+Sehr geehrte/r ${client.firstName} ${client.lastName},
+
+vielen Dank für Ihre erste Ratenzahlung! 
+
+Um mit Ihrem Insolvenzverfahren fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
+
+Bitte laden Sie alle Mahnungen, Rechnungen und Schreiben Ihrer Gläubiger hier hoch:
+🔗 ${process.env.FRONTEND_URL}/login?token=${client.portal_token}
+
+📋 Benötigte Dokumente:
+• Mahnungen und Zahlungsaufforderungen
+• Rechnungen und Verträge
+• Inkasso-Schreiben
+• Kreditverträge
+• Sonstige Gläubigerschreiben
+
+Mit freundlichen Grüßen
+Ihr Insolvenz-Team
+
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+}
+
+// Helper function to generate processing wait ticket content
+function generateProcessingWaitTicket(client, documents, completedDocs) {
+  const processing = documents.filter(d => d.processing_status !== 'completed');
+  const estimatedTime = processing.length * 30; // 30 seconds per document
+  
+  return `⏳ AI-VERARBEITUNG LÄUFT
+
+👤 MANDANT: ${client.firstName} ${client.lastName}
+📧 E-Mail: ${client.email}
+📁 Aktenzeichen: ${client.aktenzeichen}
+✅ Erste Rate: BEZAHLT
+
+🔄 VERARBEITUNGSSTATUS:
+• Dokumente hochgeladen: ${documents.length}
+• Bereits verarbeitet: ${completedDocs.length}/${documents.length}
+• Noch in Bearbeitung: ${processing.length}
+
+⏱️ Geschätzte Wartezeit: ${Math.ceil(estimatedTime / 60)} Minuten
+
+📋 DOKUMENTE IN BEARBEITUNG:
+${processing.map(d => `• ${d.name || 'Unbekannt'} (${d.processing_status})`).join('\n') || 'Alle Dokumente verarbeitet'}
+
+🔧 AGENT-AKTIONEN:
+• ⏳ Warten Sie auf Verarbeitungsabschluss
+• 🔄 Sie erhalten automatisch ein Update-Ticket wenn fertig
+• 📞 Bei Problemen nach 10+ Minuten: Support kontaktieren
+
+📝 HINWEIS: Dieses Ticket wird automatisch aktualisiert, sobald die AI-Verarbeitung abgeschlossen ist.
+
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+}
+
+// Helper function to generate no creditors ticket content
+function generateNoCreditorsTicket(client, documents) {
+  const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+  const nonCreditorDocs = documents.filter(d => d.is_creditor_document === false);
+  
+  return `⚠️ KEINE GLÄUBIGER GEFUNDEN
+
+👤 MANDANT: ${client.firstName} ${client.lastName}
+📧 E-Mail: ${client.email}
+📁 Aktenzeichen: ${client.aktenzeichen}
+✅ Erste Rate: BEZAHLT
+
+📊 DOKUMENT-ANALYSE ERGEBNIS:
+• Hochgeladen: ${documents.length} Dokumente
+• Als Gläubigerdokument erkannt: ${creditorDocs.length}
+• Als Nicht-Gläubigerdokument eingestuft: ${nonCreditorDocs.length}
+• Extrahierte Gläubiger: 0
+
+⚠️ PROBLEM: Keine Gläubigerdaten extrahiert
+
+🔍 MÖGLICHE URSACHEN:
+• Falsche Dokumenttypen hochgeladen
+• Schlechte Bildqualität
+• Unvollständige Scans
+• AI-Klassifizierung fehlerhaft
+
+🔧 AGENT-AKTIONEN:
+1. [BUTTON: Dokumente manuell prüfen] → ${process.env.FRONTEND_URL}/admin/review/${client.id}
+2. [BUTTON: Mandant kontaktieren - bessere Dokumente anfordern]
+3. [BUTTON: Manuelle Gläubiger-Erfassung starten]
+
+📋 HOCHGELADENE DOKUMENTE:
+${documents.map(d => `• ${d.name || 'Unbekannt'} - ${d.is_creditor_document ? '✅ Gläubiger' : '❌ Kein Gläubiger'}`).join('\n')}
+
+📝 NÄCHSTE SCHRITTE:
+1. Manuelle Dokumentenprüfung durchführen
+2. Bei Bedarf bessere Dokumente beim Mandant anfordern
+3. Ggf. Gläubiger manuell erfassen
+
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+}
 
 // Helper function to generate creditor review ticket content for Phase 2
 function generateCreditorReviewTicketContent(client, documents, creditors, needsManualReview) {

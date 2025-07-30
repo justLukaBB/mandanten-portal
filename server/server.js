@@ -4,6 +4,7 @@ const cors = require('cors');
 const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 require('dotenv').config();
 
 // Import configuration and middleware
@@ -14,6 +15,7 @@ const healthRoutes = require('./routes/health');
 const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
 const agentReviewRoutes = require('./routes/agent-review');
+const dashboardStatusRoutes = require('./routes/dashboard-status');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -30,6 +32,37 @@ const PORT = config.PORT;
 
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
+
+// Helper function to trigger processing-complete webhook
+async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
+  try {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const webhookUrl = `${baseUrl}/api/zendesk-webhook/processing-complete`;
+    
+    console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
+    
+    const response = await axios.post(webhookUrl, {
+      client_id: clientId,
+      document_id: documentId,
+      timestamp: new Date().toISOString(),
+      triggered_by: 'document_processing_completion'
+    }, {
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'MandarenPortal-Server/1.0'
+      }
+    });
+    
+    console.log(`✅ Processing-complete webhook triggered successfully for client ${clientId}`);
+    return response.data;
+    
+  } catch (error) {
+    console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
+    // Don't throw - webhook failure shouldn't break document processing
+    return null;
+  }
+}
 
 // Safe client update function to prevent race conditions
 async function safeClientUpdate(clientId, updateFunction) {
@@ -108,6 +141,9 @@ app.use('/api/portal-webhook', portalWebhooks);
 
 // Agent review routes (admin auth required)
 app.use('/api/agent-review', agentReviewRoutes);
+
+// Dashboard status routes (admin auth required)
+app.use('/api/dashboard-status', dashboardStatusRoutes);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -494,6 +530,8 @@ app.post('/api/clients/:clientId/documents',
             // Update client status when documents are processed
             const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
             const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
+            const totalDocs = client.documents.length;
+            const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
             
             // Update status based on processing results
             if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
@@ -516,6 +554,47 @@ app.post('/api/clients/:clientId/documents',
                   created_at: new Date()
                 });
               }
+            }
+            
+            // Check if all documents are processed and trigger webhook for processing_wait clients
+            if (allDocsCompleted && client.first_payment_received && client.payment_ticket_type === 'processing_wait') {
+              console.log(`🎯 All documents completed for client ${clientId} in processing_wait state - triggering webhook`);
+              
+              // Update final creditor list if needed
+              const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
+              const extractedCreditors = [];
+              
+              creditorDocuments.forEach(doc => {
+                if (doc.extracted_data?.creditor_data) {
+                  const creditorData = doc.extracted_data.creditor_data;
+                  extractedCreditors.push({
+                    id: uuidv4(),
+                    sender_name: creditorData.sender_name,
+                    sender_address: creditorData.sender_address,
+                    sender_email: creditorData.sender_email,
+                    reference_number: creditorData.reference_number,
+                    claim_amount: creditorData.claim_amount || 0,
+                    is_representative: creditorData.is_representative || false,
+                    actual_creditor: creditorData.actual_creditor,
+                    source_document: doc.name,
+                    source_document_id: doc.id,
+                    ai_confidence: doc.confidence || 0,
+                    status: 'confirmed',
+                    created_at: new Date(),
+                    confirmed_at: new Date()
+                  });
+                }
+              });
+              
+              if (extractedCreditors.length > 0) {
+                client.final_creditor_list = extractedCreditors;
+                console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
+              }
+              
+              // Trigger the processing-complete webhook asynchronously
+              setTimeout(async () => {
+                await triggerProcessingCompleteWebhook(clientId, documentId);
+              }, 1000); // Small delay to ensure database save completes first
             }
             
             return client;
