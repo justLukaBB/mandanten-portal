@@ -88,6 +88,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
     { value: 'processing_wait', label: '⏳ AI verarbeitet', count: 0 },
     { value: 'manual_review', label: '🔍 Manuelle Prüfung', count: 0 },
     { value: 'auto_approved', label: '✅ Bereit zur Bestätigung', count: 0 },
+    { value: 'creditor_contact_initiated', label: '📧 Gläubiger kontaktiert', count: 0 },
+    { value: 'creditor_contact_failed', label: '❌ Gläubiger-Kontakt fehlgeschlagen', count: 0 },
     { value: 'no_creditors_found', label: '⚠️ Keine Gläubiger gefunden', count: 0 },
     { value: 'created', label: 'Erstellt', count: 0 },
     { value: 'portal_access_sent', label: 'Portal-Zugang gesendet', count: 0 },
@@ -180,6 +182,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
         filtered = filtered.filter(user => user.payment_ticket_type === statusFilter);
       } else if (statusFilter === 'awaiting_payment') {
         filtered = filtered.filter(user => !user.first_payment_received);
+      } else if (['creditor_contact_initiated', 'creditor_contact_failed'].includes(statusFilter)) {
+        filtered = filtered.filter(user => user.current_status === statusFilter);
       } else {
         filtered = filtered.filter(user => user.current_status === statusFilter || user.overall_status === statusFilter);
       }
@@ -221,6 +225,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       'manual_review': 'bg-orange-100 text-orange-800',
       'ready_for_confirmation': 'bg-green-100 text-green-800',
       'problem': 'bg-red-100 text-red-800',
+      'creditor_contact_initiated': 'bg-purple-100 text-purple-800',
+      'creditor_contact_failed': 'bg-red-200 text-red-900',
       'created': 'bg-gray-100 text-gray-800',
       'portal_access_sent': 'bg-indigo-100 text-indigo-800',
       'documents_uploaded': 'bg-purple-100 text-purple-800',
@@ -248,6 +254,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       'manual_review': '🔍 Manuelle Prüfung',
       'ready_for_confirmation': '✅ Bereit zur Bestätigung',
       'problem': '⚠️ Problem',
+      'creditor_contact_initiated': '📧 Gläubiger kontaktiert',
+      'creditor_contact_failed': '❌ Gläubiger-Kontakt fehlgeschlagen',
       'payment_confirmed': '✅ Zahlung bestätigt',
       'created': 'Erstellt',
       'portal_access_sent': 'Portal-Zugang gesendet',
@@ -267,7 +275,9 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       'processing_wait': users.filter(u => u.payment_ticket_type === 'processing_wait').length,
       'manual_review': users.filter(u => u.payment_ticket_type === 'manual_review').length,
       'auto_approved': users.filter(u => u.payment_ticket_type === 'auto_approved').length,
-      'no_creditors_found': users.filter(u => u.payment_ticket_type === 'no_creditors_found').length
+      'no_creditors_found': users.filter(u => u.payment_ticket_type === 'no_creditors_found').length,
+      'creditor_contact_initiated': users.filter(u => u.current_status === 'creditor_contact_initiated').length,
+      'creditor_contact_failed': users.filter(u => u.current_status === 'creditor_contact_failed').length
     };
     
     // Add legacy status counts

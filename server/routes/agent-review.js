@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const Client = require('../models/Client');
 const { authenticateAdmin } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
+const CreditorContactService = require('../services/creditorContactService');
 
 const router = express.Router();
 
@@ -278,10 +279,62 @@ router.post('/:clientId/complete', authenticateAdmin, rateLimits.general, async 
 
     console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors, ${totalDebt}€ total debt`);
 
+    // AUTO-TRIGGER CREDITOR CONTACT PROCESS
+    let creditorContactResult = null;
+    let creditorContactError = null;
+    
+    if (creditors.length > 0) {
+      try {
+        console.log(`🚀 Auto-triggering creditor contact process for ${client.aktenzeichen}...`);
+        
+        const creditorService = new CreditorContactService();
+        creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+        
+        console.log(`✅ Creditor contact process started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+        
+        // Update client status to indicate creditor contact has started
+        client.current_status = 'creditor_contact_initiated';
+        client.updated_at = new Date();
+        
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'creditor_contact_initiated',
+          changed_by: 'system',
+          metadata: {
+            triggered_by: 'manual_review_completion',
+            main_ticket_id: creditorContactResult.main_ticket_id,
+            emails_sent: creditorContactResult.emails_sent,
+            total_creditors: creditors.length,
+            side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+          }
+        });
+        
+        await client.save();
+        
+      } catch (error) {
+        console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, error.message);
+        creditorContactError = error.message;
+        
+        // Still update status but mark as error
+        client.current_status = 'creditor_contact_failed';
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'creditor_contact_failed',
+          changed_by: 'system',
+          metadata: {
+            error_message: error.message,
+            requires_manual_action: true
+          }
+        });
+        
+        await client.save();
+      }
+    }
+
     res.json({
       success: true,
       message: 'Review session completed successfully',
-      client_status: 'manual_review_complete',
+      client_status: creditorContactResult ? 'creditor_contact_initiated' : 'manual_review_complete',
       summary: {
         client: {
           name: `${client.firstName} ${client.lastName}`,
@@ -297,8 +350,21 @@ router.post('/:clientId/complete', authenticateAdmin, rateLimits.general, async 
           total_count: client.documents.length
         }
       },
-      next_step: 'Update Zendesk ticket with final creditor list',
-      zendesk_update_required: true
+      // Enhanced response with creditor contact info
+      creditor_contact: creditorContactResult ? {
+        success: true,
+        main_ticket_id: creditorContactResult.main_ticket_id,
+        main_ticket_subject: creditorContactResult.main_ticket_subject,
+        emails_sent: creditorContactResult.emails_sent,
+        total_creditors: creditors.length,
+        side_conversations_created: creditorContactResult.side_conversation_results?.length || 0,
+        next_step: 'Creditor emails sent via Side Conversations - Monitor responses in Zendesk'
+      } : {
+        success: false,
+        error: creditorContactError,
+        next_step: creditors.length === 0 ? 'No creditors to contact' : 'Manual creditor contact required'
+      },
+      zendesk_update_required: false // No longer needed - automatic process handles it
     });
 
   } catch (error) {

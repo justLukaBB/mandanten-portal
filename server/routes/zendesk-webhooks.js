@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
 const ZendeskService = require('../services/zendeskService');
+const CreditorContactService = require('../services/creditorContactService');
 
 const router = express.Router();
 
@@ -524,6 +525,55 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
 
           await client.save();
           console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
+          
+          // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios
+          if (ticketType === 'auto_approved' && creditors.length > 0) {
+            try {
+              console.log(`🚀 Auto-triggering creditor contact for auto-approved client ${client.aktenzeichen}...`);
+              
+              const creditorService = new CreditorContactService();
+              const creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+              
+              console.log(`✅ Auto-approved creditor contact started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+              
+              // Update client status
+              client.current_status = 'creditor_contact_initiated';
+              client.payment_ticket_type = 'creditor_contact_initiated';
+              client.updated_at = new Date();
+              
+              client.status_history.push({
+                id: uuidv4(),
+                status: 'creditor_contact_initiated',
+                changed_by: 'system',
+                metadata: {
+                  triggered_by: 'auto_approved_payment_confirmation',
+                  main_ticket_id: creditorContactResult.main_ticket_id,
+                  emails_sent: creditorContactResult.emails_sent,
+                  total_creditors: creditors.length,
+                  side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+                }
+              });
+              
+              await client.save();
+              
+            } catch (creditorError) {
+              console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, creditorError.message);
+              
+              client.current_status = 'creditor_contact_failed';
+              client.status_history.push({
+                id: uuidv4(),
+                status: 'creditor_contact_failed',
+                changed_by: 'system',
+                metadata: {
+                  error_message: creditorError.message,
+                  requires_manual_action: true
+                }
+              });
+              
+              await client.save();
+            }
+          }
+          
         } else {
           ticketCreationError = zendeskTicket.error;
           console.error('❌ Failed to create Zendesk ticket:', zendeskTicket.error);
@@ -847,6 +897,56 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
           
           await client.save();
           console.log(`✅ Processing complete ticket created: ${zendeskTicket.ticket_id}`);
+          
+          // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios (processing-complete)
+          if (ticketType === 'auto_approved' && creditors.length > 0) {
+            try {
+              console.log(`🚀 Auto-triggering creditor contact for processing-complete auto-approved client ${client.aktenzeichen}...`);
+              
+              const creditorService = new CreditorContactService();
+              const creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+              
+              console.log(`✅ Processing-complete auto-approved creditor contact started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+              
+              // Update client status
+              client.current_status = 'creditor_contact_initiated';
+              client.payment_ticket_type = 'creditor_contact_initiated';
+              client.updated_at = new Date();
+              
+              client.status_history.push({
+                id: uuidv4(),
+                status: 'creditor_contact_initiated',
+                changed_by: 'system',
+                metadata: {
+                  triggered_by: 'processing_complete_auto_approved',
+                  main_ticket_id: creditorContactResult.main_ticket_id,
+                  emails_sent: creditorContactResult.emails_sent,
+                  total_creditors: creditors.length,
+                  side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+                }
+              });
+              
+              await client.save();
+              
+            } catch (creditorError) {
+              console.error(`❌ Failed to auto-trigger creditor contact for processing-complete ${client.aktenzeichen}:`, creditorError.message);
+              
+              client.current_status = 'creditor_contact_failed';
+              client.status_history.push({
+                id: uuidv4(),
+                status: 'creditor_contact_failed',
+                changed_by: 'system',
+                metadata: {
+                  error_message: creditorError.message,
+                  requires_manual_action: true,
+                  triggered_from: 'processing_complete_auto_approved'
+                }
+              });
+              
+              await client.save();
+            }
+          }
+          
         } else {
           ticketCreationError = zendeskTicket.error;
           console.error('❌ Failed to create processing complete ticket:', zendeskTicket.error);
