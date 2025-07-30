@@ -157,6 +157,9 @@ const clientSchema = new mongoose.Schema({
       'waiting_for_payment',
       'payment_confirmed',
       'creditor_review',
+      'manual_review_complete',
+      'creditor_contact_initiated',
+      'creditor_contact_failed',
       'awaiting_client_confirmation',
       'creditor_contact_active',
       'completed'
