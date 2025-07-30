@@ -239,6 +239,31 @@ router.post('/logout', authenticateAgent, rateLimits.general, async (req, res) =
   }
 });
 
+// List all agents (Admin only)
+// GET /api/agent-auth/list
+router.get('/list', authenticateAdmin, rateLimits.general, async (req, res) => {
+  try {
+    console.log(`👤 Admin ${req.adminId} requesting agent list`);
+
+    const agents = await Agent.find({}, {
+      password_hash: 0 // Exclude password hash from response
+    }).sort({ created_at: -1 });
+
+    res.json({
+      success: true,
+      agents: agents,
+      total: agents.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error listing agents:', error);
+    res.status(500).json({
+      error: 'Failed to list agents',
+      details: error.message
+    });
+  }
+});
+
 // Create Agent via Admin Token (Alternative method)
 // POST /api/agent-auth/create-via-admin
 router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
@@ -301,6 +326,43 @@ router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
     console.error('❌ Create agent via admin error:', error);
     res.status(500).json({
       error: 'Failed to create agent',
+      details: error.message
+    });
+  }
+});
+
+// Debug endpoint to check password hashing (REMOVE IN PRODUCTION)
+// POST /api/agent-auth/debug-password
+router.post('/debug-password', authenticateAdmin, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    const agent = await Agent.findOne({ username: username.toLowerCase() });
+    if (!agent) {
+      return res.json({ error: 'Agent not found' });
+    }
+
+    console.log(`🔍 Debug password for ${username}:`);
+    console.log(`- Input password: "${password}"`);
+    console.log(`- Stored hash: "${agent.password_hash}"`);
+    console.log(`- Hash length: ${agent.password_hash.length}`);
+    
+    const isValid = await agent.comparePassword(password);
+    console.log(`- Password valid: ${isValid}`);
+
+    res.json({
+      username: agent.username,
+      password_provided: password,
+      hash_stored: agent.password_hash,
+      hash_length: agent.password_hash.length,
+      is_valid: isValid,
+      debug: 'This endpoint should be removed in production'
+    });
+
+  } catch (error) {
+    console.error('❌ Debug password error:', error);
+    res.status(500).json({
+      error: 'Debug failed',
       details: error.message
     });
   }
