@@ -14,7 +14,7 @@ const documentSchema = new mongoose.Schema({
   },
   document_status: {
     type: String,
-    enum: ['pending', 'creditor_confirmed', 'non_creditor', 'duplicate', 'unclear'],
+    enum: ['pending', 'creditor_confirmed', 'non_creditor', 'non_creditor_confirmed', 'duplicate', 'unclear'],
     default: 'pending'
   },
   status_reason: String,
