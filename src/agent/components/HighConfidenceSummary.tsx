@@ -4,7 +4,7 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid';
 interface HighConfidenceDocument {
   id: string;
   name: string;
-  confidence: number;
+  confidence?: number;
   extracted_data?: {
     creditor_data?: {
       sender_name?: string;
@@ -12,6 +12,7 @@ interface HighConfidenceDocument {
       reference_number?: string;
       claim_amount?: number;
     };
+    confidence?: number;
   };
 }
 
