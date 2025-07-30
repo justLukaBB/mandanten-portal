@@ -16,6 +16,7 @@ const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
 const agentReviewRoutes = require('./routes/agent-review');
 const agentAuthRoutes = require('./routes/agent-auth');
+const testAgentReviewRoutes = require('./routes/test-agent-review');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -144,6 +145,9 @@ app.use('/api/agent-auth', agentAuthRoutes);
 
 // Agent review routes (agent auth required)
 app.use('/api/agent-review', agentReviewRoutes);
+
+// Test agent review routes (admin auth required)
+app.use('/api/test/agent-review', testAgentReviewRoutes);
 
 // Dashboard status routes (admin auth required) - moved inline for consistent auth
 

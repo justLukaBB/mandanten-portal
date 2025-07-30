@@ -7,7 +7,10 @@ import {
   UsersIcon,
   EyeIcon,
   EyeSlashIcon,
-  PencilIcon
+  PencilIcon,
+  BeakerIcon,
+  DocumentTextIcon,
+  PlayIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 
@@ -57,9 +60,15 @@ const Settings: React.FC = () => {
     role: 'agent'
   });
 
-  // Load agents on component mount
+  // Test Scenario State
+  const [testScenarios, setTestScenarios] = useState<any[]>([]);
+  const [testLoading, setTestLoading] = useState(false);
+  const [lastTestResult, setLastTestResult] = useState<any>(null);
+
+  // Load agents and test scenarios on component mount
   useEffect(() => {
     loadAgents();
+    loadTestScenarios();
   }, []);
 
   const loadAgents = async () => {
@@ -148,6 +157,98 @@ const Settings: React.FC = () => {
     setNewAgent(prev => ({ ...prev, [name]: value }));
   };
 
+  // Test Scenario Functions
+  const loadTestScenarios = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/test/agent-review/scenarios`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestScenarios(data.scenarios || []);
+      }
+    } catch (error) {
+      console.error('Error loading test scenarios:', error);
+    }
+  };
+
+  const createTestScenario = async () => {
+    setTestLoading(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/test/agent-review/create-test-scenario`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create test scenario');
+      }
+
+      const result = await response.json();
+      setLastTestResult(result);
+      
+      setMessage({
+        type: 'success',
+        text: `✅ Test-Szenario erstellt! Client: ${result.test_client.aktenzeichen} mit ${result.test_client.documents.need_review} problematischen Dokumenten.`
+      });
+
+      loadTestScenarios(); // Reload scenarios
+
+    } catch (error: any) {
+      console.error('Error creating test scenario:', error);
+      setMessage({
+        type: 'error',
+        text: `❌ Fehler beim Erstellen des Test-Szenarios: ${error.message}`
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const cleanupTestScenarios = async () => {
+    setTestLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/test/agent-review/cleanup`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to cleanup test scenarios');
+      }
+
+      const result = await response.json();
+      
+      setMessage({
+        type: 'success',
+        text: `✅ ${result.deleted_count} Test-Szenarien gelöscht.`
+      });
+
+      setTestScenarios([]);
+      setLastTestResult(null);
+
+    } catch (error: any) {
+      console.error('Error cleaning up test scenarios:', error);
+      setMessage({
+        type: 'error',
+        text: `❌ Fehler beim Löschen: ${error.message}`
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
   const handleClearDatabase = async () => {
     setLoading(true);
     setMessage(null);
@@ -191,6 +292,140 @@ const Settings: React.FC = () => {
         <p className="text-gray-600 mt-1">
           System-Konfiguration und Datenbank-Verwaltung
         </p>
+      </div>
+
+      {/* Test Agent Review Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <BeakerIcon className="w-5 h-5 mr-2" />
+            Agent Review Testing
+          </h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={createTestScenario}
+              disabled={testLoading}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              style={{backgroundColor: '#9f1a1d'}}
+            >
+              {testLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Erstelle...
+                </>
+              ) : (
+                <>
+                  <PlayIcon className="w-4 h-4 mr-2" />
+                  Test-Szenario erstellen
+                </>
+              )}
+            </button>
+            {testScenarios.length > 0 && (
+              <button
+                onClick={cleanupTestScenarios}
+                disabled={testLoading}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <TrashIcon className="w-4 h-4 mr-2" />
+                Aufräumen
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-sm font-medium text-blue-900 mb-2">🧪 Was wird erstellt:</h3>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>• <strong>Test-Client</strong> mit problematischen Dokumenten</li>
+            <li>• <strong>3 Dokumente</strong> mit niedriger Confidence (&lt;80%) - benötigen manuelle Prüfung</li>
+            <li>• <strong>1 Dokument</strong> mit hoher Confidence (&gt;95%) - keine Prüfung nötig</li>
+            <li>• <strong>Verschiedene Probleme:</strong> Fehlende E-Mails, unklare Namen, schlechte OCR-Qualität</li>
+          </ul>
+        </div>
+
+        {lastTestResult && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <h3 className="text-sm font-medium text-green-900 mb-2">✅ Letztes Test-Szenario:</h3>
+            <div className="text-sm text-green-800">
+              <p><strong>Client:</strong> {lastTestResult.test_client.name} ({lastTestResult.test_client.aktenzeichen})</p>
+              <p><strong>Dokumente zur Prüfung:</strong> {lastTestResult.test_client.documents.need_review} von {lastTestResult.test_client.documents.total}</p>
+              <p><strong>Gläubiger zur Prüfung:</strong> {lastTestResult.test_client.creditors.need_review} von {lastTestResult.test_client.creditors.total}</p>
+              
+              <div className="mt-2 p-2 bg-white rounded border">
+                <p className="font-medium">🔗 Review-Links:</p>
+                <div className="mt-1 space-y-1">
+                  <div>
+                    <span className="text-xs text-gray-600">Lokal:</span>
+                    <code className="ml-2 text-xs bg-gray-100 px-1 rounded">
+                      http://localhost:3000{lastTestResult.test_client.review_url}
+                    </code>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-600">Production:</span>
+                    <code className="ml-2 text-xs bg-gray-100 px-1 rounded">
+                      {lastTestResult.test_client.direct_review_url}
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              {lastTestResult.review_summary && (
+                <div className="mt-2">
+                  <p className="font-medium">📋 Problematische Dokumente:</p>
+                  <ul className="mt-1 space-y-1 text-xs">
+                    {lastTestResult.review_summary.documents_to_review.map((doc: any, index: number) => (
+                      <li key={index} className="flex justify-between">
+                        <span>{doc.name}</span>
+                        <span className="text-red-600">{Math.round(doc.confidence * 100)}% confidence</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="text-sm text-gray-600">
+          <p className="mb-2">
+            <strong>Aktuelle Test-Szenarien:</strong> {testScenarios.length}
+          </p>
+          {testScenarios.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <BeakerIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+              <p>Keine Test-Szenarien vorhanden.</p>
+              <p className="text-xs mt-1">Erstellen Sie ein Test-Szenario zum Testen des Agent Review Dashboards.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {testScenarios.map((scenario) => (
+                <div key={scenario.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{scenario.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {scenario.aktenzeichen} • {scenario.documents_needing_review} von {scenario.total_documents} Dokumenten brauchen Review
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-500">
+                      {new Date(scenario.created_at).toLocaleDateString('de-DE')}
+                    </span>
+                    <a
+                      href={scenario.direct_review_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white hover:opacity-90"
+                      style={{backgroundColor: '#9f1a1d'}}
+                    >
+                      <DocumentTextIcon className="w-3 h-3 mr-1" />
+                      Review
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Agent Management Section */}
