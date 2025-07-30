@@ -12,8 +12,8 @@ import api from '../../config/api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list';
-  onNavigate: (page: 'analytics' | 'enhanced' | 'settings' | 'create-user' | 'user-list') => void;
+  currentPage: 'analytics' | 'settings' | 'create-user' | 'user-list';
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
@@ -21,16 +21,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 
   const navigation = [
     { 
-      name: 'Enhanced Dashboard', 
-      key: 'enhanced' as const, 
-      icon: ChartBarIcon,
-      description: '🚀 Live Payment & Document Status'
-    },
-    { 
       name: 'Analytics Dashboard', 
       key: 'analytics' as const, 
       icon: PresentationChartLineIcon,
-      description: '📊 Monitoring & Analytics'
+      description: '📊 Enhanced Payment & Document Monitoring'
     },
     { 
       name: 'User erstellen', 
