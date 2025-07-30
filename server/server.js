@@ -3657,6 +3657,32 @@ function getClientDisplayStatus(client) {
     status.overall_status = 'awaiting_payment';
     status.review = '💰 Warte auf erste Rate';
     status.next_action = 'Warten auf erste Rate';
+  // Check for completed workflows first (current_status)
+  } else if (client.current_status === 'manual_review_complete') {
+    status.overall_status = 'review_complete';
+    status.review = '✅ Prüfung abgeschlossen';
+    status.next_action = 'Gläubiger-Kontakt initiieren';
+    status.needs_attention = false;
+  } else if (client.current_status === 'creditor_contact_initiated') {
+    status.overall_status = 'creditor_contact_active';
+    status.review = '📧 Gläubiger kontaktiert';
+    status.next_action = 'Gläubiger-Antworten überwachen';
+    status.needs_attention = false;
+  } else if (client.current_status === 'creditor_contact_failed') {
+    status.overall_status = 'creditor_contact_error';
+    status.review = '❌ Gläubiger-Kontakt fehlgeschlagen';
+    status.next_action = 'Manueller Gläubiger-Kontakt erforderlich';
+    status.needs_attention = true;
+  } else if (client.current_status === 'creditor_contact_active') {
+    status.overall_status = 'creditor_contact_active';
+    status.review = '📞 Gläubiger-Kontakt aktiv';
+    status.next_action = 'Gläubiger-Kommunikation verfolgen';
+    status.needs_attention = false;
+  } else if (client.current_status === 'completed') {
+    status.overall_status = 'completed';
+    status.review = '🎉 Abgeschlossen';
+    status.next_action = 'Fall abgeschlossen';
+    status.needs_attention = false;
   } else if (client.payment_ticket_type) {
     switch(client.payment_ticket_type) {
       case 'document_request':
