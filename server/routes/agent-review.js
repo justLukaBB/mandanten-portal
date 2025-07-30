@@ -338,9 +338,11 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
           claim_amount: corrections.claim_amount ? parseFloat(corrections.claim_amount) : (creditors[creditorIndex].claim_amount || 0),
           confidence: 1.0, // Manual correction = 100% confidence
+          status: 'confirmed', // Change status from pending to confirmed
           manually_reviewed: true,
           reviewed_by: req.agentId,
           reviewed_at: new Date(),
+          confirmed_at: new Date(), // Add confirmation timestamp
           original_ai_data: originalData,
           correction_notes: corrections.notes || '',
           review_action: 'corrected'
@@ -360,9 +362,11 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           reference_number: corrections.reference_number || '',
           claim_amount: isNaN(claimAmount) ? 0 : claimAmount,
           confidence: 1.0, // Manual entry = 100% confidence
+          status: 'confirmed', // New creditors from manual review are confirmed
           manually_reviewed: true,
           reviewed_by: req.agentId,
           reviewed_at: new Date(),
+          confirmed_at: new Date(), // Add confirmation timestamp
           created_via: 'manual_review',
           correction_notes: corrections.notes || ''
         };
@@ -374,6 +378,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       // Mark as skipped
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
         Object.assign(creditors[creditorIndex], {
+          status: 'rejected', // Mark as rejected when skipped
           manually_reviewed: true,
           reviewed_by: req.agentId,
           reviewed_at: new Date(),
@@ -386,9 +391,11 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
         Object.assign(creditors[creditorIndex], {
           confidence: 1.0, // Confirmed = 100% confidence
+          status: 'confirmed', // Change status from pending to confirmed
           manually_reviewed: true,
           reviewed_by: req.agentId,
           reviewed_at: new Date(),
+          confirmed_at: new Date(), // Add confirmation timestamp
           review_action: 'confirmed'
         });
       }
