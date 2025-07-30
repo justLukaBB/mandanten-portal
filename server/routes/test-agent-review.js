@@ -146,57 +146,8 @@ router.post('/create-test-scenario', authenticateAdmin, rateLimits.general, asyn
         }
       ],
       
-      // Initial creditor list from AI extraction (problematic entries)
-      final_creditor_list: [
-        {
-          id: uuidv4(),
-          document_id: testClient?.documents?.[0]?.id,
-          source_document: 'Problematic_Invoice_1.pdf',
-          sender_name: 'Unklare Bank AG',
-          sender_email: 'inkasso@unclear-bank.de',
-          reference_number: 'UB/2024/???',
-          claim_amount: 850.50,
-          confidence: 0.35,
-          status: 'pending',
-          created_at: new Date()
-        },
-        {
-          id: uuidv4(),
-          document_id: testClient?.documents?.[1]?.id,
-          source_document: 'Damaged_Document_2.pdf',
-          sender_name: 'Credit Solutions',
-          sender_email: '',
-          reference_number: 'CS-24-1234',
-          claim_amount: 1200.00,
-          confidence: 0.55,
-          status: 'pending',
-          created_at: new Date()
-        },
-        {
-          id: uuidv4(),
-          document_id: testClient?.documents?.[2]?.id,
-          source_document: 'Questionable_Bill_3.pdf',
-          sender_name: 'Forderungsmanagement Schmidt & Partner GmbH',
-          sender_email: 'info@schmidt-partner.de',
-          reference_number: 'SP/2024/7891',
-          claim_amount: 2150.75,
-          confidence: 0.72,
-          status: 'pending',
-          created_at: new Date()
-        },
-        {
-          id: uuidv4(),
-          document_id: testClient?.documents?.[3]?.id,
-          source_document: 'Clear_Invoice_4.pdf',
-          sender_name: 'Deutsche Inkasso GmbH',
-          sender_email: 'forderungen@deutsche-inkasso.de',
-          reference_number: 'DI/2024/12345',
-          claim_amount: 750.00,
-          confidence: 0.95,
-          status: 'confirmed',
-          created_at: new Date()
-        }
-      ],
+      // Initial creditor list from AI extraction (will be populated after client creation)
+      final_creditor_list: [],
       
       // Status history
       status_history: [
@@ -227,11 +178,57 @@ router.post('/create-test-scenario', authenticateAdmin, rateLimits.general, asyn
       updated_at: new Date()
     });
 
-    // Fix document references after client creation
-    testClient.final_creditor_list[0].document_id = testClient.documents[0].id;
-    testClient.final_creditor_list[1].document_id = testClient.documents[1].id;
-    testClient.final_creditor_list[2].document_id = testClient.documents[2].id;
-    testClient.final_creditor_list[3].document_id = testClient.documents[3].id;
+    // Create creditor list after client creation (now we have document IDs)
+    testClient.final_creditor_list = [
+      {
+        id: uuidv4(),
+        document_id: testClient.documents[0].id,
+        source_document: 'Problematic_Invoice_1.pdf',
+        sender_name: 'Unklare Bank AG',
+        sender_email: 'inkasso@unclear-bank.de',
+        reference_number: 'UB/2024/???',
+        claim_amount: 850.50,
+        confidence: 0.35,
+        status: 'pending',
+        created_at: new Date()
+      },
+      {
+        id: uuidv4(),
+        document_id: testClient.documents[1].id,
+        source_document: 'Damaged_Document_2.pdf',
+        sender_name: 'Credit Solutions',
+        sender_email: '',
+        reference_number: 'CS-24-1234',
+        claim_amount: 1200.00,
+        confidence: 0.55,
+        status: 'pending',
+        created_at: new Date()
+      },
+      {
+        id: uuidv4(),
+        document_id: testClient.documents[2].id,
+        source_document: 'Questionable_Bill_3.pdf',
+        sender_name: 'Forderungsmanagement Schmidt & Partner GmbH',
+        sender_email: 'info@schmidt-partner.de',
+        reference_number: 'SP/2024/7891',
+        claim_amount: 2150.75,
+        confidence: 0.72,
+        status: 'pending',
+        created_at: new Date()
+      },
+      {
+        id: uuidv4(),
+        document_id: testClient.documents[3].id,
+        source_document: 'Clear_Invoice_4.pdf',
+        sender_name: 'Deutsche Inkasso GmbH',
+        sender_email: 'forderungen@deutsche-inkasso.de',
+        reference_number: 'DI/2024/12345',
+        claim_amount: 750.00,
+        confidence: 0.95,
+        status: 'confirmed',
+        created_at: new Date()
+      }
+    ];
 
     await testClient.save();
 
