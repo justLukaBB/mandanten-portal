@@ -24,7 +24,7 @@ interface HighConfidenceCreditor {
   claim_amount?: number;
   confidence: number;
   source_document: string;
-  status: string;
+  status?: string;
 }
 
 interface HighConfidenceSummaryProps {
