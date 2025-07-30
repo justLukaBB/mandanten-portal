@@ -10,7 +10,8 @@ import {
   CheckCircleIcon,
   EyeIcon,
   InformationCircleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 
@@ -86,6 +87,38 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     fetchUserDetails();
     // Removed auto-refresh to prevent session logout issues
   }, [userId]);
+
+  const downloadDocument = async (documentId: string, documentName: string) => {
+    try {
+      console.log(`📥 Downloading document ${documentId} (${documentName})`);
+      
+      const response = await fetch(`${API_BASE_URL}/clients/${userId}/documents/${documentId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = documentName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log(`✅ Document downloaded successfully`);
+    } catch (error) {
+      console.error('❌ Error downloading document:', error);
+      alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    }
+  };
 
   const fetchUserDetails = async () => {
     try {
@@ -367,7 +400,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             )}
                           </div>
                         </div>
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 space-x-2">
+                          <button
+                            onClick={() => downloadDocument(doc.id, doc.name)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300"
+                          >
+                            <ArrowDownTrayIcon className="w-3 h-3 mr-1" />
+                            Download
+                          </button>
                           <button
                             onClick={() => {
                               console.log('Details button clicked for document:', doc);
