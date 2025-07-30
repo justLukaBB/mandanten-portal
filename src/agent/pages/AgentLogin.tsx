@@ -143,10 +143,9 @@ const AgentLogin: React.FC = () => {
             <button
               type="submit"
               disabled={loading || !credentials.username.trim() || !credentials.password.trim()}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:opacity-90"
               style={{
-                backgroundColor: loading ? '#6b7280' : '#9f1a1d',
-                ':hover': { backgroundColor: '#7f1616' }
+                backgroundColor: loading ? '#6b7280' : '#9f1a1d'
               }}
             >
               {loading ? (
