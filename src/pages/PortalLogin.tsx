@@ -13,74 +13,71 @@ const PortalLogin: React.FC = () => {
   const [showAktenzeichen, setShowAktenzeichen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    
+    // Clear any previous errors but keep credentials
     setError('');
+    setLoading(true);
 
     try {
+      console.log('🔄 Attempting login with credentials:', { 
+        email: credentials.email, 
+        hasAktenzeichen: !!credentials.aktenzeichen 
+      });
+
       const response = await axios.post(`${API_BASE_URL}/portal/login`, credentials);
       
-      if (response.data.success) {
-        // Store session token and JWT token for API requests
-        localStorage.setItem('portal_session_token', response.data.session_token);
-        localStorage.setItem('auth_token', response.data.token || response.data.session_token); // For API requests
-        localStorage.setItem('portal_client_id', response.data.client.id);
-        localStorage.setItem('portal_client_data', JSON.stringify(response.data.client));
+      if (response.data && response.data.success) {
+        console.log('✅ Login API call successful');
         
-        console.log('🔑 Login successful, tokens stored:', {
-          session_token: !!response.data.session_token,
-          jwt_token: !!response.data.token,
-          client_id: response.data.client.id
-        });
+        // Store all required data
+        const sessionToken = response.data.session_token;
+        const jwtToken = response.data.token || sessionToken;
+        const clientId = response.data.client.id;
+        const clientData = JSON.stringify(response.data.client);
         
-        // Wait a brief moment to ensure localStorage is properly set
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Store tokens synchronously
+        localStorage.setItem('portal_session_token', sessionToken);
+        localStorage.setItem('auth_token', jwtToken);
+        localStorage.setItem('portal_client_id', clientId);
+        localStorage.setItem('portal_client_data', clientData);
         
-        // Verify that the tokens were properly stored
-        const storedToken = localStorage.getItem('portal_session_token');
-        const storedClientId = localStorage.getItem('portal_client_id');
+        console.log('💾 Tokens stored successfully');
         
-        if (storedToken && storedClientId) {
-          // Reset retry count on successful login
-          setRetryCount(0);
-          // Redirect to personal portal
+        // Use setTimeout to ensure localStorage operations complete
+        setTimeout(() => {
+          console.log('🚀 Navigating to portal...');
           navigate('/portal', { replace: true });
-        } else {
-          // If localStorage didn't work, try again with a longer delay
-          if (retryCount < 2) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const retryToken = localStorage.getItem('portal_session_token');
-            const retryClientId = localStorage.getItem('portal_client_id');
-            
-            if (retryToken && retryClientId) {
-              setRetryCount(0);
-              navigate('/portal', { replace: true });
-            } else {
-              setRetryCount(prev => prev + 1);
-              throw new Error('Login data could not be stored properly');
-            }
-          } else {
-            throw new Error('Login data could not be stored properly after multiple attempts');
-          }
-        }
+        }, 50);
+        
       } else {
+        console.error('❌ Login failed - invalid response structure:', response.data);
         setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
-      if (error.response?.data?.error) {
-        setError(error.response.data.error);
-      } else if (error.message?.includes('Login data could not be stored properly')) {
-        if (retryCount >= 2) {
-          setError('Wiederholte Login-Probleme. Bitte laden Sie die Seite neu und versuchen Sie es erneut.');
+      console.error('❌ Login error:', error);
+      
+      // Handle different types of errors
+      if (error.response) {
+        // Server responded with error status
+        const serverMessage = error.response.data?.error || error.response.data?.message;
+        if (serverMessage) {
+          setError(serverMessage);
+        } else if (error.response.status === 401) {
+          setError('Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Aktenzeichen.');
+        } else if (error.response.status === 429) {
+          setError('Zu viele Login-Versuche. Bitte warten Sie einen Moment.');
         } else {
-          setError('Login-Daten konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.');
+          setError(`Server-Fehler (${error.response.status}). Bitte versuchen Sie es später erneut.`);
         }
+      } else if (error.request) {
+        // Network error
+        setError('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.');
       } else {
-        setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+        // Other error
+        setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
       }
     } finally {
       setLoading(false);
@@ -172,8 +169,8 @@ const PortalLogin: React.FC = () => {
           <div>
             <button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              disabled={loading || !credentials.email.trim() || !credentials.aktenzeichen.trim()}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               {loading ? (
                 <div className="flex items-center">

@@ -46,27 +46,23 @@ export const PersonalPortal = ({
 
   // Check authentication on load
   useEffect(() => {
-    const checkAuth = () => {
-      const sessionToken = localStorage.getItem('portal_session_token');
-      const storedClientId = localStorage.getItem('portal_client_id');
-      
-      if (!sessionToken || !storedClientId || storedClientId !== clientId) {
-        console.warn('Authentication check failed, redirecting to login');
-        navigate('/login', { replace: true });
-        return false;
-      }
-      return true;
-    };
+    const sessionToken = localStorage.getItem('portal_session_token');
+    const storedClientId = localStorage.getItem('portal_client_id');
     
-    // Check immediately
-    if (!checkAuth()) return;
+    console.log('🔍 PersonalPortal: Auth check:', {
+      hasSessionToken: !!sessionToken,
+      hasStoredClientId: !!storedClientId,
+      storedClientId,
+      expectedClientId: clientId,
+      match: storedClientId === clientId
+    });
     
-    // Also check after a brief delay to handle timing issues
-    const timeoutId = setTimeout(() => {
-      checkAuth();
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
+    if (!sessionToken || !storedClientId || storedClientId !== clientId) {
+      console.warn('❌ PersonalPortal: Authentication failed, redirecting to login');
+      navigate('/login', { replace: true });
+    } else {
+      console.log('✅ PersonalPortal: Authentication successful');
+    }
   }, [clientId, navigate]);
 
   // Default progress phases

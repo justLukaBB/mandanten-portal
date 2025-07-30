@@ -13,6 +13,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
       const sessionToken = localStorage.getItem('portal_session_token');
       const clientId = localStorage.getItem('portal_client_id');
       
+      console.log('🔍 ProtectedRoute: Checking auth tokens:', {
+        hasSessionToken: !!sessionToken,
+        hasClientId: !!clientId
+      });
+      
       if (sessionToken && clientId) {
         setIsAuthenticated(true);
       } else {
@@ -22,11 +27,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     
     // Check immediately
     checkAuth();
-    
-    // Also check after a short delay to handle potential localStorage timing issues
-    const timeoutId = setTimeout(checkAuth, 50);
-    
-    return () => clearTimeout(timeoutId);
   }, []);
   
   // Show loading state while checking authentication
