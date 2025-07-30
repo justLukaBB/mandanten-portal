@@ -9,6 +9,85 @@ const config = require('../config');
 
 const router = express.Router();
 
+// Helper function to serve mock PDF for test scenarios
+function serveMockPDF(res, documentName) {
+  try {
+    // Create a simple mock PDF content
+    const mockPDFContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+
+4 0 obj
+<<
+/Length 110
+>>
+stream
+BT
+/F1 12 Tf
+50 700 Td
+(Mock Test Document: ${documentName}) Tj
+0 -20 Td
+(This is a test document for Agent Review Dashboard) Tj
+0 -40 Td
+(Document contains simulated creditor data for testing purposes) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000208 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+370
+%%EOF`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${documentName}"`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    res.send(Buffer.from(mockPDFContent));
+    
+  } catch (error) {
+    console.error('❌ Error serving mock PDF:', error);
+    res.status(500).json({
+      error: 'Failed to serve mock PDF',
+      details: error.message
+    });
+  }
+}
+
 // Get available clients for review
 // GET /api/agent-review/available-clients
 router.get('/available-clients', authenticateAgent, rateLimits.general, async (req, res) => {
@@ -194,7 +273,26 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     const { clientId } = req.params;
     const { document_id, corrections, action } = req.body; // action: 'correct', 'skip', 'confirm'
     
-    console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}`);
+    console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}, action: ${action}`);
+
+    // Input validation
+    if (!document_id) {
+      return res.status(400).json({
+        error: 'document_id is required'
+      });
+    }
+
+    if (!action || !['correct', 'skip', 'confirm'].includes(action)) {
+      return res.status(400).json({
+        error: 'Valid action is required (correct, skip, confirm)'
+      });
+    }
+
+    if (action === 'correct' && (!corrections || typeof corrections !== 'object')) {
+      return res.status(400).json({
+        error: 'corrections object is required for correct action'
+      });
+    }
 
     const client = await Client.findOne({ id: clientId });
     
@@ -205,8 +303,9 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       });
     }
 
-    // Find the document
-    const document = client.documents.find(d => d.id === document_id);
+    // Safe document lookup
+    const documents = client.documents || [];
+    const document = documents.find(d => d.id === document_id);
     if (!document) {
       return res.status(404).json({
         error: 'Document not found',
@@ -228,16 +327,16 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
 
     if (action === 'correct' && corrections) {
       // Apply corrections
-      if (creditorIndex >= 0) {
-        // Update existing creditor
+      if (creditorIndex >= 0 && creditorIndex < creditors.length) {
+        // Update existing creditor - safe access
         const originalData = { ...creditors[creditorIndex] };
         
         creditors[creditorIndex] = {
           ...creditors[creditorIndex],
-          sender_name: corrections.sender_name || creditors[creditorIndex].sender_name,
-          sender_email: corrections.sender_email || creditors[creditorIndex].sender_email,
-          reference_number: corrections.reference_number || creditors[creditorIndex].reference_number,
-          claim_amount: corrections.claim_amount || creditors[creditorIndex].claim_amount,
+          sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
+          sender_email: corrections.sender_email || creditors[creditorIndex].sender_email || '',
+          reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
+          claim_amount: corrections.claim_amount ? parseFloat(corrections.claim_amount) : (creditors[creditorIndex].claim_amount || 0),
           confidence: 1.0, // Manual correction = 100% confidence
           manually_reviewed: true,
           reviewed_by: req.agentId,
@@ -249,6 +348,8 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         console.log(`✅ Updated existing creditor for document ${document_id}`);
       } else {
         // Create new creditor from corrections
+        const claimAmount = corrections.claim_amount ? parseFloat(corrections.claim_amount) : 0;
+        
         const newCreditor = {
           id: uuidv4(),
           document_id: document_id,
@@ -256,7 +357,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           sender_name: corrections.sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || '',
           reference_number: corrections.reference_number || '',
-          claim_amount: parseFloat(corrections.claim_amount) || 0,
+          claim_amount: isNaN(claimAmount) ? 0 : claimAmount,
           confidence: 1.0, // Manual entry = 100% confidence
           manually_reviewed: true,
           reviewed_by: req.agentId,
@@ -572,6 +673,13 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
 
     if (!filePath || !fs.existsSync(filePath)) {
       console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
+      
+      // For test scenarios, serve a mock PDF
+      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
+        console.log(`📋 Serving mock PDF for test document ${document.name}`);
+        return serveMockPDF(res, document.name);
+      }
+      
       return res.status(404).json({
         error: 'Document file not found on disk',
         document_id: documentId
