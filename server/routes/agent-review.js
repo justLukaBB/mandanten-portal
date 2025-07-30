@@ -331,8 +331,8 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         // Update existing creditor - safe access
         const originalData = { ...creditors[creditorIndex] };
         
-        creditors[creditorIndex] = {
-          ...creditors[creditorIndex],
+        // Preserve the original creditor object and only update specific fields
+        Object.assign(creditors[creditorIndex], {
           sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || creditors[creditorIndex].sender_email || '',
           reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
@@ -342,8 +342,9 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           reviewed_by: req.agentId,
           reviewed_at: new Date(),
           original_ai_data: originalData,
-          correction_notes: corrections.notes || ''
-        };
+          correction_notes: corrections.notes || '',
+          review_action: 'corrected'
+        });
         
         console.log(`✅ Updated existing creditor for document ${document_id}`);
       } else {
@@ -371,21 +372,25 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       }
     } else if (action === 'skip') {
       // Mark as skipped
-      if (creditorIndex >= 0) {
-        creditors[creditorIndex].manually_reviewed = true;
-        creditors[creditorIndex].reviewed_by = req.agentId;
-        creditors[creditorIndex].reviewed_at = new Date();
-        creditors[creditorIndex].review_action = 'skipped';
+      if (creditorIndex >= 0 && creditorIndex < creditors.length) {
+        Object.assign(creditors[creditorIndex], {
+          manually_reviewed: true,
+          reviewed_by: req.agentId,
+          reviewed_at: new Date(),
+          review_action: 'skipped'
+        });
       }
       console.log(`⏭️ Skipped review for document ${document_id}`);
     } else if (action === 'confirm') {
       // Confirm AI extraction is correct
-      if (creditorIndex >= 0) {
-        creditors[creditorIndex].confidence = 1.0; // Confirmed = 100% confidence
-        creditors[creditorIndex].manually_reviewed = true;
-        creditors[creditorIndex].reviewed_by = req.agentId;
-        creditors[creditorIndex].reviewed_at = new Date();
-        creditors[creditorIndex].review_action = 'confirmed';
+      if (creditorIndex >= 0 && creditorIndex < creditors.length) {
+        Object.assign(creditors[creditorIndex], {
+          confidence: 1.0, // Confirmed = 100% confidence
+          manually_reviewed: true,
+          reviewed_by: req.agentId,
+          reviewed_at: new Date(),
+          review_action: 'confirmed'
+        });
       }
       console.log(`✅ Confirmed AI extraction for document ${document_id}`);
     }
