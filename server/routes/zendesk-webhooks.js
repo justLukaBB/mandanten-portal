@@ -20,7 +20,7 @@ router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
       const ticket = req.body.ticket;
       
       email = requester.email;
-      aktenzeichen = requester.aktenzeichen;
+      aktenzeichen = requester.aktenzeichen; // This is the custom field!
       zendesk_ticket_id = ticket.id;
       zendesk_user_id = requester.id;
       phone = requester.phone || '';
