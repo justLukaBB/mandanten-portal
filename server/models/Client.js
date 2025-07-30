@@ -60,7 +60,11 @@ const documentSchema = new mongoose.Schema({
   summary: String,
   processing_error: String,
   processing_time_ms: Number,
-  duplicate_reason: String
+  duplicate_reason: String,
+  // Agent review fields
+  manually_reviewed: { type: Boolean, default: false },
+  reviewed_at: Date,
+  reviewed_by: String
 }, { _id: false });
 
 const creditorSchema = new mongoose.Schema({
@@ -74,14 +78,24 @@ const creditorSchema = new mongoose.Schema({
   actual_creditor: String,
   source_document: String,
   source_document_id: String,
+  document_id: String, // Link to document
   ai_confidence: Number,
+  confidence: Number, // General confidence field
   status: {
     type: String,
     enum: ['confirmed', 'rejected', 'pending'],
     default: 'confirmed'
   },
   created_at: { type: Date, default: Date.now },
-  confirmed_at: Date
+  confirmed_at: Date,
+  // Agent review fields
+  manually_reviewed: { type: Boolean, default: false },
+  reviewed_at: Date,
+  reviewed_by: String,
+  review_action: String, // 'confirmed', 'corrected', 'skipped'
+  original_ai_data: mongoose.Schema.Types.Mixed,
+  correction_notes: String,
+  created_via: String // 'ai_extraction', 'manual_review', etc.
 }, { _id: false });
 
 // Status History Schema for tracking all status changes
