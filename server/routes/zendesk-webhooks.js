@@ -601,14 +601,14 @@ router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
       },
-      zendesk_ticket: zendeskTicket ? {
-        created: zendeskTicket.success,
-        ticket_id: zendeskTicket.ticket_id,
-        ticket_url: zendeskTicket.ticket_url,
-        error: ticketCreationError
+      zendesk_comment: zendeskComment ? {
+        added: zendeskComment.success,
+        ticket_id: zendesk_ticket_id,
+        scenario: ticketType,
+        error: commentError
       } : {
-        created: false,
-        error: ticketCreationError
+        added: false,
+        error: commentError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
@@ -867,36 +867,39 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
 
     await client.save();
 
-    // AUTOMATICALLY CREATE UPDATE ZENDESK TICKET
-    let zendeskTicket = null;
-    let ticketCreationError = null;
+    // ADD PROCESSING COMPLETE COMMENT TO ORIGINAL TICKET
+    let zendeskComment = null;
+    let commentError = null;
 
-    if (zendeskService.isConfigured()) {
+    // Try to find the original ticket ID from client's zendesk_tickets
+    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
+    const originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id;
+
+    if (zendeskService.isConfigured() && originalTicketId) {
       try {
-        console.log('🎫 Creating processing complete Zendesk ticket...');
+        console.log(`💬 Adding processing complete comment to ticket ${originalTicketId}...`);
         
-        zendeskTicket = await zendeskService.createTicket({
-          subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
-          content: ticketContent,
-          requesterEmail: client.email,
-          tags: tags,
-          priority: ticketType === 'manual_review' ? 'normal' : 'low',
-          type: 'task'
+        // Generate processing complete comment
+        const processingCompleteComment = `**🔄 PROCESSING COMPLETE - ANALYSIS READY**\n\n👤 **Client:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n${generateInternalComment(client, ticketType, documents, creditors, state)}`;
+        const ticketStatus = getTicketStatusForScenario(ticketType);
+        const ticketTags = ['processing-complete', `scenario-${ticketType}`, ...tags];
+        
+        zendeskComment = await zendeskService.addInternalComment(originalTicketId, {
+          content: processingCompleteComment,
+          status: ticketStatus,
+          tags: ticketTags
         });
 
-        if (zendeskTicket.success) {
-          // Store the created ticket ID
-          client.zendesk_tickets = client.zendesk_tickets || [];
-          client.zendesk_tickets.push({
-            ticket_id: zendeskTicket.ticket_id,
-            ticket_type: 'processing_complete',
-            ticket_scenario: ticketType,
-            status: 'active',
-            created_at: new Date()
-          });
+        if (zendeskComment.success) {
+          console.log(`✅ Processing complete comment added to ticket ${originalTicketId}`);
+          
+          // Update client ticket tracking
+          if (originalTicket) {
+            originalTicket.last_comment_at = new Date();
+            originalTicket.processing_complete_scenario = ticketType;
+          }
           
           await client.save();
-          console.log(`✅ Processing complete ticket created: ${zendeskTicket.ticket_id}`);
           
           // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios (processing-complete)
           if (ticketType === 'auto_approved' && creditors.length > 0) {
@@ -948,16 +951,21 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
           }
           
         } else {
-          ticketCreationError = zendeskTicket.error;
-          console.error('❌ Failed to create processing complete ticket:', zendeskTicket.error);
+          commentError = zendeskComment.error;
+          console.error('❌ Failed to add processing complete comment:', zendeskComment.error);
         }
       } catch (error) {
-        ticketCreationError = error.message;
-        console.error('❌ Exception creating processing complete ticket:', error);
+        commentError = error.message;
+        console.error('❌ Exception adding processing complete comment:', error);
       }
     } else {
-      console.log('⚠️ Zendesk service not configured - skipping automatic ticket creation');
-      ticketCreationError = 'Zendesk API not configured';
+      if (!zendeskService.isConfigured()) {
+        console.log('⚠️ Zendesk service not configured - skipping comment');
+        commentError = 'Zendesk API not configured';
+      } else {
+        console.log('⚠️ No original ticket ID found - cannot add comment');
+        commentError = 'No original ticket ID available';
+      }
     }
 
     console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
@@ -973,14 +981,14 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
       },
-      zendesk_ticket: zendeskTicket ? {
-        created: zendeskTicket.success,
-        ticket_id: zendeskTicket.ticket_id,
-        ticket_url: zendeskTicket.ticket_url,
-        error: ticketCreationError
+      zendesk_comment: zendeskComment ? {
+        added: zendeskComment.success,
+        ticket_id: originalTicketId,
+        scenario: ticketType,
+        error: commentError
       } : {
-        created: false,
-        error: ticketCreationError
+        added: false,
+        error: commentError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
@@ -1280,6 +1288,61 @@ ${creditors.length > 0
 }
 
 🔗 Portal-Link: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+}
+
+// Helper function to generate internal comment for original ticket
+function generateInternalComment(client, ticketType, documents, creditors, state) {
+  const baseInfo = `**💰 PAYMENT CONFIRMED - AUTOMATED ANALYSIS**\n\n👤 **Client:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})\n📧 **Email:** ${client.email}\n⏰ **Processed:** ${new Date().toLocaleString('de-DE')}`;
+  
+  switch(ticketType) {
+    case 'document_request':
+      return `${baseInfo}\n\n⚠️ **STATUS: DOCUMENTS REQUIRED**\n\n📊 **Analysis:**\n• Documents uploaded: ${documents.length}\n• Processing status: No documents found\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[CLIENT PORTAL ACCESS]** ${process.env.FRONTEND_URL}/login?token=${client.portal_token}\n\n📧 **Email Template:**\n\"Sehr geehrte/r ${client.firstName} ${client.lastName},\n\nvielen Dank für Ihre erste Ratenzahlung!\n\nBitte laden Sie Ihre Gläubigerdokumente hier hoch:\n${process.env.FRONTEND_URL}/login?token=${client.portal_token}\n\nBenötigte Dokumente: Mahnungen, Rechnungen, Inkasso-Schreiben\"\n\n📋 **Automatic Process:**\n• After document upload, system re-analyzes automatically\n• This ticket will be updated with results\n• No further agent action needed until then
+`;
+    
+    case 'auto_approved':
+      const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+      const creditorsList = creditors.map(c => 
+        `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.confidence || 0) * 100)}% confidence)`
+      ).join('\n');
+      
+      return `${baseInfo}\n\n✅ **STATUS: AI PROCESSED - FULLY AUTOMATED**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditors found: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• All creditors ≥80% confidence\n\n🏛️ **VERIFIED CREDITORS:**\n${creditorsList}\n\n🚀 **AUTOMATED ACTIONS:**\n• ✅ Creditor contact process started automatically\n• ✅ Client portal access granted\n• ✅ Creditor list sent for confirmation\n\n📋 **NO AGENT ACTION REQUIRED** - Process fully automated`;
+    
+    case 'manual_review':
+      const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+      const confident = creditors.filter(c => (c.confidence || 0) >= 0.8);
+      
+      return `${baseInfo}\n\n⚠️ **STATUS: MANUAL REVIEW REQUIRED**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditors found: ${creditors.length}\n• Need manual review: ${needsReview.length}\n• Auto-verified: ${confident.length}\n\n🔍 **CREDITORS NEEDING REVIEW:**\n${needsReview.map(c => `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.confidence || 0) * 100)}% confidence)`).join('\n')}\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[MANUAL REVIEW DASHBOARD]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}\n\n📋 **Process:**\n1. Click link above to open Review Dashboard\n2. Manually verify and correct low-confidence extractions\n3. System automatically continues after completion\n4. Creditor contact starts automatically\n5. This ticket gets updated with final results\n\n✅ **Auto-verified creditors will be processed automatically**
+`;
+    
+    case 'no_creditors_found':
+      return `${baseInfo}\n\n⚠️ **STATUS: NO CREDITORS FOUND**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditor documents detected: ${documents.filter(d => d.is_creditor_document).length}\n• Creditors extracted: 0\n\n🔍 **POSSIBLE ISSUES:**\n• Documents may not contain creditor information\n• Poor document quality / non-standard format\n• AI classification error\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[DOCUMENT REVIEW]** ${process.env.FRONTEND_URL}/admin/clients/${client.id}\n\n📋 **Documents Uploaded:**\n${documents.map(d => `• ${d.name} - ${d.is_creditor_document ? '✅ Creditor doc' : '❌ Other doc'}`).join('\n')}\n\n📧 **Options:**\n1. Review documents manually via link above\n2. Request better quality documents from client\n3. Manual creditor entry if needed
+`;
+    
+    case 'processing_wait':
+      const processing = documents.filter(d => d.processing_status !== 'completed');
+      return `${baseInfo}\n\n⏳ **STATUS: AI PROCESSING IN PROGRESS**\n\n📊 **Processing Status:**\n• Documents uploaded: ${documents.length}\n• Processing complete: ${documents.length - processing.length}/${documents.length}\n• Estimated time remaining: ${Math.ceil(processing.length * 0.5)} minutes\n\n🔄 **DOCUMENTS IN QUEUE:**\n${processing.map(d => `• ${d.name} (${d.processing_status})`).join('\n')}\n\n⏰ **NO AGENT ACTION REQUIRED**\n• System will automatically update this ticket when processing completes\n• Appropriate workflow will continue based on analysis results\n\n📋 **Next Steps:**\n• Wait for AI processing to complete\n• Ticket will be updated automatically with results`;
+    
+    default:
+      return `${baseInfo}\n\n❓ **STATUS: UNKNOWN SCENARIO**\n\nPlease check system logs for details.`;
+  }
+}
+
+// Helper function to get ticket status based on scenario
+function getTicketStatusForScenario(ticketType) {
+  switch(ticketType) {
+    case 'document_request':
+      return 'pending'; // Waiting for customer
+    case 'auto_approved':
+      return 'open'; // Automated process active
+    case 'manual_review':
+      return 'pending'; // Waiting for agent review
+    case 'no_creditors_found':
+      return 'pending'; // Needs agent investigation
+    case 'processing_wait':
+      return 'open'; // System processing
+    default:
+      return 'open';
+  }
 }
 
 module.exports = router;
