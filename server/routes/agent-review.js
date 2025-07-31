@@ -5,6 +5,7 @@ const Agent = require('../models/Agent');
 const { authenticateAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const CreditorContactService = require('../services/creditorContactService');
+const ZendeskService = require('../services/zendeskService');
 const config = require('../config');
 
 const router = express.Router();
@@ -505,6 +506,26 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
 
     console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors, ${totalDebt}€ total debt`);
 
+    // ADD ZENDESK COMMENT FOR REVIEW COMPLETION
+    const zendeskService = new ZendeskService();
+    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
+    const originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id || zendesk_ticket_id;
+
+    if (zendeskService.isConfigured() && originalTicketId) {
+      try {
+        const reviewCompleteComment = `**✅ MANUAL REVIEW COMPLETED**\n\n👤 **Agent:** ${req.agentId}\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n📊 **Final Results:**\n• Total creditors: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• Documents reviewed: ${reviewedDocs.length}\n\n🏛️ **FINAL CREDITOR LIST:**\n${finalCreditorsList}\n\n🚀 **AUTOMATED NEXT STEPS:**\n• ✅ Creditor contact process started automatically\n• ✅ Client portal updated with creditor list\n• ✅ Ready for client confirmation\n\n📋 **STATUS:** Review complete - automated process continuing`;
+
+        await zendeskService.addInternalComment(originalTicketId, {
+          content: reviewCompleteComment,
+          status: 'open'
+        });
+        
+        console.log(`✅ Added review completion comment to ticket ${originalTicketId}`);
+      } catch (error) {
+        console.error(`❌ Failed to add review completion comment:`, error.message);
+      }
+    }
+
     // AUTO-TRIGGER CREDITOR CONTACT PROCESS
     let creditorContactResult = null;
     let creditorContactError = null;
@@ -536,6 +557,18 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
         });
         
         await client.save();
+        
+        // Add success comment to Zendesk
+        if (zendeskService.isConfigured() && originalTicketId) {
+          try {
+            await zendeskService.addInternalComment(originalTicketId, {
+              content: `🚀 **CREDITOR CONTACT INITIATED**\n\nMain ticket ID: ${creditorContactResult.main_ticket_id}\nEmails sent: ${creditorContactResult.emails_sent}/${creditors.length}\nSide conversations: ${creditorContactResult.side_conversation_results?.length || 0}\n\n✅ **Process fully automated** - creditor contact active, client receives confirmation email.`,
+              status: 'open'
+            });
+          } catch (commentError) {
+            console.error(`❌ Failed to add creditor contact success comment:`, commentError.message);
+          }
+        }
         
       } catch (error) {
         console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, error.message);

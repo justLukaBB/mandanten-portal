@@ -125,6 +125,45 @@ class ZendeskService {
     }
   }
 
+  // Add internal comment to existing ticket
+  async addInternalComment(ticketId, { content, status = null, tags = [] }) {
+    try {
+      console.log('💬 Adding internal comment to Zendesk ticket:', ticketId);
+
+      const updateData = {
+        ticket: {
+          comment: {
+            body: content,
+            public: false // Internal comment only
+          }
+        }
+      };
+
+      // Add optional status and tags
+      if (status) updateData.ticket.status = status;
+      if (tags.length > 0) updateData.ticket.tags = tags;
+
+      const response = await this.api.put(`/tickets/${ticketId}.json`, updateData);
+      
+      console.log('✅ Internal comment added to ticket:', ticketId);
+
+      return {
+        success: true,
+        ticket_id: response.data.ticket.id,
+        comment_added: true,
+        ticket: response.data.ticket
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to add internal comment:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message
+      };
+    }
+  }
+
   // Check if service is configured
   isConfigured() {
     return !!(this.domain && this.email && this.token);
