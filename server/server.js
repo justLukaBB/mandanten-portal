@@ -34,6 +34,7 @@ const PORT = config.PORT;
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: 'application/json' })); // Handle JSON sent as text
 app.use(cors());
 app.use(securityHeaders);
 
@@ -3681,6 +3682,21 @@ app.post('/api/test/phase2/reset', (req, res) => {
 
 // Error handling middleware
 app.use((error, req, res, next) => {
+  console.error('❌ Express Error Handler:', error);
+  console.error('Error Type:', error.constructor.name);
+  console.error('Error Stack:', error.stack);
+  
+  // Handle JSON parsing errors
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    console.error('JSON Parse Error - Request Body:', req.body);
+    console.error('JSON Parse Error - Raw Body:', error.body);
+    return res.status(400).json({ 
+      error: 'Invalid JSON', 
+      details: error.message,
+      type: 'JSON_PARSE_ERROR'
+    });
+  }
+  
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ 

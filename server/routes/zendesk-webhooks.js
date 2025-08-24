@@ -10,9 +10,35 @@ const router = express.Router();
 // Initialize Zendesk service
 const zendeskService = new ZendeskService();
 
+// Middleware to handle Zendesk's specific JSON format
+const parseZendeskPayload = (req, res, next) => {
+  console.log('🔍 Zendesk Payload Parser - Original body type:', typeof req.body);
+  
+  // If body is a string, try to parse it
+  if (typeof req.body === 'string') {
+    try {
+      console.log('📜 Attempting to parse string body as JSON...');
+      req.body = JSON.parse(req.body);
+      console.log('✅ Successfully parsed string body to JSON');
+    } catch (e) {
+      console.error('❌ Failed to parse string body:', e.message);
+      return res.status(400).json({
+        error: 'Invalid JSON in request body',
+        details: e.message,
+        receivedType: typeof req.body,
+        receivedBody: req.body.substring(0, 100) + '...'
+      });
+    }
+  }
+  
+  // Log the final parsed body
+  console.log('📦 Final parsed body:', JSON.stringify(req.body, null, 2));
+  next();
+};
+
 // Zendesk Webhook: Portal Link Sent
 // Triggered when agent uses "Portal-Link senden" macro
-router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
+router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async (req, res) => {
   try {
     console.log('🔗 Zendesk Webhook: Portal-Link-Sent received', req.body);
     
@@ -177,7 +203,7 @@ router.post('/portal-link-sent', rateLimits.general, async (req, res) => {
 
 // NEW: Zendesk Webhook: User Payment Confirmed (Phase 2)
 // Triggered when agent checks "erste_rate_bezahlt_user" checkbox on USER profile
-router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
+router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, async (req, res) => {
   try {
     console.log('💰 Zendesk Webhook: User-Payment-Confirmed received', req.body);
     
@@ -343,9 +369,13 @@ router.post('/user-payment-confirmed', rateLimits.general, async (req, res) => {
 
 // PRIMARY: Zendesk Webhook: Payment Confirmed
 // Triggered when agent checks "erste_rate_bezahlt" checkbox on a ticket
-router.post('/payment-confirmed', rateLimits.general, async (req, res) => {
+router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async (req, res) => {
   try {
-    console.log('💰 Zendesk Webhook: Payment-Confirmed received', req.body);
+    console.log('💰 Zendesk Webhook: Payment-Confirmed received');
+    console.log('Request Headers:', req.headers);
+    console.log('Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('Body Type:', typeof req.body);
+    console.log('Is req.body an object?', req.body && typeof req.body === 'object');
     
     // Extract data from the webhook payload
     // The aktenzeichen comes from ticket.requester.aktenzeichen (custom field)
