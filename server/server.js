@@ -31,6 +31,20 @@ const TestDataService = require('./services/testDataService');
 const app = express();
 const PORT = config.PORT;
 
+// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cors());
+app.use(securityHeaders);
+
+// Mount routes
+app.use('/api/health', healthRoutes);
+app.use('/api/zendesk-webhook', zendeskWebhooks);
+app.use('/api/portal-webhook', portalWebhooks);
+app.use('/api/agent-review', agentReviewRoutes);
+app.use('/api/agent-auth', agentAuthRoutes);
+app.use('/api/test/agent-review', testAgentReviewRoutes);
+
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
 
