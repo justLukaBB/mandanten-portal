@@ -28,6 +28,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     
     // Check immediately
     checkAuth();
+    
+    // Listen for localStorage changes (from login)
+    const handleStorageChange = () => {
+      checkAuth();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Custom event for localStorage changes within the same tab
+    const handleLoginSuccess = () => {
+      checkAuth();
+    };
+    
+    window.addEventListener('loginSuccess', handleLoginSuccess);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('loginSuccess', handleLoginSuccess);
+    };
   }, []);
   
   // Show loading state while checking authentication

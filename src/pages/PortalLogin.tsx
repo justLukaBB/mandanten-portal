@@ -46,11 +46,12 @@ const PortalLogin: React.FC = () => {
         
         console.log('💾 Tokens stored successfully');
         
-        // Use setTimeout to ensure localStorage operations complete
-        setTimeout(() => {
-          console.log('🚀 Navigating to portal...');
-          navigate('/portal', { replace: true });
-        }, 50);
+        // Dispatch custom event to notify ProtectedRoute
+        window.dispatchEvent(new CustomEvent('loginSuccess'));
+        
+        // Navigate immediately without setTimeout
+        console.log('🚀 Navigating to portal...');
+        navigate('/portal', { replace: true });
         
       } else {
         console.error('❌ Login failed - invalid response structure:', response.data);
