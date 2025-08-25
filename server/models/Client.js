@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 const documentSchema = new mongoose.Schema({
   id: { type: String, required: true },
   name: { type: String, required: true },
-  filename: { type: String, required: true },
-  type: { type: String, required: true },
-  size: { type: Number, required: true },
+  filename: { type: String, required: false }, // Made optional for legacy data
+  type: { type: String, required: false }, // Made optional for legacy data
+  size: { type: Number, required: false }, // Made optional for legacy data
   uploadedAt: { type: Date, default: Date.now },
   processing_status: { 
     type: String, 

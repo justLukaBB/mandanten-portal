@@ -97,34 +97,65 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
     if (client) {
       console.log(`📋 Client exists, updating: ${client.aktenzeichen}`);
       
-      // Update existing client with Zendesk info
-      client.zendesk_ticket_id = zendesk_ticket_id;
-      client.zendesk_user_id = zendesk_user_id;
-      client.portal_link_sent = true;
-      client.portal_link_sent_at = new Date();
-      client.current_status = 'portal_access_sent';
-      
-      // Add to Zendesk tickets array
-      if (!client.zendesk_tickets.some(t => t.ticket_id === zendesk_ticket_id)) {
-        client.zendesk_tickets.push({
-          ticket_id: zendesk_ticket_id,
-          ticket_type: 'portal_access',
-          status: 'active',
-          created_at: new Date()
-        });
-      }
-      
-      // Add status history entry
-      client.status_history.push({
-        id: uuidv4(),
-        status: 'portal_access_sent',
-        changed_by: 'agent',
-        zendesk_ticket_id: zendesk_ticket_id,
-        metadata: {
-          action: 'portal_link_resent',
-          agent_action: 'Portal-Link senden macro'
+      try {
+        // Update only specific fields to avoid document validation issues
+        const updateData = {
+          zendesk_ticket_id: zendesk_ticket_id,
+          zendesk_user_id: zendesk_user_id,
+          portal_link_sent: true,
+          portal_link_sent_at: new Date(),
+          current_status: 'portal_access_sent',
+          updated_at: new Date()
+        };
+        
+        // Update with $push and $set to avoid document array validation
+        const updatedClient = await Client.findOneAndUpdate(
+        { _id: client._id },
+        {
+          $set: updateData,
+          $push: {
+            zendesk_tickets: {
+              ticket_id: zendesk_ticket_id,
+              ticket_type: 'portal_access',
+              status: 'active',
+              created_at: new Date()
+            },
+            status_history: {
+              id: uuidv4(),
+              status: 'portal_access_sent',
+              changed_by: 'agent',
+              zendesk_ticket_id: zendesk_ticket_id,
+              metadata: {
+                action: 'portal_link_resent',
+                agent_action: 'Portal-Link senden macro'
+              }
+            }
+          }
+        },
+        { 
+          new: true,
+          runValidators: false, // Skip validation for legacy documents
+          strict: false // Allow fields not in schema
         }
-      });
+      );
+      
+      // Use the updated client directly - no reload needed
+      client = updatedClient;
+      
+      } catch (updateError) {
+        console.error('❌ Error updating existing client, falling back to basic update:', updateError.message);
+        
+        // Fallback: Just update the critical fields without touching documents
+        client.zendesk_ticket_id = zendesk_ticket_id;
+        client.zendesk_user_id = zendesk_user_id;
+        client.portal_link_sent = true;
+        client.portal_link_sent_at = new Date();
+        client.current_status = 'portal_access_sent';
+        client.updated_at = new Date();
+        
+        // Save without validation for documents
+        await client.save({ validateModifiedOnly: true });
+      }
     } else {
       console.log(`👤 Creating new client: ${aktenzeichen}`);
       
@@ -176,9 +207,9 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
           }
         }]
       });
+      
+      await client.save();
     }
-
-    await client.save();
     
     console.log(`✅ Client updated/created successfully: ${client.aktenzeichen}`);
     
@@ -445,7 +476,38 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       }
     });
 
-    await client.save();
+    // Save with validation workaround
+    try {
+      await client.save({ validateModifiedOnly: true });
+    } catch (saveError) {
+      console.error('⚠️ Error saving client with full validation, trying without document validation:', saveError.message);
+      
+      // Update using findOneAndUpdate to bypass document validation
+      await Client.findOneAndUpdate(
+        { _id: client._id },
+        {
+          $set: {
+            first_payment_received: true,
+            current_status: 'payment_confirmed',
+            updated_at: new Date()
+          },
+          $push: {
+            status_history: {
+              id: uuidv4(),
+              status: 'payment_confirmed',
+              changed_by: 'agent',
+              zendesk_ticket_id: zendesk_ticket_id,
+              metadata: {
+                agent_email: agent_email,
+                agent_action: 'erste_rate_bezahlt checkbox',
+                payment_date: new Date()
+              }
+            }
+          }
+        },
+        { runValidators: false }
+      );
+    }
 
     // ANALYZE CURRENT STATE AND DETERMINE SCENARIO
     const documents = client.documents || [];
