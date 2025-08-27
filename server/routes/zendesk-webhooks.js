@@ -615,7 +615,40 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
             }
           });
 
-          await client.save();
+          // Save using update to avoid validation issues with legacy documents
+          try {
+            await client.save({ validateModifiedOnly: true });
+          } catch (saveError) {
+            console.error('⚠️ Error saving after ticket creation, using direct update:', saveError.message);
+            
+            // Use direct update to bypass validation
+            await Client.findOneAndUpdate(
+              { _id: client._id },
+              {
+                $push: {
+                  zendesk_tickets: {
+                    ticket_id: zendeskTicket.ticket_id,
+                    ticket_type: 'payment_review',
+                    ticket_scenario: ticketType,
+                    status: 'active',
+                    created_at: new Date()
+                  },
+                  status_history: {
+                    id: uuidv4(),
+                    status: 'zendesk_ticket_created',
+                    changed_by: 'system',
+                    metadata: {
+                      zendesk_ticket_id: zendeskTicket.ticket_id,
+                      ticket_scenario: ticketType,
+                      ticket_subject: generateTicketSubject(client, ticketType)
+                    }
+                  }
+                }
+              },
+              { runValidators: false }
+            );
+          }
+          
           console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
           
           // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios
@@ -693,14 +726,14 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
       },
-      zendesk_comment: zendeskComment ? {
-        added: zendeskComment.success,
-        ticket_id: zendesk_ticket_id,
+      zendesk_ticket: zendeskTicket ? {
+        created: zendeskTicket.success,
+        ticket_id: zendeskTicket.ticket_id,
         scenario: ticketType,
-        error: commentError
+        error: ticketCreationError
       } : {
-        added: false,
-        error: commentError
+        created: false,
+        error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`

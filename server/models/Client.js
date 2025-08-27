@@ -139,10 +139,13 @@ const clientSchema = new mongoose.Schema({
     ticket_id: String,
     ticket_type: {
       type: String,
-      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact']
+      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact', 'payment_review', 'main_ticket']
     },
+    ticket_scenario: String, // For tracking specific scenarios like document_request, manual_review, etc.
     status: String,
-    created_at: { type: Date, default: Date.now }
+    created_at: { type: Date, default: Date.now },
+    last_comment_at: Date,
+    processing_complete_scenario: String
   }],
   
   // Workflow - updated for Zendesk-centric approach
