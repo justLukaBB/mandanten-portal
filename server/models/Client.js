@@ -196,6 +196,11 @@ const clientSchema = new mongoose.Schema({
   document_request_sent_at: Date,
   all_documents_processed_at: Date,
   
+  // Document reminder tracking
+  document_reminder_count: { type: Number, default: 0 },
+  last_document_reminder_at: Date,
+  documents_uploaded_after_payment_at: Date,
+  
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },
