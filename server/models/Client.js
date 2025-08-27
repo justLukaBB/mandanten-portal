@@ -197,6 +197,7 @@ const clientSchema = new mongoose.Schema({
   },
   payment_processed_at: Date,
   document_request_sent_at: Date,
+  document_request_email_sent_at: Date,
   all_documents_processed_at: Date,
   
   // Document reminder tracking

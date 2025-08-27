@@ -96,6 +96,7 @@ class DocumentReminderService {
       if (this.zendeskService.isConfigured() && originalTicket.ticket_id) {
         console.log(`💬 Adding document reminder comment to ticket ${originalTicket.ticket_id}...`);
         
+        // First add internal comment
         zendeskUpdateResult = await this.zendeskService.addInternalComment(originalTicket.ticket_id, {
           content: reminderContent,
           tags: ['document-reminder', `reminder-${reminderCount}`, 'awaiting-documents']
@@ -103,6 +104,29 @@ class DocumentReminderService {
 
         if (zendeskUpdateResult.success) {
           console.log(`✅ Document reminder added to ticket ${originalTicket.ticket_id}`);
+          
+          // Now send email via side conversation
+          console.log(`📧 Sending reminder email via side conversation...`);
+          
+          const emailSubject = `${urgencyText} Erinnerung: Dokumente benötigt - Aktenzeichen ${client.aktenzeichen}`;
+          const emailBody = this.generateReminderEmailBody(client, reminderCount, urgencyText);
+          
+          const sideConversationResult = await this.zendeskService.createSideConversation(
+            originalTicket.ticket_id,
+            {
+              recipientEmail: client.email,
+              recipientName: `${client.firstName} ${client.lastName}`,
+              subject: emailSubject,
+              body: emailBody,
+              internalNote: false // We already added the internal note above
+            }
+          );
+          
+          if (sideConversationResult.success) {
+            console.log(`✅ Reminder email sent via side conversation to ${client.email}`);
+          } else {
+            console.error(`❌ Failed to send reminder email: ${sideConversationResult.error}`);
+          }
         } else {
           console.error(`❌ Failed to add reminder to ticket: ${zendeskUpdateResult.error}`);
         }
@@ -143,6 +167,68 @@ class DocumentReminderService {
     }
   }
 
+  // Generate reminder email body for customer
+  generateReminderEmailBody(client, reminderCount, urgencyText) {
+    const daysSincePayment = Math.floor(
+      (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    
+    const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+    
+    let greeting = '';
+    if (reminderCount === 1) {
+      greeting = 'wir möchten Sie freundlich daran erinnern, dass';
+    } else if (reminderCount === 2) {
+      greeting = 'leider haben wir noch keine Dokumente von Ihnen erhalten. Bitte denken Sie daran, dass';
+    } else if (reminderCount >= 3) {
+      greeting = 'dies ist eine wichtige Erinnerung! Um Ihr Insolvenzverfahren fortzusetzen,';
+    }
+    
+    const emailBody = `Sehr geehrte/r ${client.firstName} ${client.lastName},
+
+${greeting} wir Ihre Gläubigerdokumente benötigen.
+
+Sie haben Ihre erste Rate vor ${daysSincePayment} Tagen bezahlt - vielen Dank dafür! 
+Jetzt fehlen nur noch Ihre Dokumente, damit wir mit der Bearbeitung beginnen können.
+
+IHRE ZUGANGSDATEN:
+==================
+Portal-Link: ${portalUrl}
+E-Mail: ${client.email}
+Aktenzeichen: ${client.aktenzeichen}
+
+BENÖTIGTE DOKUMENTE:
+===================
+• Mahnungen und Zahlungsaufforderungen
+• Rechnungen und Verträge  
+• Inkasso-Schreiben
+• Kreditverträge
+• Alle anderen Gläubigerschreiben
+
+${reminderCount >= 3 ? `
+⚠️ WICHTIG: Ohne Ihre Dokumente können wir nicht mit der Bearbeitung beginnen.
+Ihre bisherigen Zahlungen könnten verfallen, wenn wir nicht bald fortfahren können.
+` : ''}
+
+So laden Sie Ihre Dokumente hoch:
+1. Klicken Sie auf den Portal-Link oben
+2. Melden Sie sich mit Ihrer E-Mail-Adresse und Ihrem Aktenzeichen an  
+3. Klicken Sie auf "Dokumente hochladen"
+4. Wählen Sie Ihre Dokumente aus oder fotografieren Sie diese mit Ihrem Smartphone
+
+${reminderCount >= 2 ? `
+Benötigen Sie Hilfe beim Hochladen? Rufen Sie uns gerne an:
+📞 ${process.env.SUPPORT_PHONE || '+49 123 456789'}
+` : ''}
+
+Mit freundlichen Grüßen
+Ihr Insolvenz-Team
+
+PS: Dies ist die ${reminderCount}. Erinnerung bezüglich Ihrer fehlenden Dokumente.`;
+
+    return emailBody;
+  }
+  
   // Generate reminder content based on reminder count
   generateReminderContent(client, reminderCount) {
     const daysSincePayment = Math.floor(

@@ -178,6 +178,102 @@ class ZendeskService {
       token: this.token ? '✅ Set' : '❌ Missing ZENDESK_API_TOKEN'
     };
   }
+
+  // Create side conversation to send email to customer
+  async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, internalNote = true }) {
+    try {
+      console.log(`📧 Creating Side Conversation on ticket ${ticketId} to send email to ${recipientEmail}...`);
+      
+      const sideConversationData = {
+        message: {
+          to: [
+            {
+              email: recipientEmail,
+              name: recipientName
+            }
+          ],
+          subject: subject,
+          body: body
+        }
+      };
+
+      const response = await this.api.post(`/tickets/${ticketId}/side_conversations.json`, sideConversationData);
+      
+      console.log(`✅ Side Conversation created successfully!`);
+      console.log(`📨 Side Conversation ID: ${response.data.side_conversation?.id}`);
+      console.log(`📧 Email sent to: ${recipientEmail}`);
+      
+      // Add internal note to main ticket about the side conversation if requested
+      if (internalNote) {
+        await this.addInternalComment(
+          ticketId, 
+          {
+            content: `📧 **ERINNERUNG GESENDET**\n\nEmpfänger: ${recipientEmail} (${recipientName})\nBetreff: ${subject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\n✅ E-Mail erfolgreich versendet`,
+            tags: ['document-reminder-sent']
+          }
+        );
+      }
+      
+      return {
+        success: true,
+        ticket_id: ticketId,
+        side_conversation_id: response.data.side_conversation?.id,
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+        subject: subject,
+        email_sent: true
+      };
+
+    } catch (error) {
+      console.error(`❌ Error creating Side Conversation for ticket ${ticketId}:`, error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+        details: error.response?.data?.details || null,
+        email_sent: false
+      };
+    }
+  }
+
+  // Add public comment to ticket (visible to customer)
+  async addPublicComment(ticketId, { content, status = null, tags = [] }) {
+    try {
+      console.log('💬 Adding public comment to Zendesk ticket:', ticketId);
+
+      const updateData = {
+        ticket: {
+          comment: {
+            body: content,
+            public: true // Public comment visible to customer
+          }
+        }
+      };
+
+      // Add optional status and tags
+      if (status) updateData.ticket.status = status;
+      if (tags.length > 0) updateData.ticket.tags = tags;
+
+      const response = await this.api.put(`/tickets/${ticketId}.json`, updateData);
+      
+      console.log('✅ Public comment added to ticket:', ticketId);
+
+      return {
+        success: true,
+        ticket_id: response.data.ticket.id,
+        comment_added: true,
+        ticket: response.data.ticket
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to add public comment:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message
+      };
+    }
+  }
 }
 
 module.exports = ZendeskService;

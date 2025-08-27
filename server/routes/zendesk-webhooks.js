@@ -651,6 +651,119 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           
           console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
           
+          // AUTO-SEND DOCUMENT REMINDER EMAIL for document_request scenarios
+          if (ticketType === 'document_request') {
+            try {
+              console.log(`📧 Auto-sending document reminder email to ${client.email}...`);
+              
+              // Generate email content
+              const emailSubject = `Dokumente benötigt für Ihr Insolvenzverfahren - Aktenzeichen ${client.aktenzeichen}`;
+              const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+              
+              const emailBody = `Sehr geehrte/r ${client.firstName} ${client.lastName},
+
+vielen Dank für Ihre erste Ratenzahlung! Wir haben diese erhalten und können nun mit Ihrem Insolvenzverfahren fortfahren.
+
+Um den nächsten Schritt einzuleiten, benötigen wir dringend Ihre Gläubigerdokumente.
+
+IHRE ZUGANGSDATEN:
+==================
+Portal-Link: ${portalUrl}
+E-Mail: ${client.email}
+Aktenzeichen: ${client.aktenzeichen}
+
+BENÖTIGTE DOKUMENTE:
+===================
+• Mahnungen und Zahlungsaufforderungen
+• Rechnungen und Verträge
+• Inkasso-Schreiben
+• Kreditverträge
+• Sonstige Gläubigerschreiben
+
+WICHTIG: Bitte laden Sie ALLE Dokumente Ihrer Gläubiger hoch, auch ältere Schreiben.
+
+So laden Sie Ihre Dokumente hoch:
+1. Klicken Sie auf den Portal-Link oben
+2. Melden Sie sich mit Ihrer E-Mail-Adresse und Ihrem Aktenzeichen an
+3. Klicken Sie auf "Dokumente hochladen"
+4. Wählen Sie Ihre Dokumente aus oder fotografieren Sie diese mit Ihrem Smartphone
+
+Bei Fragen oder technischen Problemen erreichen Sie uns unter:
+${process.env.SUPPORT_EMAIL || 'support@kanzlei.de'}
+${process.env.SUPPORT_PHONE || '+49 123 456789'}
+
+Mit freundlichen Grüßen
+Ihr Insolvenz-Team
+
+PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen ist.`;
+              
+              // Create side conversation to send email
+              const sideConversationResult = await zendeskService.createSideConversation(
+                zendeskTicket.ticket_id,
+                {
+                  recipientEmail: client.email,
+                  recipientName: `${client.firstName} ${client.lastName}`,
+                  subject: emailSubject,
+                  body: emailBody,
+                  internalNote: true
+                }
+              );
+              
+              if (sideConversationResult.success) {
+                console.log(`✅ Document reminder email sent to ${client.email}`);
+                
+                // Update client status history
+                client.status_history.push({
+                  id: uuidv4(),
+                  status: 'document_reminder_email_sent',
+                  changed_by: 'system',
+                  metadata: {
+                    side_conversation_id: sideConversationResult.side_conversation_id,
+                    email_sent_to: client.email,
+                    zendesk_ticket_id: zendeskTicket.ticket_id
+                  }
+                });
+                
+                // Update document request timestamp
+                client.document_request_email_sent_at = new Date();
+                
+                // Save client updates
+                try {
+                  await client.save({ validateModifiedOnly: true });
+                } catch (saveError) {
+                  console.error('⚠️ Error saving after email sent, using direct update:', saveError.message);
+                  
+                  await Client.findOneAndUpdate(
+                    { _id: client._id },
+                    {
+                      $set: {
+                        document_request_email_sent_at: new Date()
+                      },
+                      $push: {
+                        status_history: {
+                          id: uuidv4(),
+                          status: 'document_reminder_email_sent',
+                          changed_by: 'system',
+                          metadata: {
+                            side_conversation_id: sideConversationResult.side_conversation_id,
+                            email_sent_to: client.email,
+                            zendesk_ticket_id: zendeskTicket.ticket_id
+                          }
+                        }
+                      }
+                    },
+                    { runValidators: false }
+                  );
+                }
+              } else {
+                console.error(`❌ Failed to send document reminder email: ${sideConversationResult.error}`);
+              }
+              
+            } catch (emailError) {
+              console.error(`❌ Error sending document reminder email for ${client.aktenzeichen}:`, emailError.message);
+            }
+          }
+          
           // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios
           if (ticketType === 'auto_approved' && creditors.length > 0) {
             try {
