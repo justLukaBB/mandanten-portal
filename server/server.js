@@ -763,6 +763,38 @@ app.post('/api/clients/:clientId/documents',
         });
       }
       
+      // Check if this client was waiting for documents after payment
+      if (client.first_payment_received && client.payment_ticket_type === 'document_request') {
+        console.log(`✅ Documents uploaded for client ${clientId} who was waiting after payment!`);
+        
+        // Update payment ticket type to processing
+        client.payment_ticket_type = 'processing_wait';
+        client.documents_uploaded_after_payment_at = new Date();
+        
+        // Add status history
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'documents_uploaded_after_payment',
+          changed_by: 'system',
+          metadata: {
+            documents_count: uploadedDocuments.length,
+            days_after_payment: Math.floor(
+              (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
+            ),
+            reminder_count: client.document_reminder_count || 0
+          }
+        });
+        
+        // Notify via document reminder service (async)
+        setTimeout(async () => {
+          try {
+            await documentReminderService.checkDocumentUploadStatus(clientId);
+          } catch (error) {
+            console.error('Error notifying document upload:', error);
+          }
+        }, 1000);
+      }
+      
       return client;
     });
     
@@ -3680,6 +3712,57 @@ app.post('/api/test/phase2/reset', (req, res) => {
   }
 });
 
+// Manual trigger for document reminder check (admin only)
+app.post('/api/admin/trigger-document-reminders', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      console.log('📧 Admin triggered manual document reminder check');
+      
+      const result = await documentReminderService.checkAndSendReminders();
+      
+      res.json({
+        success: true,
+        message: 'Document reminder check completed',
+        totalChecked: result.totalChecked,
+        remindersSent: result.remindersSent,
+        errors: result.errors
+      });
+      
+    } catch (error) {
+      console.error('Error in manual document reminder trigger:', error);
+      res.status(500).json({
+        error: 'Failed to trigger document reminders',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Check document upload status for specific client
+app.post('/api/admin/check-document-status/:clientId', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      console.log(`📄 Admin checking document status for client ${clientId}`);
+      
+      const result = await documentReminderService.checkDocumentUploadStatus(clientId);
+      
+      res.json(result);
+      
+    } catch (error) {
+      console.error('Error checking document status:', error);
+      res.status(500).json({
+        error: 'Failed to check document status',
+        details: error.message
+      });
+    }
+  }
+);
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('❌ Express Error Handler:', error);
@@ -3711,6 +3794,39 @@ app.use((error, req, res, next) => {
   });
 });
 
+// Document reminder service
+const DocumentReminderService = require('./services/documentReminderService');
+const documentReminderService = new DocumentReminderService();
+
+// Start scheduled document reminder checks
+function startScheduledTasks() {
+  // Run document reminder check every hour
+  const REMINDER_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running scheduled document reminder check...');
+      const result = await documentReminderService.checkAndSendReminders();
+      console.log(`✅ Document reminder check complete: ${result.remindersSent} reminders sent\n`);
+    } catch (error) {
+      console.error('❌ Error in scheduled document reminder check:', error);
+    }
+  }, REMINDER_CHECK_INTERVAL);
+  
+  // Run initial check after 1 minute
+  setTimeout(async () => {
+    try {
+      console.log('\n⏰ Running initial document reminder check...');
+      const result = await documentReminderService.checkAndSendReminders();
+      console.log(`✅ Initial document reminder check complete: ${result.remindersSent} reminders sent\n`);
+    } catch (error) {
+      console.error('❌ Error in initial document reminder check:', error);
+    }
+  }, 60000); // 1 minute
+  
+  console.log('📅 Scheduled tasks started: Document reminders will check every hour');
+}
+
 // Start server with database initialization
 async function startServer() {
   try {
@@ -3722,6 +3838,9 @@ async function startServer() {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`💾 Database: ${databaseService.isHealthy() ? 'MongoDB Connected' : 'In-Memory Fallback'}`);
+      
+      // Start scheduled tasks
+      startScheduledTasks();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
