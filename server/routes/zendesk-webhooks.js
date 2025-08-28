@@ -1158,6 +1158,7 @@ ${finalCreditorsList}
 
 🚀 BEREIT FÜR KUNDEN-BESTÄTIGUNG
 [BUTTON: Gläubigerliste zur Bestätigung senden]
+🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}
 
 📁 Mandant: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
 
@@ -1702,8 +1703,10 @@ ${needsManualReview ? `🔧 AGENT-AKTIONEN:
 [BUTTON: Manuelle Prüfung starten] → ${reviewUrl}
 
 Nach der manuellen Prüfung:
-[BUTTON: Gläubigerliste zur Bestätigung senden]` : `✅ ALLE GLÄUBIGER VERIFIZIERT:
-[BUTTON: Gläubigerliste zur Bestätigung senden]`}
+[BUTTON: Gläubigerliste zur Bestätigung senden]
+🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}` : `✅ ALLE GLÄUBIGER VERIFIZIERT:
+[BUTTON: Gläubigerliste zur Bestätigung senden]
+🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`}
 
 🔗 Mandant Portal: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
 📁 Aktenzeichen: ${client.aktenzeichen}`;
