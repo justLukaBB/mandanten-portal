@@ -305,8 +305,8 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
         console.log(`✅ All documents processed for ${client.aktenzeichen}. Status: waiting_for_payment`);
         
         // Check if client paid first rate and is waiting for processing - trigger webhook
-        if (client.first_payment_received && client.payment_ticket_type === 'processing_wait') {
-          console.log(`🎯 All documents completed for client ${client.id} in processing_wait state - triggering webhook`);
+        if (client.first_payment_received) {
+          console.log(`🎯 All documents completed for client ${client.id} with payment received - triggering webhook`);
           
           // Update final creditor list if needed
           const extractedCreditors = [];

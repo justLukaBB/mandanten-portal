@@ -655,9 +655,9 @@ app.post('/api/clients/:clientId/documents',
               }
             }
             
-            // Check if all documents are processed and trigger webhook for processing_wait clients
-            if (allDocsCompleted && client.first_payment_received && client.payment_ticket_type === 'processing_wait') {
-              console.log(`🎯 All documents completed for client ${clientId} in processing_wait state - triggering webhook`);
+            // Check if all documents are processed and trigger webhook for clients with payment received
+            if (allDocsCompleted && client.first_payment_received) {
+              console.log(`🎯 All documents completed for client ${clientId} with payment received - triggering webhook`);
               
               // Update final creditor list if needed
               const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);

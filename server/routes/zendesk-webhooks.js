@@ -1398,7 +1398,7 @@ router.post('/creditor-confirmation-request', rateLimits.general, async (req, re
       success: true,
       message: 'Creditor confirmation request processed',
       client_status: 'awaiting_client_confirmation',
-      portal_url: `${process.env.FRONTEND_URL}/portal/confirm-creditors?token=${client.portal_token}`,
+      portal_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`,
       creditors_count: client.final_creditor_list?.length || 0,
       next_step: 'Client will receive confirmation email with portal link'
     });
@@ -1469,7 +1469,7 @@ Bitte laden Sie alle Mahnungen, Rechnungen und Schreiben Ihrer Gläubiger hier h
 Mit freundlichen Grüßen
 Ihr Insolvenz-Team
 
-🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}`;
 }
 
 // Helper function to generate processing wait ticket content
@@ -1501,7 +1501,7 @@ ${processing.map(d => `• ${d.name || 'Unbekannt'} (${d.processing_status})`).j
 
 📝 HINWEIS: Dieses Ticket wird automatisch aktualisiert, sobald die AI-Verarbeitung abgeschlossen ist.
 
-🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}`;
 }
 
 // Helper function to generate no creditors ticket content
@@ -1531,7 +1531,7 @@ function generateNoCreditorsTicket(client, documents) {
 • AI-Klassifizierung fehlerhaft
 
 🔧 AGENT-AKTIONEN:
-1. [BUTTON: Dokumente manuell prüfen] → ${process.env.FRONTEND_URL}/admin/review/${client.id}
+1. [BUTTON: Dokumente manuell prüfen] → ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}
 2. [BUTTON: Mandant kontaktieren - bessere Dokumente anfordern]
 3. [BUTTON: Manuelle Gläubiger-Erfassung starten]
 
@@ -1543,7 +1543,7 @@ ${documents.map(d => `• ${d.name || 'Unbekannt'} - ${d.is_creditor_document ? 
 2. Bei Bedarf bessere Dokumente beim Mandant anfordern
 3. Ggf. Gläubiger manuell erfassen
 
-🔗 Portal-Zugang: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+🔗 Portal-Zugang: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}`;
 }
 
 // Helper function to generate creditor review ticket content for Phase 2
