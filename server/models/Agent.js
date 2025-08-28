@@ -69,6 +69,15 @@ agentSchema.pre('save', async function(next) {
   }
 });
 
+// Instance methods
+agentSchema.methods.comparePassword = async function(candidatePassword) {
+  try {
+    return await bcrypt.compare(candidatePassword, this.password_hash);
+  } catch (error) {
+    throw new Error('Password comparison failed');
+  }
+};
+
 // Indexes for performance
 agentSchema.index({ username: 1 });
 agentSchema.index({ email: 1 });
