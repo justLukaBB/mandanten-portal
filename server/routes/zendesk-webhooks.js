@@ -308,7 +308,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       hasDocuments: documents.length > 0,
       allProcessed: documents.length > 0 && completedDocs.length === documents.length,
       hasCreditors: creditors.length > 0,
-      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+      needsManualReview: creditors.some(c => (c.ai_confidence || c.confidence || 0) < 0.8)
     };
 
     // DETERMINE PAYMENT TICKET TYPE BASED ON SCENARIO
@@ -369,8 +369,8 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
     }
     
     // Check which creditors need manual review (confidence < 80%)
-    const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
-    const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
+    const needsReview = creditors.filter(c => (c.ai_confidence || c.confidence || 0) < 0.8);
+    const confidenceOk = creditors.filter(c => (c.ai_confidence || c.confidence || 0) >= 0.8);
     
     // Generate automatic review ticket content
     const reviewTicketContent = generateCreditorReviewTicketContent(
@@ -613,7 +613,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       hasDocuments: documents.length > 0,
       allProcessed: documents.length > 0 && completedDocs.length === documents.length,
       hasCreditors: creditors.length > 0,
-      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+      needsManualReview: creditors.some(c => (c.ai_confidence || c.confidence || 0) < 0.8)
     };
 
     // DETERMINE TICKET TYPE AND CONTENT BASED ON SCENARIO
@@ -1086,7 +1086,7 @@ router.post('/start-manual-review', rateLimits.general, async (req, res) => {
       client_status: 'under_manual_review',
       review_dashboard_url: reviewUrl,
       documents_to_review: (client.documents || []).filter(d => d.is_creditor_document).length,
-      creditors_need_review: (client.final_creditor_list || []).filter(c => (c.confidence || 0) < 0.8).length,
+      creditors_need_review: (client.final_creditor_list || []).filter(c => (c.ai_confidence || c.confidence || 0) < 0.8).length,
       next_step: 'Agent should open review dashboard and correct AI extractions'
     });
 
@@ -1628,17 +1628,17 @@ function generateCreditorReviewTicketContent(client, documents, creditors, needs
   const creditorDocs = documents.filter(d => d.is_creditor_document === true);
   const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
   
-  // Separate creditors by confidence level
-  const confidenceOk = creditors.filter(c => (c.confidence || 0) >= 0.8);
-  const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
+  // Separate creditors by confidence level (use AI confidence from Claude)
+  const confidenceOk = creditors.filter(c => (c.ai_confidence || c.confidence || 0) >= 0.8);
+  const needsReview = creditors.filter(c => (c.ai_confidence || c.confidence || 0) < 0.8);
   
   // Generate creditor lists
   const verifiedCreditors = confidenceOk.map(c => 
-    `✅ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.confidence || 0) * 100)}%)`
+    `✅ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.ai_confidence || c.confidence || 0) * 100)}%)`
   ).join('\n');
   
   const reviewCreditors = needsReview.map(c => 
-    `⚠️ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.confidence || 0) * 100)}%) → PRÜFUNG NÖTIG`
+    `⚠️ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.ai_confidence || c.confidence || 0) * 100)}%) → PRÜFUNG NÖTIG`
   ).join('\n');
 
   const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`;
@@ -1717,16 +1717,16 @@ function generateInternalComment(client, ticketType, documents, creditors, state
     case 'auto_approved':
       const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
       const creditorsList = creditors.map(c => 
-        `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.confidence || 0) * 100)}% confidence)`
+        `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.ai_confidence || c.confidence || 0) * 100)}% confidence)`
       ).join('\n');
       
       return `${baseInfo}\n\n✅ **STATUS: AI PROCESSED - FULLY AUTOMATED**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditors found: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• All creditors ≥80% confidence\n\n🏛️ **VERIFIED CREDITORS:**\n${creditorsList}\n\n🚀 **AUTOMATED ACTIONS:**\n• ✅ Creditor contact process started automatically\n• ✅ Client portal access granted\n• ✅ Creditor list sent for confirmation\n\n📋 **NO AGENT ACTION REQUIRED** - Process fully automated`;
     
     case 'manual_review':
-      const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
-      const confident = creditors.filter(c => (c.confidence || 0) >= 0.8);
+      const needsReview = creditors.filter(c => (c.ai_confidence || c.confidence || 0) < 0.8);
+      const confident = creditors.filter(c => (c.ai_confidence || c.confidence || 0) >= 0.8);
       
-      return `${baseInfo}\n\n⚠️ **STATUS: MANUAL REVIEW REQUIRED**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditors found: ${creditors.length}\n• Need manual review: ${needsReview.length}\n• Auto-verified: ${confident.length}\n\n🔍 **CREDITORS NEEDING REVIEW:**\n${needsReview.map(c => `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.confidence || 0) * 100)}% confidence)`).join('\n')}\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[MANUAL REVIEW DASHBOARD]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}\n\n📋 **Process:**\n1. Click link above to open Review Dashboard\n2. Manually verify and correct low-confidence extractions\n3. System automatically continues after completion\n4. Creditor contact starts automatically\n5. This ticket gets updated with final results\n\n✅ **Auto-verified creditors will be processed automatically**
+      return `${baseInfo}\n\n⚠️ **STATUS: MANUAL REVIEW REQUIRED**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditors found: ${creditors.length}\n• Need manual review: ${needsReview.length}\n• Auto-verified: ${confident.length}\n\n🔍 **CREDITORS NEEDING REVIEW:**\n${needsReview.map(c => `• ${c.sender_name || 'Unknown'} - €${c.claim_amount || 'N/A'} (${Math.round((c.ai_confidence || c.confidence || 0) * 100)}% confidence)`).join('\n')}\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[MANUAL REVIEW DASHBOARD]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}\n\n📋 **Process:**\n1. Click link above to open Review Dashboard\n2. Manually verify and correct low-confidence extractions\n3. System automatically continues after completion\n4. Creditor contact starts automatically\n5. This ticket gets updated with final results\n\n✅ **Auto-verified creditors will be processed automatically**
 `;
     
     case 'no_creditors_found':
