@@ -1134,7 +1134,7 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
         
         zendeskComment = await zendeskService.addInternalComment(originalTicketId, {
           content: processingCompleteComment,
-          status: ticketStatus,
+          // status: ticketStatus, // REMOVED: Don't change the original ticket status
           tags: ticketTags
         });
 

@@ -2,9 +2,10 @@ const axios = require('axios');
 
 class ZendeskService {
   constructor() {
-    this.domain = process.env.ZENDESK_DOMAIN; // e.g., 'yourcompany.zendesk.com'
-    this.email = process.env.ZENDESK_API_EMAIL; // e.g., 'agent@yourcompany.com'
-    this.token = process.env.ZENDESK_API_TOKEN; // Your API token
+    // Support both old and new environment variable names
+    this.domain = process.env.ZENDESK_DOMAIN || process.env.ZENDESK_SUBDOMAIN; // e.g., 'yourcompany.zendesk.com'
+    this.email = process.env.ZENDESK_API_EMAIL || process.env.ZENDESK_EMAIL; // e.g., 'agent@yourcompany.com'
+    this.token = process.env.ZENDESK_API_TOKEN || process.env.ZENDESK_TOKEN; // Your API token
     
     this.baseURL = `https://${this.domain}/api/v2`;
     
