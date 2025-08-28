@@ -212,6 +212,16 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
     }
     
     console.log(`✅ Client updated/created successfully: ${client.aktenzeichen}`);
+    console.log(`   📋 Client details:`, {
+      id: client.id,
+      firstName: client.firstName,
+      lastName: client.lastName,
+      email: client.email,
+      aktenzeichen: client.aktenzeichen,
+      current_status: client.current_status,
+      created_at: client.created_at,
+      updated_at: client.updated_at
+    });
     
     // Return success response to Zendesk
     res.json({
@@ -689,8 +699,8 @@ So laden Sie Ihre Dokumente hoch:
 4. Wählen Sie Ihre Dokumente aus oder fotografieren Sie diese mit Ihrem Smartphone
 
 Bei Fragen oder technischen Problemen erreichen Sie uns unter:
-${process.env.SUPPORT_EMAIL || 'support@kanzlei.de'}
-${process.env.SUPPORT_PHONE || '+49 123 456789'}
+info@ra-scuric.de
+0234 9136810
 
 Mit freundlichen Grüßen
 Ihr Insolvenz-Team
