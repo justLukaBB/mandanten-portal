@@ -203,20 +203,18 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
     const documents = client.documents || [];
     const creditors = client.final_creditor_list || [];
     
-    // Filter documents that need manual review
+    // Filter documents that need manual review based on Claude AI document confidence
     const documentsToReview = documents.filter(doc => {
-      // Get related creditor data
-      const relatedCreditor = creditors.find(c => 
-        c.document_id === doc.id || 
-        c.source_document === doc.name
-      );
+      // Check if document needs manual review based on Claude AI confidence or manual_review_required flag
+      const documentConfidence = doc.extracted_data?.confidence || 0;
+      const manualReviewRequired = doc.extracted_data?.manual_review_required === true;
       
       // Include if:
-      // 1. It's a creditor document with low confidence
-      // 2. Or if no creditor was extracted from this document
+      // 1. It's a creditor document AND
+      // 2. Either manual review is explicitly required OR document confidence is low
       return (
         doc.is_creditor_document === true && 
-        (!relatedCreditor || (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
+        (manualReviewRequired || documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
       );
     });
 
@@ -390,6 +388,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     } else if (action === 'confirm') {
       // Confirm AI extraction is correct
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
+        // Update existing creditor
         Object.assign(creditors[creditorIndex], {
           confidence: 1.0, // Confirmed = 100% confidence
           status: 'confirmed', // Change status from pending to confirmed
@@ -399,8 +398,39 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           confirmed_at: new Date(), // Add confirmation timestamp
           review_action: 'confirmed'
         });
+        console.log(`✅ Confirmed existing creditor for document ${document_id}`);
+      } else {
+        // No existing creditor found - create one from document AI data
+        const creditorData = document.extracted_data?.creditor_data;
+        if (creditorData) {
+          const newCreditor = {
+            id: uuidv4(),
+            document_id: document_id,
+            source_document: document.name,
+            sender_name: creditorData.sender_name || 'Unbekannter Gläubiger',
+            sender_email: creditorData.sender_email || '',
+            sender_address: creditorData.sender_address || '',
+            reference_number: creditorData.reference_number || '',
+            claim_amount: creditorData.claim_amount || 0,
+            is_representative: creditorData.is_representative || false,
+            actual_creditor: creditorData.actual_creditor || creditorData.sender_name,
+            ai_confidence: document.extracted_data?.confidence || 0,
+            confidence: 1.0, // Confirmed = 100% confidence
+            status: 'confirmed',
+            manually_reviewed: true,
+            reviewed_by: req.agentId,
+            reviewed_at: new Date(),
+            confirmed_at: new Date(),
+            created_via: 'agent_confirmation',
+            review_action: 'confirmed'
+          };
+          
+          creditors.push(newCreditor);
+          console.log(`✅ Created new confirmed creditor from AI data for document ${document_id}: ${newCreditor.sender_name}`);
+        } else {
+          console.log(`⚠️ No AI creditor data found for document ${document_id} - cannot confirm`);
+        }
       }
-      console.log(`✅ Confirmed AI extraction for document ${document_id}`);
     }
 
     // Update the client with corrected data

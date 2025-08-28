@@ -52,16 +52,17 @@ interface ReviewData {
 interface Document {
   id: string;
   name: string;
-  filename: string;
-  type: string;
-  size: number;
-  uploadedAt: string;
+  filename?: string;
+  type?: string;
+  size?: number;
+  uploadedAt?: string;
   processing_status: string;
   is_creditor_document: boolean;
   manually_reviewed?: boolean;
   extracted_data?: {
     creditor_data?: any;
     confidence?: number;
+    manual_review_required?: boolean;
   };
 }
 

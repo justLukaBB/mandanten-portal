@@ -521,7 +521,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           actual_creditor: creditorData.actual_creditor || creditorData.sender_name,
           source_document: doc.name || 'Unbekannt',
           source_document_id: doc.id || '',
-          ai_confidence: doc.confidence || 0,
+          ai_confidence: doc.extracted_data?.confidence || 0,
           status: 'confirmed',
           created_at: new Date(),
           confirmed_at: new Date(),
