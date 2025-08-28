@@ -490,6 +490,72 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     client.first_payment_received = true;
     client.current_status = 'payment_confirmed';
     client.updated_at = new Date();
+    
+    // MANUAL CREDITOR EXTRACTION: Go through all documents and extract creditors
+    console.log(`🔍 MANUAL CREDITOR EXTRACTION: Checking all documents for client ${client.aktenzeichen}`);
+    const allDocuments = client.documents || [];
+    const creditorDocuments = allDocuments.filter(doc => doc.is_creditor_document === true);
+    
+    console.log(`📊 Found ${creditorDocuments.length} creditor documents out of ${allDocuments.length} total documents`);
+    
+    const manualExtractedCreditors = [];
+    
+    creditorDocuments.forEach((doc, index) => {
+      console.log(`📄 Document ${index + 1}: ${doc.name || 'Unnamed'}`);
+      console.log(`   - Is Creditor Document: ${doc.is_creditor_document}`);
+      console.log(`   - Has extracted_data: ${!!doc.extracted_data}`);
+      console.log(`   - Has creditor_data: ${!!doc.extracted_data?.creditor_data}`);
+      
+      if (doc.extracted_data?.creditor_data) {
+        const creditorData = doc.extracted_data.creditor_data;
+        console.log(`   - Creditor Data:`, creditorData);
+        
+        const creditor = {
+          id: uuidv4(),
+          sender_name: creditorData.sender_name || 'Unbekannter Gläubiger',
+          sender_address: creditorData.sender_address || '',
+          sender_email: creditorData.sender_email || '',
+          reference_number: creditorData.reference_number || '',
+          claim_amount: creditorData.claim_amount || 0,
+          is_representative: creditorData.is_representative || false,
+          actual_creditor: creditorData.actual_creditor || creditorData.sender_name,
+          source_document: doc.name || 'Unbekannt',
+          source_document_id: doc.id || '',
+          ai_confidence: doc.confidence || 0,
+          status: 'confirmed',
+          created_at: new Date(),
+          confirmed_at: new Date(),
+          extraction_method: 'manual_payment_confirmation'
+        };
+        
+        manualExtractedCreditors.push(creditor);
+        console.log(`   ✅ Added creditor: ${creditor.sender_name} (${creditor.claim_amount}€)`);
+      } else {
+        console.log(`   ❌ No creditor data found in document despite is_creditor_document = true`);
+      }
+    });
+    
+    // Update client with manually extracted creditors
+    if (manualExtractedCreditors.length > 0) {
+      client.final_creditor_list = manualExtractedCreditors;
+      console.log(`✅ MANUAL EXTRACTION COMPLETE: Added ${manualExtractedCreditors.length} creditors to final_creditor_list`);
+      
+      // Add extraction history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'manual_creditor_extraction_completed',
+        changed_by: 'system',
+        metadata: {
+          extracted_creditors: manualExtractedCreditors.length,
+          total_documents: allDocuments.length,
+          creditor_documents: creditorDocuments.length,
+          extraction_method: 'manual_payment_confirmation'
+        },
+        created_at: new Date()
+      });
+    } else {
+      console.log(`⚠️ MANUAL EXTRACTION: No creditors extracted despite ${creditorDocuments.length} creditor documents`);
+    }
 
     // Add status history
     client.status_history.push({
