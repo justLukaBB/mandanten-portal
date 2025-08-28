@@ -218,7 +218,8 @@ So laden Sie Ihre Dokumente hoch:
 
 ${reminderCount >= 2 ? `
 Benötigen Sie Hilfe beim Hochladen? Rufen Sie uns gerne an:
-📞 ${process.env.SUPPORT_PHONE || '+49 123 456789'}
+📞 0234 9136810
+📧 info@ra-scuric.de
 ` : ''}
 
 Mit freundlichen Grüßen
@@ -293,7 +294,8 @@ Ihre bisherigen Zahlungen könnten verfallen, wenn wir nicht bald fortfahren kö
 
 ${reminderCount >= 2 ? `
 Benötigen Sie Hilfe beim Hochladen? Rufen Sie uns gerne an:
-📞 ${process.env.SUPPORT_PHONE || '+49 123 456789'}
+📞 0234 9136810
+📧 info@ra-scuric.de
 ` : ''}
 
 Mit freundlichen Grüßen

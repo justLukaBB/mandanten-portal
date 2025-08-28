@@ -1211,6 +1211,11 @@ app.get('/api/admin/clients',
           client_confirmed_creditors: 1
         }).sort({ created_at: -1 });
         console.log(`📊 Found ${clients.length} clients in MongoDB`);
+        
+        // Debug: Log all clients with their basic info
+        clients.forEach(client => {
+          console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email} - ID: ${client._id}`);
+        });
       }
     } catch (mongoError) {
       console.error('MongoDB query failed:', mongoError);
@@ -3857,6 +3862,12 @@ app.get('/api/admin/dashboard-status',
     console.log('📊 Dashboard Status: Getting enhanced client statuses');
 
     const clients = await Client.find({}).sort({ updated_at: -1 });
+    console.log(`📊 Found ${clients.length} clients in MongoDB`);
+    
+    // Debug: Log all clients with their basic info
+    clients.forEach(client => {
+      console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email}`);
+    });
     
     const clientStatuses = clients.map(client => {
       const status = getClientDisplayStatus(client);

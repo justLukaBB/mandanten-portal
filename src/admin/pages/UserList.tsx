@@ -134,7 +134,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
         user.firstName.toLowerCase().includes(query) ||
         user.lastName.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
-        user.aktenzeichen.toLowerCase().includes(query)
+        (user.aktenzeichen && user.aktenzeichen.toLowerCase().includes(query))
       );
     }
     

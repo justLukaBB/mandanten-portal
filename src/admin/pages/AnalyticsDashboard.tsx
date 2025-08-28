@@ -119,42 +119,55 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       setLoading(true);
       setError(null);
       
-      // Use enhanced dashboard endpoint for payment status data
-      const response = await api.get('/admin/dashboard-status');
-      
-      if (!response.data.success) {
-        throw new Error('Failed to fetch dashboard data');
-      }
+      // Use admin clients endpoint
+      const response = await api.get('/admin/clients');
       
       const clientsData = response.data.clients || [];
-      setPaymentStats(response.data.statistics);
+      
+      // Calculate payment stats from client data
+      const stats: PaymentStats = {
+        total_clients: clientsData.length,
+        payment_confirmed: clientsData.filter((c: any) => c.first_payment_received).length,
+        awaiting_documents: clientsData.filter((c: any) => c.workflow_status === 'document_upload').length,
+        processing: clientsData.filter((c: any) => c.workflow_status === 'processing').length,
+        manual_review_needed: clientsData.filter((c: any) => c.workflow_status === 'manual_review').length,
+        auto_approved: clientsData.filter((c: any) => c.workflow_status === 'auto_approved').length,
+        no_creditors: clientsData.filter((c: any) => c.workflow_status === 'no_creditors').length,
+        needs_attention: clientsData.filter((c: any) => c.needs_attention).length
+      };
+      setPaymentStats(stats);
       
       // Transform client data for enhanced analytics view
       const transformedUsers: User[] = clientsData.map((client: any) => ({
         id: client.id || client._id,
         aktenzeichen: client.aktenzeichen,
-        firstName: client.name?.split(' ')[0] || '',
-        lastName: client.name?.split(' ').slice(1).join(' ') || '',
+        firstName: client.firstName || '',
+        lastName: client.lastName || '',
         email: client.email,
-        current_status: client.current_status || 'created',
+        current_status: client.current_status || client.workflow_status || 'created',
         created_at: client.created_at || new Date().toISOString(),
         updated_at: client.updated_at || new Date().toISOString(),
         last_login: client.last_login,
-        documents_count: client.documents_count || 0,
-        creditors_count: client.creditors_count || 0,
+        documents_count: Array.isArray(client.documents) ? client.documents.length : 0,
+        creditors_count: Array.isArray(client.final_creditor_list) ? client.final_creditor_list.length : 0,
         zendesk_ticket_id: client.zendesk_ticket_id,
         
         // Enhanced payment status fields
-        payment: client.payment || '❌ Ausstehend',
-        documents: client.documents || '0 Dokumente',
-        processing: client.processing || 'Unbekannt',
-        review: client.review || 'Ausstehend',
-        overall_status: client.overall_status || 'created',
+        payment: client.first_payment_received ? '✅ Erhalten' : '❌ Ausstehend',
+        documents: `${Array.isArray(client.documents) ? client.documents.length : 0} Dokumente`,
+        processing: client.workflow_status === 'processing' ? 'In Bearbeitung' : 
+                   client.workflow_status === 'completed' ? 'Abgeschlossen' : 'Ausstehend',
+        review: client.admin_approved ? 'Genehmigt' : 'Ausstehend',
+        overall_status: client.workflow_status || client.current_status || 'created',
         first_payment_received: client.first_payment_received || false,
-        payment_ticket_type: client.payment_ticket_type,
-        needs_attention: client.needs_attention || false,
-        next_action: client.next_action || 'Warten auf erste Rate',
-        payment_processed_at: client.payment_processed_at,
+        payment_ticket_type: client.workflow_status,
+        needs_attention: client.workflow_status === 'manual_review' || client.workflow_status === 'problem',
+        next_action: client.workflow_status === 'created' ? 'Warten auf erste Rate' :
+                     client.workflow_status === 'document_upload' ? 'Dokumente hochladen' :
+                     client.workflow_status === 'processing' ? 'AI Verarbeitung' :
+                     client.workflow_status === 'admin_review' ? 'Admin Prüfung' :
+                     client.workflow_status === 'client_confirmation' ? 'Kunde bestätigen' : 'Keine Aktion',
+        payment_processed_at: client.first_payment_received ? client.payment_received_at : undefined,
         document_request_sent_at: client.document_request_sent_at,
         all_documents_processed_at: client.all_documents_processed_at
       }));
