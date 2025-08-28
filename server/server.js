@@ -52,7 +52,7 @@ const processingMutex = new Map();
 // Helper function to trigger processing-complete webhook
 async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
   try {
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
     const webhookUrl = `${baseUrl}/api/zendesk-webhook/processing-complete`;
     
     console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
