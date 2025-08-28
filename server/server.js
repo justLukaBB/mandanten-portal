@@ -4146,6 +4146,86 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
           
           await saveClient(client);
           console.log(`✅ Document processing completed: ${originalName} - Creditor: ${processingResult.classification.is_creditor_document}`);
+          
+          // Check if all documents are now completed and trigger status updates
+          const updatedClient = await getClient(clientId);
+          const completedDocs = updatedClient.documents.filter(doc => doc.processing_status === 'completed');
+          const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
+          const allDocsCompleted = completedDocs.length === updatedClient.documents.length && updatedClient.documents.length > 0;
+          
+          // Update status based on processing results (regardless of payment status)
+          if (allDocsCompleted) {
+            if (creditorDocs.length > 0) {
+              updatedClient.current_status = 'documents_completed';
+              console.log(`✅ All documents completed for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+            } else {
+              updatedClient.current_status = 'no_creditors_found';
+              console.log(`⚠️ All documents completed but no creditors found for client ${clientId}`);
+            }
+            
+            // Add status history entry
+            updatedClient.status_history = updatedClient.status_history || [];
+            updatedClient.status_history.push({
+              id: uuidv4(),
+              status: updatedClient.current_status,
+              changed_by: 'system',
+              metadata: {
+                total_documents: updatedClient.documents.length,
+                completed_documents: completedDocs.length,
+                creditor_documents: creditorDocs.length,
+                processing_completed_timestamp: new Date().toISOString()
+              },
+              created_at: new Date()
+            });
+          }
+          
+          // If payment is also received, populate creditor list and trigger webhook
+          if (allDocsCompleted && updatedClient.first_payment_received) {
+            console.log(`🎯 All documents completed for client ${clientId} after upload - triggering creditor list population`);
+            
+            // Update final creditor list
+            const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
+            console.log(`📊 Found ${creditorDocuments.length} creditor documents for extraction`);
+            const extractedCreditors = [];
+            
+            creditorDocuments.forEach(doc => {
+              if (doc.extracted_data?.creditor_data) {
+                const creditorData = doc.extracted_data.creditor_data;
+                console.log(`📊 Extracting creditor from document ${doc.name}:`, creditorData);
+                extractedCreditors.push({
+                  id: uuidv4(),
+                  sender_name: creditorData.sender_name,
+                  sender_address: creditorData.sender_address,
+                  sender_email: creditorData.sender_email,
+                  reference_number: creditorData.reference_number,
+                  claim_amount: creditorData.claim_amount || 0,
+                  is_representative: creditorData.is_representative || false,
+                  actual_creditor: creditorData.actual_creditor,
+                  source_document: doc.name,
+                  source_document_id: doc.id,
+                  ai_confidence: doc.confidence || 0,
+                  status: 'confirmed',
+                  created_at: new Date(),
+                  confirmed_at: new Date()
+                });
+              }
+            });
+            
+            // Update client with extracted creditors
+            if (extractedCreditors.length > 0) {
+              updatedClient.final_creditor_list = extractedCreditors;
+              updatedClient.current_status = 'documents_completed';
+              console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
+            } else {
+              updatedClient.current_status = 'no_creditors_found';
+              console.log(`⚠️ No creditors extracted despite creditor documents being found`);
+            }
+            
+            await saveClient(updatedClient);
+            
+            // Trigger processing-complete webhook
+            await triggerProcessingCompleteWebhook(clientId);
+          }
         }
         
       } catch (processingError) {
