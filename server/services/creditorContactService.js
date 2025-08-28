@@ -33,9 +33,25 @@ class CreditorContactService {
      * Main function triggered when client confirms creditor list
      * Creates Zendesk user and tickets for all creditors
      */
-    async processClientCreditorConfirmation(clientReference, clientData) {
+    async processClientCreditorConfirmation(clientReference, clientData = null) {
         try {
             console.log(`\n🚀 Starting creditor contact process for client: ${clientReference}`);
+            
+            // If clientData not provided, fetch from database
+            if (!clientData) {
+                const Client = require('../models/Client');
+                const client = await Client.findOne({ aktenzeichen: clientReference });
+                if (!client) {
+                    throw new Error(`Client not found: ${clientReference}`);
+                }
+                clientData = {
+                    name: `${client.firstName} ${client.lastName}`,
+                    email: client.email,
+                    phone: client.phone || '',
+                    address: client.address || ''
+                };
+            }
+            
             console.log(`📋 Client: ${clientData.name} (${clientData.email})`);
 
             // Step 1: Test Zendesk connection
@@ -90,16 +106,16 @@ class CreditorContactService {
                     const contactRecord = await this.createCreditorContactRecord(creditor, mainTicket.id, zendeskUser.id);
                     contactRecords.push({
                         creditor_id: creditor.id,
-                        creditor_name: creditor.creditor_name,
+                        creditor_name: creditor.sender_name || 'Unknown Creditor',
                         main_ticket_id: mainTicket.id,
                         contact_id: contactRecord.id,
                         success: true
                     });
                 } catch (error) {
-                    console.error(`❌ Failed to create contact record for ${creditor.creditor_name}:`, error.message);
+                    console.error(`❌ Failed to create contact record for ${creditor.sender_name || 'Unknown Creditor'}:`, error.message);
                     contactRecords.push({
                         creditor_id: creditor.id,
-                        creditor_name: creditor.creditor_name,
+                        creditor_name: creditor.sender_name || 'Unknown Creditor',
                         success: false,
                         error: error.message
                     });
@@ -252,7 +268,7 @@ class CreditorContactService {
         const contactRecord = {
             id: contactId,
             client_reference: creditorData.client_reference,
-            creditor_name: creditorData.creditor_name,
+            creditor_name: creditorData.sender_name,
             creditor_email: creditorData.creditor_email,
             creditor_address: creditorData.creditor_address,
             reference_number: creditorData.reference_number,
@@ -286,7 +302,7 @@ class CreditorContactService {
         // Store in memory (in production, save to database)
         this.creditorContacts.set(contactId, contactRecord);
         
-        console.log(`✅ Created creditor contact record: ${creditorData.creditor_name} (${contactId})`);
+        console.log(`✅ Created creditor contact record: ${creditorData.sender_name} (${contactId})`);
         return contactRecord;
     }
 

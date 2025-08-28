@@ -193,7 +193,7 @@ const clientSchema = new mongoose.Schema({
   // Payment and Review Tracking
   payment_ticket_type: {
     type: String,
-    enum: ['document_request', 'processing_wait', 'manual_review', 'auto_approved', 'no_creditors_found']
+    enum: ['document_request', 'processing_wait', 'manual_review', 'auto_approved', 'no_creditors_found', 'creditor_contact_initiated']
   },
   payment_processed_at: Date,
   document_request_sent_at: Date,
