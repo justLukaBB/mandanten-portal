@@ -634,7 +634,31 @@ app.post('/api/clients/:clientId/documents',
             
             // Update status based on processing results
             if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
-              if (creditorDocs.length > 0) {
+              if (allDocsCompleted) {
+                // All documents are processed
+                if (creditorDocs.length > 0) {
+                  client.current_status = 'documents_completed';
+                  console.log(`✅ Status updated to 'documents_completed' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+                } else {
+                  client.current_status = 'no_creditors_found';
+                  console.log(`⚠️ Status updated to 'no_creditors_found' for client ${clientId}`);
+                }
+                
+                // Add status history entry
+                client.status_history = client.status_history || [];
+                client.status_history.push({
+                  id: uuidv4(),
+                  status: client.current_status,
+                  changed_by: 'system',
+                  metadata: {
+                    total_documents: client.documents.length,
+                    completed_documents: completedDocs.length,
+                    creditor_documents: creditorDocs.length,
+                    processing_completed_timestamp: new Date().toISOString()
+                  },
+                  created_at: new Date()
+                });
+              } else if (creditorDocs.length > 0) {
                 client.current_status = 'documents_processing';
                 console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
                 
