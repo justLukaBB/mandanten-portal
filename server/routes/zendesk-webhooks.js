@@ -1468,6 +1468,45 @@ router.post('/creditor-confirmation-request', rateLimits.general, async (req, re
 
     await client.save();
 
+    // Add Zendesk comment with agent review link
+    if (zendeskService.isConfigured() && zendesk_ticket_id) {
+      try {
+        const agentReviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`;
+        const creditorsList = client.final_creditor_list?.map(c => 
+          `• ${c.sender_name || 'Unbekannt'} - €${c.claim_amount || 'N/A'} (${Math.round((c.ai_confidence || c.confidence || 0) * 100)}% confidence)`
+        ).join('\n') || 'Keine Gläubiger gefunden';
+
+        const confirmationComment = `**📋 GLÄUBIGER-BESTÄTIGUNG ANGEFORDERT**
+
+👤 **Client:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})
+📧 **Agent:** ${agent_email || 'System'}
+⏰ **Angefordert:** ${new Date().toLocaleString('de-DE')}
+
+📊 **GLÄUBIGER-LISTE (${client.final_creditor_list?.length || 0}):**
+${creditorsList}
+
+🔧 **AGENT-OPTIONEN:**
+→ **[AGENT REVIEW]** ${agentReviewUrl}
+  • Gläubiger bearbeiten/korrigieren
+  • Zusätzliche Gläubiger hinzufügen  
+  • Gläubiger entfernen/ablehnen
+
+🏛️ **CLIENT-PORTAL:**
+→ **[CLIENT BESTÄTIGUNG]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}
+
+📋 **STATUS:** Wartet auf Mandanten-Bestätigung
+✅ **Nächste Schritte:** Mandant erhält E-Mail mit Bestätigungslink`;
+
+        await zendeskService.addInternalComment(zendesk_ticket_id, {
+          content: confirmationComment
+        });
+        
+        console.log(`✅ Added creditor confirmation comment to ticket ${zendesk_ticket_id}`);
+      } catch (error) {
+        console.error(`❌ Failed to add creditor confirmation comment:`, error.message);
+      }
+    }
+
     console.log(`✅ Creditor confirmation request processed for ${client.aktenzeichen}`);
 
     res.json({
@@ -1475,8 +1514,9 @@ router.post('/creditor-confirmation-request', rateLimits.general, async (req, re
       message: 'Creditor confirmation request processed',
       client_status: 'awaiting_client_confirmation',
       portal_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`,
+      agent_review_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`,
       creditors_count: client.final_creditor_list?.length || 0,
-      next_step: 'Client will receive confirmation email with portal link'
+      next_step: 'Client will receive confirmation email with portal link. Agent can also review/modify creditors via agent_review_url.'
     });
 
   } catch (error) {
@@ -1533,7 +1573,7 @@ vielen Dank für Ihre erste Ratenzahlung!
 Um mit Ihrem Insolvenzverfahren fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
 
 Bitte laden Sie alle Mahnungen, Rechnungen und Schreiben Ihrer Gläubiger hier hoch:
-🔗 ${process.env.FRONTEND_URL}/login?token=${client.portal_token}
+🔗 ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
 
 📋 Benötigte Dokumente:
 • Mahnungen und Zahlungsaufforderungen
@@ -1665,7 +1705,7 @@ Nach der manuellen Prüfung:
 [BUTTON: Gläubigerliste zur Bestätigung senden]` : `✅ ALLE GLÄUBIGER VERIFIZIERT:
 [BUTTON: Gläubigerliste zur Bestätigung senden]`}
 
-🔗 Mandant Portal: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}
+🔗 Mandant Portal: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
 📁 Aktenzeichen: ${client.aktenzeichen}`;
 }
 
@@ -1702,7 +1742,7 @@ ${creditors.length > 0
   : '📄 Dokumente beim Mandant anfordern - keine Gläubigerdokumente gefunden'
 }
 
-🔗 Portal-Link: ${process.env.FRONTEND_URL}/login?token=${client.portal_token}`;
+🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}`;
 }
 
 // Helper function to generate internal comment for original ticket
@@ -1711,7 +1751,7 @@ function generateInternalComment(client, ticketType, documents, creditors, state
   
   switch(ticketType) {
     case 'document_request':
-      return `${baseInfo}\n\n⚠️ **STATUS: DOCUMENTS REQUIRED**\n\n📊 **Analysis:**\n• Documents uploaded: ${documents.length}\n• Processing status: No documents found\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[CLIENT PORTAL ACCESS]** ${process.env.FRONTEND_URL}/login?token=${client.portal_token}\n\n📧 **Email Template:**\n\"Sehr geehrte/r ${client.firstName} ${client.lastName},\n\nvielen Dank für Ihre erste Ratenzahlung!\n\nBitte laden Sie Ihre Gläubigerdokumente hier hoch:\n${process.env.FRONTEND_URL}/login?token=${client.portal_token}\n\nBenötigte Dokumente: Mahnungen, Rechnungen, Inkasso-Schreiben\"\n\n📋 **Automatic Process:**\n• After document upload, system re-analyzes automatically\n• This ticket will be updated with results\n• No further agent action needed until then
+      return `${baseInfo}\n\n⚠️ **STATUS: DOCUMENTS REQUIRED**\n\n📊 **Analysis:**\n• Documents uploaded: ${documents.length}\n• Processing status: No documents found\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[CLIENT PORTAL ACCESS]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}\n\n📧 **Email Template:**\n\"Sehr geehrte/r ${client.firstName} ${client.lastName},\n\nvielen Dank für Ihre erste Ratenzahlung!\n\nBitte laden Sie Ihre Gläubigerdokumente hier hoch:\n${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}\n\nBenötigte Dokumente: Mahnungen, Rechnungen, Inkasso-Schreiben\"\n\n📋 **Automatic Process:**\n• After document upload, system re-analyzes automatically\n• This ticket will be updated with results\n• No further agent action needed until then
 `;
     
     case 'auto_approved':
@@ -1730,7 +1770,7 @@ function generateInternalComment(client, ticketType, documents, creditors, state
 `;
     
     case 'no_creditors_found':
-      return `${baseInfo}\n\n⚠️ **STATUS: NO CREDITORS FOUND**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditor documents detected: ${documents.filter(d => d.is_creditor_document).length}\n• Creditors extracted: 0\n\n🔍 **POSSIBLE ISSUES:**\n• Documents may not contain creditor information\n• Poor document quality / non-standard format\n• AI classification error\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[DOCUMENT REVIEW]** ${process.env.FRONTEND_URL}/admin/clients/${client.id}\n\n📋 **Documents Uploaded:**\n${documents.map(d => `• ${d.name} - ${d.is_creditor_document ? '✅ Creditor doc' : '❌ Other doc'}`).join('\n')}\n\n📧 **Options:**\n1. Review documents manually via link above\n2. Request better quality documents from client\n3. Manual creditor entry if needed
+      return `${baseInfo}\n\n⚠️ **STATUS: NO CREDITORS FOUND**\n\n📊 **Analysis Results:**\n• Documents processed: ${documents.length}\n• Creditor documents detected: ${documents.filter(d => d.is_creditor_document).length}\n• Creditors extracted: 0\n\n🔍 **POSSIBLE ISSUES:**\n• Documents may not contain creditor information\n• Poor document quality / non-standard format\n• AI classification error\n\n🔧 **AGENT ACTION REQUIRED:**\n→ **[DOCUMENT REVIEW]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/clients/${client.id}\n\n📋 **Documents Uploaded:**\n${documents.map(d => `• ${d.name} - ${d.is_creditor_document ? '✅ Creditor doc' : '❌ Other doc'}`).join('\n')}\n\n📧 **Options:**\n1. Review documents manually via link above\n2. Request better quality documents from client\n3. Manual creditor entry if needed
 `;
     
     case 'processing_wait':
