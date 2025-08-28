@@ -348,7 +348,25 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
 
     // Update client with payment processing info
     client.payment_processed_at = new Date();
-    await client.save();
+    
+    // Save client with error handling for document validation issues
+    try {
+      await client.save({ validateModifiedOnly: true });
+    } catch (saveError) {
+      console.error('⚠️ Error saving client with payment_processed_at, using direct update:', saveError.message);
+      
+      // Use direct update to bypass validation
+      await Client.findOneAndUpdate(
+        { _id: client._id },
+        {
+          $set: {
+            payment_processed_at: new Date(),
+            payment_ticket_type: client.payment_ticket_type
+          }
+        },
+        { runValidators: false }
+      );
+    }
     
     // Check which creditors need manual review (confidence < 80%)
     const needsReview = creditors.filter(c => (c.confidence || 0) < 0.8);
