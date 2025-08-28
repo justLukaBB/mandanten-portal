@@ -4266,6 +4266,63 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
   }
 });
 
+// Test agent creation endpoint (for development only)
+app.post('/api/test/create-agent', async (req, res) => {
+  try {
+    const Agent = require('./models/Agent');
+    const bcrypt = require('bcryptjs');
+
+    // Check if test agent already exists
+    let testAgent = await Agent.findOne({ username: 'test2' });
+    
+    if (testAgent) {
+      console.log('✅ Test agent already exists');
+      return res.json({
+        success: true,
+        message: 'Test agent already exists',
+        credentials: {
+          username: 'test2',
+          password: 'testpassword123'
+        }
+      });
+    }
+
+    // Create test agent
+    const hashedPassword = await bcrypt.hash('testpassword123', 12);
+    
+    testAgent = new Agent({
+      id: uuidv4(),
+      username: 'test2',
+      email: 'test2@example.com',
+      password_hash: hashedPassword,
+      first_name: 'Test',
+      last_name: 'Agent',
+      role: 'agent',
+      is_active: true
+    });
+
+    await testAgent.save();
+    
+    console.log('✅ Test agent created successfully');
+
+    res.json({
+      success: true,
+      message: 'Test agent created successfully',
+      credentials: {
+        username: 'test2',
+        password: 'testpassword123'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating test agent:', error);
+    res.status(500).json({
+      error: 'Failed to create test agent',
+      details: error.message
+    });
+  }
+});
+
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Received SIGINT, shutting down gracefully...');

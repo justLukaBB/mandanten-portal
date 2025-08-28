@@ -407,7 +407,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       manual_review_required: needsReview.length > 0,
       zendesk_ticket_data: ticketData,
       review_dashboard_url: needsReview.length > 0 
-        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
         : null,
       scenario_analysis: {
         hasDocuments: state.hasDocuments,
@@ -1016,7 +1016,7 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
         error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
-        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
         : null,
       next_action: nextAction,
       documents_count: documents.length,
@@ -1076,7 +1076,7 @@ router.post('/start-manual-review', rateLimits.general, async (req, res) => {
 
     await client.save();
 
-    const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`;
+    const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`;
 
     console.log(`✅ Manual review started for ${client.aktenzeichen}`);
 
@@ -1230,9 +1230,19 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
 
     // All documents processed - analyze and create review ticket
     const creditors = client.final_creditor_list || [];
+    // Check if documents need manual review based on Claude AI confidence
+    const lowConfidenceDocuments = documents.filter(d => 
+      d.extracted_data?.confidence && d.extracted_data.confidence < 0.8
+    );
+    const manualReviewRequired = documents.some(d => 
+      d.extracted_data?.manual_review_required === true ||
+      (d.extracted_data?.confidence && d.extracted_data.confidence < 0.8)
+    );
+
     const state = {
       hasCreditors: creditors.length > 0,
-      needsManualReview: creditors.some(c => (c.confidence || 0) < 0.8)
+      needsManualReview: manualReviewRequired,
+      lowConfidenceCount: lowConfidenceDocuments.length
     };
 
     let ticketType, ticketContent, tags;
@@ -1396,7 +1406,7 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
         error: commentError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
-        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
         : null,
       processing_duration_seconds: Math.round((Date.now() - new Date(client.payment_processed_at).getTime()) / 1000),
       documents_processed: documents.length,
@@ -1597,7 +1607,7 @@ function generateNoCreditorsTicket(client, documents) {
 • AI-Klassifizierung fehlerhaft
 
 🔧 AGENT-AKTIONEN:
-1. [BUTTON: Dokumente manuell prüfen] → ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}
+1. [BUTTON: Dokumente manuell prüfen] → ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}
 2. [BUTTON: Mandant kontaktieren - bessere Dokumente anfordern]
 3. [BUTTON: Manuelle Gläubiger-Erfassung starten]
 
@@ -1631,7 +1641,7 @@ function generateCreditorReviewTicketContent(client, documents, creditors, needs
     `⚠️ ${c.sender_name || 'Unbekannt'} - ${c.claim_amount || 'N/A'}€ (Confidence: ${Math.round((c.confidence || 0) * 100)}%) → PRÜFUNG NÖTIG`
   ).join('\n');
 
-  const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/admin/review/${client.id}`;
+  const reviewUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`;
 
   return `🤖 GLÄUBIGER-ANALYSE FÜR: ${client.firstName} ${client.lastName}
 
