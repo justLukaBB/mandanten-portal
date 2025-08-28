@@ -14,8 +14,8 @@ interface DocumentViewerProps {
     id: string;
     name: string;
     filename?: string;
-    type: string;
-    size: number;
+    type?: string;
+    size?: number;
   };
   className?: string;
 }

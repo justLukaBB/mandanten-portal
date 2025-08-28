@@ -324,7 +324,7 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
                 actual_creditor: creditorData.actual_creditor,
                 source_document: doc.name,
                 source_document_id: doc.id,
-                ai_confidence: doc.confidence || 0,
+                ai_confidence: doc.extracted_data?.confidence || 0,
                 status: 'confirmed',
                 created_at: new Date(),
                 confirmed_at: new Date()
