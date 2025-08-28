@@ -140,7 +140,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               {document.filename || document.name}
             </h3>
             <p className="text-xs text-gray-500">
-              {document.type} • {Math.round(document.size / 1024)} KB
+              {document.type || 'Unknown type'} • {document.size ? Math.round(document.size / 1024) + ' KB' : 'Unknown size'}
             </p>
           </div>
         </div>
