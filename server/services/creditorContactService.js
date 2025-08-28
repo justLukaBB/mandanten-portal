@@ -106,16 +106,16 @@ class CreditorContactService {
                     const contactRecord = await this.createCreditorContactRecord(creditor, mainTicket.id, zendeskUser.id);
                     contactRecords.push({
                         creditor_id: creditor.id,
-                        creditor_name: creditor.sender_name || 'Unknown Creditor',
+                        creditor_name: creditor.creditor_name || creditor.sender_name || 'Unknown Creditor',
                         main_ticket_id: mainTicket.id,
                         contact_id: contactRecord.id,
                         success: true
                     });
                 } catch (error) {
-                    console.error(`❌ Failed to create contact record for ${creditor.sender_name || 'Unknown Creditor'}:`, error.message);
+                    console.error(`❌ Failed to create contact record for ${creditor.creditor_name || creditor.sender_name || 'Unknown Creditor'}:`, error.message);
                     contactRecords.push({
                         creditor_id: creditor.id,
-                        creditor_name: creditor.sender_name || 'Unknown Creditor',
+                        creditor_name: creditor.creditor_name || creditor.sender_name || 'Unknown Creditor',
                         success: false,
                         error: error.message
                     });
@@ -184,71 +184,49 @@ class CreditorContactService {
     }
 
     /**
-     * Get all confirmed creditors for a client from the existing document system
-     * Converts confirmed documents to creditor contact records
+     * Get all confirmed creditors for a client from MongoDB
+     * Uses final_creditor_list from client instead of document-based approach
      */
     async getConfirmedCreditorsForClient(clientReference) {
-        // This integrates with the existing clientsData from server.js
-        // In a real implementation, this would query the database
-        
-        // For demo, we'll extract from the in-memory clientsData
-        const clientsData = require('../server').clientsData || {};
-        const client = clientsData[clientReference];
-        
-        if (!client) {
-            throw new Error(`Client ${clientReference} not found`);
-        }
-
-        // Get all confirmed creditor documents
-        const confirmedDocs = (client.documents || []).filter(doc => 
-            doc.document_status === 'creditor_confirmed' && 
-            doc.extracted_data?.creditor_data &&
-            !doc.is_duplicate
-        );
-
-        console.log(`📋 Found ${confirmedDocs.length} confirmed creditor documents`);
-
-        // Group by creditor + reference number (unique contact key)
-        const creditorGroups = new Map();
-        
-        confirmedDocs.forEach(doc => {
-            const creditorData = doc.extracted_data.creditor_data;
+        try {
+            // Query MongoDB for the client
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
             
-            // Determine contact details
-            const contactName = creditorData.is_representative && creditorData.actual_creditor 
-                ? creditorData.actual_creditor 
-                : creditorData.sender_name;
-                
-            const contactEmail = creditorData.sender_email;
-            const referenceKey = creditorData.reference_number || 'NO_REF';
-            
-            // Create unique key
-            const uniqueKey = `${contactName}|${referenceKey}`;
-            
-            if (!creditorGroups.has(uniqueKey)) {
-                creditorGroups.set(uniqueKey, {
-                    id: uuidv4(),
-                    client_reference: clientReference,
-                    creditor_name: contactName,
-                    creditor_email: contactEmail,
-                    creditor_address: creditorData.sender_address || '',
-                    reference_number: referenceKey,
-                    original_claim_amount: creditorData.claim_amount || 0,
-                    document_ids: [doc.id],
-                    is_representative: creditorData.is_representative || false,
-                    actual_creditor: creditorData.actual_creditor || ''
-                });
-            } else {
-                // Add to existing group and update amount if higher
-                const existing = creditorGroups.get(uniqueKey);
-                existing.document_ids.push(doc.id);
-                if (creditorData.claim_amount && creditorData.claim_amount > existing.original_claim_amount) {
-                    existing.original_claim_amount = creditorData.claim_amount;
-                }
+            if (!client) {
+                throw new Error(`Client ${clientReference} not found in database`);
             }
-        });
 
-        return Array.from(creditorGroups.values());
+            // Use final_creditor_list which contains confirmed creditors
+            const confirmedCreditors = (client.final_creditor_list || []).filter(creditor => 
+                creditor.status === 'confirmed' && 
+                creditor.sender_name && 
+                creditor.sender_email
+            );
+
+            console.log(`📋 Found ${confirmedCreditors.length} confirmed creditors in final_creditor_list for client ${clientReference}`);
+
+            // Convert creditors to contact records format
+            const creditorContactRecords = confirmedCreditors.map(creditor => ({
+                id: uuidv4(),
+                client_reference: clientReference,
+                creditor_name: creditor.sender_name,
+                creditor_email: creditor.sender_email,
+                creditor_address: creditor.sender_address || '',
+                reference_number: creditor.reference_number || 'NO_REF',
+                original_claim_amount: creditor.claim_amount || 0,
+                document_ids: creditor.document_id ? [creditor.document_id] : [],
+                is_representative: creditor.is_representative || false,
+                actual_creditor: creditor.actual_creditor || creditor.sender_name,
+                sender_name: creditor.sender_name // Keep original sender name for contact record
+            }));
+
+            return creditorContactRecords;
+            
+        } catch (error) {
+            console.error(`❌ Error getting confirmed creditors for client ${clientReference}:`, error.message);
+            throw error;
+        }
     }
 
     /**
@@ -268,7 +246,7 @@ class CreditorContactService {
         const contactRecord = {
             id: contactId,
             client_reference: creditorData.client_reference,
-            creditor_name: creditorData.sender_name,
+            creditor_name: creditorData.creditor_name || creditorData.sender_name,
             creditor_email: creditorData.creditor_email,
             creditor_address: creditorData.creditor_address,
             reference_number: creditorData.reference_number,
@@ -302,7 +280,7 @@ class CreditorContactService {
         // Store in memory (in production, save to database)
         this.creditorContacts.set(contactId, contactRecord);
         
-        console.log(`✅ Created creditor contact record: ${creditorData.sender_name} (${contactId})`);
+        console.log(`✅ Created creditor contact record: ${creditorData.creditor_name || creditorData.sender_name} (${contactId})`);
         return contactRecord;
     }
 
