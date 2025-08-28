@@ -4072,6 +4072,120 @@ function getClientDisplayStatus(client) {
   return status;
 }
 
+// Document upload endpoint - MISSING FROM ORIGINAL CODE!
+app.post('/api/clients/:clientId/documents', upload.single('document'), async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const documentId = uuidv4();
+    const fileName = req.file.filename;
+    const originalName = req.file.originalname;
+    const filePath = req.file.path;
+    
+    console.log(`📄 Processing uploaded document: ${originalName} for client ${clientId}`);
+    
+    // Initialize document record
+    const documentRecord = {
+      id: documentId,
+      name: originalName,
+      filename: fileName,
+      path: filePath,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      uploadedAt: new Date().toISOString(),
+      processing_status: 'processing',
+      is_creditor_document: false,
+      extracted_data: {},
+      confidence: 0,
+      processing_method: 'pending'
+    };
+
+    // Add document to client
+    client.documents = client.documents || [];
+    client.documents.push(documentRecord);
+    
+    // Update client status to documents_uploaded if needed
+    if (client.current_status === 'created' || client.current_status === 'portal_access_sent') {
+      client.current_status = 'documents_uploaded';
+    }
+
+    await saveClient(client);
+
+    console.log(`📄 Document ${originalName} added to client ${clientId}, starting processing...`);
+
+    // Process document asynchronously
+    setImmediate(async () => {
+      try {
+        console.log(`🤖 Starting AI processing for: ${originalName}`);
+        
+        // Process with AI
+        const processingResult = await documentProcessor.processDocument(filePath, originalName);
+        
+        // Update document with processing results
+        const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+        if (docIndex !== -1) {
+          client.documents[docIndex] = {
+            ...client.documents[docIndex],
+            processing_status: 'completed',
+            is_creditor_document: processingResult.classification.is_creditor_document,
+            extracted_data: processingResult.extracted_data,
+            confidence: processingResult.classification.confidence,
+            processing_method: 'ai_processed',
+            processed_at: new Date().toISOString(),
+            processing_time_ms: processingResult.processing_time_ms || 0
+          };
+          
+          await saveClient(client);
+          console.log(`✅ Document processing completed: ${originalName} - Creditor: ${processingResult.classification.is_creditor_document}`);
+        }
+        
+      } catch (processingError) {
+        console.error(`❌ Error processing document ${originalName}:`, processingError);
+        
+        // Update document with error
+        const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+        if (docIndex !== -1) {
+          client.documents[docIndex] = {
+            ...client.documents[docIndex],
+            processing_status: 'failed',
+            processing_error: processingError.message,
+            processed_at: new Date().toISOString()
+          };
+          
+          await saveClient(client);
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Document uploaded successfully and processing started',
+      document: {
+        id: documentId,
+        name: originalName,
+        size: req.file.size,
+        processing_status: 'processing'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading document:', error);
+    res.status(500).json({ 
+      error: 'Failed to upload document',
+      details: error.message 
+    });
+  }
+});
+
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Received SIGINT, shutting down gracefully...');
