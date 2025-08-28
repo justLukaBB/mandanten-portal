@@ -601,7 +601,25 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
 
     // Update client with payment processing info
     client.payment_processed_at = new Date();
-    await client.save();
+    
+    // Save client with error handling for document validation issues
+    try {
+      await client.save({ validateModifiedOnly: true });
+    } catch (saveError) {
+      console.error('⚠️ Error saving client with payment_processed_at (line 604), using direct update:', saveError.message);
+      
+      // Use direct update to bypass validation
+      await Client.findOneAndUpdate(
+        { _id: client._id },
+        {
+          $set: {
+            payment_processed_at: new Date(),
+            payment_ticket_type: client.payment_ticket_type
+          }
+        },
+        { runValidators: false }
+      );
+    }
 
     // AUTOMATICALLY CREATE ZENDESK TICKET
     let zendeskTicket = null;
@@ -820,7 +838,37 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
                 }
               });
               
-              await client.save();
+              // Save with error handling
+              try {
+                await client.save({ validateModifiedOnly: true });
+              } catch (saveError) {
+                console.error('⚠️ Error saving client after successful creditor contact, using direct update:', saveError.message);
+                await Client.findOneAndUpdate(
+                  { _id: client._id },
+                  {
+                    $set: {
+                      current_status: 'creditor_contact_initiated',
+                      payment_ticket_type: 'creditor_contact_initiated',
+                      updated_at: new Date()
+                    },
+                    $push: {
+                      status_history: {
+                        id: uuidv4(),
+                        status: 'creditor_contact_initiated',
+                        changed_by: 'system',
+                        metadata: {
+                          triggered_by: 'auto_approved_payment_confirmation',
+                          main_ticket_id: creditorContactResult.main_ticket_id,
+                          emails_sent: creditorContactResult.emails_sent,
+                          total_creditors: creditors.length,
+                          side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+                        }
+                      }
+                    }
+                  },
+                  { runValidators: false }
+                );
+              }
               
             } catch (creditorError) {
               console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, creditorError.message);
@@ -836,7 +884,32 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
                 }
               });
               
-              await client.save();
+              // Save with error handling
+              try {
+                await client.save({ validateModifiedOnly: true });
+              } catch (saveError) {
+                console.error('⚠️ Error saving client after failed creditor contact, using direct update:', saveError.message);
+                await Client.findOneAndUpdate(
+                  { _id: client._id },
+                  {
+                    $set: {
+                      current_status: 'creditor_contact_failed'
+                    },
+                    $push: {
+                      status_history: {
+                        id: uuidv4(),
+                        status: 'creditor_contact_failed',
+                        changed_by: 'system',
+                        metadata: {
+                          error_message: creditorError.message,
+                          requires_manual_action: true
+                        }
+                      }
+                    }
+                  },
+                  { runValidators: false }
+                );
+              }
             }
           }
           
