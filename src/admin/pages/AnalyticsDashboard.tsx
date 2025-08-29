@@ -7,7 +7,8 @@ import {
   CalendarIcon,
   MagnifyingGlassIcon,
   EyeIcon,
-  ClockIcon
+  ClockIcon,
+  ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
@@ -181,6 +182,27 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetPaymentStatus = async (userId: string, aktenzeichen: string) => {
+    if (!confirm(`Möchten Sie den Zahlungsstatus für ${aktenzeichen} zurücksetzen? Dies setzt den Client auf "waiting_for_payment" zurück.`)) {
+      return;
+    }
+
+    try {
+      const response = await api.post(`/admin/clients/${userId}/reset-payment`);
+      
+      if (response.data.success) {
+        alert(`✅ Zahlungsstatus für ${aktenzeichen} erfolgreich zurückgesetzt!`);
+        // Reload the data
+        fetchUsers();
+      } else {
+        alert('❌ Fehler beim Zurücksetzen des Status');
+      }
+    } catch (error: any) {
+      console.error('Error resetting payment status:', error);
+      alert(error.response?.data?.message || 'Fehler beim Zurücksetzen des Status');
     }
   };
 
@@ -611,14 +633,28 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => setSelectedUserId(user.aktenzeichen)}
-                      className="inline-flex items-center hover:opacity-80"
-                      style={{color: '#9f1a1d'}}
-                    >
-                      <EyeIcon className="w-4 h-4 mr-1" />
-                      Details
-                    </button>
+                    <div className="flex space-x-2 justify-end">
+                      <button
+                        onClick={() => setSelectedUserId(user.aktenzeichen)}
+                        className="inline-flex items-center hover:opacity-80"
+                        style={{color: '#9f1a1d'}}
+                        title="Details anzeigen"
+                      >
+                        <EyeIcon className="w-4 h-4 mr-1" />
+                        Details
+                      </button>
+                      
+                      {user.first_payment_received && (
+                        <button
+                          onClick={() => resetPaymentStatus(user.id, user.aktenzeichen)}
+                          className="inline-flex items-center text-orange-600 hover:opacity-80"
+                          title="Zahlungsstatus zurücksetzen"
+                        >
+                          <ArrowUturnLeftIcon className="w-4 h-4 mr-1" />
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

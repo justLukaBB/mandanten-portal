@@ -1209,6 +1209,76 @@ app.post('/api/admin/clients/:clientId/mark-payment-received', async (req, res) 
   }
 });
 
+// Admin: Reset payment status for testing
+app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log(`🔄 Admin resetting payment status for client ${client.aktenzeichen}`);
+    
+    // Reset payment and status fields
+    client.first_payment_received = false;
+    client.payment_processed_at = null;
+    client.payment_ticket_type = null;
+    client.current_status = 'waiting_for_payment';
+    client.workflow_status = 'portal_access_sent';
+    client.admin_approved = false;
+    client.admin_approved_at = null;
+    client.admin_approved_by = null;
+    client.client_confirmed_creditors = false;
+    client.client_confirmed_at = null;
+    client.creditor_contact_started = false;
+    client.creditor_contact_started_at = null;
+    client.document_request_email_sent_at = null;
+    client.all_documents_processed_at = null;
+    
+    // Clear final creditor list
+    client.final_creditor_list = [];
+    
+    // Add status history entry
+    const { v4: uuidv4 } = require('uuid');
+    if (!client.status_history) {
+      client.status_history = [];
+    }
+    
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'waiting_for_payment',
+      changed_by: 'admin',
+      metadata: {
+        action: 'reset_payment_status',
+        reason: 'Admin reset for testing',
+        reset_at: new Date().toISOString()
+      },
+      created_at: new Date()
+    });
+    
+    // Save the client
+    await client.save({ validateModifiedOnly: true });
+    
+    console.log(`✅ Payment status reset successfully for ${client.aktenzeichen}`);
+    
+    res.json({
+      success: true,
+      message: `Payment status reset for ${client.aktenzeichen}`,
+      new_status: client.current_status,
+      workflow_status: client.workflow_status
+    });
+    
+  } catch (error) {
+    console.error('Error resetting payment status:', error);
+    res.status(500).json({ 
+      error: 'Error resetting payment status',
+      details: error.message 
+    });
+  }
+});
+
 // Admin: Generate and approve creditor list
 app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res) => {
   try {
