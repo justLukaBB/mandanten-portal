@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import PersonalPortal from './pages/PersonalPortal';
 import PortalLogin from './pages/PortalLogin';
+import ConfirmCreditors from './pages/ConfirmCreditors';
 import AdminApp from './admin/AdminApp';
 import AgentApp from './agent/AgentApp';
 
@@ -95,6 +96,12 @@ function App() {
                   }}
                 />
               </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/portal/confirm-creditors" 
+            element={
+              <ConfirmCreditors />
             } 
           />
           <Route path="/admin/*" element={<AdminApp />} />
