@@ -1317,53 +1317,30 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
           
           await client.save();
           
-          // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios (processing-complete)
+          // UPDATE STATUS for auto_approved scenarios but DO NOT trigger creditor contact yet
           if (ticketType === 'auto_approved' && creditors.length > 0) {
-            try {
-              console.log(`🚀 Auto-triggering creditor contact for processing-complete auto-approved client ${client.aktenzeichen}...`);
-              
-              const creditorService = new CreditorContactService();
-              const creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
-              
-              console.log(`✅ Processing-complete auto-approved creditor contact started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
-              
-              // Update client status
-              client.current_status = 'creditor_contact_initiated';
-              client.payment_ticket_type = 'creditor_contact_initiated';
-              client.updated_at = new Date();
-              
-              client.status_history.push({
-                id: uuidv4(),
-                status: 'creditor_contact_initiated',
-                changed_by: 'system',
-                metadata: {
-                  triggered_by: 'processing_complete_auto_approved',
-                  main_ticket_id: creditorContactResult.main_ticket_id,
-                  emails_sent: creditorContactResult.emails_sent,
-                  total_creditors: creditors.length,
-                  side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
-                }
-              });
-              
-              await client.save();
-              
-            } catch (creditorError) {
-              console.error(`❌ Failed to auto-trigger creditor contact for processing-complete ${client.aktenzeichen}:`, creditorError.message);
-              
-              client.current_status = 'creditor_contact_failed';
-              client.status_history.push({
-                id: uuidv4(),
-                status: 'creditor_contact_failed',
-                changed_by: 'system',
-                metadata: {
-                  error_message: creditorError.message,
-                  requires_manual_action: true,
-                  triggered_from: 'processing_complete_auto_approved'
-                }
-              });
-              
-              await client.save();
-            }
+            // Mark as auto-approved and waiting for BOTH confirmations
+            client.current_status = 'awaiting_client_confirmation';
+            client.admin_approved = true; // Auto-approved by system due to high confidence
+            client.admin_approved_at = new Date();
+            client.admin_approved_by = 'System (Auto-Approved)';
+            client.updated_at = new Date();
+            
+            client.status_history.push({
+              id: uuidv4(),
+              status: 'awaiting_client_confirmation',
+              changed_by: 'system',
+              metadata: {
+                auto_approved: true,
+                reason: 'High AI confidence - no manual review needed',
+                total_creditors: creditors.length,
+                requires_client_confirmation: true
+              }
+            });
+            
+            await client.save();
+            
+            console.log(`✅ Auto-approved ${client.aktenzeichen} - Now waiting for client confirmation before creditor contact`);
           }
           
         } else {
