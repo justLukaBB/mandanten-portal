@@ -763,140 +763,49 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           
           console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
           
-          // AUTO-SEND DOCUMENT REMINDER EMAIL for document_request scenarios
+          // DO NOT AUTO-SEND CLIENT EMAILS - Agent must approve first
           if (ticketType === 'document_request') {
+            console.log(`ℹ️ Document request payment confirmed for ${client.aktenzeichen} - waiting for agent to approve document request email`);
+            
+            // Add note to ticket that agent action is required
             try {
-              console.log(`📧 Auto-sending document reminder email to ${client.email}...`);
-              
-              // Generate email content
-              const emailSubject = `Dokumente benötigt für Ihr Insolvenzverfahren - Aktenzeichen ${client.aktenzeichen}`;
-              const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
-              
-              const emailBody = `Sehr geehrte/r ${client.firstName} ${client.lastName},
+              await zendeskService.addInternalComment(zendeskTicket.ticket_id, {
+                content: `💰 **PAYMENT CONFIRMED - AGENT ACTION REQUIRED**
 
-vielen Dank für Ihre erste Ratenzahlung! Wir haben diese erhalten und können nun mit Ihrem Insolvenzverfahren fortfahren.
+✅ First payment received for document request
+📧 **NEXT STEP:** Agent must review and send document request email
 
-Um den nächsten Schritt einzuleiten, benötigen wir dringend Ihre Gläubigerdokumente.
+🔗 **Agent Action Required:** Send document request email to client after review
+📋 **Client:** ${client.firstName} ${client.lastName} (${client.email})
+💼 **Aktenzeichen:** ${client.aktenzeichen}
 
-IHRE ZUGANGSDATEN:
-==================
-Portal-Link: ${portalUrl}
-E-Mail: ${client.email}
-Aktenzeichen: ${client.aktenzeichen}
-
-BENÖTIGTE DOKUMENTE:
-===================
-• Mahnungen und Zahlungsaufforderungen
-• Rechnungen und Verträge
-• Inkasso-Schreiben
-• Kreditverträge
-• Sonstige Gläubigerschreiben
-
-WICHTIG: Bitte laden Sie ALLE Dokumente Ihrer Gläubiger hoch, auch ältere Schreiben.
-
-So laden Sie Ihre Dokumente hoch:
-1. Klicken Sie auf den Portal-Link oben
-2. Melden Sie sich mit Ihrer E-Mail-Adresse und Ihrem Aktenzeichen an
-3. Klicken Sie auf "Dokumente hochladen"
-4. Wählen Sie Ihre Dokumente aus oder fotografieren Sie diese mit Ihrem Smartphone
-
-Bei Fragen oder technischen Problemen erreichen Sie uns unter:
-info@ra-scuric.de
-0234 9136810
-
-Mit freundlichen Grüßen
-Ihr Insolvenz-Team
-
-PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen ist.`;
-              
-              // Create side conversation to send email
-              const sideConversationResult = await zendeskService.createSideConversation(
-                zendeskTicket.ticket_id,
-                {
-                  recipientEmail: client.email,
-                  recipientName: `${client.firstName} ${client.lastName}`,
-                  subject: emailSubject,
-                  body: emailBody,
-                  internalNote: true
-                }
-              );
-              
-              if (sideConversationResult.success) {
-                console.log(`✅ Document reminder email sent to ${client.email}`);
-                
-                // Update client status history
-                client.status_history.push({
-                  id: uuidv4(),
-                  status: 'document_reminder_email_sent',
-                  changed_by: 'system',
-                  metadata: {
-                    side_conversation_id: sideConversationResult.side_conversation_id,
-                    email_sent_to: client.email,
-                    zendesk_ticket_id: zendeskTicket.ticket_id
-                  }
-                });
-                
-                // Update document request timestamp
-                client.document_request_email_sent_at = new Date();
-                
-                // Save client updates
-                try {
-                  await client.save({ validateModifiedOnly: true });
-                } catch (saveError) {
-                  console.error('⚠️ Error saving after email sent, using direct update:', saveError.message);
-                  
-                  await Client.findOneAndUpdate(
-                    { _id: client._id },
-                    {
-                      $set: {
-                        document_request_email_sent_at: new Date()
-                      },
-                      $push: {
-                        status_history: {
-                          id: uuidv4(),
-                          status: 'document_reminder_email_sent',
-                          changed_by: 'system',
-                          metadata: {
-                            side_conversation_id: sideConversationResult.side_conversation_id,
-                            email_sent_to: client.email,
-                            zendesk_ticket_id: zendeskTicket.ticket_id
-                          }
-                        }
-                      }
-                    },
-                    { runValidators: false }
-                  );
-                }
-              } else {
-                console.error(`❌ Failed to send document reminder email: ${sideConversationResult.error}`);
-              }
-              
-            } catch (emailError) {
-              console.error(`❌ Error sending document reminder email for ${client.aktenzeichen}:`, emailError.message);
+**Manual Action:** Use "Dokumentenanfrage senden" button to send document request email after review.`,
+                status: 'open'
+              });
+            } catch (commentError) {
+              console.error('❌ Failed to add agent action note:', commentError.message);
             }
           }
           
-          // UPDATE STATUS for auto_approved scenarios but DO NOT trigger creditor contact
+          // MARK AS READY FOR AGENT REVIEW (even for auto-approved scenarios)
           if (ticketType === 'auto_approved' && creditors.length > 0) {
             try {
-              console.log(`✅ Auto-approved client ${client.aktenzeichen} - Setting status to await confirmations...`);
+              console.log(`✅ Auto-approved client ${client.aktenzeichen} - Ready for agent confirmation...`);
               
-              // Mark as auto-approved and waiting for client confirmation
-              client.current_status = 'awaiting_client_confirmation';
-              client.admin_approved = true; // Auto-approved by system
-              client.admin_approved_at = new Date();
-              client.admin_approved_by = 'System (Auto-Approved)';
+              // Set status to awaiting agent review (even for auto-approved)
+              client.current_status = 'awaiting_agent_review';
               client.updated_at = new Date();
               
               client.status_history.push({
                 id: uuidv4(),
-                status: 'awaiting_client_confirmation',
+                status: 'awaiting_agent_review',
                 changed_by: 'system',
                 metadata: {
-                  auto_approved: true,
-                  reason: 'High AI confidence scores - payment confirmation',
+                  payment_confirmed: true,
+                  auto_approved_eligible: true,
+                  reason: 'High AI confidence scores - awaiting agent final confirmation',
                   total_creditors: creditors.length,
-                  requires_client_confirmation: true
+                  requires_agent_confirmation: true
                 }
               });
               
@@ -909,22 +818,20 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
                   { _id: client._id },
                   {
                     $set: {
-                      current_status: 'awaiting_client_confirmation',
-                      admin_approved: true,
-                      admin_approved_at: new Date(),
-                      admin_approved_by: 'System (Auto-Approved)',
+                      current_status: 'awaiting_agent_review',
                       updated_at: new Date()
                     },
                     $push: {
                       status_history: {
                         id: uuidv4(),
-                        status: 'awaiting_client_confirmation',
+                        status: 'awaiting_agent_review',
                         changed_by: 'system',
                         metadata: {
-                          auto_approved: true,
-                          reason: 'High AI confidence scores - payment confirmation',
+                          payment_confirmed: true,
+                          auto_approved_eligible: true,
+                          reason: 'High AI confidence scores - awaiting agent final confirmation',
                           total_creditors: creditors.length,
-                          requires_client_confirmation: true
+                          requires_agent_confirmation: true
                         }
                       }
                     }
@@ -933,46 +840,8 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
                 );
               }
               
-              // SEND CLIENT NOTIFICATION FOR AUTO-APPROVED CREDITORS
-              if (zendeskTicket && zendeskTicket.success) {
-                try {
-                  console.log(`📧 Sending client notification for auto-approved creditors...`);
-                  
-                  const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-                  const creditorsList = creditors
-                    .filter(c => c.status === 'confirmed')
-                    .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
-                    .join('\n');
-                  
-                  const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
-                  
-                  const notificationSubject = 'Ihre Gläubigerliste ist bereit zur Bestätigung';
-                  const notificationBody = `Sehr geehrte/r ${client.firstName} ${client.lastName},
-
-wir haben Ihre Dokumente erfolgreich verarbeitet und folgende Gläubiger identifiziert:
-
-${creditorsList}
-
-Gesamtschulden: €${totalDebt.toFixed(2)}
-
-WICHTIG: Bitte bestätigen Sie diese Gläubigerliste, damit wir in Ihrem Namen Kontakt aufnehmen können.
-
-➡️ Zur Bestätigung: ${portalLink}
-
-Mit freundlichen Grüßen
-Ihr Beratungsteam`;
-                  
-                  await zendeskService.sendSideConversation(zendeskTicket.ticket_id, {
-                    recipient_email: client.email,
-                    subject: notificationSubject,
-                    message: notificationBody
-                  });
-                  
-                  console.log(`✅ Client notification sent for auto-approved creditors`);
-                } catch (notifyError) {
-                  console.error(`❌ Failed to send client notification:`, notifyError.message);
-                }
-              }
+              // NO CLIENT NOTIFICATION - Agent must confirm first
+              console.log(`ℹ️ Auto-approved creditors ready - waiting for agent confirmation before client notification`);
               
             } catch (error) {
               console.error(`❌ Error updating auto-approved status for ${client.aktenzeichen}:`, error.message);
