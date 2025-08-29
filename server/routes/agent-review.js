@@ -508,22 +508,26 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
       });
     }
 
-    // Update client status
-    client.current_status = 'manual_review_complete';
+    // Update client status - now requires client confirmation
+    client.current_status = 'awaiting_client_confirmation';
+    client.admin_approved = true; // Mark that agent/admin has approved
+    client.admin_approved_at = new Date();
+    client.admin_approved_by = req.agentId;
     client.updated_at = new Date();
 
     // Add status history
     client.status_history.push({
       id: uuidv4(),
-      status: 'manual_review_complete',
+      status: 'awaiting_client_confirmation',
       changed_by: 'agent',
       zendesk_ticket_id: zendesk_ticket_id,
       metadata: {
         agent_id: req.agentId,
-        agent_action: 'Completed manual review via dashboard',
+        agent_action: 'Completed manual review - awaiting client confirmation',
         review_completed_at: new Date(),
         total_creditors: (client.final_creditor_list || []).length,
-        manually_reviewed_docs: client.documents.filter(d => d.manually_reviewed === true).length
+        manually_reviewed_docs: client.documents.filter(d => d.manually_reviewed === true).length,
+        requires_client_confirmation: true
       }
     });
 
@@ -543,7 +547,12 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
 
     if (zendeskService.isConfigured() && originalTicketId) {
       try {
-        const reviewCompleteComment = `**✅ MANUAL REVIEW COMPLETED**\n\n👤 **Agent:** ${req.agentId}\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n📊 **Final Results:**\n• Total creditors: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• Documents reviewed: ${reviewedDocs.length}\n\n🏛️ **FINAL CREDITOR LIST:**\n${finalCreditorsList}\n\n🚀 **AUTOMATED NEXT STEPS:**\n• ✅ Creditor contact process started automatically\n• ✅ Client portal updated with creditor list\n• ✅ Ready for client confirmation\n\n📋 **STATUS:** Review complete - automated process continuing`;
+        const finalCreditorsList = creditors
+          .filter(c => c.status === 'confirmed')
+          .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
+          .join('\n');
+
+        const reviewCompleteComment = `**✅ MANUAL REVIEW COMPLETED**\n\n👤 **Agent:** ${req.agentId}\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n📊 **Final Results:**\n• Total creditors: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• Documents reviewed: ${reviewedDocs.length}\n\n🏛️ **FINAL CREDITOR LIST:**\n${finalCreditorsList}\n\n⏳ **NEXT STEPS:**\n• ✅ Client notification sent via Side Conversation\n• ⏳ Waiting for client to confirm creditor list\n• 🔄 After client confirmation → Automatic creditor contact starts\n\n📋 **STATUS:** Awaiting client confirmation`;
 
         await zendeskService.addInternalComment(originalTicketId, {
           content: reviewCompleteComment,
@@ -556,74 +565,89 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
       }
     }
 
-    // AUTO-TRIGGER CREDITOR CONTACT PROCESS
-    let creditorContactResult = null;
-    let creditorContactError = null;
+    // SEND CLIENT CONFIRMATION REQUEST VIA ZENDESK
+    let clientNotificationSent = false;
     
     if (creditors.length > 0) {
       try {
-        console.log(`🚀 Auto-triggering creditor contact process for ${client.aktenzeichen}...`);
+        console.log(`📧 Sending client confirmation request for ${client.aktenzeichen}...`);
         
-        const creditorService = new CreditorContactService();
-        creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+        // Generate creditor list for client review
+        const creditorsList = creditors
+          .filter(c => c.status === 'confirmed')
+          .map((c, index) => {
+            return `${index + 1}. **${c.sender_name || 'Unbekannt'}**
+   - Forderung: €${(c.claim_amount || 0).toFixed(2)}
+   - Referenz: ${c.reference_number || 'Keine Referenz'}`;
+          }).join('\n\n');
+
+        const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
         
-        console.log(`✅ Creditor contact process started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
-        
-        // Update client status to indicate creditor contact has started
-        client.current_status = 'creditor_contact_initiated';
-        client.updated_at = new Date();
-        
-        client.status_history.push({
-          id: uuidv4(),
-          status: 'creditor_contact_initiated',
-          changed_by: 'system',
-          metadata: {
-            triggered_by: 'manual_review_completion',
-            main_ticket_id: creditorContactResult.main_ticket_id,
-            emails_sent: creditorContactResult.emails_sent,
-            total_creditors: creditors.length,
-            side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
-          }
-        });
-        
-        await client.save();
-        
-        // Add success comment to Zendesk
+        // Send Side Conversation to client
         if (zendeskService.isConfigured() && originalTicketId) {
           try {
-            await zendeskService.addInternalComment(originalTicketId, {
-              content: `🚀 **CREDITOR CONTACT INITIATED**\n\nMain ticket ID: ${creditorContactResult.main_ticket_id}\nEmails sent: ${creditorContactResult.emails_sent}/${creditors.length}\nSide conversations: ${creditorContactResult.side_conversation_results?.length || 0}\n\n✅ **Process fully automated** - creditor contact active, client receives confirmation email.`,
-              status: 'open'
+            const clientMessage = `**Gläubigerliste zur Überprüfung bereit**
+
+Sehr geehrte/r ${client.firstName} ${client.lastName},
+
+unsere Mitarbeiter haben die Überprüfung Ihrer Dokumente abgeschlossen. Folgende Gläubiger wurden identifiziert:
+
+**📋 GLÄUBIGERLISTE:**
+${creditorsList}
+
+**Gesamtschulden:** €${totalDebt.toFixed(2)}
+
+**🔍 WICHTIG: Ihre Bestätigung erforderlich**
+Bitte überprüfen Sie diese Liste sorgfältig und bestätigen Sie, dass alle Gläubiger korrekt erfasst wurden.
+
+**➡️ Zur Bestätigung:**
+${portalLink}
+
+Nach Ihrer Bestätigung werden wir automatisch Kontakt mit Ihren Gläubigern aufnehmen.
+
+Mit freundlichen Grüßen
+Ihr Beratungsteam`;
+
+            // Send as Side Conversation to client
+            await zendeskService.sendSideConversation(originalTicketId, {
+              recipient_email: client.email,
+              subject: 'Gläubigerliste zur Bestätigung',
+              message: clientMessage
             });
-          } catch (commentError) {
-            console.error(`❌ Failed to add creditor contact success comment:`, commentError.message);
+
+            // Add internal note about sent confirmation
+            await zendeskService.addInternalComment(originalTicketId, {
+              content: `📧 **CLIENT CONFIRMATION REQUEST SENT**
+
+✅ Agent review completed by: ${req.agentId}
+📋 Total creditors identified: ${creditors.length}
+💰 Total debt: €${totalDebt.toFixed(2)}
+
+⏳ **WAITING FOR:** Client confirmation
+🔗 **Portal link sent:** ${portalLink}
+
+**Next steps:**
+1. Client reviews and confirms creditor list
+2. After client confirmation → Automatic creditor contact will be triggered`,
+              status: 'pending'
+            });
+
+            clientNotificationSent = true;
+            console.log(`✅ Client confirmation request sent to ${client.email}`);
+          } catch (error) {
+            console.error(`❌ Failed to send client confirmation request:`, error.message);
           }
         }
         
       } catch (error) {
-        console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, error.message);
-        creditorContactError = error.message;
-        
-        // Still update status but mark as error
-        client.current_status = 'creditor_contact_failed';
-        client.status_history.push({
-          id: uuidv4(),
-          status: 'creditor_contact_failed',
-          changed_by: 'system',
-          metadata: {
-            error_message: error.message,
-            requires_manual_action: true
-          }
-        });
-        
-        await client.save();
+        console.error(`❌ Failed to send client notification for ${client.aktenzeichen}:`, error.message);
       }
     }
 
     res.json({
       success: true,
-      message: 'Review session completed successfully',
-      client_status: creditorContactResult ? 'creditor_contact_initiated' : 'manual_review_complete',
+      message: 'Review session completed - client confirmation required',
+      client_status: 'awaiting_client_confirmation',
       summary: {
         client: {
           name: `${client.firstName} ${client.lastName}`,
@@ -639,21 +663,18 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
           total_count: client.documents.length
         }
       },
-      // Enhanced response with creditor contact info
-      creditor_contact: creditorContactResult ? {
-        success: true,
-        main_ticket_id: creditorContactResult.main_ticket_id,
-        main_ticket_subject: creditorContactResult.main_ticket_subject,
-        emails_sent: creditorContactResult.emails_sent,
-        total_creditors: creditors.length,
-        side_conversations_created: creditorContactResult.side_conversation_results?.length || 0,
-        next_step: 'Creditor emails sent via Side Conversations - Monitor responses in Zendesk'
-      } : {
-        success: false,
-        error: creditorContactError,
-        next_step: creditors.length === 0 ? 'No creditors to contact' : 'Manual creditor contact required'
+      // Client confirmation workflow info
+      client_confirmation: {
+        required: true,
+        notification_sent: clientNotificationSent,
+        portal_link: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`,
+        next_steps: [
+          '1. Client receives email with creditor list',
+          '2. Client reviews and confirms creditors in portal',
+          '3. After confirmation: automatic creditor contact starts'
+        ]
       },
-      zendesk_update_required: false // No longer needed - automatic process handles it
+      zendesk_update_required: false
     });
 
   } catch (error) {
