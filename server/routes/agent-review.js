@@ -583,7 +583,7 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
 
         const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
         
-        // Send Side Conversation to client
+        // Send Side Conversation to client (if Zendesk is configured)
         if (zendeskService.isConfigured() && originalTicketId) {
           try {
             const clientMessage = `**Gläubigerliste zur Überprüfung bereit**
@@ -609,15 +609,16 @@ Mit freundlichen Grüßen
 Ihr Beratungsteam`;
 
             // Send as Side Conversation to client
-            await zendeskService.sendSideConversation(originalTicketId, {
+            const sideConversationResult = await zendeskService.sendSideConversation(originalTicketId, {
               recipient_email: client.email,
               subject: 'Gläubigerliste zur Bestätigung',
               message: clientMessage
             });
 
-            // Add internal note about sent confirmation
-            await zendeskService.addInternalComment(originalTicketId, {
-              content: `📧 **CLIENT CONFIRMATION REQUEST SENT**
+            if (sideConversationResult.success) {
+              // Add internal note about sent confirmation
+              await zendeskService.addInternalComment(originalTicketId, {
+                content: `📧 **CLIENT CONFIRMATION REQUEST SENT**
 
 ✅ Agent review completed by: ${req.agentId}
 📋 Total creditors identified: ${creditors.length}
@@ -629,14 +630,55 @@ Ihr Beratungsteam`;
 **Next steps:**
 1. Client reviews and confirms creditor list
 2. After client confirmation → Automatic creditor contact will be triggered`,
-              status: 'pending'
-            });
+                status: 'pending'
+              });
 
-            clientNotificationSent = true;
-            console.log(`✅ Client confirmation request sent to ${client.email}`);
+              clientNotificationSent = true;
+              console.log(`✅ Client confirmation request sent to ${client.email}`);
+            } else {
+              console.error(`❌ Side Conversation failed:`, sideConversationResult.error);
+              
+              // Still mark as successful but note the failure
+              await zendeskService.addInternalComment(originalTicketId, {
+                content: `⚠️ **CLIENT NOTIFICATION FAILED**
+
+✅ Agent review completed by: ${req.agentId}
+📋 Total creditors identified: ${creditors.length}
+💰 Total debt: €${totalDebt.toFixed(2)}
+
+❌ **ERROR:** Failed to send automatic email to client
+🔗 **Manual portal link:** ${portalLink}
+
+**MANUAL ACTION REQUIRED:** Please send portal link to client manually`,
+                status: 'open'
+              });
+              
+              console.log(`⚠️ Manual notification required for ${client.email}`);
+            }
           } catch (error) {
             console.error(`❌ Failed to send client confirmation request:`, error.message);
+            
+            // Add error note to ticket but don't fail the entire operation
+            try {
+              await zendeskService.addInternalComment(originalTicketId, {
+                content: `❌ **CLIENT NOTIFICATION ERROR**
+
+✅ Agent review completed by: ${req.agentId}
+📋 Total creditors identified: ${creditors.length}
+💰 Total debt: €${totalDebt.toFixed(2)}
+
+❌ **ERROR:** ${error.message}
+🔗 **Manual portal link:** ${portalLink}
+
+**MANUAL ACTION REQUIRED:** Please send portal link to client manually`,
+                status: 'open'
+              });
+            } catch (commentError) {
+              console.error('❌ Failed to add error comment to ticket:', commentError.message);
+            }
           }
+        } else {
+          console.log(`ℹ️ Zendesk not configured or no ticket ID - skipping automatic client notification`);
         }
         
       } catch (error) {
