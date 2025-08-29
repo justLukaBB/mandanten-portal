@@ -193,18 +193,18 @@ class ZendeskService {
       
       // Create a side conversation
       const sideConversationData = {
-        message: {
-          to: [{
-            email: recipient_email
-          }],
-          subject: subject,
-          body: message,
-          public: false // Side conversations are private by default
-        },
-        ticket_id: ticketId
+        side_conversation: {
+          message: {
+            to: [{
+              email: recipient_email
+            }],
+            subject: subject,
+            body: message
+          }
+        }
       };
 
-      const response = await this.api.post(`/tickets/${ticketId}/side_conversations`, sideConversationData);
+      const response = await this.api.post(`/tickets/${ticketId}/side_conversations.json`, sideConversationData);
       
       console.log('✅ Side Conversation sent:', {
         ticket_id: ticketId,
