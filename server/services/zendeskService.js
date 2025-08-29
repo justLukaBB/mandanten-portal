@@ -180,6 +180,54 @@ class ZendeskService {
     };
   }
 
+  // Send Side Conversation (email to external party)
+  async sendSideConversation(ticketId, { recipient_email, subject, message }) {
+    try {
+      console.log(`📧 Sending Side Conversation from ticket ${ticketId} to ${recipient_email}...`);
+      
+      // First, add an internal comment about sending the email
+      await this.addInternalComment(ticketId, {
+        content: `📧 Sending Side Conversation to: ${recipient_email}\nSubject: ${subject}`,
+        status: 'open'
+      });
+      
+      // Create a side conversation
+      const sideConversationData = {
+        message: {
+          to: [{
+            email: recipient_email
+          }],
+          subject: subject,
+          body: message,
+          public: false // Side conversations are private by default
+        },
+        ticket_id: ticketId
+      };
+
+      const response = await this.api.post(`/tickets/${ticketId}/side_conversations`, sideConversationData);
+      
+      console.log('✅ Side Conversation sent:', {
+        ticket_id: ticketId,
+        recipient: recipient_email,
+        subject: subject
+      });
+
+      return {
+        success: true,
+        side_conversation_id: response.data.side_conversation?.id,
+        ticket_id: ticketId
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to send Side Conversation:', error.response?.data || error.message);
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message
+      };
+    }
+  }
+
   // Create side conversation to send email to customer
   async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, internalNote = true }) {
     try {

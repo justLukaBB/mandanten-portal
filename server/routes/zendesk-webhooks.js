@@ -1529,6 +1529,190 @@ ${creditorsList}
   }
 });
 
+// Zendesk Webhook: Client Creditor Confirmation
+// Triggered when client confirms creditors in the portal
+router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) => {
+  try {
+    console.log('✅ Zendesk Webhook: Client-Creditor-Confirmed received', req.body);
+    
+    const { aktenzeichen, confirmed_at, creditors_confirmed } = req.body;
+
+    if (!aktenzeichen) {
+      return res.status(400).json({
+        error: 'Missing required field: aktenzeichen'
+      });
+    }
+
+    const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        aktenzeichen: aktenzeichen
+      });
+    }
+
+    // Check if agent/admin has already approved
+    if (!client.admin_approved) {
+      return res.status(400).json({
+        error: 'Admin approval required before client confirmation',
+        message: 'Creditors must be reviewed and approved by agent first'
+      });
+    }
+
+    // Update client confirmation status
+    client.client_confirmed_creditors = true;
+    client.client_confirmed_at = confirmed_at || new Date();
+    client.updated_at = new Date();
+
+    // Add status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'client_creditors_confirmed',
+      changed_by: 'client',
+      metadata: {
+        confirmed_at: confirmed_at || new Date(),
+        creditors_count: creditors_confirmed || client.final_creditor_list?.length || 0,
+        admin_approved: client.admin_approved,
+        admin_approved_at: client.admin_approved_at
+      }
+    });
+
+    await client.save();
+
+    // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
+    let creditorContactResult = null;
+    let creditorContactError = null;
+    
+    const creditors = client.final_creditor_list || [];
+    
+    if (creditors.length > 0) {
+      try {
+        console.log(`🚀 Auto-triggering creditor contact after client confirmation for ${client.aktenzeichen}...`);
+        
+        const creditorService = new CreditorContactService();
+        creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+        
+        console.log(`✅ Creditor contact process started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+        
+        // Update client status to indicate creditor contact has started
+        client.current_status = 'creditor_contact_initiated';
+        client.creditor_contact_started = true;
+        client.creditor_contact_started_at = new Date();
+        client.updated_at = new Date();
+        
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'creditor_contact_initiated',
+          changed_by: 'system',
+          metadata: {
+            triggered_by: 'client_confirmation',
+            main_ticket_id: creditorContactResult.main_ticket_id,
+            emails_sent: creditorContactResult.emails_sent,
+            total_creditors: creditors.length,
+            side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+          }
+        });
+        
+        await client.save();
+        
+      } catch (error) {
+        console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, error.message);
+        creditorContactError = error.message;
+        
+        // Still update status but mark as error
+        client.current_status = 'creditor_contact_failed';
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'creditor_contact_failed',
+          changed_by: 'system',
+          metadata: {
+            error_message: error.message,
+            requires_manual_action: true
+          }
+        });
+        
+        await client.save();
+      }
+    }
+
+    // Add Zendesk comment about client confirmation
+    const zendeskService = new ZendeskService();
+    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
+    const zendesk_ticket_id = originalTicket?.ticket_id || client.zendesk_ticket_id;
+
+    if (zendeskService.isConfigured() && zendesk_ticket_id) {
+      try {
+        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+        
+        let confirmationComment = `**✅ CLIENT HAT GLÄUBIGER BESTÄTIGT**
+
+👤 **Mandant:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})
+⏰ **Bestätigt:** ${new Date(client.client_confirmed_at).toLocaleString('de-DE')}
+📊 **Gläubiger:** ${creditors.length}
+💰 **Gesamtschuld:** €${totalDebt.toFixed(2)}
+
+✅ **Admin-Prüfung:** ${client.admin_approved_at ? new Date(client.admin_approved_at).toLocaleString('de-DE') : 'Nicht verfügbar'}
+✅ **Client-Bestätigung:** ${new Date(client.client_confirmed_at).toLocaleString('de-DE')}`;
+
+        if (creditorContactResult) {
+          confirmationComment += `
+
+🚀 **GLÄUBIGER-KONTAKT GESTARTET**
+• Main Ticket ID: ${creditorContactResult.main_ticket_id}
+• E-Mails versendet: ${creditorContactResult.emails_sent}/${creditors.length}
+• Side Conversations: ${creditorContactResult.side_conversation_results?.length || 0}
+
+📋 **STATUS:** Gläubiger-Kontakt läuft automatisch`;
+        } else if (creditorContactError) {
+          confirmationComment += `
+
+❌ **FEHLER BEI GLÄUBIGER-KONTAKT**
+• Fehler: ${creditorContactError}
+• Aktion erforderlich: Manueller Gläubiger-Kontakt nötig`;
+        }
+
+        await zendeskService.addInternalComment(zendesk_ticket_id, {
+          content: confirmationComment,
+          status: creditorContactResult ? 'open' : 'pending'
+        });
+        
+        console.log(`✅ Added client confirmation comment to ticket ${zendesk_ticket_id}`);
+      } catch (error) {
+        console.error(`❌ Failed to add client confirmation comment:`, error.message);
+      }
+    }
+
+    console.log(`✅ Client creditor confirmation processed for ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: 'Client creditor confirmation processed successfully',
+      client_status: client.current_status,
+      creditors_confirmed: creditors.length,
+      creditor_contact: creditorContactResult ? {
+        success: true,
+        main_ticket_id: creditorContactResult.main_ticket_id,
+        emails_sent: creditorContactResult.emails_sent,
+        side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+      } : {
+        success: false,
+        error: creditorContactError
+      },
+      next_step: creditorContactResult ? 
+        'Creditor contact initiated - monitor responses in Zendesk' : 
+        'Manual creditor contact required'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in client-creditor-confirmed webhook:', error);
+    res.status(500).json({
+      error: 'Failed to process client creditor confirmation',
+      details: error.message
+    });
+  }
+});
+
 // Helper function to generate ticket subject based on type
 function generateTicketSubject(client, ticketType) {
   const name = `${client.firstName} ${client.lastName}`;

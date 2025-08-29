@@ -1108,9 +1108,75 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
   }
 });
 
-// OLD DASHBOARD ROUTE REMOVED - Zendesk handles creditor confirmation now
-
-// OLD DASHBOARD ROUTE REMOVED - Zendesk handles creditor contact now
+// Client: Confirm creditor list
+app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Check if admin has already approved
+    if (!client.admin_approved) {
+      return res.status(400).json({
+        error: 'Admin approval required',
+        message: 'Die Gläubigerliste muss zuerst von unserem Team überprüft werden.'
+      });
+    }
+    
+    // Check if client is in the right status
+    if (client.current_status !== 'awaiting_client_confirmation') {
+      return res.status(400).json({
+        error: 'Invalid status',
+        message: 'Gläubigerbestätigung ist in diesem Status nicht möglich.',
+        current_status: client.current_status
+      });
+    }
+    
+    // Trigger the client confirmation webhook
+    const axios = require('axios');
+    const webhookUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/api/zendesk-webhook/client-creditor-confirmed`;
+    
+    try {
+      const response = await axios.post(webhookUrl, {
+        aktenzeichen: client.aktenzeichen,
+        confirmed_at: new Date().toISOString(),
+        creditors_confirmed: (client.final_creditor_list || []).length
+      }, {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.data.success) {
+        res.json({
+          success: true,
+          message: 'Gläubigerliste erfolgreich bestätigt',
+          creditor_contact: response.data.creditor_contact,
+          next_step: response.data.next_step
+        });
+      } else {
+        throw new Error(response.data.error || 'Webhook failed');
+      }
+    } catch (webhookError) {
+      console.error('Failed to trigger client confirmation webhook:', webhookError.message);
+      res.status(500).json({
+        error: 'Failed to process confirmation',
+        details: webhookError.message
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error confirming creditors:', error);
+    res.status(500).json({ 
+      error: 'Error confirming creditors',
+      details: error.message 
+    });
+  }
+});
 
 // Admin: Mark payment received
 app.post('/api/admin/clients/:clientId/mark-payment-received', async (req, res) => {
