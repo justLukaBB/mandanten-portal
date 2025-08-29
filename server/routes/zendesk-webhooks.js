@@ -1863,11 +1863,13 @@ ${reviewCreditors}` : ''}
 ${needsManualReview ? `🔧 AGENT-AKTIONEN:
 [BUTTON: Manuelle Prüfung starten] → ${reviewUrl}
 
-Nach der manuellen Prüfung:
-[BUTTON: Gläubigerliste zur Bestätigung senden]
-🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}` : `✅ ALLE GLÄUBIGER VERIFIZIERT:
-[BUTTON: Gläubigerliste zur Bestätigung senden]
-🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`}
+⚠️ AGENT MUSS GLÄUBIGER BESTÄTIGEN:
+🔗 Agent-Dashboard: ${reviewUrl}
+
+Nach Agent-Bestätigung wird automatisch E-Mail an Mandant versendet.` : `✅ ALLE GLÄUBIGER VERIFIZIERT - AGENT-BESTÄTIGUNG ERFORDERLICH:
+🔗 Agent-Dashboard: ${reviewUrl}
+
+Nach Agent-Bestätigung wird automatisch E-Mail an Mandant versendet.`}
 
 🔗 Mandant Portal: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
 📁 Aktenzeichen: ${client.aktenzeichen}`;
