@@ -541,28 +541,44 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors, ${totalDebt}€ total debt`);
 
     // ADD ZENDESK COMMENT FOR REVIEW COMPLETION
-    const zendeskService = new ZendeskService();
-    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
-    const originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id || zendesk_ticket_id;
+    let zendeskService = null;
+    let originalTicketId = null;
+    
+    try {
+      zendeskService = new ZendeskService();
+      const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
+      originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id || zendesk_ticket_id;
+      
+      console.log(`🎫 Zendesk configured: ${zendeskService.isConfigured()}, Ticket ID: ${originalTicketId}`);
 
-    if (zendeskService.isConfigured() && originalTicketId) {
-      try {
-        const finalCreditorsList = creditors
-          .filter(c => c.status === 'confirmed')
-          .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
-          .join('\n');
+      if (zendeskService.isConfigured() && originalTicketId) {
+        try {
+          const finalCreditorsList = creditors
+            .filter(c => c.status === 'confirmed')
+            .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
+            .join('\n');
 
-        const reviewCompleteComment = `**✅ MANUAL REVIEW COMPLETED**\n\n👤 **Agent:** ${req.agentId}\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n📊 **Final Results:**\n• Total creditors: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• Documents reviewed: ${reviewedDocs.length}\n\n🏛️ **FINAL CREDITOR LIST:**\n${finalCreditorsList}\n\n⏳ **NEXT STEPS:**\n• ✅ Client notification sent via Side Conversation\n• ⏳ Waiting for client to confirm creditor list\n• 🔄 After client confirmation → Automatic creditor contact starts\n\n📋 **STATUS:** Awaiting client confirmation`;
+          const reviewCompleteComment = `**✅ MANUAL REVIEW COMPLETED**\n\n👤 **Agent:** ${req.agentId}\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n📊 **Final Results:**\n• Total creditors: ${creditors.length}\n• Total debt: €${totalDebt.toFixed(2)}\n• Documents reviewed: ${reviewedDocs.length}\n\n🏛️ **FINAL CREDITOR LIST:**\n${finalCreditorsList}\n\n⏳ **NEXT STEPS:**\n• ✅ Client notification sent via Side Conversation\n• ⏳ Waiting for client to confirm creditor list\n• 🔄 After client confirmation → Automatic creditor contact starts\n\n📋 **STATUS:** Awaiting client confirmation`;
 
-        await zendeskService.addInternalComment(originalTicketId, {
-          content: reviewCompleteComment,
-          status: 'open'
-        });
-        
-        console.log(`✅ Added review completion comment to ticket ${originalTicketId}`);
-      } catch (error) {
-        console.error(`❌ Failed to add review completion comment:`, error.message);
+          console.log(`📝 Adding review completion comment to ticket ${originalTicketId}...`);
+          await zendeskService.addInternalComment(originalTicketId, {
+            content: reviewCompleteComment,
+            status: 'open'
+          });
+          
+          console.log(`✅ Added review completion comment to ticket ${originalTicketId}`);
+        } catch (commentError) {
+          console.error(`❌ Failed to add review completion comment:`, commentError.message);
+          console.error(`Comment error stack:`, commentError.stack);
+          // Don't fail the entire operation for comment errors
+        }
+      } else {
+        console.log(`ℹ️ Zendesk not configured or no ticket ID - skipping review completion comment`);
       }
+    } catch (zendeskSetupError) {
+      console.error(`❌ Failed to initialize Zendesk service:`, zendeskSetupError.message);
+      console.error(`Zendesk setup error stack:`, zendeskSetupError.stack);
+      // Don't fail the entire operation for Zendesk setup errors
     }
 
     // SEND CLIENT CONFIRMATION REQUEST VIA ZENDESK
@@ -570,7 +586,7 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     
     if (creditors.length > 0) {
       try {
-        console.log(`📧 Sending client confirmation request for ${client.aktenzeichen}...`);
+        console.log(`📧 Preparing client confirmation request for ${client.aktenzeichen}...`);
         
         // Generate creditor list for client review
         const creditorsList = creditors
@@ -584,8 +600,9 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
         const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
         
         // Send Side Conversation to client (if Zendesk is configured)
-        if (zendeskService.isConfigured() && originalTicketId) {
+        if (zendeskService && zendeskService.isConfigured() && originalTicketId) {
           try {
+            console.log(`📧 Attempting to send Side Conversation to ${client.email}...`);
             const clientMessage = `**Gläubigerliste zur Überprüfung bereit**
 
 Sehr geehrte/r ${client.firstName} ${client.lastName},
@@ -657,11 +674,13 @@ Ihr Beratungsteam`;
             }
           } catch (error) {
             console.error(`❌ Failed to send client confirmation request:`, error.message);
+            console.error(`Client notification error stack:`, error.stack);
             
             // Add error note to ticket but don't fail the entire operation
             try {
-              await zendeskService.addInternalComment(originalTicketId, {
-                content: `❌ **CLIENT NOTIFICATION ERROR**
+              if (zendeskService && originalTicketId) {
+                await zendeskService.addInternalComment(originalTicketId, {
+                  content: `❌ **CLIENT NOTIFICATION ERROR**
 
 ✅ Agent review completed by: ${req.agentId}
 📋 Total creditors identified: ${creditors.length}
@@ -671,10 +690,12 @@ Ihr Beratungsteam`;
 🔗 **Manual portal link:** ${portalLink}
 
 **MANUAL ACTION REQUIRED:** Please send portal link to client manually`,
-                status: 'open'
-              });
+                  status: 'open'
+                });
+              }
             } catch (commentError) {
               console.error('❌ Failed to add error comment to ticket:', commentError.message);
+              console.error('Comment error stack:', commentError.stack);
             }
           }
         } else {
@@ -683,7 +704,11 @@ Ihr Beratungsteam`;
         
       } catch (error) {
         console.error(`❌ Failed to send client notification for ${client.aktenzeichen}:`, error.message);
+        console.error(`Client notification outer error stack:`, error.stack);
+        // Don't fail the entire operation for client notification errors
       }
+    } else {
+      console.log(`ℹ️ No confirmed creditors found - skipping client notification`);
     }
 
     res.json({
@@ -721,9 +746,17 @@ Ihr Beratungsteam`;
 
   } catch (error) {
     console.error('❌ Error completing review:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Client ID:', req.params.clientId);
+    
     res.status(500).json({
       error: 'Failed to complete review',
-      details: error.message
+      details: error.message,
+      debug: {
+        clientId: req.params.clientId,
+        errorType: error.constructor.name,
+        stack: error.stack
+      }
     });
   }
 });
