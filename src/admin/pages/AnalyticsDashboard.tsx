@@ -186,7 +186,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   };
 
   const resetPaymentStatus = async (userId: string, aktenzeichen: string) => {
-    if (!confirm(`Möchten Sie den Zahlungsstatus für ${aktenzeichen} zurücksetzen? Dies setzt den Client auf "waiting_for_payment" zurück.`)) {
+    if (!window.confirm(`Möchten Sie den Zahlungsstatus für ${aktenzeichen} zurücksetzen? Dies setzt den Client auf "waiting_for_payment" zurück.`)) {
       return;
     }
 
