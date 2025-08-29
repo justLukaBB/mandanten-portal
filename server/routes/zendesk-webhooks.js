@@ -876,31 +876,27 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
             }
           }
           
-          // AUTO-TRIGGER CREDITOR CONTACT for auto_approved scenarios
+          // UPDATE STATUS for auto_approved scenarios but DO NOT trigger creditor contact
           if (ticketType === 'auto_approved' && creditors.length > 0) {
             try {
-              console.log(`🚀 Auto-triggering creditor contact for auto-approved client ${client.aktenzeichen}...`);
+              console.log(`✅ Auto-approved client ${client.aktenzeichen} - Setting status to await confirmations...`);
               
-              const creditorService = new CreditorContactService();
-              const creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
-              
-              console.log(`✅ Auto-approved creditor contact started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
-              
-              // Update client status
-              client.current_status = 'creditor_contact_initiated';
-              client.payment_ticket_type = 'creditor_contact_initiated';
+              // Mark as auto-approved and waiting for client confirmation
+              client.current_status = 'awaiting_client_confirmation';
+              client.admin_approved = true; // Auto-approved by system
+              client.admin_approved_at = new Date();
+              client.admin_approved_by = 'System (Auto-Approved)';
               client.updated_at = new Date();
               
               client.status_history.push({
                 id: uuidv4(),
-                status: 'creditor_contact_initiated',
+                status: 'awaiting_client_confirmation',
                 changed_by: 'system',
                 metadata: {
-                  triggered_by: 'auto_approved_payment_confirmation',
-                  main_ticket_id: creditorContactResult.main_ticket_id,
-                  emails_sent: creditorContactResult.emails_sent,
+                  auto_approved: true,
+                  reason: 'High AI confidence scores - payment confirmation',
                   total_creditors: creditors.length,
-                  side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+                  requires_client_confirmation: true
                 }
               });
               
@@ -908,26 +904,27 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
               try {
                 await client.save({ validateModifiedOnly: true });
               } catch (saveError) {
-                console.error('⚠️ Error saving client after successful creditor contact, using direct update:', saveError.message);
+                console.error('⚠️ Error saving client status update, using direct update:', saveError.message);
                 await Client.findOneAndUpdate(
                   { _id: client._id },
                   {
                     $set: {
-                      current_status: 'creditor_contact_initiated',
-                      payment_ticket_type: 'creditor_contact_initiated',
+                      current_status: 'awaiting_client_confirmation',
+                      admin_approved: true,
+                      admin_approved_at: new Date(),
+                      admin_approved_by: 'System (Auto-Approved)',
                       updated_at: new Date()
                     },
                     $push: {
                       status_history: {
                         id: uuidv4(),
-                        status: 'creditor_contact_initiated',
+                        status: 'awaiting_client_confirmation',
                         changed_by: 'system',
                         metadata: {
-                          triggered_by: 'auto_approved_payment_confirmation',
-                          main_ticket_id: creditorContactResult.main_ticket_id,
-                          emails_sent: creditorContactResult.emails_sent,
+                          auto_approved: true,
+                          reason: 'High AI confidence scores - payment confirmation',
                           total_creditors: creditors.length,
-                          side_conversations_created: creditorContactResult.side_conversation_results?.length || 0
+                          requires_client_confirmation: true
                         }
                       }
                     }
@@ -936,46 +933,49 @@ PS: Diese E-Mail wurde automatisch generiert, nachdem Ihre Zahlung eingegangen i
                 );
               }
               
-            } catch (creditorError) {
-              console.error(`❌ Failed to auto-trigger creditor contact for ${client.aktenzeichen}:`, creditorError.message);
-              
-              client.current_status = 'creditor_contact_failed';
-              client.status_history.push({
-                id: uuidv4(),
-                status: 'creditor_contact_failed',
-                changed_by: 'system',
-                metadata: {
-                  error_message: creditorError.message,
-                  requires_manual_action: true
+              // SEND CLIENT NOTIFICATION FOR AUTO-APPROVED CREDITORS
+              if (zendeskTicket && zendeskTicket.success) {
+                try {
+                  console.log(`📧 Sending client notification for auto-approved creditors...`);
+                  
+                  const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+                  const creditorsList = creditors
+                    .filter(c => c.status === 'confirmed')
+                    .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
+                    .join('\n');
+                  
+                  const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
+                  
+                  const notificationSubject = 'Ihre Gläubigerliste ist bereit zur Bestätigung';
+                  const notificationBody = `Sehr geehrte/r ${client.firstName} ${client.lastName},
+
+wir haben Ihre Dokumente erfolgreich verarbeitet und folgende Gläubiger identifiziert:
+
+${creditorsList}
+
+Gesamtschulden: €${totalDebt.toFixed(2)}
+
+WICHTIG: Bitte bestätigen Sie diese Gläubigerliste, damit wir in Ihrem Namen Kontakt aufnehmen können.
+
+➡️ Zur Bestätigung: ${portalLink}
+
+Mit freundlichen Grüßen
+Ihr Beratungsteam`;
+                  
+                  await zendeskService.sendSideConversation(zendeskTicket.ticket_id, {
+                    recipient_email: client.email,
+                    subject: notificationSubject,
+                    message: notificationBody
+                  });
+                  
+                  console.log(`✅ Client notification sent for auto-approved creditors`);
+                } catch (notifyError) {
+                  console.error(`❌ Failed to send client notification:`, notifyError.message);
                 }
-              });
-              
-              // Save with error handling
-              try {
-                await client.save({ validateModifiedOnly: true });
-              } catch (saveError) {
-                console.error('⚠️ Error saving client after failed creditor contact, using direct update:', saveError.message);
-                await Client.findOneAndUpdate(
-                  { _id: client._id },
-                  {
-                    $set: {
-                      current_status: 'creditor_contact_failed'
-                    },
-                    $push: {
-                      status_history: {
-                        id: uuidv4(),
-                        status: 'creditor_contact_failed',
-                        changed_by: 'system',
-                        metadata: {
-                          error_message: creditorError.message,
-                          requires_manual_action: true
-                        }
-                      }
-                    }
-                  },
-                  { runValidators: false }
-                );
               }
+              
+            } catch (error) {
+              console.error(`❌ Error updating auto-approved status for ${client.aktenzeichen}:`, error.message);
             }
           }
           

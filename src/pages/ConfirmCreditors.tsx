@@ -45,7 +45,7 @@ const ConfirmCreditors: React.FC = () => {
   const loginWithToken = async () => {
     try {
       console.log('🔐 Logging in with token...');
-      const loginResponse = await axios.post(`${API_BASE_URL}/clients/login`, { token });
+      const loginResponse = await axios.post(`${API_BASE_URL}/api/clients/login`, { token });
       
       if (loginResponse.data.success) {
         const { clientId: cId, sessionToken, client } = loginResponse.data;
@@ -72,7 +72,7 @@ const ConfirmCreditors: React.FC = () => {
   const fetchCreditorData = async (cId: string) => {
     try {
       console.log('📋 Fetching creditor confirmation data...');
-      const response = await axios.get(`${API_BASE_URL}/clients/${cId}/creditor-confirmation`);
+      const response = await axios.get(`${API_BASE_URL}/api/clients/${cId}/creditor-confirmation`);
       
       setData(response.data);
       setLoading(false);
@@ -89,7 +89,7 @@ const ConfirmCreditors: React.FC = () => {
     setConfirming(true);
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/clients/${clientId}/confirm-creditors`);
+      const response = await axios.post(`${API_BASE_URL}/api/clients/${clientId}/confirm-creditors`);
       
       if (response.data.success) {
         // Refresh data to show confirmed status
