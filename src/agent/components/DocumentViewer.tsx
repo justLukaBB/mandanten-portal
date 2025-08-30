@@ -31,8 +31,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
-    loadDocument();
-  }, [clientId, document.id]);
+    if (clientId && document?.id) {
+      loadDocument();
+    } else {
+      console.warn('⚠️ DocumentViewer: Missing clientId or document.id', { clientId, documentId: document?.id });
+      setError('Document ID fehlt');
+      setLoading(false);
+    }
+  }, [clientId, document?.id]);
 
   const loadDocument = async () => {
     try {
@@ -42,6 +48,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       const token = localStorage.getItem('agent_token');
       
       // First get document metadata
+      console.log(`📄 Loading document: ${document.id} for client: ${clientId}`);
       const metadataResponse = await fetch(`${API_BASE_URL}/agent-review/${clientId}/document/${document.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
