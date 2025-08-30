@@ -2052,41 +2052,7 @@ app.get('/api/clients/:clientId/final-debt-summary', async (req, res) => {
 });
 
 // Zendesk webhook endpoint for processing creditor responses
-app.post('/api/zendesk-webhook', async (req, res) => {
-  try {
-    const webhookData = req.body;
-    
-    console.log('📥 Received Zendesk webhook:', webhookData.type || 'unknown');
-    
-    // Check if this is a ticket comment update from creditor response
-    if (webhookData.type === 'ticket_comment_created') {
-      const ticketId = webhookData.ticket?.id;
-      const comment = webhookData.comment;
-      
-      // Only process public comments (creditor responses)
-      if (comment?.public && comment.via?.channel !== 'web') {
-        console.log(`📧 Processing creditor response for ticket ${ticketId}`);
-        
-        const result = await creditorContactService.processIncomingCreditorResponse(ticketId, comment);
-        
-        if (result.success) {
-          console.log(`✅ Processed response: ${result.creditor_name} - ${result.amount} EUR`);
-        } else {
-          console.log(`❌ Failed to process response: ${result.error}`);
-        }
-      }
-    }
-    
-    res.json({ status: 'success', message: 'Webhook processed' });
-    
-  } catch (error) {
-    console.error('Error processing Zendesk webhook:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: error.message 
-    });
-  }
-});
+// Creditor response webhook moved to /routes/zendesk-webhooks.js
 
 // Zendesk webhook endpoint for "Portal - Link" macro
 app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
