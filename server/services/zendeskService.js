@@ -196,10 +196,11 @@ class ZendeskService {
         side_conversation: {
           message: {
             to: [{
-              email: recipient_email
+              email: recipient_email,
+              name: recipient_email.split('@')[0] // Add name field
             }],
             subject: subject,
-            body: message
+            message: message  // Changed from 'body' to 'message'
           }
         }
       };
@@ -219,11 +220,20 @@ class ZendeskService {
       };
 
     } catch (error) {
-      console.error('❌ Failed to send Side Conversation:', error.response?.data || error.message);
+      console.error('❌ Failed to send Side Conversation:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        ticketId: ticketId,
+        recipientEmail: recipient_email
+      });
       
       return {
         success: false,
-        error: error.response?.data?.error || error.message
+        error: error.response?.data?.error || error.response?.data || error.message,
+        status: error.response?.status,
+        details: error.response?.data
       };
     }
   }
