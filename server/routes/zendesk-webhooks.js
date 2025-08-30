@@ -1597,6 +1597,80 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
   }
 });
 
+// Webhook: Process creditor responses (ticket comments)
+router.post('/creditor-response', rateLimits.general, async (req, res) => {
+  try {
+    console.log('📥 Zendesk Webhook: Creditor Response received', {
+      type: req.body.type,
+      ticket_id: req.body.ticket?.id
+    });
+    
+    const webhookData = req.body;
+    
+    // Check if this is a ticket comment update from creditor response
+    if (webhookData.type === 'ticket_comment_created') {
+      const ticketId = webhookData.ticket?.id;
+      const comment = webhookData.comment;
+      
+      console.log(`📧 Processing potential creditor response for ticket ${ticketId}`);
+      console.log(`📝 Comment details:`, {
+        public: comment?.public,
+        channel: comment?.via?.channel,
+        author_id: comment?.author_id
+      });
+      
+      // Only process public comments (creditor responses) that didn't come from web interface
+      if (comment?.public && comment.via?.channel !== 'web') {
+        console.log(`✅ Valid creditor response detected for ticket ${ticketId}`);
+        
+        const CreditorContactService = require('../services/creditorContactService');
+        const creditorContactService = new CreditorContactService();
+        
+        const result = await creditorContactService.processIncomingCreditorResponse(ticketId, comment);
+        
+        if (result.success) {
+          console.log(`✅ Processed creditor response: ${result.creditor_name} - €${result.amount}`);
+          
+          res.json({
+            success: true,
+            message: 'Creditor response processed successfully',
+            creditor: result.creditor_name,
+            amount: result.amount,
+            extraction_confidence: result.confidence
+          });
+        } else {
+          console.log(`❌ Failed to process creditor response: ${result.error}`);
+          
+          res.json({
+            success: false,
+            message: 'Failed to process creditor response',
+            error: result.error
+          });
+        }
+      } else {
+        console.log(`ℹ️ Skipping non-creditor comment for ticket ${ticketId}`);
+        res.json({
+          success: true,
+          message: 'Comment ignored - not a creditor response'
+        });
+      }
+    } else {
+      console.log(`ℹ️ Webhook type ${webhookData.type} - not a comment, ignoring`);
+      res.json({
+        success: true,
+        message: 'Webhook processed - not a comment event'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in creditor-response webhook:', error);
+    res.status(500).json({
+      error: 'Failed to process creditor response webhook',
+      details: error.message
+    });
+  }
+});
+
 // Helper function to generate ticket subject based on type
 function generateTicketSubject(client, ticketType) {
   const name = `${client.firstName} ${client.lastName}`;
