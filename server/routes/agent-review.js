@@ -656,7 +656,7 @@ ${creditorsList}
 Bitte überprüfen Sie diese Liste sorgfältig und bestätigen Sie, dass alle Gläubiger korrekt erfasst wurden.
 
 **➡️ Zur Bestätigung:**
-${portalLink}
+${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
 
 Nach Ihrer Bestätigung werden wir automatisch Kontakt mit Ihren Gläubigern aufnehmen.
 
@@ -683,7 +683,7 @@ Ihr Beratungsteam`;
 💰 Total debt: €${totalDebt.toFixed(2)}
 
 ⏳ **WAITING FOR:** Client confirmation in portal
-🔗 **Portal link sent:** ${portalLink}
+🔗 **Portal link sent:** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
 
 **Next steps:**
 1. ✅ Agent review completed
@@ -706,7 +706,7 @@ Ihr Beratungsteam`;
 💰 Total debt: €${totalDebt.toFixed(2)}
 
 ❌ **ERROR:** Failed to send client confirmation email
-🔗 **Manual portal link:** ${portalLink}
+🔗 **Manual portal link:** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
 
 **MANUAL ACTION REQUIRED:** Please send portal link to client manually`,
                 status: 'open'
