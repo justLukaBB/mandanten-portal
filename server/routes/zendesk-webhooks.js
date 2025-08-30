@@ -486,9 +486,23 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
 
     console.log(`📋 Processing payment confirmation for: ${client.firstName} ${client.lastName}`);
 
+    // Check if payment was already confirmed to prevent duplicate processing
+    if (client.first_payment_received && client.payment_processed_at) {
+      console.log(`⚠️ Payment already confirmed for ${client.aktenzeichen} at ${client.payment_processed_at}`);
+      return res.json({
+        success: true,
+        message: 'Payment already confirmed',
+        client_id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        already_processed: true,
+        processed_at: client.payment_processed_at
+      });
+    }
+
     // Update client status
     client.first_payment_received = true;
     client.current_status = 'payment_confirmed';
+    client.payment_processed_at = new Date();
     client.updated_at = new Date();
     
     // MANUAL CREDITOR EXTRACTION: Go through all documents and extract creditors
