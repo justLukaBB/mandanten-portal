@@ -494,6 +494,15 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     // MANUAL CREDITOR EXTRACTION: Go through all documents and extract creditors
     console.log(`🔍 MANUAL CREDITOR EXTRACTION: Checking all documents for client ${client.aktenzeichen}`);
     const allDocuments = client.documents || [];
+    
+    // Ensure all documents have IDs (fix for legacy data or missing IDs)
+    allDocuments.forEach((doc, index) => {
+      if (!doc.id) {
+        doc.id = doc._id?.toString() || uuidv4();
+        console.log(`⚠️ Generated missing ID for document ${index + 1}: ${doc.id}`);
+      }
+    });
+    
     const creditorDocuments = allDocuments.filter(doc => doc.is_creditor_document === true);
     
     console.log(`📊 Found ${creditorDocuments.length} creditor documents out of ${allDocuments.length} total documents`);
@@ -502,6 +511,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     
     creditorDocuments.forEach((doc, index) => {
       console.log(`📄 Document ${index + 1}: ${doc.name || 'Unnamed'}`);
+      console.log(`   - Document ID: ${doc.id || 'NO ID!'}`);
       console.log(`   - Is Creditor Document: ${doc.is_creditor_document}`);
       console.log(`   - Has extracted_data: ${!!doc.extracted_data}`);
       console.log(`   - Has creditor_data: ${!!doc.extracted_data?.creditor_data}`);
@@ -520,7 +530,8 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           is_representative: creditorData.is_representative || false,
           actual_creditor: creditorData.actual_creditor || creditorData.sender_name,
           source_document: doc.name || 'Unbekannt',
-          source_document_id: doc.id || '',
+          source_document_id: doc.id || doc._id || '',
+          document_id: doc.id || doc._id || '',
           ai_confidence: doc.extracted_data?.confidence || 0,
           status: 'confirmed',
           created_at: new Date(),
@@ -570,8 +581,9 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       }
     });
 
-    // Save with validation workaround
+    // Save with validation workaround (need to mark documents as modified since we may have added IDs)
     try {
+      client.markModified('documents');
       await client.save({ validateModifiedOnly: true });
     } catch (saveError) {
       console.error('⚠️ Error saving client with full validation, trying without document validation:', saveError.message);
@@ -792,18 +804,18 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
             try {
               console.log(`✅ Auto-approved client ${client.aktenzeichen} - Ready for agent confirmation...`);
               
-              // Set status to awaiting agent review (even for auto-approved)
-              client.current_status = 'awaiting_agent_review';
+              // Set status to creditor review (agent must review creditors)
+              client.current_status = 'creditor_review';
               client.updated_at = new Date();
               
               client.status_history.push({
                 id: uuidv4(),
-                status: 'awaiting_agent_review',
+                status: 'creditor_review',
                 changed_by: 'system',
                 metadata: {
                   payment_confirmed: true,
                   auto_approved_eligible: true,
-                  reason: 'High AI confidence scores - awaiting agent final confirmation',
+                  reason: 'High AI confidence scores - awaiting agent review',
                   total_creditors: creditors.length,
                   requires_agent_confirmation: true
                 }
@@ -818,18 +830,18 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
                   { _id: client._id },
                   {
                     $set: {
-                      current_status: 'awaiting_agent_review',
+                      current_status: 'creditor_review',
                       updated_at: new Date()
                     },
                     $push: {
                       status_history: {
                         id: uuidv4(),
-                        status: 'awaiting_agent_review',
+                        status: 'creditor_review',
                         changed_by: 'system',
                         metadata: {
                           payment_confirmed: true,
                           auto_approved_eligible: true,
-                          reason: 'High AI confidence scores - awaiting agent final confirmation',
+                          reason: 'High AI confidence scores - awaiting agent review',
                           total_creditors: creditors.length,
                           requires_agent_confirmation: true
                         }
