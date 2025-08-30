@@ -1151,37 +1151,46 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
       });
     }
     
-    // Trigger the client confirmation webhook
-    const axios = require('axios');
-    const webhookUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/api/zendesk-webhook/client-creditor-confirmed`;
-    
+    // Process client creditor confirmation directly
     try {
-      const response = await axios.post(webhookUrl, {
-        aktenzeichen: client.aktenzeichen,
-        confirmed_at: new Date().toISOString(),
-        creditors_confirmed: (client.final_creditor_list || []).length
-      }, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json'
+      console.log(`✅ Processing client creditor confirmation for ${client.aktenzeichen}...`);
+      
+      // Update client confirmation status
+      client.client_confirmed_creditors = true;
+      client.client_confirmed_at = new Date();
+      client.current_status = 'creditor_contact_initiated';
+      client.updated_at = new Date();
+
+      // Add status history
+      const { v4: uuidv4 } = require('uuid');
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'client_creditors_confirmed',
+        changed_by: 'client',
+        metadata: {
+          confirmed_at: new Date(),
+          creditors_count: (client.final_creditor_list || []).length,
+          admin_approved: client.admin_approved,
+          admin_approved_at: client.admin_approved_at
         }
       });
+
+      await client.save();
       
-      if (response.data.success) {
-        res.json({
-          success: true,
-          message: 'Gläubigerliste erfolgreich bestätigt',
-          creditor_contact: response.data.creditor_contact,
-          next_step: response.data.next_step
-        });
-      } else {
-        throw new Error(response.data.error || 'Webhook failed');
-      }
-    } catch (webhookError) {
-      console.error('Failed to trigger client confirmation webhook:', webhookError.message);
+      console.log(`✅ Client ${client.aktenzeichen} creditor confirmation processed successfully`);
+      
+      res.json({
+        success: true,
+        message: 'Gläubigerliste erfolgreich bestätigt',
+        status: 'creditor_contact_initiated',
+        next_step: 'Creditor contact will be initiated automatically'
+      });
+      
+    } catch (confirmationError) {
+      console.error('Failed to process client confirmation:', confirmationError.message);
       res.status(500).json({
         error: 'Failed to process confirmation',
-        details: webhookError.message
+        details: confirmationError.message
       });
     }
     
