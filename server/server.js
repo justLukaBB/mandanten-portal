@@ -1193,6 +1193,44 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
           
           console.log(`✅ Creditor contact initiated: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
           
+          // Add internal comment to main ticket documenting creditor contact
+          if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {
+            try {
+              const ZendeskService = require('./services/zendeskService');
+              const zendeskService = new ZendeskService();
+              
+              const creditorsList = creditors.map((c, index) => 
+                `${index + 1}. **${c.creditor_name}** - €${(c.claim_amount || 0).toFixed(2)}`
+              ).join('\n');
+              
+              await zendeskService.addInternalComment(client.zendesk_ticket_id, {
+                content: `🚀 **GLÄUBIGER-KONTAKT INITIIERT**
+
+✅ **Client bestätigt:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})
+📧 **Emails verschickt:** ${creditorContactResult.emails_sent}/${creditors.length}
+🎫 **Hauptticket:** ${creditorContactResult.main_ticket_id}
+
+📋 **Kontaktierte Gläubiger:**
+${creditorsList}
+
+**💰 Gesamtschulden:** €${creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0).toFixed(2)}
+
+⏳ **Nächste Schritte:**
+• Gläubiger haben 14 Tage Zeit zu antworten
+• Antworten werden automatisch im Hauptticket ${creditorContactResult.main_ticket_id} verarbeitet
+• Bei fehlenden Antworten wird automatische Nachfassung eingeleitet
+
+**Status:** Warten auf Gläubiger-Antworten`,
+                status: 'pending'
+              });
+              
+              console.log(`✅ Added creditor contact documentation to ticket ${client.zendesk_ticket_id}`);
+              
+            } catch (commentError) {
+              console.error(`❌ Failed to add creditor contact comment:`, commentError.message);
+            }
+          }
+          
         } catch (creditorError) {
           console.error(`❌ Failed to initiate creditor contact:`, creditorError.message);
           // Don't fail the confirmation, just log the error
