@@ -1179,11 +1179,37 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
       
       console.log(`✅ Client ${client.aktenzeichen} creditor confirmation processed successfully`);
       
+      // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
+      let creditorContactResult = null;
+      const creditors = client.final_creditor_list || [];
+      
+      if (creditors.length > 0) {
+        try {
+          console.log(`🚀 Auto-triggering creditor contact for ${client.aktenzeichen}...`);
+          
+          const CreditorContactService = require('./services/creditorContactService');
+          const creditorService = new CreditorContactService();
+          creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+          
+          console.log(`✅ Creditor contact initiated: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+          
+        } catch (creditorError) {
+          console.error(`❌ Failed to initiate creditor contact:`, creditorError.message);
+          // Don't fail the confirmation, just log the error
+        }
+      }
+      
       res.json({
         success: true,
         message: 'Gläubigerliste erfolgreich bestätigt',
         status: 'creditor_contact_initiated',
-        next_step: 'Creditor contact will be initiated automatically'
+        creditor_contact: creditorContactResult ? {
+          emails_sent: creditorContactResult.emails_sent,
+          main_ticket_id: creditorContactResult.main_ticket_id
+        } : null,
+        next_step: creditorContactResult ? 
+          `Creditor contact initiated - ${creditorContactResult.emails_sent} emails sent` : 
+          'Manual creditor contact required'
       });
       
     } catch (confirmationError) {
