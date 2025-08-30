@@ -1072,10 +1072,13 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
     
+    // Check current_status (new field) or workflow_status (legacy field)
+    const status = client.current_status || client.workflow_status;
+    
     // For new clients, return empty state
-    if (client.workflow_status === 'portal_access_sent') {
+    if (status === 'portal_access_sent' || status === 'created') {
       return res.json({
-        workflow_status: client.workflow_status,
+        workflow_status: status,
         creditors: [],
         client_confirmed: false,
         confirmation_deadline: null,
@@ -1083,21 +1086,34 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
       });
     }
     
-    if (client.workflow_status !== 'client_confirmation' && client.workflow_status !== 'completed') {
+    // Check if agent has approved (required before client can see creditors)
+    if (!client.admin_approved) {
       return res.json({
-        workflow_status: client.workflow_status,
-        creditors: client.final_creditor_list || [],
-        client_confirmed: client.client_confirmed_creditors || false,
+        workflow_status: status,
+        creditors: [],
+        client_confirmed: false,
         confirmation_deadline: null,
-        message: 'Gläubigerliste wird noch verarbeitet.'
+        message: 'Ihre Gläubigerliste wird noch von unserem Team überprüft.'
       });
     }
     
-    res.json({
-      workflow_status: client.workflow_status,
-      creditors: client.final_creditor_list || [],
-      client_confirmed: client.client_confirmed_creditors || false,
-      confirmation_deadline: null
+    // If agent approved and status is awaiting_client_confirmation, show creditors
+    if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed') {
+      return res.json({
+        workflow_status: status,
+        creditors: client.final_creditor_list || [],
+        client_confirmed: client.client_confirmed_creditors || false,
+        confirmation_deadline: null
+      });
+    }
+    
+    // Default case - creditors being processed
+    return res.json({
+      workflow_status: status,
+      creditors: [],
+      client_confirmed: false,
+      confirmation_deadline: null,
+      message: 'Gläubigerliste wird noch verarbeitet.'
     });
   } catch (error) {
     console.error('Error fetching creditor confirmation:', error);
