@@ -1060,7 +1060,7 @@ ${finalCreditorsList}
 
 🚀 BEREIT FÜR KUNDEN-BESTÄTIGUNG
 [BUTTON: Gläubigerliste zur Bestätigung senden]
-🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}
+🔗 Portal-Link: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
 
 📁 Mandant: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
 
@@ -1372,7 +1372,7 @@ ${creditorsList}
   • Gläubiger entfernen/ablehnen
 
 🏛️ **CLIENT-PORTAL:**
-→ **[CLIENT BESTÄTIGUNG]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}
+→ **[CLIENT BESTÄTIGUNG]** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
 
 📋 **STATUS:** Wartet auf Mandanten-Bestätigung
 ✅ **Nächste Schritte:** Mandant erhält E-Mail mit Bestätigungslink`;
@@ -1393,7 +1393,7 @@ ${creditorsList}
       success: true,
       message: 'Creditor confirmation request processed',
       client_status: 'awaiting_client_confirmation',
-      portal_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`,
+      portal_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}`,
       agent_review_url: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`,
       creditors_count: client.final_creditor_list?.length || 0,
       next_step: 'Client will receive confirmation email with portal link. Agent can also review/modify creditors via agent_review_url.'
