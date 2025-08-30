@@ -10,6 +10,20 @@ const config = require('../config');
 
 const router = express.Router();
 
+// Debug endpoint to test agent authentication
+router.get('/debug/auth', authenticateAgent, rateLimits.general, async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Agent authentication working',
+    agent: {
+      id: req.agentId,
+      username: req.agentUsername,
+      role: req.agentRole
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Helper function to serve mock PDF for test scenarios
 function serveMockPDF(res, documentName) {
   try {
@@ -99,8 +113,11 @@ router.get('/available-clients', authenticateAgent, rateLimits.general, async (r
     const clients = await Client.find({
       // Only clients who have received payment (ready for review)
       first_payment_received: true,
-      // Exclude clients that are already fully reviewed
-      current_status: { $nin: ['manual_review_complete', 'creditor_contact_initiated', 'completed'] }
+      // Include clients that need creditor review or exclude completed ones
+      $or: [
+        { current_status: 'creditor_review' },
+        { current_status: { $nin: ['manual_review_complete', 'creditor_contact_initiated', 'completed', 'awaiting_client_confirmation'] } }
+      ]
     }).sort({ payment_processed_at: -1 }).limit(20);
 
     const availableClients = [];
@@ -222,6 +239,16 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
     const creditorsToReview = creditors.filter(c => (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
 
     console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs, ${creditorsToReview.length} creditors need review`);
+    
+    // Log document structure for debugging
+    if (documentsToReview.length > 0) {
+      console.log(`📄 First document to review:`, {
+        id: documentsToReview[0].id,
+        name: documentsToReview[0].name,
+        hasId: !!documentsToReview[0].id,
+        documentStructure: Object.keys(documentsToReview[0])
+      });
+    }
 
     res.json({
       success: true,
@@ -274,20 +301,31 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     
     console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}, action: ${action}`);
 
-    // Input validation
+    // Enhanced input validation with debugging
+    console.log(`📝 Correction request data:`, {
+      document_id,
+      action,
+      corrections: corrections ? Object.keys(corrections) : 'null',
+      agentId: req.agentId,
+      agentUsername: req.agentUsername
+    });
+
     if (!document_id) {
+      console.log(`❌ Missing document_id in correction request`);
       return res.status(400).json({
         error: 'document_id is required'
       });
     }
 
     if (!action || !['correct', 'skip', 'confirm'].includes(action)) {
+      console.log(`❌ Invalid action: ${action}`);
       return res.status(400).json({
         error: 'Valid action is required (correct, skip, confirm)'
       });
     }
 
     if (action === 'correct' && (!corrections || typeof corrections !== 'object')) {
+      console.log(`❌ Missing corrections for action 'correct':`, corrections);
       return res.status(400).json({
         error: 'corrections object is required for correct action'
       });
