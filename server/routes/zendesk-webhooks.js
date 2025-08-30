@@ -1469,8 +1469,13 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
       try {
         console.log(`🚀 Auto-triggering creditor contact after client confirmation for ${client.aktenzeichen}...`);
         
+        console.log('📝 Attempting to instantiate CreditorContactService...');
         const creditorService = new CreditorContactService();
+        console.log('✅ CreditorContactService instantiated successfully');
+        
+        console.log('📞 Calling processClientCreditorConfirmation...');
         creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
+        console.log('✅ processClientCreditorConfirmation completed:', creditorContactResult);
         
         console.log(`✅ Creditor contact process started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
         
