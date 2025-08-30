@@ -495,11 +495,18 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     console.log(`🔍 MANUAL CREDITOR EXTRACTION: Checking all documents for client ${client.aktenzeichen}`);
     const allDocuments = client.documents || [];
     
-    // Ensure all documents have IDs (fix for legacy data or missing IDs)
+    // Ensure all documents have required fields (fix for legacy data)
     allDocuments.forEach((doc, index) => {
+      // Ensure document has an ID
       if (!doc.id) {
         doc.id = doc._id?.toString() || uuidv4();
         console.log(`⚠️ Generated missing ID for document ${index + 1}: ${doc.id}`);
+      }
+      
+      // Ensure document has a name (required by schema)
+      if (!doc.name) {
+        doc.name = doc.filename || `Document_${index + 1}_${doc.id?.substring(0, 8) || 'unknown'}`;
+        console.log(`⚠️ Generated missing name for document ${index + 1}: ${doc.name}`);
       }
     });
     
