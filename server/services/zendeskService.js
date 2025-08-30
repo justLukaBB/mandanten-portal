@@ -193,15 +193,13 @@ class ZendeskService {
       
       // Create a side conversation
       const sideConversationData = {
-        side_conversation: {
-          message: {
-            to: [{
-              email: recipient_email,
-              name: recipient_email.split('@')[0] // Add name field
-            }],
-            subject: subject,
-            message: message  // Changed from 'body' to 'message'
-          }
+        message: {
+          to: [{
+            email: recipient_email,
+            name: recipient_email.split('@')[0] // Add name field
+          }],
+          subject: subject,
+          body: message
         }
       };
 
