@@ -636,7 +636,7 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
    - Referenz: ${c.reference_number || 'Keine Referenz'}`;
           }).join('\n\n');
 
-        const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`;
+        const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}`;
         
         // Send Side Conversation to client (AFTER agent approval)
         if (zendeskService && zendeskService.isConfigured() && originalTicketId) {
@@ -752,7 +752,7 @@ Ihr Beratungsteam`;
       client_confirmation: {
         required: true,
         notification_sent: clientNotificationSent,
-        portal_link: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal/confirm-creditors?token=${client.portal_token}`,
+        portal_link: `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}`,
         next_steps: [
           '1. Client receives email with creditor list',
           '2. Client reviews and confirms creditors in portal',
