@@ -145,7 +145,8 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
   }
 
   // Only show creditor confirmation when admin has approved it
-  if (confirmationData.workflow_status !== 'client_confirmation' && 
+  if (confirmationData.workflow_status !== 'awaiting_client_confirmation' && 
+      confirmationData.workflow_status !== 'client_confirmation' && 
       confirmationData.workflow_status !== 'completed') {
     return null;
   }
