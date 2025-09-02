@@ -155,6 +155,15 @@ Az: {reference_number}`
 
             console.log(`✅ Updated contact record: ${contactRecord.creditor_name} - Final amount: ${finalAmount} EUR`);
 
+            // SYNC BACK TO CLIENT'S FINAL_CREDITOR_LIST for admin dashboard visibility
+            await this.syncResponseToClientCreditorList(contactRecord.client_reference, contactRecord, {
+                final_debt_amount: finalAmount,
+                amount_source: amountSource,
+                response_received_at: new Date().toISOString(),
+                creditor_response_text: emailData.body,
+                extraction_confidence: extractionResult.confidence
+            });
+
             return {
                 success: true,
                 creditor_id: contactRecord.id,
@@ -447,6 +456,92 @@ Az: {reference_number}`
                 client_reference: clientReference,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Sync creditor response data back to client's final_creditor_list
+     * This ensures admin dashboard shows updated amounts from creditor responses
+     */
+    async syncResponseToClientCreditorList(clientReference, contactRecord, responseData) {
+        try {
+            console.log(`🔄 Syncing creditor response to client ${clientReference} final_creditor_list...`);
+            
+            // Get client from database
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                console.error(`❌ Client ${clientReference} not found for syncing response`);
+                return false;
+            }
+
+            // Find matching creditor in final_creditor_list
+            const finalCreditorList = client.final_creditor_list || [];
+            const creditorIndex = finalCreditorList.findIndex(creditor => 
+                (creditor.sender_name === contactRecord.creditor_name) ||
+                (creditor.reference_number === contactRecord.reference_number) ||
+                (creditor.sender_email === contactRecord.creditor_email)
+            );
+
+            if (creditorIndex === -1) {
+                console.error(`❌ Creditor ${contactRecord.creditor_name} not found in client's final_creditor_list`);
+                return false;
+            }
+
+            // Update the creditor with response data
+            const creditor = finalCreditorList[creditorIndex];
+            
+            // Update amount information
+            creditor.claim_amount = responseData.final_debt_amount; // THIS IS KEY - updates amount in admin dashboard
+            creditor.original_claim_amount = creditor.claim_amount; // Keep original
+            creditor.creditor_response_amount = responseData.final_debt_amount;
+            
+            // Update status information
+            creditor.status = 'responded';
+            creditor.amount_source = responseData.amount_source;
+            creditor.response_received_at = responseData.response_received_at;
+            creditor.extraction_confidence = responseData.extraction_confidence;
+            creditor.creditor_response_text = responseData.creditor_response_text;
+            creditor.response_processed_at = new Date().toISOString();
+            
+            // Add response metadata
+            creditor.response_metadata = {
+                contact_record_id: contactRecord.id,
+                processed_by: 'side_conversation_monitor',
+                processing_method: 'claude_ai_extraction'
+            };
+
+            // Update client in database
+            client.final_creditor_list = finalCreditorList;
+            client.updated_at = new Date();
+            
+            // Add to status history
+            client.status_history.push({
+                id: require('uuid').v4(),
+                status: 'creditor_response_processed',
+                changed_by: 'system',
+                metadata: {
+                    creditor_name: contactRecord.creditor_name,
+                    old_amount: creditor.original_claim_amount || 0,
+                    new_amount: responseData.final_debt_amount,
+                    amount_change: (responseData.final_debt_amount - (creditor.original_claim_amount || 0)),
+                    extraction_confidence: responseData.extraction_confidence,
+                    response_method: 'side_conversation'
+                },
+                created_at: new Date()
+            });
+
+            // Save to database
+            await client.save({ validateModifiedOnly: true });
+            
+            console.log(`✅ Synced creditor response: ${contactRecord.creditor_name} amount updated from ${creditor.original_claim_amount || 'N/A'}€ to ${responseData.final_debt_amount}€`);
+            
+            return true;
+            
+        } catch (error) {
+            console.error(`❌ Error syncing creditor response to client ${clientReference}:`, error.message);
+            return false;
         }
     }
 
