@@ -17,6 +17,7 @@ const portalWebhooks = require('./routes/portal-webhooks');
 const agentReviewRoutes = require('./routes/agent-review');
 const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
+const testCreditorContactRoutes = require('./routes/test-creditor-contact');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -24,9 +25,13 @@ const Client = require('./models/Client');
 
 const DocumentProcessor = require('./services/documentProcessor');
 const CreditorContactService = require('./services/creditorContactService');
+const SideConversationMonitor = require('./services/sideConversationMonitor');
 const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
+
+// Initialize global side conversation monitor
+const globalSideConversationMonitor = new SideConversationMonitor();
 
 const app = express();
 const PORT = config.PORT;
@@ -45,6 +50,7 @@ app.use('/api/portal-webhook', portalWebhooks);
 app.use('/api/agent-review', agentReviewRoutes);
 app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
+app.use('/api/test/creditor-contact', testCreditorContactRoutes);
 
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
@@ -1192,6 +1198,27 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
           creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
           
           console.log(`✅ Creditor contact initiated: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+          
+          // AUTO-START SIDE CONVERSATION MONITORING
+          try {
+            console.log(`🔄 Auto-starting Side Conversation monitoring for client ${client.aktenzeichen}...`);
+            
+            // Pass the same creditor service instance to monitor so it can access the contact data
+            globalSideConversationMonitor.creditorContactService = creditorService;
+            
+            // Small delay to ensure all side conversations are fully created
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const monitorResult = globalSideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
+            
+            if (monitorResult.success) {
+              console.log(`✅ Started monitoring ${monitorResult.side_conversations_count} Side Conversations for ${client.aktenzeichen}`);
+            } else {
+              console.log(`⚠️ Failed to start monitoring for ${client.aktenzeichen}: ${monitorResult.message}`);
+            }
+          } catch (error) {
+            console.error(`❌ Error auto-starting monitoring for ${client.aktenzeichen}:`, error.message);
+          }
           
           // Add internal comment to main ticket documenting creditor contact
           if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {

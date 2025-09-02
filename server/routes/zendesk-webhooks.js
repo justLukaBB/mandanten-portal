@@ -11,6 +11,9 @@ const router = express.Router();
 // Initialize Zendesk service
 const zendeskService = new ZendeskService();
 
+// Initialize Side Conversation Monitor
+const sideConversationMonitor = new SideConversationMonitor();
+
 // Middleware to handle Zendesk's specific JSON format
 const parseZendeskPayload = (req, res, next) => {
   console.log('🔍 Zendesk Payload Parser - Original body type:', typeof req.body);
