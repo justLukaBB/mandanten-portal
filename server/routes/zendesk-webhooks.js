@@ -2166,6 +2166,67 @@ router.get('/monitor/status/:clientReference', rateLimits.general, async (req, r
   }
 });
 
+// API: Restart monitoring for all active clients
+router.post('/monitor/restart', rateLimits.general, async (req, res) => {
+  try {
+    console.log('🔄 Restarting Side Conversation monitoring...');
+    
+    // Get current active sessions
+    const currentStatus = sideConversationMonitor.getStatus();
+    const activeSessions = currentStatus.active_sessions || [];
+    
+    // Stop all monitoring
+    sideConversationMonitor.stopGlobalMonitoring();
+    
+    // Restart monitoring for each active client
+    let restartedCount = 0;
+    const results = [];
+    
+    for (const session of activeSessions) {
+      try {
+        const result = sideConversationMonitor.startMonitoringForClient(session.client_reference, 1);
+        if (result.success) {
+          restartedCount++;
+          results.push({
+            client_reference: session.client_reference,
+            success: true,
+            side_conversations_count: result.side_conversations_count
+          });
+        } else {
+          results.push({
+            client_reference: session.client_reference,
+            success: false,
+            error: result.message
+          });
+        }
+      } catch (error) {
+        results.push({
+          client_reference: session.client_reference,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    console.log(`✅ Monitoring restarted for ${restartedCount}/${activeSessions.length} clients`);
+    
+    res.json({
+      success: true,
+      message: `Monitoring restarted for ${restartedCount}/${activeSessions.length} clients`,
+      restarted_count: restartedCount,
+      total_clients: activeSessions.length,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('❌ Error restarting monitoring:', error.message);
+    res.status(500).json({
+      error: 'Failed to restart monitoring',
+      details: error.message
+    });
+  }
+});
+
 // API: Manual check for specific client
 router.post('/monitor/check-client/:clientReference', rateLimits.general, async (req, res) => {
   try {

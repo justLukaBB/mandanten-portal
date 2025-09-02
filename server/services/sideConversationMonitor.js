@@ -100,7 +100,12 @@ class SideConversationMonitor {
         console.log(`🌐 Starting global Side Conversation monitoring (every ${intervalMinutes} minutes)`);
         
         this.globalMonitorInterval = setInterval(async () => {
-            await this.checkAllActiveSessions();
+            try {
+                await this.checkAllActiveSessions();
+            } catch (error) {
+                console.error('❌ Critical error in global monitoring interval:', error.message);
+                console.error('🔄 Monitoring will continue on next interval...');
+            }
         }, checkInterval);
         
         // Initial check
