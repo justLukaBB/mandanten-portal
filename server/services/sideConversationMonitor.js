@@ -227,9 +227,9 @@ class SideConversationMonitor {
         try {
             console.log(`🔍 Checking Side Conversation ${sideConversationId} for ticket ${ticketId}`);
             
-            // Get Side Conversation messages from Zendesk API
+            // Get Side Conversation with events sideloaded to get actual messages
             const response = await this.zendeskService.api.get(
-                `/tickets/${ticketId}/side_conversations/${sideConversationId}.json`
+                `/tickets/${ticketId}/side_conversations/${sideConversationId}.json?include=events`
             );
             
             if (!response.data.side_conversation) {
@@ -238,18 +238,23 @@ class SideConversationMonitor {
             }
 
             const sideConversation = response.data.side_conversation;
-            const messages = sideConversation.events || [];
+            
+            // Events might be sideloaded in the response root or in the side_conversation object
+            const messages = sideConversation.events || response.data.events || [];
             
             console.log(`📨 Found ${messages.length} total messages in Side Conversation ${sideConversationId}`);
             console.log(`👥 Participants:`, sideConversation.participants?.length || 0);
             
+            // Debug: log full response structure to understand sideloading
+            console.log(`🔍 Full API response keys:`, Object.keys(response.data));
+            console.log(`🔍 Side Conversation keys:`, Object.keys(sideConversation));
+            
             // Debug: log message structure
             if (messages.length > 0) {
                 console.log(`🔍 Sample message structure:`, JSON.stringify(messages[0], null, 2));
+            } else {
+                console.log(`⚠️ No events found - checking if they're elsewhere in response`);
             }
-            
-            // Also debug the full API response structure
-            console.log(`🔍 Full Side Conversation structure:`, Object.keys(sideConversation));
 
             // Get session to check when monitoring started
             const session = this.activeMonitoringSessions.get(contact.client_reference);
