@@ -137,7 +137,8 @@ const ReviewDashboard: React.FC = () => {
       console.log(`📊 Loaded review data for ${data.client.aktenzeichen}:`, data);
       
       // If no manual reviews needed, go straight to summary
-      if (data.documents.need_review.length === 0) {
+      if (!data.documents.need_review || data.documents.need_review.length === 0) {
+        console.log('📊 No documents need review, switching to summary phase');
         setReviewPhase('summary');
       }
       
@@ -158,6 +159,14 @@ const ReviewDashboard: React.FC = () => {
       const currentDoc = reviewData.documents.need_review[currentDocIndex];
       const token = localStorage.getItem('agent_token');
       
+      console.log(`📤 Sending correction request:`, {
+        clientId,
+        document_id: currentDoc.id,
+        action,
+        corrections,
+        hasToken: !!token
+      });
+      
       const response = await fetch(`${API_BASE_URL}/agent-review/${clientId}/correct`, {
         method: 'POST',
         headers: {
@@ -172,7 +181,9 @@ const ReviewDashboard: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to save ${action}`);
+        const errorData = await response.json();
+        console.error(`❌ Server error response:`, errorData);
+        throw new Error(errorData.error || `Failed to save ${action}`);
       }
 
       const result = await response.json();
@@ -307,8 +318,12 @@ const ReviewDashboard: React.FC = () => {
     return null;
   }
 
-  const documentsToReview = reviewData.documents.need_review;
+  const documentsToReview = reviewData.documents.need_review || [];
   const currentDoc = documentsToReview[currentDocIndex];
+  
+  // Log for debugging
+  console.log('📄 Current document:', currentDoc);
+  console.log('📑 Documents to review:', documentsToReview);
   
   // Get high-confidence documents and creditors
   const highConfidenceDocuments = reviewData.documents.all.filter(doc => 
@@ -405,23 +420,35 @@ const ReviewDashboard: React.FC = () => {
       <div className="flex h-[calc(100vh-140px)]">
         {/* Document Viewer */}
         <div className="w-1/2 p-4">
-          <DocumentViewer 
-            clientId={clientId!}
-            document={currentDoc}
-            className="h-full"
-          />
+          {currentDoc ? (
+            <DocumentViewer 
+              clientId={clientId!}
+              document={currentDoc}
+              className="h-full"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg">
+              <p className="text-gray-500">Kein Dokument zum Anzeigen</p>
+            </div>
+          )}
         </div>
 
         {/* Correction Form */}
         <div className="w-1/2 p-4">
-          <CorrectionForm
-            document={currentDoc}
-            onSave={(corrections) => handleSaveCorrections(corrections, 'correct')}
-            onSkip={(reason) => handleSaveCorrections({ skip_reason: reason }, 'skip')}
-            onConfirm={() => handleSaveCorrections({}, 'confirm')}
-            disabled={saving}
-            className="h-full"
-          />
+          {currentDoc ? (
+            <CorrectionForm
+              document={currentDoc}
+              onSave={(corrections) => handleSaveCorrections(corrections, 'correct')}
+              onSkip={(reason) => handleSaveCorrections({ skip_reason: reason }, 'skip')}
+              onConfirm={() => handleSaveCorrections({}, 'confirm')}
+              disabled={saving}
+              className="h-full"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg">
+              <p className="text-gray-500">Keine Dokumente zur Überprüfung</p>
+            </div>
+          )}
         </div>
       </div>
 
