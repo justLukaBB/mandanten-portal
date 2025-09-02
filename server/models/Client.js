@@ -83,7 +83,7 @@ const creditorSchema = new mongoose.Schema({
   confidence: Number, // General confidence field
   status: {
     type: String,
-    enum: ['confirmed', 'rejected', 'pending'],
+    enum: ['confirmed', 'rejected', 'pending', 'responded'],
     default: 'confirmed'
   },
   created_at: { type: Date, default: Date.now },
