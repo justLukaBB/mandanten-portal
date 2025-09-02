@@ -18,7 +18,7 @@ class SideConversationMonitor {
     /**
      * Start monitoring Side Conversations for a specific client's creditor contact process
      */
-    startMonitoringForClient(clientReference, intervalMinutes = 5) {
+    startMonitoringForClient(clientReference, intervalMinutes = 1) {
         if (this.activeMonitoringSessions.has(clientReference)) {
             console.log(`⚠️ Side Conversation monitor already running for client ${clientReference}`);
             return this.activeMonitoringSessions.get(clientReference);
@@ -90,7 +90,7 @@ class SideConversationMonitor {
     /**
      * Start global monitoring that checks all active client sessions
      */
-    startGlobalMonitoring(intervalMinutes = 5) {
+    startGlobalMonitoring(intervalMinutes = 1) {
         if (this.globalMonitorInterval) {
             return; // Already running
         }
