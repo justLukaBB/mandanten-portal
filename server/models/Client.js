@@ -218,6 +218,50 @@ const clientSchema = new mongoose.Schema({
   creditor_contact_started: { type: Boolean, default: false },
   creditor_contact_started_at: Date,
   
+  // Financial data for Schuldenbereinigungsplan (manual input)
+  financial_data: {
+    net_income: Number,
+    dependents: { type: Number, default: 0 },
+    marital_status: {
+      type: String,
+      enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet']
+    },
+    pfaendbar_amount: Number, // Auto-calculated from garnishment table
+    input_date: Date,
+    input_by: String // Agent who entered data
+  },
+  
+  // Debt settlement plan (Schuldenbereinigungsplan)
+  debt_settlement_plan: {
+    created_at: Date,
+    total_debt: Number,
+    pfaendbar_amount: Number,
+    creditors: [{
+      id: String,
+      name: String,
+      email: String,
+      amount: Number,
+      percentage: Number,
+      monthly_quota: Number,
+      amount_source: {
+        type: String,
+        enum: ['creditor_response', 'original_document', 'default_fallback']
+      },
+      contact_status: {
+        type: String,
+        enum: ['responded', 'no_response', 'email_failed']
+      }
+    }],
+    zendesk_ticket_id: String, // New ticket created for the plan
+    plan_status: {
+      type: String,
+      enum: ['generated', 'sent_to_client', 'approved', 'rejected'],
+      default: 'generated'
+    },
+    generated_by: String, // Agent or 'system' for automated
+    plan_notes: String
+  },
+  
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
