@@ -2075,9 +2075,6 @@ function getTicketStatusForScenario(ticketType) {
   }
 }
 
-// Initialize Side Conversation Monitor
-const sideConversationMonitor = new SideConversationMonitor();
-
 // API: Start Side Conversation monitoring for a specific client
 router.post('/monitor/start-client/:clientReference', rateLimits.general, async (req, res) => {
   try {
