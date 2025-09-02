@@ -236,10 +236,26 @@ class SideConversationMonitor {
             const messages = sideConversation.participants || [];
             
             console.log(`📨 Found ${messages.length} total messages in Side Conversation ${sideConversationId}`);
+            
+            // Debug: log message structure
+            if (messages.length > 0) {
+                console.log(`🔍 Sample message structure:`, JSON.stringify(messages[0], null, 2));
+            }
 
             // Get session to check when monitoring started
             const session = this.activeMonitoringSessions.get(contact.client_reference);
-            const monitoringStartTime = session ? session.startedAt : new Date();
+            let monitoringStartTime;
+            
+            try {
+                monitoringStartTime = session && session.startedAt ? new Date(session.startedAt) : new Date();
+                if (isNaN(monitoringStartTime.getTime())) {
+                    console.log(`⚠️ Invalid monitoring start time, using current time`);
+                    monitoringStartTime = new Date();
+                }
+            } catch (error) {
+                console.log(`⚠️ Error parsing monitoring start time: ${error.message}, using current time`);
+                monitoringStartTime = new Date();
+            }
             
             // Filter for new inbound messages since monitoring started
             const newMessages = messages.filter(message => {
