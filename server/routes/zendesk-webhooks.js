@@ -1484,6 +1484,12 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
         try {
           console.log(`🔄 Auto-starting Side Conversation monitoring for client ${client.aktenzeichen}...`);
           
+          // Pass the same creditor service instance to monitor so it can access the contact data
+          sideConversationMonitor.creditorContactService = creditorService;
+          
+          // Small delay to ensure all side conversations are fully created
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
           const monitorResult = sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
           
           if (monitorResult.success) {
