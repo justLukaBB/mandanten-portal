@@ -237,16 +237,27 @@ class SideConversationMonitor {
             
             console.log(`📨 Found ${messages.length} total messages in Side Conversation ${sideConversationId}`);
 
-            // Filter for new inbound messages since last check
+            // Get session to check when monitoring started
+            const session = this.activeMonitoringSessions.get(contact.client_reference);
+            const monitoringStartTime = session ? session.startedAt : new Date();
+            
+            // Filter for new inbound messages since monitoring started
             const newMessages = messages.filter(message => {
                 const messageTime = new Date(message.created_at);
                 const messageId = `${sideConversationId}-${message.id}`;
                 
                 // Check if message is new and inbound (from creditor)
-                const isNew = messageTime > this.lastCheckTime;
+                const isNew = messageTime > monitoringStartTime;
                 const isInbound = message.via && message.via.source && message.via.source.from;
                 const notProcessed = !this.processedMessages.has(messageId);
                 const containsDebtInfo = this.containsDebtInformation(message.body);
+                
+                // Debug logging for message filtering
+                console.log(`📧 Message ${message.id}: Time=${messageTime.toISOString()}, MonitorStart=${monitoringStartTime.toISOString()}`);
+                console.log(`   📊 Filters: isNew=${isNew}, isInbound=${isInbound}, notProcessed=${notProcessed}, hasDebtInfo=${containsDebtInfo}`);
+                if (message.body) {
+                    console.log(`   📝 Body preview: "${message.body.substring(0, 100)}..."`);
+                }
                 
                 return isNew && isInbound && notProcessed && containsDebtInfo;
             });
