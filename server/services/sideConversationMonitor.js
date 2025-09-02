@@ -280,15 +280,24 @@ class SideConversationMonitor {
                     
                     // Check if message is new and inbound (from creditor)
                     const isNew = messageTime > monitoringStartTime;
-                    const isInbound = message.via && message.via.source && message.via.source.from;
+                    
+                    // Check if message is inbound by looking at the from email
+                    // Inbound = not from our agent (luka@ra-scuric.de)
+                    const fromEmail = message.message?.from?.email || message.actor?.email;
+                    const isInbound = fromEmail && fromEmail !== 'luka@ra-scuric.de' && !fromEmail.includes('ra-scuric.de');
+                    
                     const notProcessed = !this.processedMessages.has(messageId);
-                    const containsDebtInfo = this.containsDebtInformation(message.body);
+                    
+                    // Get message body from the correct location
+                    const messageBody = message.message?.body || '';
+                    const containsDebtInfo = this.containsDebtInformation(messageBody);
                     
                     // Debug logging for message filtering
                     console.log(`📧 Message ${message.id}: Time=${messageTime.toISOString()}, MonitorStart=${monitoringStartTime.toISOString()}`);
+                    console.log(`   📊 From: ${fromEmail}, Type: ${message.type}, Via: ${message.via}`);
                     console.log(`   📊 Filters: isNew=${isNew}, isInbound=${isInbound}, notProcessed=${notProcessed}, hasDebtInfo=${containsDebtInfo}`);
-                    if (message.body) {
-                        console.log(`   📝 Body preview: "${message.body.substring(0, 100)}..."`);
+                    if (messageBody) {
+                        console.log(`   📝 Body preview: "${messageBody.substring(0, 100)}..."`);
                     }
                     
                     return isNew && isInbound && notProcessed && containsDebtInfo;
@@ -307,10 +316,10 @@ class SideConversationMonitor {
                 contact: contact,
                 message: {
                     id: message.id,
-                    body: message.body,
+                    body: message.message?.body || '',
                     created_at: message.created_at,
-                    from_email: message.via?.source?.from?.address || contact.creditor_email,
-                    from_name: message.via?.source?.from?.name || contact.creditor_name
+                    from_email: message.message?.from?.email || contact.creditor_email,
+                    from_name: message.message?.from?.name || contact.creditor_name
                 }
             }));
 
