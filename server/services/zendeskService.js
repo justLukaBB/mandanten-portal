@@ -180,36 +180,51 @@ class ZendeskService {
     };
   }
 
-  // Send Side Conversation (email to external party)
+  // Send Side Conversation (email to external party) - IMPROVED
   async sendSideConversation(ticketId, { recipient_email, subject, message }) {
     try {
       console.log(`📧 Sending Side Conversation from ticket ${ticketId} to ${recipient_email}...`);
       
-      // First, add an internal comment about sending the email
-      await this.addInternalComment(ticketId, {
-        content: `📧 Sending Side Conversation to: ${recipient_email}\nSubject: ${subject}`,
-        status: 'open'
-      });
+      // Validate ticket exists first
+      const ticketCheck = await this.getTicket(ticketId);
+      if (!ticketCheck.success) {
+        console.error(`❌ Cannot send side conversation - ticket ${ticketId} not found`);
+        return {
+          success: false,
+          error: `Ticket ${ticketId} not found`,
+          status: 404
+        };
+      }
       
-      // Create a side conversation
+      // Create a side conversation with improved structure
       const sideConversationData = {
         message: {
           to: [{
             email: recipient_email,
-            name: recipient_email.split('@')[0] // Add name field
+            name: recipient_email.split('@')[0]
           }],
           subject: subject,
-          body: message
+          body: message,
+          html_body: message.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         }
       };
 
+      console.log(`📤 Side conversation payload:`, JSON.stringify(sideConversationData, null, 2));
+
       const response = await this.api.post(`/tickets/${ticketId}/side_conversations.json`, sideConversationData);
       
-      console.log('✅ Side Conversation sent:', {
+      console.log('✅ Side Conversation sent successfully:', {
         ticket_id: ticketId,
         recipient: recipient_email,
-        subject: subject
+        subject: subject,
+        side_conversation_id: response.data.side_conversation?.id
       });
+
+      // Add internal comment about success (don't await to avoid blocking)
+      this.addInternalComment(ticketId, {
+        content: `📧 **SIDE CONVERSATION SENT**\n\nRecipient: ${recipient_email}\nSubject: ${subject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\n✅ Email sent successfully`,
+        status: 'pending'
+      }).catch(err => console.log('Warning: Could not add success comment:', err.message));
 
       return {
         success: true,
@@ -224,8 +239,16 @@ class ZendeskService {
         data: error.response?.data,
         message: error.message,
         ticketId: ticketId,
-        recipientEmail: recipient_email
+        recipientEmail: recipient_email,
+        url: error.config?.url,
+        method: error.config?.method
       });
+      
+      // Add internal comment about failure (don't await to avoid blocking)
+      this.addInternalComment(ticketId, {
+        content: `❌ **SIDE CONVERSATION FAILED**\n\nRecipient: ${recipient_email}\nSubject: ${subject}\nError: ${error.response?.status} ${error.response?.statusText}\nDetails: ${JSON.stringify(error.response?.data)}\n\n**MANUAL ACTION REQUIRED:** Send email to client manually`,
+        status: 'open'
+      }).catch(err => console.log('Warning: Could not add error comment:', err.message));
       
       return {
         success: false,
@@ -236,10 +259,39 @@ class ZendeskService {
     }
   }
 
-  // Create side conversation to send email to customer
+  // Create side conversation to send email to customer - IMPROVED
   async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, internalNote = true }) {
     try {
       console.log(`📧 Creating Side Conversation on ticket ${ticketId} to send email to ${recipientEmail}...`);
+      
+      // Validate ticket exists first  
+      const ticketCheck = await this.getTicket(ticketId);
+      if (!ticketCheck.success) {
+        console.error(`❌ Cannot create side conversation - ticket ${ticketId} not found`);
+        return {
+          success: false,
+          error: `Ticket ${ticketId} not found`,
+          status: 404,
+          email_sent: false
+        };
+      }
+
+      // Check if side conversations are enabled for this Zendesk instance
+      try {
+        // First check if we can access side conversations endpoint
+        await this.api.get(`/tickets/${ticketId}/side_conversations.json`);
+      } catch (checkError) {
+        if (checkError.response?.status === 403) {
+          console.error(`❌ Side Conversations not enabled or insufficient permissions`);
+          return {
+            success: false,
+            error: 'Side Conversations feature not enabled or insufficient permissions',
+            status: 403,
+            email_sent: false,
+            suggestion: 'Enable Side Conversations in Zendesk admin or use public comments instead'
+          };
+        }
+      }
       
       const sideConversationData = {
         message: {
@@ -250,9 +302,17 @@ class ZendeskService {
             }
           ],
           subject: subject,
-          body: body
+          body: body,
+          html_body: body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         }
       };
+
+      console.log(`📤 Creating side conversation with data:`, {
+        ticketId,
+        recipientEmail,
+        recipientName,
+        subject: subject.substring(0, 50) + '...'
+      });
 
       const response = await this.api.post(`/tickets/${ticketId}/side_conversations.json`, sideConversationData);
       
@@ -262,13 +322,17 @@ class ZendeskService {
       
       // Add internal note to main ticket about the side conversation if requested
       if (internalNote) {
-        await this.addInternalComment(
-          ticketId, 
-          {
-            content: `📧 **ERINNERUNG GESENDET**\n\nEmpfänger: ${recipientEmail} (${recipientName})\nBetreff: ${subject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\n✅ E-Mail erfolgreich versendet`,
-            tags: ['document-reminder-sent']
-          }
-        );
+        try {
+          await this.addInternalComment(
+            ticketId, 
+            {
+              content: `📧 **CLIENT EMAIL SENT**\n\nRecipient: ${recipientEmail} (${recipientName})\nSubject: ${subject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\n✅ E-Mail successfully sent via Side Conversation`,
+              tags: ['client-email-sent', 'side-conversation']
+            }
+          );
+        } catch (commentError) {
+          console.log('Warning: Could not add internal note:', commentError.message);
+        }
       }
       
       return {
@@ -282,12 +346,45 @@ class ZendeskService {
       };
 
     } catch (error) {
-      console.error(`❌ Error creating Side Conversation for ticket ${ticketId}:`, error.response?.data || error.message);
+      console.error(`❌ Error creating Side Conversation for ticket ${ticketId}:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url
+      });
+      
+      let errorMessage = error.message;
+      let suggestion = null;
+      
+      if (error.response?.status === 403) {
+        errorMessage = 'Forbidden - Side Conversations feature may not be enabled or insufficient API permissions';
+        suggestion = 'Check Zendesk admin settings for Side Conversations feature and API token permissions';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Ticket not found or Side Conversations endpoint not available';
+      } else if (error.response?.status === 422) {
+        errorMessage = 'Invalid data - check email format and required fields';
+      }
+      
+      // Add internal comment about failure if possible
+      if (ticketId) {
+        try {
+          await this.addInternalComment(ticketId, {
+            content: `❌ **SIDE CONVERSATION FAILED**\n\nRecipient: ${recipientEmail} (${recipientName})\nSubject: ${subject}\nError: ${error.response?.status} ${error.response?.statusText}\nDetails: ${JSON.stringify(error.response?.data)}\n\n**MANUAL ACTION REQUIRED:** Send email to client manually at ${recipientEmail}`,
+            tags: ['side-conversation-failed'],
+            status: 'open'
+          });
+        } catch (commentError) {
+          console.log('Warning: Could not add error comment:', commentError.message);
+        }
+      }
       
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
-        details: error.response?.data?.details || null,
+        error: errorMessage,
+        status: error.response?.status,
+        details: error.response?.data,
+        suggestion: suggestion,
         email_sent: false
       };
     }
@@ -330,6 +427,99 @@ class ZendeskService {
         error: error.response?.data?.error || error.message
       };
     }
+  }
+
+  // Fallback method: Send email as public comment when side conversations fail
+  async sendEmailAsPublicComment(ticketId, { recipient_email, subject, message }) {
+    try {
+      console.log(`📧 Fallback: Sending email as public comment on ticket ${ticketId}...`);
+      
+      const publicCommentContent = `📧 **Email to ${recipient_email}**\n\n**Subject:** ${subject}\n\n**Message:**\n${message}\n\n---\n*This message was sent as a public comment because Side Conversations are not available. The client should receive this via email notification.*`;
+      
+      const result = await this.addPublicComment(ticketId, {
+        content: publicCommentContent,
+        status: 'pending'
+      });
+      
+      if (result.success) {
+        console.log(`✅ Email sent as public comment on ticket ${ticketId}`);
+        return {
+          success: true,
+          method: 'public_comment',
+          ticket_id: ticketId,
+          recipient_email: recipient_email
+        };
+      } else {
+        return {
+          success: false,
+          error: result.error,
+          method: 'public_comment'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Fallback public comment also failed:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        method: 'public_comment'
+      };
+    }
+  }
+
+  // Helper method to send client notification with automatic fallbacks
+  async sendClientNotification(ticketId, { recipient_email, recipient_name, subject, message }) {
+    console.log(`📧 Attempting to send client notification to ${recipient_email}...`);
+    
+    // Method 1: Try Side Conversation (createSideConversation)
+    let result = await this.createSideConversation(ticketId, {
+      recipientEmail: recipient_email,
+      recipientName: recipient_name,
+      subject: subject,
+      body: message,
+      internalNote: false
+    });
+    
+    if (result.success) {
+      console.log(`✅ Client notification sent via createSideConversation`);
+      return { ...result, method: 'createSideConversation' };
+    }
+    
+    console.log(`⚠️ createSideConversation failed, trying sendSideConversation...`);
+    
+    // Method 2: Try original Side Conversation (sendSideConversation) 
+    result = await this.sendSideConversation(ticketId, {
+      recipient_email: recipient_email,
+      subject: subject,
+      message: message
+    });
+    
+    if (result.success) {
+      console.log(`✅ Client notification sent via sendSideConversation`);
+      return { ...result, method: 'sendSideConversation' };
+    }
+    
+    console.log(`⚠️ sendSideConversation failed, trying public comment fallback...`);
+    
+    // Method 3: Fallback to public comment
+    result = await this.sendEmailAsPublicComment(ticketId, {
+      recipient_email: recipient_email,
+      subject: subject,
+      message: message
+    });
+    
+    if (result.success) {
+      console.log(`✅ Client notification sent via public comment fallback`);
+      return { ...result, method: 'public_comment_fallback' };
+    }
+    
+    console.log(`❌ All notification methods failed`);
+    return {
+      success: false,
+      error: 'All notification methods failed',
+      methods_tried: ['createSideConversation', 'sendSideConversation', 'public_comment_fallback'],
+      last_error: result.error
+    };
   }
 }
 
