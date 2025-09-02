@@ -4072,6 +4072,311 @@ function startScheduledTasks() {
   console.log('📅 Scheduled tasks started: Document reminders will check every hour');
 }
 
+// ============================================================================
+// SCHULDENBEREINIGUNGSPLAN ENDPOINTS
+// ============================================================================
+
+// Save financial data for a client
+app.post('/api/clients/:clientId/financial-data', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const { net_income, dependents, marital_status, input_by } = req.body;
+    
+    console.log(`💰 Saving financial data for client: ${clientId}`);
+    
+    // Validate required parameters
+    if (!net_income || !marital_status) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: net_income, marital_status' 
+      });
+    }
+    
+    // Calculate pfändbar amount using existing calculator
+    const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
+    const garnishmentResult = germanGarnishmentCalculator.calculate(net_income, marital_status, dependents || 0);
+    
+    // Find and update client
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Update financial data
+    client.financial_data = {
+      net_income: net_income,
+      dependents: dependents || 0,
+      marital_status: marital_status,
+      pfaendbar_amount: garnishmentResult.garnishable_amount,
+      input_date: new Date(),
+      input_by: input_by || 'system'
+    };
+    
+    await client.save();
+    
+    console.log(`✅ Financial data saved for ${client.aktenzeichen}: ${garnishmentResult.garnishable_amount} EUR pfändbar`);
+    
+    res.json({
+      success: true,
+      client_id: client.id,
+      aktenzeichen: client.aktenzeichen,
+      financial_data: client.financial_data,
+      garnishment_result: garnishmentResult
+    });
+    
+  } catch (error) {
+    console.error('❌ Error saving financial data:', error.message);
+    res.status(500).json({
+      error: 'Failed to save financial data',
+      details: error.message
+    });
+  }
+});
+
+// Generate 30-day settlement plan simulation
+app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const { generated_by } = req.body;
+    
+    console.log(`📊 Generating settlement plan for client: ${clientId}`);
+    
+    // Find client with financial data
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    if (!client.financial_data || !client.financial_data.pfaendbar_amount) {
+      return res.status(400).json({ 
+        error: 'Financial data not found. Please enter client financial information first.' 
+      });
+    }
+    
+    // Get creditor contacts for this client
+    const CreditorContactService = require('./services/creditorContactService');
+    const creditorService = new CreditorContactService();
+    
+    // Get all creditor contacts for this client
+    const creditorContacts = Array.from(creditorService.creditorContacts.values())
+      .filter(contact => contact.client_reference === client.aktenzeichen);
+    
+    if (creditorContacts.length === 0) {
+      // Fallback: use final_creditor_list if no contact records exist
+      if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
+        return res.status(400).json({ 
+          error: 'No creditors found for this client. Please ensure creditor contact has been initiated.' 
+        });
+      }
+      
+      // Use final_creditor_list data
+      creditorContacts = client.final_creditor_list.map(creditor => ({
+        creditor_name: creditor.sender_name || creditor.creditor_name,
+        creditor_email: creditor.sender_email || creditor.creditor_email,
+        reference_number: creditor.reference_number,
+        original_claim_amount: creditor.claim_amount,
+        final_debt_amount: creditor.creditor_response_amount || creditor.claim_amount || 100.00,
+        amount_source: creditor.creditor_response_amount ? 'creditor_response' : 
+                      creditor.claim_amount ? 'original_document' : 'default_fallback',
+        contact_status: creditor.status === 'responded' ? 'responded' : 'no_response'
+      }));
+    }
+    
+    // Build final creditors list with amount prioritization
+    const finalCreditors = creditorContacts.map(contact => {
+      let amount = 100.00; // Default fallback
+      let amount_source = 'default_fallback';
+      
+      // Priority: Response > Original > Default
+      if (contact.final_debt_amount > 0) {
+        amount = contact.final_debt_amount;
+        amount_source = contact.amount_source || 'creditor_response';
+      } else if (contact.original_claim_amount > 0) {
+        amount = contact.original_claim_amount;
+        amount_source = 'original_document';
+      }
+      
+      return {
+        id: contact.id || require('uuid').v4(),
+        name: contact.creditor_name,
+        email: contact.creditor_email,
+        amount: amount,
+        amount_source: amount_source,
+        contact_status: contact.contact_status || 'no_response'
+      };
+    });
+    
+    // Calculate proportional distribution using existing calculator
+    const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
+    const quotas = germanGarnishmentCalculator.calculateCreditorQuotas(finalCreditors, client.financial_data.pfaendbar_amount);
+    
+    // Calculate totals
+    const totalDebt = finalCreditors.reduce((sum, creditor) => sum + creditor.amount, 0);
+    
+    // Create settlement plan
+    const settlementPlan = {
+      created_at: new Date(),
+      total_debt: totalDebt,
+      pfaendbar_amount: client.financial_data.pfaendbar_amount,
+      creditors: quotas.map(quota => ({
+        id: quota.id || require('uuid').v4(),
+        name: quota.creditor_name,
+        email: quota.creditor_email || '',
+        amount: quota.debt_amount,
+        percentage: quota.debt_percentage,
+        monthly_quota: quota.monthly_quota,
+        amount_source: finalCreditors.find(c => c.name === quota.creditor_name)?.amount_source || 'default_fallback',
+        contact_status: finalCreditors.find(c => c.name === quota.creditor_name)?.contact_status || 'no_response'
+      })),
+      plan_status: 'generated',
+      generated_by: generated_by || 'system',
+      plan_notes: `Generated automatically after 30-day creditor response period. Total of ${finalCreditors.length} creditors processed.`
+    };
+    
+    // Create Zendesk ticket for the settlement plan
+    let zendesk_ticket_id = null;
+    try {
+      const ZendeskService = require('./services/zendeskService');
+      const zendeskService = new ZendeskService();
+      
+      // Create formatted plan summary for Zendesk
+      const creditorSummary = settlementPlan.creditors.map((creditor, index) => 
+        `${index + 1}. **${creditor.name}** - €${creditor.amount.toFixed(2)} (${creditor.percentage.toFixed(1)}%) → Monatlich: €${creditor.monthly_quota.toFixed(2)}\n   📧 ${creditor.email}\n   🏷️ ${creditor.amount_source} | Status: ${creditor.contact_status}`
+      ).join('\n\n');
+      
+      const ticketContent = `📊 **SCHULDENBEREINIGUNGSPLAN ERSTELLT**
+
+👤 **Mandant:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})
+💰 **Einkommen:** €${client.financial_data.net_income.toFixed(2)} netto
+👨‍👩‍👧‍👦 **Unterhaltsberechtigte:** ${client.financial_data.dependents}
+💍 **Familienstand:** ${client.financial_data.marital_status}
+
+📈 **FINANZIELLE ÜBERSICHT:**
+• **Pfändbarer Betrag:** €${client.financial_data.pfaendbar_amount.toFixed(2)} / Monat
+• **Gesamtschulden:** €${totalDebt.toFixed(2)}
+• **Anzahl Gläubiger:** ${settlementPlan.creditors.length}
+
+📋 **GLÄUBIGER-VERTEILUNG:**
+
+${creditorSummary}
+
+📊 **ZUSAMMENFASSUNG:**
+• Antworten erhalten: ${finalCreditors.filter(c => c.contact_status === 'responded').length}/${finalCreditors.length}
+• Default-Beträge verwendet: ${finalCreditors.filter(c => c.amount_source === 'default_fallback').length}
+• Monatliche Gesamtrate: €${client.financial_data.pfaendbar_amount.toFixed(2)}
+
+⏰ **Erstellt:** ${new Date().toLocaleString('de-DE')}
+👤 **Erstellt von:** ${generated_by || 'System (30-Tage Simulation)'}
+
+📋 **NÄCHSTE SCHRITTE:**
+1. Plan prüfen und genehmigen
+2. Schuldenbereinigungsplan an Mandant senden
+3. Gläubiger über Regulierungsplan informieren`;
+
+      // Create the ticket
+      const ticketResult = await zendeskService.createTicket({
+        subject: `Schuldenbereinigungsplan - ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+        comment: {
+          body: ticketContent
+        },
+        requester_id: client.zendesk_user_id,
+        tags: ['schuldenbereinigungsplan', 'debt-settlement-plan', 'auto-generated', 'phase-2'],
+        priority: 'normal',
+        type: 'task'
+      });
+      
+      if (ticketResult.success) {
+        zendesk_ticket_id = ticketResult.ticket.id;
+        console.log(`✅ Created Zendesk ticket ${zendesk_ticket_id} for settlement plan`);
+      } else {
+        console.error('❌ Failed to create Zendesk ticket:', ticketResult.error);
+      }
+      
+    } catch (zendeskError) {
+      console.error('❌ Error creating Zendesk ticket:', zendeskError.message);
+      // Don't fail the whole process if Zendesk fails
+    }
+    
+    // Update settlement plan with Zendesk ticket ID
+    settlementPlan.zendesk_ticket_id = zendesk_ticket_id;
+    
+    // Save plan to client record
+    client.debt_settlement_plan = settlementPlan;
+    await client.save();
+    
+    console.log(`✅ Settlement plan generated for ${client.aktenzeichen}: ${totalDebt} EUR total debt, ${client.financial_data.pfaendbar_amount} EUR monthly distribution`);
+    
+    res.json({
+      success: true,
+      client_id: client.id,
+      aktenzeichen: client.aktenzeichen,
+      settlement_plan: settlementPlan,
+      summary: {
+        total_creditors: finalCreditors.length,
+        total_debt: totalDebt,
+        monthly_distribution: client.financial_data.pfaendbar_amount,
+        responded_creditors: finalCreditors.filter(c => c.contact_status === 'responded').length,
+        default_amounts: finalCreditors.filter(c => c.amount_source === 'default_fallback').length
+      },
+      zendesk_ticket_created: !!zendesk_ticket_id,
+      zendesk_ticket_id: zendesk_ticket_id
+    });
+    
+  } catch (error) {
+    console.error('❌ Error generating settlement plan:', error.message);
+    res.status(500).json({
+      error: 'Failed to generate settlement plan',
+      details: error.message
+    });
+  }
+});
+
+// Get existing settlement plan for a client
+app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    res.json({
+      success: true,
+      client_id: client.id,
+      aktenzeichen: client.aktenzeichen,
+      has_financial_data: !!client.financial_data,
+      financial_data: client.financial_data,
+      has_settlement_plan: !!client.debt_settlement_plan,
+      settlement_plan: client.debt_settlement_plan
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting settlement plan:', error.message);
+    res.status(500).json({
+      error: 'Failed to get settlement plan',
+      details: error.message
+    });
+  }
+});
+
 // Start server with database initialization
 async function startServer() {
   try {
