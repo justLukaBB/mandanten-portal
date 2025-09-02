@@ -1484,7 +1484,7 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
         try {
           console.log(`🔄 Auto-starting Side Conversation monitoring for client ${client.aktenzeichen}...`);
           
-          const monitorResult = sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 5);
+          const monitorResult = sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
           
           if (monitorResult.success) {
             console.log(`✅ Started monitoring ${monitorResult.side_conversations_count} Side Conversations for ${client.aktenzeichen}`);
@@ -2061,7 +2061,7 @@ const sideConversationMonitor = new SideConversationMonitor();
 router.post('/monitor/start-client/:clientReference', rateLimits.general, async (req, res) => {
   try {
     const { clientReference } = req.params;
-    const { interval_minutes = 5 } = req.body;
+    const { interval_minutes = 1 } = req.body;
     
     console.log(`🚀 Starting Side Conversation monitoring for client: ${clientReference}`);
     
