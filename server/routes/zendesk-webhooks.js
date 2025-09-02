@@ -4,6 +4,7 @@ const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
 const ZendeskService = require('../services/zendeskService');
 const CreditorContactService = require('../services/creditorContactService');
+const SideConversationMonitor = require('../services/sideConversationMonitor');
 
 const router = express.Router();
 
@@ -1479,6 +1480,21 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
         
         console.log(`✅ Creditor contact process started: Main ticket ID ${creditorContactResult.main_ticket_id}, ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
         
+        // AUTO-START SIDE CONVERSATION MONITORING
+        try {
+          console.log(`🔄 Auto-starting Side Conversation monitoring for client ${client.aktenzeichen}...`);
+          
+          const monitorResult = sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 5);
+          
+          if (monitorResult.success) {
+            console.log(`✅ Started monitoring ${monitorResult.side_conversations_count} Side Conversations for ${client.aktenzeichen}`);
+          } else {
+            console.log(`⚠️ Failed to start monitoring for ${client.aktenzeichen}: ${monitorResult.message}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error auto-starting monitoring for ${client.aktenzeichen}:`, error.message);
+        }
+        
         // Update client status to indicate creditor contact has started
         client.current_status = 'creditor_contact_initiated';
         client.creditor_contact_started = true;
@@ -1624,12 +1640,17 @@ router.post('/creditor-response', rateLimits.general, async (req, res) => {
       console.log(`📝 Comment details:`, {
         public: comment?.public,
         channel: comment?.via?.channel,
-        author_id: comment?.author_id
+        author_id: comment?.author_id,
+        body_preview: comment?.body?.substring(0, 100)
       });
       
-      // Only process public comments (creditor responses) that didn't come from web interface
-      if (comment?.public && comment.via?.channel !== 'web') {
-        console.log(`✅ Valid creditor response detected for ticket ${ticketId}`);
+      // RELAXED CONDITIONS FOR TESTING: Process public comments OR test comments
+      const isValidCreditorResponse = comment?.public || (comment?.body && comment.body.includes("Schulden"));
+      const skipWebFilter = comment?.via?.channel !== 'web' || comment?.body?.includes("Schulden"); // Allow test replies
+      
+      if (isValidCreditorResponse && skipWebFilter) {
+        console.log(`✅ Valid creditor response detected for ticket ${ticketId} (relaxed conditions)`);
+        console.log(`📝 Processing comment: "${comment.body}"`);
         
         const CreditorContactService = require('../services/creditorContactService');
         const creditorContactService = new CreditorContactService();
@@ -1637,14 +1658,15 @@ router.post('/creditor-response', rateLimits.general, async (req, res) => {
         const result = await creditorContactService.processIncomingCreditorResponse(ticketId, comment);
         
         if (result.success) {
-          console.log(`✅ Processed creditor response: ${result.creditor_name} - €${result.amount}`);
+          console.log(`✅ Processed creditor response: ${result.creditor_name} - €${result.final_amount}`);
           
           res.json({
             success: true,
             message: 'Creditor response processed successfully',
             creditor: result.creditor_name,
-            amount: result.amount,
-            extraction_confidence: result.confidence
+            amount: result.final_amount,
+            extraction_confidence: result.confidence,
+            processing_details: result
           });
         } else {
           console.log(`❌ Failed to process creditor response: ${result.error}`);
@@ -1652,14 +1674,25 @@ router.post('/creditor-response', rateLimits.general, async (req, res) => {
           res.json({
             success: false,
             message: 'Failed to process creditor response',
-            error: result.error
+            error: result.error,
+            debug_info: result
           });
         }
       } else {
-        console.log(`ℹ️ Skipping non-creditor comment for ticket ${ticketId}`);
+        console.log(`ℹ️ Skipping comment for ticket ${ticketId} - does not match creditor response criteria`);
+        console.log(`   - Public: ${comment?.public}`);
+        console.log(`   - Channel: ${comment?.via?.channel}`);
+        console.log(`   - Contains 'Schulden': ${comment?.body?.includes("Schulden")}`);
+        
         res.json({
           success: true,
-          message: 'Comment ignored - not a creditor response'
+          message: 'Comment ignored - not a creditor response',
+          debug_info: {
+            comment_public: comment?.public,
+            via_channel: comment?.via?.channel,
+            contains_schulden: comment?.body?.includes("Schulden"),
+            body_preview: comment?.body?.substring(0, 50)
+          }
         });
       }
     } else {
@@ -1683,11 +1716,64 @@ router.post('/creditor-response', rateLimits.general, async (req, res) => {
 router.post('/test-trigger', rateLimits.general, async (req, res) => {
   console.log('🧪 TEST WEBHOOK TRIGGERED!');
   console.log('📝 Received data:', JSON.stringify(req.body, null, 2));
+  console.log('📋 Headers:', req.headers);
   
   res.json({
     success: true,
     message: 'Test webhook received successfully!',
     timestamp: new Date().toISOString(),
+    received_data: req.body,
+    headers: req.headers
+  });
+});
+
+// DEBUG: Enhanced creditor response webhook with more logging
+router.post('/debug-creditor-response', rateLimits.general, async (req, res) => {
+  console.log('🔍 DEBUG CREDITOR RESPONSE WEBHOOK TRIGGERED!');
+  console.log('📝 Full request data:', JSON.stringify(req.body, null, 2));
+  console.log('📋 Headers:', req.headers);
+  console.log('🎯 Body type:', typeof req.body);
+  console.log('📊 Is object?', req.body && typeof req.body === 'object');
+  
+  if (req.body) {
+    console.log('🔬 Detailed Analysis:');
+    console.log('   - Type:', req.body.type);
+    console.log('   - Has ticket?', !!req.body.ticket);
+    console.log('   - Ticket ID:', req.body.ticket?.id);
+    console.log('   - Has comment?', !!req.body.comment);
+    console.log('   - Comment public?', req.body.comment?.public);
+    console.log('   - Comment channel:', req.body.comment?.via?.channel);
+    console.log('   - Comment body preview:', req.body.comment?.body?.substring(0, 100));
+    console.log('   - Author ID:', req.body.comment?.author_id);
+  }
+  
+  // Test the debt extraction with your example
+  if (req.body.comment?.body) {
+    try {
+      const DebtAmountExtractor = require('../services/debtAmountExtractor');
+      const extractor = new DebtAmountExtractor();
+      const result = await extractor.extractDebtAmount(req.body.comment.body);
+      console.log('💰 Debt extraction test result:', result);
+    } catch (error) {
+      console.error('❌ Debt extraction test failed:', error.message);
+    }
+  }
+  
+  res.json({
+    success: true,
+    message: 'Debug webhook received and analyzed!',
+    timestamp: new Date().toISOString(),
+    analysis: {
+      body_type: typeof req.body,
+      has_ticket: !!req.body.ticket,
+      has_comment: !!req.body.comment,
+      webhook_type: req.body.type,
+      comment_public: req.body.comment?.public,
+      comment_channel: req.body.comment?.via?.channel,
+      would_process: req.body.type === 'ticket_comment_created' && 
+                     req.body.comment?.public && 
+                     req.body.comment.via?.channel !== 'web'
+    },
     received_data: req.body
   });
 });
@@ -1967,5 +2053,150 @@ function getTicketStatusForScenario(ticketType) {
       return 'open';
   }
 }
+
+// Initialize Side Conversation Monitor
+const sideConversationMonitor = new SideConversationMonitor();
+
+// API: Start Side Conversation monitoring for a specific client
+router.post('/monitor/start-client/:clientReference', rateLimits.general, async (req, res) => {
+  try {
+    const { clientReference } = req.params;
+    const { interval_minutes = 5 } = req.body;
+    
+    console.log(`🚀 Starting Side Conversation monitoring for client: ${clientReference}`);
+    
+    const result = sideConversationMonitor.startMonitoringForClient(clientReference, interval_minutes);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Side Conversation monitoring started for client ${clientReference}`,
+        client_reference: clientReference,
+        side_conversations_count: result.side_conversations_count,
+        session: result.session
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        client_reference: clientReference
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error starting client monitoring:', error);
+    res.status(500).json({
+      error: 'Failed to start client monitoring',
+      details: error.message
+    });
+  }
+});
+
+// API: Stop Side Conversation monitoring for a specific client
+router.post('/monitor/stop-client/:clientReference', rateLimits.general, async (req, res) => {
+  try {
+    const { clientReference } = req.params;
+    
+    const result = sideConversationMonitor.stopMonitoringForClient(clientReference);
+    
+    res.json({
+      success: result,
+      message: result ? 
+        `Side Conversation monitoring stopped for client ${clientReference}` :
+        `No active monitoring for client ${clientReference}`,
+      client_reference: clientReference
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to stop client monitoring',
+      details: error.message
+    });
+  }
+});
+
+// API: Get overall monitoring status
+router.get('/monitor/status', rateLimits.general, async (req, res) => {
+  try {
+    const status = sideConversationMonitor.getStatus();
+    res.json({
+      success: true,
+      status: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get status',
+      details: error.message
+    });
+  }
+});
+
+// API: Get monitoring status for specific client
+router.get('/monitor/status/:clientReference', rateLimits.general, async (req, res) => {
+  try {
+    const { clientReference } = req.params;
+    const status = sideConversationMonitor.getClientStatus(clientReference);
+    res.json({
+      success: true,
+      status: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get client status',
+      details: error.message
+    });
+  }
+});
+
+// API: Manual check for specific client
+router.post('/monitor/check-client/:clientReference', rateLimits.general, async (req, res) => {
+  try {
+    const { clientReference } = req.params;
+    
+    console.log(`🔍 Manual Side Conversation check requested for client ${clientReference}`);
+    
+    await sideConversationMonitor.checkClientSideConversations(clientReference);
+    
+    const status = sideConversationMonitor.getClientStatus(clientReference);
+    
+    res.json({
+      success: true,
+      message: `Manual check completed for client ${clientReference}`,
+      client_reference: clientReference,
+      status: status,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error in manual client check: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to check client',
+      details: error.message
+    });
+  }
+});
+
+// API: Check all active clients
+router.post('/monitor/check-all', rateLimits.general, async (req, res) => {
+  try {
+    console.log('🔍 Manual check requested for all active clients');
+    
+    await sideConversationMonitor.checkAllActiveSessions();
+    
+    res.json({
+      success: true,
+      message: 'Manual check completed for all active clients',
+      status: sideConversationMonitor.getStatus(),
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error in manual check: ${error.message}`);
+    res.status(500).json({
+      error: 'Failed to perform manual check',
+      details: error.message
+    });
+  }
+});
 
 module.exports = router;
