@@ -40,7 +40,7 @@ app.use(securityHeaders);
 
 // Mount routes
 app.use('/api/health', healthRoutes);
-app.use('/api/zendesk-webhook', zendeskWebhooks);
+app.use('/api/zendesk-webhooks', zendeskWebhooks);
 app.use('/api/portal-webhook', portalWebhooks);
 app.use('/api/agent-review', agentReviewRoutes);
 app.use('/api/agent-auth', agentAuthRoutes);
@@ -53,7 +53,7 @@ const processingMutex = new Map();
 async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
   try {
     const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
-    const webhookUrl = `${baseUrl}/api/zendesk-webhook/processing-complete`;
+    const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
     
     console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
     
