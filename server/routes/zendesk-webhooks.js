@@ -96,7 +96,7 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
     });
 
     if (client) {
-      console.log(`📋 Client exists, updating: ${client.aktenzeichen}`);
+      console.log(`📋 Client exists in MongoDB, updating: ${client.aktenzeichen}`);
       
       try {
         // Update only specific fields to avoid document validation issues
@@ -158,7 +158,7 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
         await client.save({ validateModifiedOnly: true });
       }
     } else {
-      console.log(`👤 Creating new client: ${aktenzeichen}`);
+      console.log(`👤 No existing client found, creating new client: ${aktenzeichen}`);
       
       // Create new client
       client = new Client({
@@ -209,7 +209,19 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
         }]
       });
       
-      await client.save();
+      try {
+        await client.save();
+        console.log(`✅ New client saved to MongoDB: ${client.aktenzeichen}`);
+      } catch (saveError) {
+        console.error(`❌ Error saving new client to MongoDB:`, saveError.message);
+        console.error(`📋 Client data:`, {
+          aktenzeichen: client.aktenzeichen,
+          email: client.email,
+          firstName: client.firstName,
+          lastName: client.lastName
+        });
+        throw saveError;
+      }
     }
     
     console.log(`✅ Client updated/created successfully: ${client.aktenzeichen}`);
