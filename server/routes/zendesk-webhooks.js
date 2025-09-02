@@ -1600,9 +1600,17 @@ router.post('/client-creditor-confirmed', rateLimits.general, async (req, res) =
 // Webhook: Process creditor responses (ticket comments)
 router.post('/creditor-response', rateLimits.general, async (req, res) => {
   try {
-    console.log('📥 Zendesk Webhook: Creditor Response received', {
+    console.log('🚨 WEBHOOK EMPFANGEN! Creditor Response received');
+    console.log('📥 Full webhook data:', JSON.stringify(req.body, null, 2));
+    console.log('📝 Headers:', req.headers);
+    console.log('📊 Body type:', typeof req.body);
+    
+    console.log('📋 Parsed webhook info:', {
       type: req.body.type,
-      ticket_id: req.body.ticket?.id
+      ticket_id: req.body.ticket?.id,
+      has_comment: !!req.body.comment,
+      comment_public: req.body.comment?.public,
+      via_channel: req.body.comment?.via?.channel
     });
     
     const webhookData = req.body;
@@ -1669,6 +1677,19 @@ router.post('/creditor-response', rateLimits.general, async (req, res) => {
       details: error.message
     });
   }
+});
+
+// TEST: Simple webhook endpoint to debug trigger issues
+router.post('/test-trigger', rateLimits.general, async (req, res) => {
+  console.log('🧪 TEST WEBHOOK TRIGGERED!');
+  console.log('📝 Received data:', JSON.stringify(req.body, null, 2));
+  
+  res.json({
+    success: true,
+    message: 'Test webhook received successfully!',
+    timestamp: new Date().toISOString(),
+    received_data: req.body
+  });
 });
 
 // Helper function to generate ticket subject based on type
