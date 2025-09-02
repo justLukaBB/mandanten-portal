@@ -238,14 +238,18 @@ class SideConversationMonitor {
             }
 
             const sideConversation = response.data.side_conversation;
-            const messages = sideConversation.participants || [];
+            const messages = sideConversation.events || [];
             
             console.log(`📨 Found ${messages.length} total messages in Side Conversation ${sideConversationId}`);
+            console.log(`👥 Participants:`, sideConversation.participants?.length || 0);
             
             // Debug: log message structure
             if (messages.length > 0) {
                 console.log(`🔍 Sample message structure:`, JSON.stringify(messages[0], null, 2));
             }
+            
+            // Also debug the full API response structure
+            console.log(`🔍 Full Side Conversation structure:`, Object.keys(sideConversation));
 
             // Get session to check when monitoring started
             const session = this.activeMonitoringSessions.get(contact.client_reference);
