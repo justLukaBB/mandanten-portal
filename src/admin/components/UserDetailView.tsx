@@ -11,9 +11,11 @@ import {
   EyeIcon,
   InformationCircleIcon,
   ArrowPathIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  CalculatorIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
+import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 
 interface UserDetailProps {
   userId: string;
@@ -82,6 +84,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSettlementPlan, setShowSettlementPlan] = useState(false);
 
   useEffect(() => {
     fetchUserDetails();
@@ -281,6 +284,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             📄 User Details: {user.firstName} {user.lastName}
           </h2>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowSettlementPlan(true)}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"
+              title="Open Schuldenbereinigungsplan"
+            >
+              <CalculatorIcon className="w-4 h-4 mr-1" />
+              Settlement Plan
+            </button>
             <button
               onClick={fetchUserDetails}
               disabled={loading}
@@ -729,6 +740,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Settlement Plan Modal */}
+      {showSettlementPlan && (
+        <SchuldenbereinigungsplanView
+          userId={userId}
+          onClose={() => setShowSettlementPlan(false)}
+          onBack={() => setShowSettlementPlan(false)}
+        />
       )}
     </div>
   );
