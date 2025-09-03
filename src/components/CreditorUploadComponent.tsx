@@ -182,7 +182,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         throw new Error('Keine gültige Client-ID verfügbar. Bitte melden Sie sich erneut an.');
       }
       
-      xhr.open('POST', `${API_BASE_URL}/clients/${clientIdentifier}/documents`);
+      xhr.open('POST', `${API_BASE_URL}/api/clients/${clientIdentifier}/documents`);
       xhr.send(formData);
 
     } catch (error) {
