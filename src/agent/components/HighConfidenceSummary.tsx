@@ -40,6 +40,14 @@ const HighConfidenceSummary: React.FC<HighConfidenceSummaryProps> = ({
   onConfirmAll,
   loading = false
 }) => {
+  // Debug logging
+  console.log('🔍 HighConfidenceSummary received:', {
+    documentsCount: documents.length,
+    creditorsCount: creditors.length,
+    creditorsSample: creditors.slice(0, 2),
+    creditorsWithAmounts: creditors.filter(c => c.claim_amount).length
+  });
+
   const totalAmount = creditors.reduce((sum, cred) => sum + (cred.claim_amount || 0), 0);
 
   return (

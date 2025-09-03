@@ -261,7 +261,13 @@ const ReviewDashboard: React.FC = () => {
       // Show completion message and redirect
       alert(`✅ Review erfolgreich abgeschlossen!\n\n${result.summary?.creditors?.total_count || 0} Gläubiger bestätigt.\n\n📧 Gläubigerliste wurde automatisch an den Mandanten gesendet.\n\n${result.creditor_contact?.success ? '✅ Gläubiger-Kontakt wurde gestartet.' : '⚠️ Gläubiger-Kontakt muss manuell gestartet werden.'}`);
       
+      // Check token before redirect
+      const tokenBeforeRedirect = localStorage.getItem('agent_token');
+      console.log('🔍 Agent token before redirect:', !!tokenBeforeRedirect);
+      console.log('🔍 Token preview before redirect:', tokenBeforeRedirect ? `${tokenBeforeRedirect.substring(0, 20)}...` : 'null');
+      
       // Redirect to agent dashboard
+      console.log('🔄 Redirecting to agent dashboard...');
       navigate('/agent/dashboard');
       
     } catch (error: any) {
@@ -333,6 +339,14 @@ const ReviewDashboard: React.FC = () => {
   );
   
   const highConfidenceCreditors = reviewData.creditors.verified || [];
+  
+  // Debug logging for creditor data
+  console.log('🔍 Review data structure:', {
+    totalCreditors: reviewData.creditors.all?.length,
+    verifiedCreditors: reviewData.creditors.verified?.length,
+    creditorsSample: reviewData.creditors.all?.slice(0, 2),
+    verifiedSample: reviewData.creditors.verified?.slice(0, 2)
+  });
 
   // If no manual review needed, go straight to summary
   if (documentsToReview.length === 0 && reviewPhase === 'manual') {

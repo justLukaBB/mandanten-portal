@@ -237,8 +237,28 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
 
     // Get creditors that need review
     const creditorsToReview = creditors.filter(c => (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+    const verifiedCreditors = creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
 
     console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs, ${creditorsToReview.length} creditors need review`);
+    console.log(`📊 Creditor details:`, {
+      totalCreditors: creditors.length,
+      verifiedCreditors: verifiedCreditors.length,
+      confidenceThreshold: config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD,
+      creditorsSample: creditors.slice(0, 2).map(c => ({
+        id: c.id,
+        name: c.sender_name,
+        amount: c.claim_amount,
+        confidence: c.confidence
+      })),
+      verifiedSample: verifiedCreditors.slice(0, 2).map(c => ({
+        id: c.id,
+        name: c.sender_name,
+        amount: c.claim_amount,
+        amountType: typeof c.claim_amount,
+        confidence: c.confidence,
+        confidenceType: typeof c.confidence
+      }))
+    });
     
     // Log document structure for debugging
     if (documentsToReview.length > 0) {

@@ -49,13 +49,17 @@ const AgentDashboard: React.FC = () => {
   const loadDashboardData = async () => {
     try {
       const agentToken = localStorage.getItem('agent_token');
+      console.log('🔍 AgentDashboard loading data, token exists:', !!agentToken);
+      console.log('🔍 Token preview:', agentToken ? `${agentToken.substring(0, 20)}...` : 'null');
+      
       if (!agentToken) {
+        console.log('❌ No agent token found, redirecting to login');
         navigate('/agent/login');
         return;
       }
 
       // Load agent profile
-      const profileResponse = await fetch(`${API_BASE_URL}/agent-auth/profile`, {
+      const profileResponse = await fetch(`${API_BASE_URL}/api/agent-auth/profile`, {
         headers: {
           'Authorization': `Bearer ${agentToken}`
         }
@@ -63,7 +67,12 @@ const AgentDashboard: React.FC = () => {
 
       if (profileResponse.ok) {
         const profileData = await profileResponse.json();
+        console.log('✅ Agent profile loaded successfully:', profileData.agent?.username);
         setAgent(profileData.agent);
+      } else {
+        console.log('❌ Profile response failed:', profileResponse.status, profileResponse.statusText);
+        const errorText = await profileResponse.text();
+        console.log('❌ Profile error details:', errorText);
       }
 
       // Load available clients for review
@@ -75,7 +84,12 @@ const AgentDashboard: React.FC = () => {
 
       if (clientsResponse.ok) {
         const clientsData = await clientsResponse.json();
+        console.log('✅ Available clients loaded:', clientsData.clients?.length || 0);
         setAvailableClients(clientsData.clients || []);
+      } else {
+        console.log('❌ Available clients response failed:', clientsResponse.status, clientsResponse.statusText);
+        const errorText = await clientsResponse.text();
+        console.log('❌ Available clients error details:', errorText);
       }
 
     } catch (error: any) {
