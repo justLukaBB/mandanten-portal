@@ -4919,9 +4919,13 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 
     console.log(`📄 Document ${originalName} added to client ${clientId}, starting processing...`);
 
-    // Process document asynchronously
+    // Process document asynchronously with delay
     setImmediate(async () => {
       try {
+        // Add 3-second delay before processing each document
+        console.log(`⏳ Waiting 3 seconds before processing: ${originalName}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
         console.log(`🤖 Starting AI processing for: ${originalName}`);
         
         // Process with AI
