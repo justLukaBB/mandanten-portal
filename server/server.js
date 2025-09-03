@@ -4383,16 +4383,11 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
 });
 
 // Admin: Simulate 30-day period - Create creditor calculation table for Schuldenbereinigungsplan
-app.post('/api/admin/clients/:clientId/simulate-30-day-period', async (req, res) => {
+app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
     
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId }
-      ]
-    });
+    const client = await getClient(clientId);
     
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
@@ -4457,31 +4452,33 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', async (req, res)
       });
     });
     
-    // Store the creditor calculation table in the client record
-    client.creditor_calculation_table = creditorCalculationTable;
-    client.creditor_calculation_created_at = currentTime;
-    client.creditor_calculation_total_debt = totalDebt;
-    client.current_status = 'creditor_calculation_ready';
-    
-    // Add a note about the calculation
-    if (!client.admin_notes) {
-      client.admin_notes = [];
-    }
-    client.admin_notes.push({
-      timestamp: currentTime,
-      note: `🕐 30-Day Simulation: Created creditor calculation table with ${creditorCalculationTable.length} creditors, total debt: €${totalDebt.toFixed(2)}`,
-      admin: 'system_simulation'
+    // Store the creditor calculation table in the client record using safeClientUpdate
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      client.creditor_calculation_table = creditorCalculationTable;
+      client.creditor_calculation_created_at = currentTime;
+      client.creditor_calculation_total_debt = totalDebt;
+      client.current_status = 'creditor_calculation_ready';
+      
+      // Add a note about the calculation
+      if (!client.admin_notes) {
+        client.admin_notes = [];
+      }
+      client.admin_notes.push({
+        timestamp: currentTime,
+        note: `🕐 30-Day Simulation: Created creditor calculation table with ${creditorCalculationTable.length} creditors, total debt: €${totalDebt.toFixed(2)}`,
+        admin: 'system_simulation'
+      });
+      
+      return client;
     });
     
-    await client.save();
-    
-    console.log(`✅ 30-Day Simulation: Created calculation table for ${client.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
+    console.log(`✅ 30-Day Simulation: Created calculation table for ${updatedClient.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
     
     res.json({
       success: true,
-      message: `Creditor calculation table created for ${client.firstName} ${client.lastName}`,
-      client_id: client.id,
-      aktenzeichen: client.aktenzeichen,
+      message: `Creditor calculation table created for ${updatedClient.firstName} ${updatedClient.lastName}`,
+      client_id: updatedClient.id,
+      aktenzeichen: updatedClient.aktenzeichen,
       creditor_count: creditorCalculationTable.length,
       total_debt: totalDebt,
       creditor_calculation_table: creditorCalculationTable,
