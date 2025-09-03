@@ -198,13 +198,46 @@ class CreditorContactService {
             }
 
             // Use final_creditor_list which contains confirmed creditors
-            const confirmedCreditors = (client.final_creditor_list || []).filter(creditor => 
+            const allCreditors = client.final_creditor_list || [];
+            console.log(`🔍 Total creditors in final_creditor_list: ${allCreditors.length}`);
+            
+            // Debug each creditor's filtering criteria
+            allCreditors.forEach((creditor, index) => {
+                console.log(`🔍 Creditor ${index + 1}:`, {
+                    name: creditor.sender_name,
+                    email: creditor.sender_email,
+                    status: creditor.status,
+                    hasName: !!creditor.sender_name,
+                    hasEmail: !!creditor.sender_email,
+                    isConfirmed: creditor.status === 'confirmed',
+                    willBeIncluded: creditor.status === 'confirmed' && !!creditor.sender_name && !!creditor.sender_email
+                });
+            });
+
+            const confirmedCreditors = allCreditors.filter(creditor => 
                 creditor.status === 'confirmed' && 
                 creditor.sender_name && 
                 creditor.sender_email
             );
 
             console.log(`📋 Found ${confirmedCreditors.length} confirmed creditors in final_creditor_list for client ${clientReference}`);
+            
+            // Log filtered out creditors
+            const filteredOut = allCreditors.filter(creditor => 
+                !(creditor.status === 'confirmed' && creditor.sender_name && creditor.sender_email)
+            );
+            
+            if (filteredOut.length > 0) {
+                console.log(`⚠️ ${filteredOut.length} creditors were filtered out:`);
+                filteredOut.forEach((creditor, index) => {
+                    const reasons = [];
+                    if (creditor.status !== 'confirmed') reasons.push(`status: ${creditor.status}`);
+                    if (!creditor.sender_name) reasons.push('missing sender_name');
+                    if (!creditor.sender_email) reasons.push('missing sender_email');
+                    
+                    console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} - Reasons: ${reasons.join(', ')}`);
+                });
+            }
 
             // Convert creditors to contact records format
             const creditorContactRecords = confirmedCreditors.map(creditor => ({
