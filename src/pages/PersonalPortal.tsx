@@ -82,12 +82,12 @@ export const PersonalPortal = ({
   const fetchClientData = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/clients/${clientId}`);
+      const response = await api.get(`/api/clients/${clientId}`);
       const clientData = response.data;
 
       if (clientData.clickupId) {
         try {
-          const formResponse = await api.get(`/proxy/forms/${clientData.clickupId}`);
+          const formResponse = await api.get(`/api/proxy/forms/${clientData.clickupId}`);
           if (formResponse.data) {
             clientData.formData = formResponse.data;
           }
@@ -98,7 +98,7 @@ export const PersonalPortal = ({
 
       // Fetch documents separately for better state management
       try {
-        const documentsResponse = await api.get(`/clients/${clientId}/documents`);
+        const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
         setDocuments(documentsResponse.data || []);
       } catch (docErr) {
         console.error('Error fetching documents:', docErr);
@@ -107,7 +107,7 @@ export const PersonalPortal = ({
 
       // Check for creditor confirmation status
       try {
-        const creditorResponse = await api.get(`/clients/${clientId}/creditor-confirmation`);
+        const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
         
         // Show creditor confirmation if workflow is ready and not completed
@@ -145,7 +145,7 @@ export const PersonalPortal = ({
       
       // Also refresh creditor confirmation status
       try {
-        const creditorResponse = await api.get(`/clients/${clientId}/creditor-confirmation`);
+        const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
         
         const shouldShowCreditorConfirmation = 

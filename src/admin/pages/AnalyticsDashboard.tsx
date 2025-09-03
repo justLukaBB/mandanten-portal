@@ -121,7 +121,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
       setError(null);
       
       // Use admin clients endpoint
-      const response = await api.get('/admin/clients');
+      const response = await api.get('/api/admin/clients');
       
       const clientsData = response.data.clients || [];
       
@@ -191,7 +191,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
     }
 
     try {
-      const response = await api.post(`/admin/clients/${userId}/reset-payment`);
+      const response = await api.post(`/api/admin/clients/${userId}/reset-payment`);
       
       if (response.data.success) {
         alert(`✅ Zahlungsstatus für ${aktenzeichen} erfolgreich zurückgesetzt!`);

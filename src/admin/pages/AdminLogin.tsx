@@ -21,7 +21,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await api.post('/admin/login', {
+      const response = await api.post('/api/admin/login', {
         email: credentials.email,
         password: credentials.password
       });
