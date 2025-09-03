@@ -136,6 +136,8 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
         total_debt: data.creditor_calculation_total_debt
       });
       
+      console.log('🔍 Raw API settlement plan data:', data.settlement_plan);
+      
       // Extract client data from the response
       const clientDataFormatted = {
         id: data.client_id,
@@ -151,6 +153,8 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
         creditor_calculation_created_at: data.creditor_calculation_created_at,
         settlement_plan: data.settlement_plan
       };
+      
+      console.log('🔍 Formatted settlement plan:', clientDataFormatted.settlement_plan);
       
       setClientData(clientDataFormatted);
       
@@ -579,7 +583,7 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                 <h3 className="text-lg font-semibold text-green-800">Schuldenbereinigungsplan Calculation Results</h3>
               </div>
               
-              {clientData.settlement_plan.success ? (
+              {clientData.settlement_plan && clientData.settlement_plan.success ? (
                 <div className="space-y-4">
                   {/* Financial Summary */}
                   <div className="bg-white rounded-lg p-4 border">
@@ -692,7 +696,15 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
               ) : (
                 <div className="text-center py-4">
                   <p className="text-red-600 font-medium">Settlement Plan Calculation Error</p>
-                  <p className="text-sm text-gray-600">{clientData.settlement_plan.error || 'Unknown error occurred'}</p>
+                  <p className="text-sm text-gray-600">
+                    {clientData.settlement_plan?.error || 'Unknown error occurred'}
+                  </p>
+                  <details className="mt-2 text-xs text-gray-500">
+                    <summary className="cursor-pointer">Debug Info</summary>
+                    <pre className="mt-1 text-left bg-gray-100 p-2 rounded text-xs overflow-auto">
+                      {JSON.stringify(clientData.settlement_plan, null, 2)}
+                    </pre>
+                  </details>
                 </div>
               )}
             </div>
