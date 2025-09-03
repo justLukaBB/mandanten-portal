@@ -96,7 +96,21 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
       }
       
       const data = await response.json();
-      setClientData(data);
+      
+      // Extract client data from the response
+      const clientDataFormatted = {
+        id: data.client_id,
+        aktenzeichen: data.aktenzeichen,
+        firstName: data.firstName || 'Unknown',
+        lastName: data.lastName || 'Unknown',
+        email: data.email || '',
+        has_financial_data: data.has_financial_data,
+        financial_data: data.financial_data,
+        has_settlement_plan: data.has_settlement_plan,
+        settlement_plan: data.settlement_plan
+      };
+      
+      setClientData(clientDataFormatted);
       
       // Pre-fill form if financial data exists
       if (data.financial_data) {
