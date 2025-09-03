@@ -105,7 +105,7 @@ const AdminCreditorDataTable: React.FC = () => {
       setLoading(true);
       
       // Get all clients from admin endpoint
-      const allClientsResponse = await api.get('/admin/clients');
+      const allClientsResponse = await api.get('/api/admin/clients');
       const allClients = allClientsResponse.data.clients || [];
       
       const clientsData: ClientData[] = [];
@@ -115,11 +115,11 @@ const AdminCreditorDataTable: React.FC = () => {
         const clientId = clientMeta.aktenzeichen || clientMeta._id;
         
         try {
-          const response = await api.get(`/clients/${clientId}`);
+          const response = await api.get(`/api/clients/${clientId}`);
           const client = response.data;
           
           // Fetch documents separately
-          const documentsResponse = await api.get(`/clients/${clientId}/documents`);
+          const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
           client.documents = documentsResponse.data || [];
           
           clientsData.push(client);

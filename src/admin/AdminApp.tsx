@@ -36,7 +36,7 @@ const AdminApp: React.FC = () => {
           
           // Validate token by making a test request
           console.log('🧪 AdminApp: Testing token with API request...');
-          const response = await api.get('/admin/clients');
+          const response = await api.get('/api/admin/clients');
           
           if (response.status === 200) {
             console.log('✅ AdminApp: Authentication successful!');

@@ -51,7 +51,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get(`/clients/${clientId}/creditor-confirmation`);
+      const response = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
       setConfirmationData(response.data);
       
       // Pre-select all creditors by default
@@ -98,7 +98,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
       setSubmitting(true);
       const confirmedCreditors = Array.from(selectedCreditors);
       
-      const response = await api.post(`/clients/${clientId}/confirm-creditors`, {
+      const response = await api.post(`/api/clients/${clientId}/confirm-creditors`, {
         confirmed_creditors: confirmedCreditors
       });
       
