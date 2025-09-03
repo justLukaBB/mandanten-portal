@@ -765,8 +765,8 @@ class GermanGarnishmentCalculator {
         try {
             console.log(`📋 Generating restructuring analysis for: ${clientReference}`);
 
-            // Calculate garnishable income
-            const garnishmentResult = this.calculateGarnishableIncome(
+            // Calculate garnishable income using current 2025-2026 table
+            const garnishmentResult = this.calculate(
                 financialData.netIncome,
                 financialData.maritalStatus,
                 financialData.numberOfChildren
