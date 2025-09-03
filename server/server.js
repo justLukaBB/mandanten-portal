@@ -4380,6 +4380,80 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
   }
 });
 
+// Admin: Simulate 30-day period for a specific client
+app.post('/api/admin/clients/:clientId/simulate-30-day-period', async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log(`🕐 30-Day Simulation: Starting for client ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+    
+    // Check if client is eligible for creditor contact process
+    // Typically this would be clients who have uploaded documents and payment is received
+    if (!client.first_payment_received) {
+      return res.status(400).json({
+        error: 'Client not eligible for creditor contact process',
+        message: 'Payment must be received first'
+      });
+    }
+    
+    // Check if client has documents
+    if (!client.documents || client.documents.length === 0) {
+      return res.status(400).json({
+        error: 'Client not eligible for creditor contact process',
+        message: 'Client must have uploaded documents first'
+      });
+    }
+    
+    // Update client status to indicate creditor contact process has started
+    const currentTime = new Date().toISOString();
+    
+    client.current_status = 'creditor_contact_initiated';
+    client.creditor_contact_started_at = currentTime;
+    client.creditor_contact_status = 'in_progress';
+    
+    // Add a note about the simulation
+    if (!client.admin_notes) {
+      client.admin_notes = [];
+    }
+    client.admin_notes.push({
+      timestamp: currentTime,
+      note: '🕐 30-Day Period Simulation: Creditor contact process initiated via admin simulation',
+      admin: 'system_simulation'
+    });
+    
+    await client.save();
+    
+    console.log(`✅ 30-Day Simulation: Client ${client.aktenzeichen} status updated to creditor_contact_initiated`);
+    
+    res.json({
+      success: true,
+      message: `30-Day simulation completed for ${client.firstName} ${client.lastName}. Creditor contact process has been initiated.`,
+      client_id: client.id,
+      aktenzeichen: client.aktenzeichen,
+      new_status: 'creditor_contact_initiated',
+      creditor_contact_started_at: currentTime
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in 30-day simulation:', error.message);
+    res.status(500).json({
+      error: 'Failed to run 30-day simulation',
+      details: error.message
+    });
+  }
+});
+
 // Start server with database initialization
 async function startServer() {
   try {
