@@ -23,7 +23,7 @@ const AgentLogin: React.FC = () => {
     try {
       console.log('🔄 Agent login attempt for:', credentials.username);
 
-      const response = await fetch(`${API_BASE_URL}/agent-auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

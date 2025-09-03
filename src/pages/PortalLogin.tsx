@@ -27,7 +27,7 @@ const PortalLogin: React.FC = () => {
         hasAktenzeichen: !!credentials.aktenzeichen 
       });
 
-      const response = await axios.post(`${API_BASE_URL}/portal/login`, credentials);
+      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, credentials);
       
       if (response.data && response.data.success) {
         console.log('✅ Login API call successful');
