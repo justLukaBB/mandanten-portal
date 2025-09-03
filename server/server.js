@@ -352,14 +352,19 @@ async function saveClient(clientData) {
       throw new Error('Database connection not available');
     }
     
+    console.log(`💾 saveClient: Updating client ${clientData.aktenzeichen || clientData.id}`);
+    console.log(`💾 saveClient: Client has creditor_calculation_table: ${!!clientData.creditor_calculation_table}, length: ${clientData.creditor_calculation_table?.length}`);
+    
     const client = await Client.findOneAndUpdate(
       { id: clientData.id },
       clientData,
       { upsert: true, new: true }
     );
+    
+    console.log(`✅ saveClient: Successfully saved client, returned client has creditor_calculation_table: ${!!client.creditor_calculation_table}, length: ${client.creditor_calculation_table?.length}`);
     return client;
   } catch (error) {
-    console.error('Error saving client to MongoDB:', error);
+    console.error('❌ Error saving client to MongoDB:', error);
     throw error;
   }
 }
@@ -4453,7 +4458,11 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     });
     
     // Store the creditor calculation table in the client record using safeClientUpdate
+    console.log(`💾 Attempting to save creditor calculation table with ${creditorCalculationTable.length} creditors`);
+    
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      console.log(`📝 Before update - client has calculation table: ${!!client.creditor_calculation_table}`);
+      
       client.creditor_calculation_table = creditorCalculationTable;
       client.creditor_calculation_created_at = currentTime;
       client.creditor_calculation_total_debt = totalDebt;
@@ -4469,8 +4478,11 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         admin: 'system_simulation'
       });
       
+      console.log(`📝 After update - client has calculation table: ${!!client.creditor_calculation_table}, length: ${client.creditor_calculation_table?.length}`);
       return client;
     });
+    
+    console.log(`💾 After safeClientUpdate - updatedClient has calculation table: ${!!updatedClient.creditor_calculation_table}, length: ${updatedClient.creditor_calculation_table?.length}`);
     
     console.log(`✅ 30-Day Simulation: Created calculation table for ${updatedClient.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
     
