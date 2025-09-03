@@ -95,7 +95,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
       
-      const response = await fetch(`${API_BASE_URL}/clients/${userId}/documents/${documentId}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
@@ -129,7 +129,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       setError(null);
       
       // Fetch user data
-      const userResponse = await fetch(`${API_BASE_URL}/clients/${userId}`, {
+      const userResponse = await fetch(`${API_BASE_URL}/api/clients/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
@@ -143,7 +143,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       
       // Fetch documents separately
       try {
-        const documentsResponse = await fetch(`${API_BASE_URL}/clients/${userId}/documents`, {
+        const documentsResponse = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
           }
