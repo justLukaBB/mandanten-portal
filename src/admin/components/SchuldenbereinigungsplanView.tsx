@@ -115,11 +115,13 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
       // Pre-fill form if financial data exists
       if (data.financial_data) {
         setFinancialForm({
-          net_income: data.financial_data.net_income.toString(),
-          dependents: data.financial_data.dependents.toString(),
-          marital_status: data.financial_data.marital_status
+          net_income: data.financial_data.net_income ? data.financial_data.net_income.toString() : '',
+          dependents: data.financial_data.dependents ? data.financial_data.dependents.toString() : '0',
+          marital_status: data.financial_data.marital_status || 'ledig'
         });
-        setPfaendbarAmount(data.financial_data.pfaendbar_amount);
+        if (data.financial_data.pfaendbar_amount !== undefined) {
+          setPfaendbarAmount(data.financial_data.pfaendbar_amount);
+        }
       }
       
     } catch (error) {
@@ -352,19 +354,19 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
                     <p className="font-medium text-gray-700">Net Income</p>
-                    <p className="text-lg font-bold text-green-600">€{clientData.financial_data?.net_income.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-green-600">€{clientData.financial_data?.net_income ? clientData.financial_data.net_income.toFixed(2) : '0.00'}</p>
                   </div>
                   <div>
                     <p className="font-medium text-gray-700">Dependents</p>
-                    <p className="text-lg font-bold">{clientData.financial_data?.dependents}</p>
+                    <p className="text-lg font-bold">{clientData.financial_data?.dependents ?? 0}</p>
                   </div>
                   <div>
                     <p className="font-medium text-gray-700">Marital Status</p>
-                    <p className="text-lg font-bold capitalize">{clientData.financial_data?.marital_status}</p>
+                    <p className="text-lg font-bold capitalize">{clientData.financial_data?.marital_status || 'ledig'}</p>
                   </div>
                   <div>
                     <p className="font-medium text-gray-700">Pfändbar Amount</p>
-                    <p className="text-lg font-bold text-red-600">€{clientData.financial_data?.pfaendbar_amount.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-red-600">€{clientData.financial_data?.pfaendbar_amount ? clientData.financial_data.pfaendbar_amount.toFixed(2) : '0.00'}</p>
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
@@ -479,19 +481,19 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
                       <div>
                         <p className="font-medium text-gray-700">Total Debt</p>
-                        <p className="text-lg font-bold text-red-600">€{clientData.settlement_plan.total_debt.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-red-600">€{clientData.settlement_plan?.total_debt ? clientData.settlement_plan.total_debt.toFixed(2) : '0.00'}</p>
                       </div>
                       <div>
                         <p className="font-medium text-gray-700">Monthly Distribution</p>
-                        <p className="text-lg font-bold text-blue-600">€{clientData.settlement_plan.pfaendbar_amount.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-blue-600">€{clientData.settlement_plan?.pfaendbar_amount ? clientData.settlement_plan.pfaendbar_amount.toFixed(2) : '0.00'}</p>
                       </div>
                       <div>
                         <p className="font-medium text-gray-700">Creditors</p>
-                        <p className="text-lg font-bold">{clientData.settlement_plan.creditors.length}</p>
+                        <p className="text-lg font-bold">{clientData.settlement_plan?.creditors?.length || 0}</p>
                       </div>
                       <div>
                         <p className="font-medium text-gray-700">Plan Status</p>
-                        <p className="text-lg font-bold capitalize text-green-600">{clientData.settlement_plan.plan_status}</p>
+                        <p className="text-lg font-bold capitalize text-green-600">{clientData.settlement_plan?.plan_status || 'pending'}</p>
                       </div>
                     </div>
                     
