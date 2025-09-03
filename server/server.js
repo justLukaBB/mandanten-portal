@@ -4503,20 +4503,22 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           numberOfChildren: updatedClient.financial_data.dependents || 0
         };
         
+        // Create mock creditor contact service that matches the expected interface
+        const creditorContacts = new Map();
+        creditorCalculationTable.forEach((creditor, index) => {
+          creditorContacts.set(`creditor_${index}`, {
+            client_reference: clientId,
+            creditor_name: creditor.name,
+            creditor_email: creditor.email,
+            reference_number: creditor.reference_number,
+            final_debt_amount: creditor.final_amount,
+            amount_source: creditor.amount_source,
+            contact_status: creditor.contact_status
+          });
+        });
+        
         const creditorContactService = {
-          getCreditorContacts: (clientRef) => {
-            return {
-              success: true,
-              creditor_contacts: creditorCalculationTable.map(creditor => ({
-                creditor_name: creditor.name,
-                creditor_email: creditor.email,
-                reference_number: creditor.reference_number,
-                final_debt_amount: creditor.final_amount,
-                amount_source: creditor.amount_source,
-                contact_status: creditor.contact_status
-              }))
-            };
-          }
+          creditorContacts: creditorContacts
         };
         
         settlementPlan = garnishmentCalculator.generateRestructuringAnalysis(
