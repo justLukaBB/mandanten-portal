@@ -61,7 +61,7 @@ const getApiBaseUrl = () => {
   // Force production URL if on Render
   if (window.location.hostname.includes('onrender.com')) {
     log('🌐 Using production API URL');
-    return 'https://mandanten-portal-backend.onrender.com/api';
+    return 'https://mandanten-portal-backend.onrender.com';
   }
   
   // If explicitly set in environment
@@ -73,12 +73,12 @@ const getApiBaseUrl = () => {
   // Production detection
   if (process.env.NODE_ENV === 'production') {
     log('🌐 Using production mode API URL');
-    return 'https://mandanten-portal-backend.onrender.com/api';
+    return 'https://mandanten-portal-backend.onrender.com';
   }
   
   // Development default
   log('🌐 Using development API URL');
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
