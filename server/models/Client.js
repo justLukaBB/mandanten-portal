@@ -95,7 +95,23 @@ const creditorSchema = new mongoose.Schema({
   review_action: String, // 'confirmed', 'corrected', 'skipped'
   original_ai_data: mongoose.Schema.Types.Mixed,
   correction_notes: String,
-  created_via: String // 'ai_extraction', 'manual_review', etc.
+  created_via: String, // 'ai_extraction', 'manual_review', etc.
+  
+  // Creditor response fields
+  current_debt_amount: Number, // Amount from creditor response
+  creditor_response_amount: Number, // Alternative field name
+  creditor_response_text: String,
+  contact_status: {
+    type: String,
+    enum: ['responded', 'no_response', 'email_failed'],
+    default: 'no_response'
+  },
+  amount_source: {
+    type: String,
+    enum: ['creditor_response', 'original_document', 'default_fallback'],
+    default: 'original_document'
+  },
+  response_received_at: Date
 }, { _id: false });
 
 // Status History Schema for tracking all status changes

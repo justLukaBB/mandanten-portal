@@ -4420,8 +4420,14 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
       
       // 3-Tier Logic:
       // 1. Check if we got a creditor response (priority 1)
-      if (creditor.current_debt_amount && creditor.amount_source === 'creditor_response') {
+      if (creditor.current_debt_amount && creditor.contact_status === 'responded') {
         finalAmount = creditor.current_debt_amount;
+        amountSource = 'creditor_response';
+        contactStatus = 'responded';
+      }
+      // Also check for alternative response amount fields
+      else if (creditor.creditor_response_amount) {
+        finalAmount = creditor.creditor_response_amount;
         amountSource = 'creditor_response';
         contactStatus = 'responded';
       }
@@ -4429,7 +4435,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
       else if (creditor.claim_amount) {
         finalAmount = creditor.claim_amount;
         amountSource = 'original_document';
-        contactStatus = 'no_response';
+        contactStatus = creditor.contact_status || 'no_response';
       }
       // 3. Default €100 if no information available (priority 3)
       else {
@@ -4501,6 +4507,73 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     console.error('❌ Error in 30-day simulation:', error.message);
     res.status(500).json({
       error: 'Failed to create creditor calculation table',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Update creditor response and recalculate amounts
+app.post('/api/admin/clients/:clientId/creditor-response', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const { creditor_id, response_amount, response_text } = req.body;
+    
+    if (!creditor_id || !response_amount) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: creditor_id and response_amount' 
+      });
+    }
+    
+    console.log(`📧 Processing creditor response for client ${clientId}, creditor ${creditor_id}, amount: €${response_amount}`);
+    
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      // Update the creditor in final_creditor_list
+      if (client.final_creditor_list) {
+        const creditorIndex = client.final_creditor_list.findIndex(c => c.id === creditor_id);
+        if (creditorIndex !== -1) {
+          client.final_creditor_list[creditorIndex].current_debt_amount = parseFloat(response_amount);
+          client.final_creditor_list[creditorIndex].creditor_response_text = response_text || '';
+          client.final_creditor_list[creditorIndex].amount_source = 'creditor_response';
+          client.final_creditor_list[creditorIndex].contact_status = 'responded';
+          client.final_creditor_list[creditorIndex].response_received_at = new Date().toISOString();
+          
+          console.log(`✅ Updated creditor ${creditor_id} with response amount €${response_amount}`);
+        } else {
+          throw new Error(`Creditor ${creditor_id} not found in final_creditor_list`);
+        }
+      }
+      
+      // If there's an existing creditor calculation table, update it too
+      if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
+        const calcIndex = client.creditor_calculation_table.findIndex(c => c.id === creditor_id);
+        if (calcIndex !== -1) {
+          client.creditor_calculation_table[calcIndex].final_amount = parseFloat(response_amount);
+          client.creditor_calculation_table[calcIndex].amount_source = 'creditor_response';
+          client.creditor_calculation_table[calcIndex].contact_status = 'responded';
+          
+          // Recalculate total debt
+          client.creditor_calculation_total_debt = client.creditor_calculation_table
+            .reduce((sum, cred) => sum + cred.final_amount, 0);
+          
+          console.log(`✅ Updated creditor calculation table, new total: €${client.creditor_calculation_total_debt}`);
+        }
+      }
+      
+      return client;
+    });
+    
+    res.json({
+      success: true,
+      message: `Creditor response updated successfully`,
+      creditor_id,
+      response_amount: parseFloat(response_amount),
+      new_total_debt: updatedClient.creditor_calculation_total_debt
+    });
+    
+  } catch (error) {
+    console.error('❌ Error updating creditor response:', error.message);
+    res.status(500).json({
+      error: 'Failed to update creditor response',
       details: error.message
     });
   }
