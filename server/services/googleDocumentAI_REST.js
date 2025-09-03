@@ -170,7 +170,7 @@ class GoogleDocumentAI_REST {
           error: 'No text extracted',
           message: 'Document appears to be an image without readable text - manual review required',
           document_metadata: {
-            file_size: fileSize,
+            file_size: fileBuffer.length,
             mime_type: mimeType,
             processing_method: 'google_document_ai_rest',
             manual_review_required: true,
