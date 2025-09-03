@@ -103,7 +103,23 @@ WICHTIG:
       if (googleDocAI) {
         console.log('Calling Google Document AI...');
         extractedData = await googleDocAI.processDocument(filePath, originalName);
-        console.log('Google Document AI processing completed successfully');
+        
+        // Handle case where no text was extracted (e.g., blank images, screenshots without text)
+        if (!extractedData.success && extractedData.error === 'No text extracted') {
+          console.log('📄 Document marked for manual review due to no text extraction');
+          extractedData = {
+            processing_status: 'completed',
+            is_creditor_document: false,
+            confidence: 0,
+            manual_review_required: true,
+            reasoning: extractedData.message,
+            creditor_data: {},
+            raw_text: '',
+            document_metadata: extractedData.document_metadata
+          };
+        } else {
+          console.log('Google Document AI processing completed successfully');
+        }
       } else {
         console.log('⚠️ Google Document AI not available, using mock data for testing...');
         extractedData = {
