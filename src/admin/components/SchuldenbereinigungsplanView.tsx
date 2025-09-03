@@ -93,6 +93,13 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
       
       const data = await response.json();
       
+      console.log('🔍 Settlement plan API response:', data);
+      console.log('🔍 Creditor calculation data:', {
+        has_creditor_calculation: data.has_creditor_calculation,
+        table_length: data.creditor_calculation_table?.length,
+        total_debt: data.creditor_calculation_total_debt
+      });
+      
       // Extract client data from the response
       const clientDataFormatted = {
         id: data.client_id,
