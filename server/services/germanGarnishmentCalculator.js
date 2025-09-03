@@ -764,6 +764,8 @@ class GermanGarnishmentCalculator {
     generateRestructuringAnalysis(clientReference, financialData, creditorContactService) {
         try {
             console.log(`📋 Generating restructuring analysis for: ${clientReference}`);
+            console.log(`📋 Financial data:`, financialData);
+            console.log(`📋 Creditor service has ${creditorContactService?.creditorContacts?.size || 0} creditors`);
 
             // Calculate garnishable income using current 2025-2026 table
             const garnishmentResult = this.calculate(
@@ -837,10 +839,15 @@ class GermanGarnishmentCalculator {
 
         } catch (error) {
             console.error('❌ Error generating restructuring analysis:', error.message);
+            console.error('❌ Error stack:', error.stack);
             return {
                 success: false,
-                error: error.message,
-                clientReference: clientReference
+                error: error.message || 'Unknown error in restructuring analysis',
+                clientReference: clientReference,
+                errorDetails: {
+                    stack: error.stack,
+                    name: error.name
+                }
             };
         }
     }
