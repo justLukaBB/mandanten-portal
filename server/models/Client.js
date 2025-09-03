@@ -262,6 +262,31 @@ const clientSchema = new mongoose.Schema({
     plan_notes: String
   },
   
+  // Creditor calculation table for Schuldenbereinigungsplan (new approach)
+  creditor_calculation_table: [{
+    id: String,
+    name: String,
+    email: String,
+    address: String,
+    reference_number: String,
+    original_amount: Number, // AI-extracted amount
+    final_amount: Number, // Final calculated amount using 3-tier logic
+    amount_source: {
+      type: String,
+      enum: ['creditor_response', 'original_document', 'default_fallback']
+    },
+    contact_status: {
+      type: String,
+      enum: ['responded', 'no_response', 'email_failed']
+    },
+    is_representative: { type: Boolean, default: false },
+    actual_creditor: String,
+    ai_confidence: Number,
+    created_at: Date
+  }],
+  creditor_calculation_created_at: Date,
+  creditor_calculation_total_debt: Number,
+  
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
