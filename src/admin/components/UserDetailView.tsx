@@ -12,7 +12,8 @@ import {
   InformationCircleIcon,
   ArrowPathIcon,
   ArrowDownTrayIcon,
-  CalculatorIcon
+  CalculatorIcon,
+  CurrencyEuroIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
@@ -20,6 +21,15 @@ import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 interface UserDetailProps {
   userId: string;
   onClose: () => void;
+}
+
+interface FinancialData {
+  net_income: number;
+  dependents: number;
+  marital_status: 'ledig' | 'verheiratet' | 'geschieden' | 'verwitwet';
+  pfaendbar_amount: number;
+  input_date: string;
+  input_by: string;
 }
 
 interface DetailedUser {
@@ -36,6 +46,8 @@ interface DetailedUser {
   final_creditor_list?: Creditor[];
   zendesk_ticket_id?: string;
   workflow_status?: string;
+  has_financial_data?: boolean;
+  financial_data?: FinancialData;
 }
 
 interface Document {
@@ -85,6 +97,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSettlementPlan, setShowSettlementPlan] = useState(false);
+  
+  // Financial data form state
+  const [financialForm, setFinancialForm] = useState({
+    net_income: '',
+    dependents: '0',
+    marital_status: 'ledig' as const
+  });
+  const [pfaendbarAmount, setPfaendbarAmount] = useState<number | null>(null);
+  const [savingFinancial, setSavingFinancial] = useState(false);
 
   useEffect(() => {
     fetchUserDetails();
@@ -120,6 +141,93 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    }
+  };
+
+  const calculatePfaendbarAmount = async (netIncome: number, maritalStatus: string, dependents: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/calculate-garnishable-income`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({
+          netIncome,
+          maritalStatus,
+          numberOfChildren: dependents
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to calculate garnishable income');
+      }
+      
+      const result = await response.json();
+      return result.garnishable_amount;
+    } catch (error) {
+      console.error('Error calculating pfändbar amount:', error);
+      return null;
+    }
+  };
+
+  const handleFinancialFormChange = async (field: string, value: string) => {
+    const newForm = { ...financialForm, [field]: value };
+    setFinancialForm(newForm);
+    
+    // Real-time pfändbar calculation
+    if (newForm.net_income && !isNaN(parseFloat(newForm.net_income))) {
+      const netIncome = parseFloat(newForm.net_income);
+      const dependents = parseInt(newForm.dependents) || 0;
+      
+      const pfaendbar = await calculatePfaendbarAmount(netIncome, newForm.marital_status, dependents);
+      setPfaendbarAmount(pfaendbar);
+    } else {
+      setPfaendbarAmount(null);
+    }
+  };
+
+  const saveFinancialData = async () => {
+    try {
+      setSavingFinancial(true);
+      
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/financial-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({
+          net_income: parseFloat(financialForm.net_income),
+          dependents: parseInt(financialForm.dependents) || 0,
+          marital_status: financialForm.marital_status,
+          input_by: 'admin'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save financial data');
+      }
+      
+      const result = await response.json();
+      console.log('Financial data saved:', result);
+      
+      // Refresh user data
+      await fetchUserDetails();
+      
+      // Clear form
+      setFinancialForm({
+        net_income: '',
+        dependents: '0',
+        marital_status: 'ledig'
+      });
+      setPfaendbarAmount(null);
+      
+    } catch (error) {
+      console.error('Error saving financial data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save financial data');
+    } finally {
+      setSavingFinancial(false);
     }
   };
 
@@ -553,6 +661,114 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               <p className="text-sm text-gray-600">Creditors</p>
             </div>
           </div>
+        </div>
+
+        {/* Financial Data Section */}
+        <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
+          <div className="flex items-center mb-4">
+            <CurrencyEuroIcon className="w-6 h-6 mr-2 text-yellow-600" />
+            <h3 className="text-lg font-semibold text-yellow-800">Financial Data</h3>
+          </div>
+          
+          {user.has_financial_data && user.financial_data ? (
+            <div className="bg-white rounded-lg p-4 border">
+              <h4 className="font-medium text-gray-900 mb-3">✅ Current Financial Data</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="font-medium text-gray-700">Net Income</p>
+                  <p className="text-lg font-bold text-green-600">€{user.financial_data.net_income.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Dependents</p>
+                  <p className="text-lg font-bold">{user.financial_data.dependents}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Marital Status</p>
+                  <p className="text-lg font-bold capitalize">{user.financial_data.marital_status}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Pfändbar Amount</p>
+                  <p className="text-lg font-bold text-red-600">€{user.financial_data.pfaendbar_amount.toFixed(2)}</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Entered on {new Date(user.financial_data.input_date).toLocaleDateString('de-DE')} by {user.financial_data.input_by}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg p-4 border">
+              <h4 className="font-medium text-gray-900 mb-3">💰 Enter Financial Data</h4>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Net Income (€)
+                    </label>
+                    <input
+                      type="number"
+                      value={financialForm.net_income}
+                      onChange={(e) => handleFinancialFormChange('net_income', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                      placeholder="2500.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Dependents
+                    </label>
+                    <input
+                      type="number"
+                      value={financialForm.dependents}
+                      onChange={(e) => handleFinancialFormChange('dependents', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Marital Status
+                    </label>
+                    <select
+                      value={financialForm.marital_status}
+                      onChange={(e) => handleFinancialFormChange('marital_status', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                    >
+                      <option value="ledig">Ledig</option>
+                      <option value="verheiratet">Verheiratet</option>
+                      <option value="geschieden">Geschieden</option>
+                      <option value="verwitwet">Verwitwet</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {pfaendbarAmount !== null && (
+                  <div className="bg-yellow-100 rounded-lg p-3 border border-yellow-300">
+                    <p className="text-sm font-medium text-yellow-800">
+                      💰 Calculated Pfändbar Amount: <span className="text-lg font-bold">€{pfaendbarAmount.toFixed(2)}</span> per month
+                    </p>
+                  </div>
+                )}
+                
+                <button
+                  onClick={saveFinancialData}
+                  disabled={savingFinancial || !financialForm.net_income || pfaendbarAmount === null}
+                  className="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingFinancial ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="w-4 h-4 mr-2" />
+                      Save Financial Data
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="mt-6 flex justify-end">
