@@ -4521,11 +4521,26 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           creditorContacts: creditorContacts
         };
         
+        console.log(`🧮 Calling generateRestructuringAnalysis with:`, {
+          clientId,
+          financialData,
+          creditorServiceType: typeof creditorContactService,
+          creditorContactsCount: creditorContactService.creditorContacts?.size || 0
+        });
+        
         settlementPlan = garnishmentCalculator.generateRestructuringAnalysis(
           clientId,
           financialData,
           creditorContactService
         );
+        
+        console.log(`📊 Settlement plan result:`, {
+          success: settlementPlan?.success,
+          error: settlementPlan?.error,
+          garnishableAmount: settlementPlan?.garnishment?.garnishableAmount,
+          creditorCount: settlementPlan?.debtAnalysis?.creditorCount,
+          totalDebt: settlementPlan?.debtAnalysis?.totalDebt
+        });
         
         if (settlementPlan && settlementPlan.success) {
           console.log(`✅ Settlement plan generated successfully: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
@@ -4536,7 +4551,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
             return client;
           });
         } else {
-          console.log(`⚠️ Settlement plan generation returned error:`, settlementPlan);
+          console.log(`⚠️ Settlement plan generation failed:`, settlementPlan);
           settlementPlan = { success: false, error: settlementPlan?.error || 'Unknown calculation error' };
         }
         
