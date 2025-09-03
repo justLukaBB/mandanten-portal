@@ -164,8 +164,19 @@ class GoogleDocumentAI_REST {
       console.log('First 500 chars of extracted text:', extractedText?.substring(0, 500));
       
       if (!extractedText || extractedText.trim().length === 0) {
-        console.error('ERROR: No text was extracted from the document');
-        throw new Error('No text was extracted from the document');
+        console.log('⚠️ WARNING: No text was extracted from the document - marking for manual review');
+        return {
+          success: false,
+          error: 'No text extracted',
+          message: 'Document appears to be an image without readable text - manual review required',
+          document_metadata: {
+            file_size: fileSize,
+            mime_type: mimeType,
+            processing_method: 'google_document_ai_rest',
+            manual_review_required: true,
+            status_reason: 'No readable text found in image'
+          }
+        };
       }
       
       // Analyze the extracted text with simplified Claude AI
