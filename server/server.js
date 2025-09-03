@@ -4375,7 +4375,8 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
       has_creditor_calculation: !!client.creditor_calculation_table,
       creditor_calculation_table: client.creditor_calculation_table || [],
       creditor_calculation_total_debt: client.creditor_calculation_total_debt || 0,
-      creditor_calculation_created_at: client.creditor_calculation_created_at
+      creditor_calculation_created_at: client.creditor_calculation_created_at,
+      settlement_plan: client.debt_settlement_plan
     });
     
   } catch (error) {
@@ -4525,6 +4526,12 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         );
         
         console.log(`✅ Settlement plan generated: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
+        
+        // Save settlement plan to database
+        await safeClientUpdate(clientId, async (client) => {
+          client.debt_settlement_plan = settlementPlan;
+          return client;
+        });
         
       } catch (error) {
         console.error(`❌ Error generating settlement plan: ${error.message}`);
