@@ -4343,7 +4343,7 @@ ${creditorSummary}
 });
 
 // Get existing settlement plan for a client
-app.get('/api/clients/:clientId/settlement-plan', authenticateAdmin, async (req, res) => {
+app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     
