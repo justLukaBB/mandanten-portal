@@ -4367,8 +4367,10 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
       email: client.email,
       has_financial_data: !!client.financial_data,
       financial_data: client.financial_data,
-      has_settlement_plan: !!client.debt_settlement_plan,
-      settlement_plan: client.debt_settlement_plan
+      has_creditor_calculation: !!client.creditor_calculation_table,
+      creditor_calculation_table: client.creditor_calculation_table || [],
+      creditor_calculation_total_debt: client.creditor_calculation_total_debt || 0,
+      creditor_calculation_created_at: client.creditor_calculation_created_at
     });
     
   } catch (error) {
@@ -4380,7 +4382,7 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
   }
 });
 
-// Admin: Simulate 30-day period for a specific client
+// Admin: Simulate 30-day period - Create creditor calculation table for Schuldenbereinigungsplan
 app.post('/api/admin/clients/:clientId/simulate-30-day-period', async (req, res) => {
   try {
     const clientId = req.params.clientId;
@@ -4396,59 +4398,100 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', async (req, res)
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    console.log(`🕐 30-Day Simulation: Starting for client ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+    console.log(`🕐 30-Day Simulation: Creating creditor calculation table for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
     
-    // Check if client is eligible for creditor contact process
-    // Typically this would be clients who have uploaded documents and payment is received
-    if (!client.first_payment_received) {
+    // Check if client has final_creditor_list
+    if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
       return res.status(400).json({
-        error: 'Client not eligible for creditor contact process',
-        message: 'Payment must be received first'
+        error: 'No creditors found for calculation',
+        message: 'Client must have a final creditor list first. Please ensure documents are processed and creditors are approved.'
       });
     }
     
-    // Check if client has documents
-    if (!client.documents || client.documents.length === 0) {
-      return res.status(400).json({
-        error: 'Client not eligible for creditor contact process',
-        message: 'Client must have uploaded documents first'
-      });
-    }
-    
-    // Update client status to indicate creditor contact process has started
+    // Create creditor calculation table with 3-tier amount logic
     const currentTime = new Date().toISOString();
+    const creditorCalculationTable = [];
+    let totalDebt = 0;
     
-    client.current_status = 'creditor_contact_initiated';
-    client.creditor_contact_started_at = currentTime;
-    client.creditor_contact_status = 'in_progress';
+    client.final_creditor_list.forEach((creditor, index) => {
+      let finalAmount = 0;
+      let amountSource = 'default_fallback';
+      let contactStatus = 'no_response';
+      
+      // 3-Tier Logic:
+      // 1. Check if we got a creditor response (priority 1)
+      if (creditor.current_debt_amount && creditor.amount_source === 'creditor_response') {
+        finalAmount = creditor.current_debt_amount;
+        amountSource = 'creditor_response';
+        contactStatus = 'responded';
+      }
+      // 2. Use AI-extracted amount from documents (priority 2)
+      else if (creditor.claim_amount) {
+        finalAmount = creditor.claim_amount;
+        amountSource = 'original_document';
+        contactStatus = 'no_response';
+      }
+      // 3. Default €100 if no information available (priority 3)
+      else {
+        finalAmount = 100.00;
+        amountSource = 'default_fallback';
+        contactStatus = 'no_response';
+      }
+      
+      totalDebt += finalAmount;
+      
+      creditorCalculationTable.push({
+        id: creditor.id || `calc_${Date.now()}_${index}`,
+        name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
+        email: creditor.sender_email || creditor.creditor_email || '',
+        address: creditor.sender_address || creditor.creditor_address || '',
+        reference_number: creditor.reference_number || '',
+        original_amount: creditor.claim_amount || 0,
+        final_amount: finalAmount,
+        amount_source: amountSource,
+        contact_status: contactStatus,
+        is_representative: creditor.is_representative || false,
+        actual_creditor: creditor.actual_creditor || creditor.sender_name,
+        ai_confidence: creditor.ai_confidence || 0,
+        created_at: currentTime
+      });
+    });
     
-    // Add a note about the simulation
+    // Store the creditor calculation table in the client record
+    client.creditor_calculation_table = creditorCalculationTable;
+    client.creditor_calculation_created_at = currentTime;
+    client.creditor_calculation_total_debt = totalDebt;
+    client.current_status = 'creditor_calculation_ready';
+    
+    // Add a note about the calculation
     if (!client.admin_notes) {
       client.admin_notes = [];
     }
     client.admin_notes.push({
       timestamp: currentTime,
-      note: '🕐 30-Day Period Simulation: Creditor contact process initiated via admin simulation',
+      note: `🕐 30-Day Simulation: Created creditor calculation table with ${creditorCalculationTable.length} creditors, total debt: €${totalDebt.toFixed(2)}`,
       admin: 'system_simulation'
     });
     
     await client.save();
     
-    console.log(`✅ 30-Day Simulation: Client ${client.aktenzeichen} status updated to creditor_contact_initiated`);
+    console.log(`✅ 30-Day Simulation: Created calculation table for ${client.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
     
     res.json({
       success: true,
-      message: `30-Day simulation completed for ${client.firstName} ${client.lastName}. Creditor contact process has been initiated.`,
+      message: `Creditor calculation table created for ${client.firstName} ${client.lastName}`,
       client_id: client.id,
       aktenzeichen: client.aktenzeichen,
-      new_status: 'creditor_contact_initiated',
-      creditor_contact_started_at: currentTime
+      creditor_count: creditorCalculationTable.length,
+      total_debt: totalDebt,
+      creditor_calculation_table: creditorCalculationTable,
+      created_at: currentTime
     });
     
   } catch (error) {
     console.error('❌ Error in 30-day simulation:', error.message);
     res.status(500).json({
-      error: 'Failed to run 30-day simulation',
+      error: 'Failed to create creditor calculation table',
       details: error.message
     });
   }

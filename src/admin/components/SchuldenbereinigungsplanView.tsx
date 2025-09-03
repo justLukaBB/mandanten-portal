@@ -27,26 +27,20 @@ interface FinancialData {
   input_by: string;
 }
 
-interface SettlementPlanCreditor {
+interface CreditorCalculationEntry {
   id: string;
   name: string;
   email: string;
-  amount: number;
-  percentage: number;
-  monthly_quota: number;
+  address: string;
+  reference_number: string;
+  original_amount: number;
+  final_amount: number;
   amount_source: 'creditor_response' | 'original_document' | 'default_fallback';
   contact_status: 'responded' | 'no_response' | 'email_failed';
-}
-
-interface SettlementPlan {
+  is_representative: boolean;
+  actual_creditor: string;
+  ai_confidence: number;
   created_at: string;
-  total_debt: number;
-  pfaendbar_amount: number;
-  creditors: SettlementPlanCreditor[];
-  zendesk_ticket_id?: string;
-  plan_status: 'generated' | 'sent_to_client' | 'approved' | 'rejected';
-  generated_by: string;
-  plan_notes: string;
 }
 
 interface ClientData {
@@ -57,8 +51,10 @@ interface ClientData {
   email: string;
   has_financial_data: boolean;
   financial_data?: FinancialData;
-  has_settlement_plan: boolean;
-  settlement_plan?: SettlementPlan;
+  has_creditor_calculation: boolean;
+  creditor_calculation_table: CreditorCalculationEntry[];
+  creditor_calculation_total_debt: number;
+  creditor_calculation_created_at?: string;
 }
 
 const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> = ({ 
@@ -106,8 +102,10 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
         email: data.email || '',
         has_financial_data: data.has_financial_data,
         financial_data: data.financial_data,
-        has_settlement_plan: data.has_settlement_plan,
-        settlement_plan: data.settlement_plan
+        has_creditor_calculation: data.has_creditor_calculation,
+        creditor_calculation_table: data.creditor_calculation_table || [],
+        creditor_calculation_total_debt: data.creditor_calculation_total_debt || 0,
+        creditor_calculation_created_at: data.creditor_calculation_created_at
       };
       
       setClientData(clientDataFormatted);
@@ -209,39 +207,6 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
     }
   };
 
-  const generateSettlementPlan = async () => {
-    try {
-      setGeneratingPlan(true);
-      setError(null);
-      
-      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/generate-settlement-plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          generated_by: 'admin_simulation'
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate settlement plan');
-      }
-      
-      const result = await response.json();
-      console.log('Settlement plan generated:', result);
-      
-      // Refresh client data to show the new plan
-      await fetchClientData();
-      
-    } catch (error) {
-      console.error('Error generating settlement plan:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate settlement plan');
-    } finally {
-      setGeneratingPlan(false);
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -446,148 +411,121 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
             )}
           </div>
 
-          {/* Settlement Plan Generation */}
-          {clientData.has_financial_data && (
-            <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <CalculatorIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-blue-800">30-Day Settlement Plan Simulation</h3>
-                </div>
-                {!clientData.has_settlement_plan && (
-                  <button
-                    onClick={generateSettlementPlan}
-                    disabled={generatingPlan}
-                    className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                  >
-                    {generatingPlan ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Generating Plan...
-                      </>
-                    ) : (
-                      <>
-                        🚀 Generate 30-Day Settlement Plan
-                      </>
-                    )}
-                  </button>
-                )}
+          {/* Creditor Calculation Table */}
+          <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <CalculatorIcon className="w-6 h-6 mr-2 text-blue-600" />
+                <h3 className="text-lg font-semibold text-blue-800">Creditor Calculation for Schuldenbereinigungsplan</h3>
               </div>
-              
-              {clientData.has_settlement_plan && clientData.settlement_plan ? (
-                <div className="space-y-4">
-                  {/* Plan Summary */}
-                  <div className="bg-white rounded-lg p-4 border">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                      <div>
-                        <p className="font-medium text-gray-700">Total Debt</p>
-                        <p className="text-lg font-bold text-red-600">€{clientData.settlement_plan?.total_debt ? clientData.settlement_plan.total_debt.toFixed(2) : '0.00'}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-700">Monthly Distribution</p>
-                        <p className="text-lg font-bold text-blue-600">€{clientData.settlement_plan?.pfaendbar_amount ? clientData.settlement_plan.pfaendbar_amount.toFixed(2) : '0.00'}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-700">Creditors</p>
-                        <p className="text-lg font-bold">{clientData.settlement_plan?.creditors?.length || 0}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-700">Plan Status</p>
-                        <p className="text-lg font-bold capitalize text-green-600">{clientData.settlement_plan?.plan_status || 'pending'}</p>
-                      </div>
-                    </div>
-                    
-                    {clientData.settlement_plan.zendesk_ticket_id && (
-                      <div className="flex items-center text-sm text-blue-600">
-                        <InformationCircleIcon className="w-4 h-4 mr-1" />
-                        Zendesk Ticket: {clientData.settlement_plan.zendesk_ticket_id}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Creditors Table */}
-                  <div className="bg-white rounded-lg border overflow-hidden">
-                    <div className="px-4 py-3 border-b bg-gray-50">
-                      <h4 className="font-semibold text-gray-900">Creditor Distribution</h4>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Creditor
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Amount
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Percentage
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Monthly Quota
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Source
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Status
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {clientData.settlement_plan.creditors.map((creditor, index) => {
-                            const sourceBadge = getSourceBadge(creditor.amount_source);
-                            return (
-                              <tr key={creditor.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900">{creditor.name}</div>
-                                    <div className="text-sm text-gray-500">{creditor.email}</div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  €{creditor.amount.toFixed(2)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {creditor.percentage.toFixed(1)}%
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                                  €{creditor.monthly_quota.toFixed(2)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sourceBadge.color}`}>
-                                    {sourceBadge.label}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(creditor.contact_status)}`}>
-                                    {creditor.contact_status === 'responded' ? 'Responded' : 
-                                     creditor.contact_status === 'no_response' ? 'No Response' : 'Email Failed'}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    Plan created on {new Date(clientData.settlement_plan.created_at).toLocaleDateString('de-DE')} by {clientData.settlement_plan.generated_by}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <InformationCircleIcon className="w-12 h-12 text-blue-400 mx-auto mb-3" />
-                  <p className="text-gray-600 mb-4">No settlement plan generated yet.</p>
-                  <p className="text-sm text-gray-500">
-                    Click "Generate 30-Day Settlement Plan" to simulate the automatic creditor response collection and create the final debt settlement plan.
-                  </p>
+              {clientData.creditor_calculation_created_at && (
+                <div className="text-sm text-gray-600">
+                  Created: {new Date(clientData.creditor_calculation_created_at).toLocaleDateString('de-DE')}
                 </div>
               )}
             </div>
-          )}
+            
+            {clientData.has_creditor_calculation && clientData.creditor_calculation_table.length > 0 ? (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="bg-white rounded-lg p-4 border">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-700">Total Creditors</p>
+                      <p className="text-lg font-bold text-blue-600">{clientData.creditor_calculation_table.length}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">Total Debt</p>
+                      <p className="text-lg font-bold text-red-600">€{clientData.creditor_calculation_total_debt.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">Status</p>
+                      <p className="text-lg font-bold text-green-600">Ready for Calculation</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Creditors Table */}
+                <div className="bg-white rounded-lg border overflow-hidden">
+                  <div className="px-4 py-3 border-b bg-gray-50">
+                    <h4 className="font-semibold text-gray-900">Creditor Amounts for Calculation</h4>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Creditor
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Reference
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Original Amount (AI)
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Final Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Source
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {clientData.creditor_calculation_table.map((creditor, index) => {
+                          const sourceBadge = getSourceBadge(creditor.amount_source);
+                          return (
+                            <tr key={creditor.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{creditor.name}</div>
+                                  <div className="text-sm text-gray-500">{creditor.email}</div>
+                                  {creditor.is_representative && (
+                                    <div className="text-xs text-blue-600">Rep for: {creditor.actual_creditor}</div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {creditor.reference_number || 'N/A'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                €{creditor.original_amount.toFixed(2)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                                €{creditor.final_amount.toFixed(2)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sourceBadge.color}`}>
+                                  {sourceBadge.label}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(creditor.contact_status)}`}>
+                                  {creditor.contact_status === 'responded' ? 'Response Received' : 
+                                   creditor.contact_status === 'no_response' ? 'No Response' : 'Email Failed'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <InformationCircleIcon className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                <p className="text-gray-600 mb-4">No creditor calculation table created yet.</p>
+                <p className="text-sm text-gray-500">
+                  Click the "30-Day Simulation" button in the client details header to create the creditor calculation table for the Schuldenbereinigungsplan.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Error Display */}
           {error && (
