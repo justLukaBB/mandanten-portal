@@ -2897,7 +2897,7 @@ app.post('/api/admin/test-webhook-response', async (req, res) => {
 // ============================================================================
 
 // Calculate garnishable income for a client
-app.post('/api/clients/:clientId/calculate-garnishable-income', (req, res) => {
+app.post('/api/clients/:clientId/calculate-garnishable-income', authenticateAdmin, (req, res) => {
   try {
     const clientId = req.params.clientId;
     const { netIncome, maritalStatus, numberOfChildren } = req.body;
@@ -4083,7 +4083,7 @@ function startScheduledTasks() {
 // ============================================================================
 
 // Save financial data for a client
-app.post('/api/clients/:clientId/financial-data', async (req, res) => {
+app.post('/api/clients/:clientId/financial-data', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const { net_income, dependents, marital_status, input_by } = req.body;
@@ -4101,37 +4101,30 @@ app.post('/api/clients/:clientId/financial-data', async (req, res) => {
     const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
     const garnishmentResult = germanGarnishmentCalculator.calculate(net_income, marital_status, dependents || 0);
     
-    // Find and update client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId }
-      ]
+    // Find and update client using the safe helper
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      client.financial_data = {
+        net_income: net_income,
+        dependents: dependents || 0,
+        marital_status: marital_status,
+        pfaendbar_amount: garnishmentResult.garnishableAmount,
+        input_date: new Date(),
+        input_by: input_by || 'system'
+      };
+      return client;
     });
     
-    if (!client) {
+    if (!updatedClient) {
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    // Update financial data
-    client.financial_data = {
-      net_income: net_income,
-      dependents: dependents || 0,
-      marital_status: marital_status,
-      pfaendbar_amount: garnishmentResult.garnishable_amount,
-      input_date: new Date(),
-      input_by: input_by || 'system'
-    };
-    
-    await client.save();
-    
-    console.log(`✅ Financial data saved for ${client.aktenzeichen}: ${garnishmentResult.garnishable_amount} EUR pfändbar`);
+    console.log(`✅ Financial data saved for ${updatedClient.aktenzeichen}: ${garnishmentResult.garnishableAmount} EUR pfändbar`);
     
     res.json({
       success: true,
-      client_id: client.id,
-      aktenzeichen: client.aktenzeichen,
-      financial_data: client.financial_data,
+      client_id: updatedClient.id,
+      aktenzeichen: updatedClient.aktenzeichen,
+      financial_data: updatedClient.financial_data,
       garnishment_result: garnishmentResult
     });
     
