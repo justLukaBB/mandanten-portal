@@ -172,6 +172,43 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
+  const simulate30DayPeriod = async () => {
+    if (!window.confirm(`🕐 30-Day Period Simulation\n\nDies simuliert das Ende der 30-Tage-Periode für Client ${user?.firstName} ${user?.lastName} (${user?.aktenzeichen}).\n\nDer Gläubigerkontakt-Prozess wird gestartet.\n\nFortfahren?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/simulate-30-day-period`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Simulation failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ 30-Day Simulation erfolgreich!\n\n${result.message}\n\nStatus: ${result.new_status || 'N/A'}`);
+        // Refresh user data to show updated status
+        await fetchUserDetails();
+      } else {
+        alert(`❌ Simulation fehlgeschlagen: ${result.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error running 30-day simulation:', error);
+      alert(`❌ Fehler bei der 30-Day Simulation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       'created': 'bg-gray-100 text-gray-800',
@@ -291,6 +328,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             >
               <CalculatorIcon className="w-4 h-4 mr-1" />
               Settlement Plan
+            </button>
+            <button
+              onClick={simulate30DayPeriod}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-orange-600 text-orange-600 hover:bg-orange-50 transition-colors"
+              title="Simulate 30-day period and start creditor contact process"
+            >
+              <ClockIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-pulse' : ''}`} />
+              30-Day Simulation
             </button>
             <button
               onClick={fetchUserDetails}
