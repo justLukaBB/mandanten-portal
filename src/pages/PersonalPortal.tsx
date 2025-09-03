@@ -140,7 +140,7 @@ export const PersonalPortal = ({
   // Refresh documents and creditor confirmation status
   const refreshDocuments = async () => {
     try {
-      const documentsResponse = await api.get(`/clients/${clientId}/documents`);
+      const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
       setDocuments(documentsResponse.data || []);
       
       // Also refresh creditor confirmation status
