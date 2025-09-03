@@ -303,6 +303,9 @@ const clientSchema = new mongoose.Schema({
   creditor_calculation_created_at: Date,
   creditor_calculation_total_debt: Number,
   
+  // New calculated settlement plan (from German garnishment calculator)
+  calculated_settlement_plan: mongoose.Schema.Types.Mixed,
+  
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
