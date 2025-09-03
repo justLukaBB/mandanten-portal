@@ -4343,20 +4343,20 @@ ${creditorSummary}
 });
 
 // Get existing settlement plan for a client
-app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
+app.get('/api/clients/:clientId/settlement-plan', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
     
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId }
-      ]
-    });
+    const client = await getClient(clientId);
     
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
+    
+    console.log(`📋 Settlement plan request for ${client.aktenzeichen}:`);
+    console.log(`   - has_creditor_calculation: ${!!client.creditor_calculation_table}`);
+    console.log(`   - calculation_table_length: ${client.creditor_calculation_table?.length || 0}`);
+    console.log(`   - total_debt: ${client.creditor_calculation_total_debt || 'N/A'}`);
     
     res.json({
       success: true,
