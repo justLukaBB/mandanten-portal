@@ -73,7 +73,7 @@ const Settings: React.FC = () => {
 
   const loadAgents = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/agent-auth/list`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-auth/list`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
@@ -107,7 +107,7 @@ const Settings: React.FC = () => {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/agent-auth/create-via-admin`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-auth/create-via-admin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ const Settings: React.FC = () => {
   // Test Scenario Functions
   const loadTestScenarios = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/test/agent-review/scenarios`, {
+      const response = await fetch(`${API_BASE_URL}/api/test/agent-review/scenarios`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
@@ -180,7 +180,7 @@ const Settings: React.FC = () => {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/test/agent-review/create-test-scenario`, {
+      const response = await fetch(`${API_BASE_URL}/api/test/agent-review/create-test-scenario`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +217,7 @@ const Settings: React.FC = () => {
     setTestLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/test/agent-review/cleanup`, {
+      const response = await fetch(`${API_BASE_URL}/api/test/agent-review/cleanup`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
@@ -254,7 +254,7 @@ const Settings: React.FC = () => {
     setMessage(null);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/clear-database`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/clear-database`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
