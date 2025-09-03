@@ -4490,6 +4490,48 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     
     console.log(`💾 After safeClientUpdate - updatedClient has calculation table: ${!!updatedClient.creditor_calculation_table}, length: ${updatedClient.creditor_calculation_table?.length}`);
     
+    // Generate automatic Schuldenbereinigungsplan calculation if financial data exists
+    let settlementPlan = null;
+    if (updatedClient.financial_data && updatedClient.financial_data.net_income) {
+      try {
+        console.log(`🧮 Generating automatic settlement plan calculation...`);
+        
+        const financialData = {
+          netIncome: updatedClient.financial_data.net_income,
+          maritalStatus: updatedClient.financial_data.marital_status || 'ledig',
+          numberOfChildren: updatedClient.financial_data.dependents || 0
+        };
+        
+        const creditorContactService = {
+          getCreditorContacts: (clientRef) => {
+            return {
+              success: true,
+              creditor_contacts: creditorCalculationTable.map(creditor => ({
+                creditor_name: creditor.name,
+                creditor_email: creditor.email,
+                reference_number: creditor.reference_number,
+                final_debt_amount: creditor.final_amount,
+                amount_source: creditor.amount_source,
+                contact_status: creditor.contact_status
+              }))
+            };
+          }
+        };
+        
+        settlementPlan = garnishmentCalculator.generateRestructuringAnalysis(
+          clientId,
+          financialData,
+          creditorContactService
+        );
+        
+        console.log(`✅ Settlement plan generated: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
+        
+      } catch (error) {
+        console.error(`❌ Error generating settlement plan: ${error.message}`);
+        settlementPlan = { error: error.message };
+      }
+    }
+    
     console.log(`✅ 30-Day Simulation: Created calculation table for ${updatedClient.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
     
     res.json({
@@ -4500,6 +4542,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
       creditor_count: creditorCalculationTable.length,
       total_debt: totalDebt,
       creditor_calculation_table: creditorCalculationTable,
+      settlement_plan: settlementPlan,
       created_at: currentTime
     });
     

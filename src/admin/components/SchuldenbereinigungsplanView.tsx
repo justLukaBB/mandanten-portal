@@ -43,6 +43,41 @@ interface CreditorCalculationEntry {
   created_at: string;
 }
 
+interface SettlementPlanCalculation {
+  success: boolean;
+  clientReference: string;
+  analysis_date: string;
+  financialInput: {
+    netIncome: number;
+    maritalStatus: string;
+    numberOfChildren: number;
+  };
+  garnishment: {
+    success: boolean;
+    garnishableAmount: number;
+    baseAmount: number;
+    exemptionAmount: number;
+    exemptionBreakdown: any;
+  };
+  debtAnalysis: {
+    totalDebt: number;
+    creditorCount: number;
+    garnishableIncome: number;
+    creditorQuotas: Array<{
+      creditor_name: string;
+      reference_number: string;
+      debt_amount: number;
+      debt_percentage: number;
+      monthly_quota: number;
+      annual_quota: number;
+      quota_36_months: number;
+      amount_source: string;
+      contact_status: string;
+    }>;
+  };
+  error?: string;
+}
+
 interface ClientData {
   id: string;
   aktenzeichen: string;
@@ -55,6 +90,7 @@ interface ClientData {
   creditor_calculation_table: CreditorCalculationEntry[];
   creditor_calculation_total_debt: number;
   creditor_calculation_created_at?: string;
+  settlement_plan?: SettlementPlanCalculation;
 }
 
 const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> = ({ 
@@ -112,7 +148,8 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
         has_creditor_calculation: data.has_creditor_calculation,
         creditor_calculation_table: data.creditor_calculation_table || [],
         creditor_calculation_total_debt: data.creditor_calculation_total_debt || 0,
-        creditor_calculation_created_at: data.creditor_calculation_created_at
+        creditor_calculation_created_at: data.creditor_calculation_created_at,
+        settlement_plan: data.settlement_plan
       };
       
       setClientData(clientDataFormatted);
@@ -533,6 +570,133 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
               </div>
             )}
           </div>
+
+          {/* Settlement Plan Calculation Results */}
+          {clientData.settlement_plan && (
+            <div className="bg-green-50 rounded-lg p-6 border border-green-200">
+              <div className="flex items-center mb-4">
+                <CalculatorIcon className="w-6 h-6 mr-2 text-green-600" />
+                <h3 className="text-lg font-semibold text-green-800">Schuldenbereinigungsplan Calculation Results</h3>
+              </div>
+              
+              {clientData.settlement_plan.success ? (
+                <div className="space-y-4">
+                  {/* Financial Summary */}
+                  <div className="bg-white rounded-lg p-4 border">
+                    <h4 className="font-semibold text-gray-900 mb-3">Financial Analysis</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium text-gray-700">Net Income</p>
+                        <p className="text-lg font-bold text-blue-600">€{clientData.settlement_plan.financialInput.netIncome.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-700">Garnishable Amount</p>
+                        <p className="text-lg font-bold text-green-600">€{clientData.settlement_plan.garnishment?.garnishableAmount?.toFixed(2) || '0.00'}/month</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-700">Total Debt</p>
+                        <p className="text-lg font-bold text-red-600">€{clientData.settlement_plan.debtAnalysis.totalDebt.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-700">Creditors</p>
+                        <p className="text-lg font-bold">{clientData.settlement_plan.debtAnalysis.creditorCount}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Payment Plan */}
+                  {clientData.settlement_plan.debtAnalysis.creditorQuotas && clientData.settlement_plan.debtAnalysis.creditorQuotas.length > 0 && (
+                    <div className="bg-white rounded-lg border overflow-hidden">
+                      <div className="px-4 py-3 border-b bg-gray-50">
+                        <h4 className="font-semibold text-gray-900">Monthly Payment Distribution</h4>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Creditor
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Debt Amount
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Percentage
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Monthly Payment
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Annual Payment
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                36-Month Total
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {clientData.settlement_plan.debtAnalysis.creditorQuotas.map((quota, index) => (
+                              <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">{quota.creditor_name}</div>
+                                    <div className="text-sm text-gray-500">{quota.reference_number}</div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  €{quota.debt_amount.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {quota.debt_percentage.toFixed(1)}%
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                                  €{quota.monthly_quota.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  €{quota.annual_quota.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">
+                                  €{quota.quota_36_months.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Plan Summary */}
+                  <div className="bg-white rounded-lg p-4 border border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-2">📊 Settlement Plan Summary</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="text-center p-3 bg-green-100 rounded">
+                        <p className="text-green-700 font-medium">Total Monthly Payment</p>
+                        <p className="text-2xl font-bold text-green-800">€{clientData.settlement_plan.garnishment?.garnishableAmount?.toFixed(2) || '0.00'}</p>
+                      </div>
+                      <div className="text-center p-3 bg-blue-100 rounded">
+                        <p className="text-blue-700 font-medium">Plan Duration</p>
+                        <p className="text-2xl font-bold text-blue-800">36 months</p>
+                      </div>
+                      <div className="text-center p-3 bg-purple-100 rounded">
+                        <p className="text-purple-700 font-medium">Total Payments</p>
+                        <p className="text-2xl font-bold text-purple-800">€{((clientData.settlement_plan.garnishment?.garnishableAmount || 0) * 36).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-500 text-center">
+                    Calculation generated on {new Date(clientData.settlement_plan.analysis_date).toLocaleString('de-DE')} | Based on German garnishment tables 2025-2026
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-red-600 font-medium">Settlement Plan Calculation Error</p>
+                  <p className="text-sm text-gray-600">{clientData.settlement_plan.error || 'Unknown error occurred'}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error Display */}
           {error && (
