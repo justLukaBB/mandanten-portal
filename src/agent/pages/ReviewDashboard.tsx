@@ -112,7 +112,7 @@ const ReviewDashboard: React.FC = () => {
       setError(null);
       
       const token = localStorage.getItem('agent_token');
-      const response = await fetch(`${API_BASE_URL}/agent-review/${clientId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -167,7 +167,7 @@ const ReviewDashboard: React.FC = () => {
         hasToken: !!token
       });
       
-      const response = await fetch(`${API_BASE_URL}/agent-review/${clientId}/correct`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -224,7 +224,7 @@ const ReviewDashboard: React.FC = () => {
         
         if (relatedDoc && !relatedDoc.manually_reviewed) {
           // Auto-confirm high-confidence creditor
-          await fetch(`${API_BASE_URL}/agent-review/${clientId}/correct`, {
+          await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -240,7 +240,7 @@ const ReviewDashboard: React.FC = () => {
       }
       
       // Now complete the entire session
-      const response = await fetch(`${API_BASE_URL}/agent-review/${clientId}/complete`, {
+      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

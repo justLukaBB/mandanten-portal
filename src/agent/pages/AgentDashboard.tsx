@@ -67,7 +67,7 @@ const AgentDashboard: React.FC = () => {
       }
 
       // Load available clients for review
-      const clientsResponse = await fetch(`${API_BASE_URL}/agent-review/available-clients`, {
+      const clientsResponse = await fetch(`${API_BASE_URL}/api/agent-review/available-clients`, {
         headers: {
           'Authorization': `Bearer ${agentToken}`
         }
