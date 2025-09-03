@@ -146,6 +146,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   const calculatePfaendbarAmount = async (netIncome: number, maritalStatus: string, dependents: number) => {
     try {
+      console.log('🧮 Calculating pfändbar amount:', { netIncome, maritalStatus, dependents });
+      
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/calculate-garnishable-income`, {
         method: 'POST',
         headers: {
@@ -160,11 +162,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to calculate garnishable income');
+        const errorText = await response.text();
+        console.error('❌ Pfändbar calculation failed:', response.status, errorText);
+        throw new Error(`Failed to calculate garnishable income: ${response.status}`);
       }
       
       const result = await response.json();
-      return result.garnishable_amount;
+      console.log('✅ Pfändbar calculation result:', result);
+      return result.garnishable_amount || 0;
     } catch (error) {
       console.error('Error calculating pfändbar amount:', error);
       return null;
@@ -676,23 +681,23 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <p className="font-medium text-gray-700">Net Income</p>
-                  <p className="text-lg font-bold text-green-600">€{user.financial_data.net_income.toFixed(2)}</p>
+                  <p className="text-lg font-bold text-green-600">€{user.financial_data.net_income ? user.financial_data.net_income.toFixed(2) : '0.00'}</p>
                 </div>
                 <div>
                   <p className="font-medium text-gray-700">Dependents</p>
-                  <p className="text-lg font-bold">{user.financial_data.dependents}</p>
+                  <p className="text-lg font-bold">{user.financial_data.dependents ?? 0}</p>
                 </div>
                 <div>
                   <p className="font-medium text-gray-700">Marital Status</p>
-                  <p className="text-lg font-bold capitalize">{user.financial_data.marital_status}</p>
+                  <p className="text-lg font-bold capitalize">{user.financial_data.marital_status || 'ledig'}</p>
                 </div>
                 <div>
                   <p className="font-medium text-gray-700">Pfändbar Amount</p>
-                  <p className="text-lg font-bold text-red-600">€{user.financial_data.pfaendbar_amount.toFixed(2)}</p>
+                  <p className="text-lg font-bold text-red-600">€{user.financial_data.pfaendbar_amount ? user.financial_data.pfaendbar_amount.toFixed(2) : '0.00'}</p>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Entered on {new Date(user.financial_data.input_date).toLocaleDateString('de-DE')} by {user.financial_data.input_by}
+                Entered on {user.financial_data.input_date ? new Date(user.financial_data.input_date).toLocaleDateString('de-DE') : 'Unknown'} by {user.financial_data.input_by || 'Unknown'}
               </p>
             </div>
           ) : (

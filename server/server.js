@@ -2945,6 +2945,7 @@ app.post('/api/clients/:clientId/calculate-garnishable-income', (req, res) => {
       success: true,
       clientId: clientId,
       garnishableIncome: result.garnishableAmount,
+      garnishable_amount: result.garnishableAmount, // For compatibility
       calculationDetails: result.calculationDetails,
       calculation_timestamp: new Date().toISOString()
     });
@@ -4496,6 +4497,12 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     if (updatedClient.financial_data && updatedClient.financial_data.net_income) {
       try {
         console.log(`🧮 Generating automatic settlement plan calculation...`);
+        console.log(`   Financial data:`, {
+          netIncome: updatedClient.financial_data.net_income,
+          maritalStatus: updatedClient.financial_data.marital_status,
+          dependents: updatedClient.financial_data.dependents
+        });
+        console.log(`   Creditors to include:`, creditorCalculationTable.length);
         
         const financialData = {
           netIncome: updatedClient.financial_data.net_income,
@@ -4525,18 +4532,25 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           creditorContactService
         );
         
-        console.log(`✅ Settlement plan generated: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
-        
-        // Save settlement plan to database
-        await safeClientUpdate(clientId, async (client) => {
-          client.debt_settlement_plan = settlementPlan;
-          return client;
-        });
+        if (settlementPlan && settlementPlan.success) {
+          console.log(`✅ Settlement plan generated successfully: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
+          
+          // Save settlement plan to database
+          await safeClientUpdate(clientId, async (client) => {
+            client.debt_settlement_plan = settlementPlan;
+            return client;
+          });
+        } else {
+          console.log(`⚠️ Settlement plan generation returned error:`, settlementPlan);
+          settlementPlan = { success: false, error: settlementPlan?.error || 'Unknown calculation error' };
+        }
         
       } catch (error) {
-        console.error(`❌ Error generating settlement plan: ${error.message}`);
-        settlementPlan = { error: error.message };
+        console.error(`❌ Error generating settlement plan:`, error);
+        settlementPlan = { success: false, error: error.message || 'Unknown error occurred' };
       }
+    } else {
+      console.log(`ℹ️ Skipping settlement plan generation - no financial data available`);
     }
     
     console.log(`✅ 30-Day Simulation: Created calculation table for ${updatedClient.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
