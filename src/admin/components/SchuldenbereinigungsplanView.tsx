@@ -296,6 +296,11 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        if (response.status === 503 && errorData.code === 'SERVICE_UNAVAILABLE') {
+          throw new Error('📄 Document generation is temporarily unavailable. The server is missing required dependencies. Please contact support.');
+        }
+        
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 

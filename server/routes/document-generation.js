@@ -8,11 +8,37 @@ const router = express.Router();
 const documentGenerator = new DocumentGenerator();
 
 /**
+ * Check document generation service health
+ * GET /api/documents/health
+ */
+router.get('/health', rateLimits.general, async (req, res) => {
+    res.json({
+        available: documentGenerator.isAvailable(),
+        service: 'document-generation',
+        dependencies: {
+            docx: documentGenerator.isAvailable()
+        },
+        message: documentGenerator.isAvailable() ? 
+            'Document generation service is available' : 
+            'Document generation service is unavailable - missing docx package'
+    });
+});
+
+/**
  * Generate Schuldenbereinigungsplan Word document
  * POST /api/documents/schuldenbereinigungsplan
  */
 router.post('/schuldenbereinigungsplan', rateLimits.general, async (req, res) => {
     try {
+        // Check if document generation is available
+        if (!documentGenerator.isAvailable()) {
+            return res.status(503).json({
+                error: 'Document generation service unavailable',
+                message: 'The docx package is not installed on this server. Please contact support.',
+                code: 'SERVICE_UNAVAILABLE'
+            });
+        }
+
         const { client_reference, settlement_data } = req.body;
 
         console.log(`📄 Document generation request for client: ${client_reference}`);
@@ -133,6 +159,15 @@ router.get('/status/:client_reference', rateLimits.general, async (req, res) => 
  */
 router.get('/test', rateLimits.general, async (req, res) => {
     try {
+        if (!documentGenerator.isAvailable()) {
+            return res.status(503).json({
+                success: false,
+                error: 'Document generation service unavailable',
+                message: 'The docx package is not installed on this server.',
+                available: false
+            });
+        }
+
         console.log('🧪 Testing document generation with sample data...');
         
         const result = await documentGenerator.testDocumentGeneration();
