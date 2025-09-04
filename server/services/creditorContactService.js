@@ -153,10 +153,20 @@ class CreditorContactService {
 
             await this.zendesk.addSideConversationStatusUpdate(mainTicket.id, statusUpdates);
 
+            // Count creditors needing manual contact
+            const creditorsNeedingManualContact = contactRecords.filter(record => {
+                const fullRecord = Array.from(this.creditorContacts.values())
+                    .find(c => c.id === record.contact_id);
+                return fullRecord && !fullRecord.creditor_email;
+            }).length;
+
             console.log(`✅ Process completed:`);
             console.log(`   - Main ticket created: 1`);
             console.log(`   - Contact records: ${successfulContacts.length}/${creditors.length}`);
             console.log(`   - Side Conversation emails sent: ${successfulEmails.length}/${successfulContacts.length}`);
+            if (creditorsNeedingManualContact > 0) {
+                console.log(`   - Creditors needing manual contact: ${creditorsNeedingManualContact}`);
+            }
 
             return {
                 success: true,
@@ -167,6 +177,8 @@ class CreditorContactService {
                 tickets_created: 1, // Only one main ticket
                 emails_sent: successfulEmails.length,
                 total_creditors: creditors.length,
+                creditors_contacted_via_email: successfulEmails.length,
+                creditors_needing_manual_contact: creditorsNeedingManualContact,
                 contact_records: contactRecords,
                 side_conversation_results: sideConversationResults,
                 processing_timestamp: new Date().toISOString()
@@ -246,9 +258,29 @@ class CreditorContactService {
                     console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} - Reasons: ${reasons.join(', ')}`);
                 });
             }
+            
+            // Track creditors without emails for manual processing
+            const creditorsWithoutEmail = allCreditors.filter(creditor => 
+                creditor.status === 'confirmed' && 
+                creditor.sender_name && 
+                !creditor.sender_email
+            );
+            
+            if (creditorsWithoutEmail.length > 0) {
+                console.log(`📮 ${creditorsWithoutEmail.length} creditors need manual contact (no email):`);
+                creditorsWithoutEmail.forEach((creditor, index) => {
+                    console.log(`   ${index + 1}. ${creditor.sender_name} - €${(creditor.claim_amount || 0).toFixed(2)}`);
+                });
+            }
 
-            // Convert creditors to contact records format
-            const creditorContactRecords = confirmedCreditors.map(creditor => ({
+            // Convert ALL creditors to contact records format (including those without emails)
+            // We need to track all creditors, not just those we can email
+            const allConfirmedCreditors = allCreditors.filter(creditor => 
+                creditor.status === 'confirmed' && 
+                creditor.sender_name
+            );
+            
+            const creditorContactRecords = allConfirmedCreditors.map(creditor => ({
                 id: uuidv4(),
                 client_reference: clientReference,
                 creditor_name: creditor.sender_name,
@@ -259,7 +291,8 @@ class CreditorContactService {
                 document_ids: creditor.document_id ? [creditor.document_id] : [],
                 is_representative: creditor.is_representative || false,
                 actual_creditor: creditor.actual_creditor || creditor.sender_name,
-                sender_name: creditor.sender_name // Keep original sender name for contact record
+                sender_name: creditor.sender_name, // Keep original sender name for contact record
+                needs_manual_contact: !creditor.sender_email // Flag for manual processing
             }));
 
             return creditorContactRecords;
@@ -348,12 +381,32 @@ class CreditorContactService {
      */
     async sendCreditorEmailsViaSideConversations(mainTicketId, contactRecords, clientData) {
         const sideConversationResults = [];
+        
+        // Filter only creditors with email addresses
+        const emailableContacts = contactRecords.filter(contact => {
+            const fullRecord = Array.from(this.creditorContacts.values())
+                .find(c => c.id === contact.contact_id);
+            return fullRecord && fullRecord.creditor_email;
+        });
+        
+        const manualContacts = contactRecords.filter(contact => {
+            const fullRecord = Array.from(this.creditorContacts.values())
+                .find(c => c.id === contact.contact_id);
+            return fullRecord && !fullRecord.creditor_email;
+        });
+        
+        if (manualContacts.length > 0) {
+            console.log(`📮 ${manualContacts.length} creditors need manual contact (no email):`);
+            manualContacts.forEach((contact, index) => {
+                console.log(`   ${index + 1}. ${contact.creditor_name}`);
+            });
+        }
 
-        for (let i = 0; i < contactRecords.length; i++) {
-            const contactInfo = contactRecords[i];
+        for (let i = 0; i < emailableContacts.length; i++) {
+            const contactInfo = emailableContacts[i];
             
             try {
-                console.log(`📧 Creating Side Conversation ${i + 1}/${contactRecords.length} for ${contactInfo.creditor_name}...`);
+                console.log(`📧 Creating Side Conversation ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name}...`);
                 
                 // Get the full contact record for this creditor
                 const contactRecord = Array.from(this.creditorContacts.values())

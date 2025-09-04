@@ -81,11 +81,15 @@ class ZendeskManager {
         try {
             const subject = `Gläubiger-Anfragen: ${clientData.name} (${creditors.length} Gläubiger)`;
             
+            // Separate creditors with and without emails
+            const creditorsWithEmail = creditors.filter(c => c.creditor_email);
+            const creditorsWithoutEmail = creditors.filter(c => !c.creditor_email);
+            
             // Generate creditor overview
             const creditorOverview = creditors.map((creditor, index) => 
-                `${index + 1}. ${creditor.creditor_name}
+                `${index + 1}. ${creditor.creditor_name} ${!creditor.creditor_email ? '⚠️ (KEIN E-MAIL)' : ''}
    • Aktenzeichen: ${creditor.reference_number}
-   • E-Mail: ${creditor.creditor_email}
+   • E-Mail: ${creditor.creditor_email || '❌ FEHLT - MANUELLE KONTAKTIERUNG ERFORDERLICH'}
    • Betrag: ${creditor.original_claim_amount ? creditor.original_claim_amount + ' EUR' : 'Unbekannt'}
    • Adresse: ${creditor.creditor_address || 'Nicht verfügbar'}`
             ).join('\n\n');
@@ -107,16 +111,23 @@ ${creditorOverview}
 📅 PROZESS-STATUS:
 • Erstellt: ${new Date().toLocaleString('de-DE')}
 • Status: Side Conversations werden erstellt
-• E-Mails: Werden an alle Gläubiger versendet
+• E-Mails: ${creditorsWithEmail.length} von ${creditors.length} Gläubigern
+${creditorsWithoutEmail.length > 0 ? `• ⚠️ ACHTUNG: ${creditorsWithoutEmail.length} Gläubiger ohne E-Mail - MANUELLE KONTAKTIERUNG ERFORDERLICH` : ''}
 
 🤖 Diese Anfragen wurden automatisch generiert basierend auf den verarbeiteten Gläubigerdokumenten.
 📧 Jeder Gläubiger erhält eine separate Side Conversation E-Mail von diesem Ticket.
+${creditorsWithoutEmail.length > 0 ? `
+⚠️ MANUELLE KONTAKTIERUNG ERFORDERLICH:
+${creditorsWithoutEmail.map((c, i) => `${i + 1}. ${c.creditor_name} - ${c.original_claim_amount ? c.original_claim_amount + ' EUR' : 'Betrag unbekannt'}`).join('\n')}
+
+Diese Gläubiger haben keine E-Mail-Adresse und müssen telefonisch oder postalisch kontaktiert werden.` : ''}
 
 ---
 INTERNE NOTIZEN:
 - Alle Gläubiger-E-Mails werden als Side Conversations von diesem Ticket versendet
 - Antworten der Gläubiger kommen als Replies zu den jeweiligen Side Conversations
-- Status-Updates werden kontinuierlich in diesem Ticket dokumentiert`;
+- Status-Updates werden kontinuierlich in diesem Ticket dokumentiert
+${creditorsWithoutEmail.length > 0 ? `- ${creditorsWithoutEmail.length} Gläubiger benötigen manuelle Kontaktierung (keine E-Mail)` : ''}`;
 
             const ticketData = {
                 ticket: {
