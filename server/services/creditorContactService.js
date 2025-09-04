@@ -70,6 +70,14 @@ class CreditorContactService {
             // Step 3: Get all creditors for this client from confirmed documents
             const creditors = await this.getConfirmedCreditorsForClient(clientReference);
             console.log(`📊 Found ${creditors.length} confirmed creditors to contact`);
+            
+            // Debug: Log all creditors that will be contacted
+            if (creditors.length > 0) {
+                console.log(`📧 Creditors to be contacted:`);
+                creditors.forEach((creditor, index) => {
+                    console.log(`   ${index + 1}. ${creditor.creditor_name || creditor.sender_name} - ${creditor.creditor_email}`);
+                });
+            }
 
             if (creditors.length === 0) {
                 return {
