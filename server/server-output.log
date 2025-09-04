@@ -930,3 +930,50 @@ Failed to initialize Google Document AI REST client: Error: No Google Cloud cred
   code: 13,
   codeName: 'Unauthorized'
 }
+
+⏰ Running scheduled document reminder check...
+🔄 Starting document reminder check...
+❌ Error in document reminder service: MongoServerError: Command find requires authentication
+    at Connection.sendCommand (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connection.js:305:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Connection.command (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connection.js:333:26)
+    at async Server.command (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/server.js:171:29)
+    at async FindOperation.execute (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/find.js:36:16)
+    at async tryOperation (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
+    at async executeOperation (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
+    at async FindCursor._initialize (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:61:26)
+    at async FindCursor.cursorInit (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:633:27)
+    at async FindCursor.fetchBatch (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:667:13) {
+  errorLabelSet: Set(0) {},
+  errorResponse: {
+    ok: 0,
+    errmsg: 'Command find requires authentication',
+    code: 13,
+    codeName: 'Unauthorized'
+  },
+  ok: 0,
+  code: 13,
+  codeName: 'Unauthorized'
+}
+❌ Error in scheduled document reminder check: MongoServerError: Command find requires authentication
+    at Connection.sendCommand (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connection.js:305:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Connection.command (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cmap/connection.js:333:26)
+    at async Server.command (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/sdam/server.js:171:29)
+    at async FindOperation.execute (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/find.js:36:16)
+    at async tryOperation (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:207:20)
+    at async executeOperation (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/operations/execute_operation.js:75:16)
+    at async FindCursor._initialize (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/find_cursor.js:61:26)
+    at async FindCursor.cursorInit (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:633:27)
+    at async FindCursor.fetchBatch (/Users/luka/Documents/Development/Mandanten-Portal/server/node_modules/mongoose/node_modules/mongodb/lib/cursor/abstract_cursor.js:667:13) {
+  errorLabelSet: Set(0) {},
+  errorResponse: {
+    ok: 0,
+    errmsg: 'Command find requires authentication',
+    code: 13,
+    codeName: 'Unauthorized'
+  },
+  ok: 0,
+  code: 13,
+  codeName: 'Unauthorized'
+}

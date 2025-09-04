@@ -271,17 +271,21 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
       console.log('🔄 Generating Schuldenbereinigungsplan document...');
 
       // Prepare settlement data for document generation
+      const totalPaymentAmount = (clientData.settlement_plan.garnishment?.garnishableAmount || 0) * 36;
+      const totalDebt = clientData.settlement_plan.debtAnalysis.totalDebt;
+      const overallQuotaPercentage = totalDebt > 0 ? (totalPaymentAmount / totalDebt) * 100 : 0;
+      
       const settlementData = {
         monthly_payment: clientData.settlement_plan.garnishment?.garnishableAmount || 0,
         duration_months: 36,
-        total_debt: clientData.settlement_plan.debtAnalysis.totalDebt,
+        total_debt: totalDebt,
         creditor_payments: clientData.settlement_plan.debtAnalysis.creditorQuotas.map(quota => ({
           creditor_name: quota.creditor_name,
           debt_amount: quota.debt_amount,
-          quota_percentage: quota.debt_percentage
+          quota_percentage: overallQuotaPercentage // Same quota percentage for all creditors in settlement plan
         })),
-        average_quota_percentage: clientData.settlement_plan.debtAnalysis.creditorQuotas.reduce((sum, quota) => sum + quota.debt_percentage, 0) / clientData.settlement_plan.debtAnalysis.creditorQuotas.length,
-        total_payment_amount: (clientData.settlement_plan.garnishment?.garnishableAmount || 0) * 36
+        average_quota_percentage: overallQuotaPercentage,
+        total_payment_amount: totalPaymentAmount
       };
 
       const response = await fetch(`${API_BASE_URL}/api/documents/schuldenbereinigungsplan`, {
