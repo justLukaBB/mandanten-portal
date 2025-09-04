@@ -1,4 +1,15 @@
-const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun, HeadingLevel, BorderStyle } = require('docx');
+// Try to load docx dependency, fail gracefully if not available
+let docxModule = null;
+let Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun, HeadingLevel, BorderStyle;
+
+try {
+    docxModule = require('docx');
+    ({ Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, TextRun, HeadingLevel, BorderStyle } = docxModule);
+} catch (error) {
+    console.warn('⚠️ docx package not found - document generation will be disabled');
+    console.warn('Install with: npm install docx');
+}
+
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -19,6 +30,10 @@ class DocumentGenerator {
      * Generate complete Schuldenbereinigungsplan Word document
      */
     async generateSchuldenbereinigungsplan(clientData, settlementData, calculationResult) {
+        if (!docxModule) {
+            throw new Error('Document generation is not available - docx package not installed. Please run: npm install docx');
+        }
+
         try {
             console.log(`📄 Generating Schuldenbereinigungsplan for ${clientData.name}...`);
 
@@ -455,9 +470,20 @@ class DocumentGenerator {
     }
 
     /**
+     * Check if document generation is available
+     */
+    isAvailable() {
+        return docxModule !== null;
+    }
+
+    /**
      * Test document generation with sample data
      */
     async testDocumentGeneration() {
+        if (!docxModule) {
+            throw new Error('Document generation is not available - docx package not installed. Please run: npm install docx');
+        }
+
         const sampleClientData = {
             name: "Anke Laux",
             email: "anke.laux@example.com",
