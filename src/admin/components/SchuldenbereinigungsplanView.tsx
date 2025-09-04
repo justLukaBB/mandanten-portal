@@ -104,6 +104,7 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
   const [error, setError] = useState<string | null>(null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [downloadingDocument, setDownloadingDocument] = useState(false);
+  const [downloadingForderungsuebersicht, setDownloadingForderungsuebersicht] = useState(false);
   
   // Financial input form state
   const [financialForm, setFinancialForm] = useState({
@@ -341,6 +342,75 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
     }
   };
 
+  const downloadForderungsuebersicht = async () => {
+    if (!clientData) {
+      setError('No client data available for document generation');
+      return;
+    }
+
+    try {
+      setDownloadingForderungsuebersicht(true);
+      setError(null);
+      
+      console.log('🔄 Generating Forderungsübersicht document...');
+
+      const response = await fetch(`${API_BASE_URL}/api/documents/forderungsuebersicht`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_reference: clientData.aktenzeichen
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        if (response.status === 503 && errorData.code === 'SERVICE_UNAVAILABLE') {
+          throw new Error('📄 Document generation is temporarily unavailable. The server is missing required dependencies. Please contact support.');
+        }
+        
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      // Get the document as a blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or create default
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `Forderungsuebersicht_${clientData.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`;
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log(`✅ Document downloaded: ${filename}`);
+      
+    } catch (error) {
+      console.error('❌ Error downloading Forderungsübersicht:', error);
+      setError(error instanceof Error ? error.message : 'Failed to download Forderungsübersicht');
+    } finally {
+      setDownloadingForderungsuebersicht(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusColors = {
       'responded': 'bg-green-100 text-green-800',
@@ -551,11 +621,32 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                 <CalculatorIcon className="w-6 h-6 mr-2 text-blue-600" />
                 <h3 className="text-lg font-semibold text-blue-800">Creditor Calculation for Schuldenbereinigungsplan</h3>
               </div>
-              {clientData.creditor_calculation_created_at && (
-                <div className="text-sm text-gray-600">
-                  Created: {new Date(clientData.creditor_calculation_created_at).toLocaleDateString('de-DE')}
-                </div>
-              )}
+              <div className="flex items-center space-x-3">
+                {clientData.has_creditor_calculation && clientData.creditor_calculation_table.length > 0 && (
+                  <button
+                    onClick={downloadForderungsuebersicht}
+                    disabled={downloadingForderungsuebersicht}
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {downloadingForderungsuebersicht ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
+                        Download Forderungsübersicht
+                      </>
+                    )}
+                  </button>
+                )}
+                {clientData.creditor_calculation_created_at && (
+                  <div className="text-sm text-gray-600">
+                    Created: {new Date(clientData.creditor_calculation_created_at).toLocaleDateString('de-DE')}
+                  </div>
+                )}
+              </div>
             </div>
             
             {clientData.has_creditor_calculation && clientData.creditor_calculation_table.length > 0 ? (

@@ -103,6 +103,62 @@ router.post('/schuldenbereinigungsplan', rateLimits.general, async (req, res) =>
 });
 
 /**
+ * Generate Forderungsübersicht Word document
+ * POST /api/documents/forderungsuebersicht
+ */
+router.post('/forderungsuebersicht', rateLimits.general, async (req, res) => {
+    try {
+        // Check if document generation is available
+        if (!documentGenerator.isAvailable()) {
+            return res.status(503).json({
+                error: 'Document generation service unavailable',
+                message: 'The docx package is not installed on this server. Please contact support.',
+                code: 'SERVICE_UNAVAILABLE'
+            });
+        }
+
+        const { client_reference } = req.body;
+
+        console.log(`📄 Forderungsübersicht generation request for client: ${client_reference}`);
+
+        // Validate required parameters
+        if (!client_reference) {
+            return res.status(400).json({
+                error: 'client_reference is required'
+            });
+        }
+
+        // Generate the document
+        const result = await documentGenerator.generateForderungsuebersichtDocument(client_reference);
+
+        if (!result.success) {
+            console.error(`❌ Forderungsübersicht generation failed: ${result.error}`);
+            return res.status(500).json({
+                error: 'Forderungsübersicht generation failed',
+                details: result.error
+            });
+        }
+
+        console.log(`✅ Forderungsübersicht generated: ${result.document_info.filename}`);
+
+        // Set response headers for file download
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${result.document_info.filename}"`);
+        res.setHeader('Content-Length', result.document_info.size);
+
+        // Send the document buffer as response
+        res.send(result.buffer);
+
+    } catch (error) {
+        console.error('❌ Error in Forderungsübersicht generation endpoint:', error.message);
+        res.status(500).json({
+            error: 'Internal server error during Forderungsübersicht generation',
+            message: error.message
+        });
+    }
+});
+
+/**
  * Get document generation status/info for a client
  * GET /api/documents/status/:client_reference
  */

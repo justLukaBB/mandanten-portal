@@ -521,6 +521,440 @@ class DocumentGenerator {
         console.log('✅ Test document generated successfully!');
         return result;
     }
+
+    /**
+     * Generate complete Forderungsübersicht (Debt Overview) Word document
+     */
+    async generateForderungsuebersicht(clientData, creditorData) {
+        if (!docxModule) {
+            throw new Error('Document generation is not available - docx package not installed. Please run: npm install docx');
+        }
+
+        try {
+            console.log(`📄 Generating Forderungsübersicht for ${clientData.name}...`);
+
+            // Format the date for the document title
+            const currentDate = new Date().toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+
+            const doc = new Document({
+                ...this.documentOptions,
+                title: "Gläubiger- und Forderungsübersicht",
+                sections: [{
+                    properties: {},
+                    children: [
+                        // Document Title
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: `Gläubiger- und Forderungsübersicht vom     ${currentDate}`,
+                                    bold: true,
+                                    size: 24
+                                })
+                            ],
+                            spacing: { after: 600 }
+                        }),
+
+                        // Applicant Information
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: "Antragsteller/-in:",
+                                    bold: true,
+                                    size: 22
+                                }),
+                                new TextRun({
+                                    text: `     ${clientData.name}`,
+                                    size: 22
+                                })
+                            ],
+                            spacing: { after: 800 }
+                        }),
+
+                        // Creditor Table
+                        await this.createForderungsuebersichtTable(creditorData),
+
+                        // Page number footer
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: "Seite 1",
+                                    size: 18
+                                })
+                            ],
+                            alignment: AlignmentType.RIGHT,
+                            spacing: { before: 800, after: 200 }
+                        }),
+
+                        // Legal Footer
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: "\n\nErstellt von Thomas Scuric Rechtsanwälte",
+                                    italics: true,
+                                    size: 18
+                                })
+                            ],
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 400 }
+                        }),
+
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: `Datum: ${currentDate}`,
+                                    italics: true,
+                                    size: 18
+                                })
+                            ],
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 200 }
+                        })
+                    ]
+                }]
+            });
+
+            console.log(`✅ Forderungsübersicht structure created for ${clientData.name}`);
+            return doc;
+
+        } catch (error) {
+            console.error('❌ Error generating Forderungsübersicht:', error.message);
+            throw new Error(`Forderungsübersicht generation failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Create the creditor overview table matching the format in the screenshot
+     */
+    async createForderungsuebersichtTable(creditorData) {
+        const tableRows = [
+            // Header Row
+            new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Nr.", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 5, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Aktenzeichen", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gläubigervertreter", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Aktenzeichen", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 10, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "berechnet zum Datum EUR", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 8, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gesamt-forderung EUR", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 8, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Forderungsgrund", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 7, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Bemerkungen", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 10, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" }
+                    })
+                ]
+            })
+        ];
+
+        // Data Rows
+        creditorData.forEach((creditor, index) => {
+            // Format creditor information
+            const creditorInfo = this.formatCreditorInfo(creditor);
+            const representativeInfo = this.formatRepresentativeInfo(creditor);
+
+            tableRows.push(
+                new TableRow({
+                    children: [
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
+                                alignment: AlignmentType.CENTER
+                            })],
+                            width: { size: 5, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditorInfo, size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 25, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.creditor_reference || '', size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 12, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: representativeInfo, size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 25, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.representative_reference || '', size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 10, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: '', size: 16 })],
+                                alignment: AlignmentType.CENTER
+                            })],
+                            width: { size: 8, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 16 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            width: { size: 8, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.debt_reason || '', size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 7, type: WidthType.PERCENTAGE }
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.remarks || '', size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            width: { size: 10, type: WidthType.PERCENTAGE }
+                        })
+                    ]
+                })
+            );
+        });
+
+        return new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 1 },
+                bottom: { style: BorderStyle.SINGLE, size: 1 },
+                left: { style: BorderStyle.SINGLE, size: 1 },
+                right: { style: BorderStyle.SINGLE, size: 1 },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1 }
+            }
+        });
+    }
+
+    /**
+     * Format creditor information for the overview table
+     */
+    formatCreditorInfo(creditor) {
+        const lines = [];
+        
+        if (creditor.creditor_name) {
+            lines.push(creditor.creditor_name);
+        }
+        
+        if (creditor.creditor_address) {
+            const addressLines = creditor.creditor_address.split('\n');
+            lines.push(...addressLines);
+        }
+        
+        if (creditor.creditor_email) {
+            lines.push(`E-Mail: ${creditor.creditor_email}`);
+        }
+        
+        return lines.join('\n');
+    }
+
+    /**
+     * Format representative information for the overview table
+     */
+    formatRepresentativeInfo(creditor) {
+        if (!creditor.is_representative || !creditor.representative_info) {
+            return '';
+        }
+
+        const rep = creditor.representative_info;
+        const lines = [];
+        
+        if (rep.name) {
+            lines.push(rep.name);
+        }
+        
+        if (rep.address) {
+            const addressLines = rep.address.split('\n');
+            lines.push(...addressLines);
+        }
+        
+        if (rep.email) {
+            lines.push(`E-Mail: ${rep.email}`);
+        }
+        
+        return lines.join('\n');
+    }
+
+    /**
+     * Generate and save complete Forderungsübersicht document
+     */
+    async generateForderungsuebersichtDocument(clientReference) {
+        try {
+            console.log(`📄 Starting Forderungsübersicht generation for client: ${clientReference}`);
+
+            // Get client data
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            const clientData = {
+                name: `${client.firstName} ${client.lastName}`,
+                email: client.email,
+                reference: clientReference
+            };
+
+            // Get creditor data from final_creditor_list or creditor calculation table
+            let creditorData = [];
+            
+            if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
+                // Use creditor calculation table if available (more complete data)
+                creditorData = client.creditor_calculation_table.map(creditor => ({
+                    creditor_name: creditor.name,
+                    creditor_address: creditor.address,
+                    creditor_email: creditor.email,
+                    creditor_reference: creditor.reference_number,
+                    debt_amount: creditor.final_amount,
+                    debt_reason: '', // Could be added to the data model later
+                    remarks: creditor.contact_status === 'responded' ? 'Antwort erhalten' : 
+                             creditor.contact_status === 'no_response' ? 'Keine Antwort' : 
+                             'E-Mail fehlgeschlagen',
+                    is_representative: creditor.is_representative,
+                    representative_info: creditor.is_representative ? {
+                        name: creditor.actual_creditor,
+                        address: '', // Could be added to data model
+                        email: ''
+                    } : null,
+                    representative_reference: ''
+                }));
+            } else if (client.final_creditor_list && client.final_creditor_list.length > 0) {
+                // Fallback to final_creditor_list
+                creditorData = client.final_creditor_list
+                    .filter(creditor => creditor.status === 'confirmed')
+                    .map(creditor => ({
+                        creditor_name: creditor.sender_name,
+                        creditor_address: creditor.sender_address,
+                        creditor_email: creditor.sender_email,
+                        creditor_reference: creditor.reference_number,
+                        debt_amount: creditor.claim_amount || 0,
+                        debt_reason: '',
+                        remarks: '',
+                        is_representative: creditor.is_representative || false,
+                        representative_info: creditor.is_representative ? {
+                            name: creditor.actual_creditor,
+                            address: '',
+                            email: ''
+                        } : null,
+                        representative_reference: ''
+                    }));
+            }
+
+            if (creditorData.length === 0) {
+                throw new Error('No creditor data available for Forderungsübersicht generation');
+            }
+
+            console.log(`📊 Processing ${creditorData.length} creditors for Forderungsübersicht`);
+
+            // Generate the document
+            const doc = await this.generateForderungsuebersicht(clientData, creditorData);
+
+            // Save the document
+            const filename = `Forderungsuebersicht_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+            const result = await this.saveDocument(doc, clientReference, filename);
+
+            console.log(`✅ Forderungsübersicht document generated successfully`);
+            console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
+
+            return {
+                success: true,
+                document_info: {
+                    filename: result.filename,
+                    path: result.path,
+                    size: result.size,
+                    client_reference: clientReference,
+                    document_type: 'forderungsuebersicht',
+                    generated_at: new Date().toISOString()
+                },
+                buffer: result.buffer
+            };
+
+        } catch (error) {
+            console.error(`❌ Error generating Forderungsübersicht document: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientReference,
+                document_type: 'forderungsuebersicht'
+            };
+        }
+    }
 }
 
 module.exports = DocumentGenerator;
