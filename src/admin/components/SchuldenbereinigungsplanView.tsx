@@ -663,25 +663,31 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                   <CalculatorIcon className="w-6 h-6 mr-2 text-green-600" />
                   <h3 className="text-lg font-semibold text-green-800">Schuldenbereinigungsplan Calculation Results</h3>
                 </div>
-                {clientData.settlement_plan.success && (
-                  <button
-                    onClick={downloadSchuldenbereinigungsplan}
-                    disabled={downloadingDocument}
-                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {downloadingDocument ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
-                        Download Word Document
-                      </>
-                    )}
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  {/* Debug info - remove after testing */}
+                  <span className="text-xs text-gray-500">
+                    Success: {String(clientData.settlement_plan?.success || false)}
+                  </span>
+                  {(clientData.settlement_plan?.success || clientData.settlement_plan?.debtAnalysis?.creditorQuotas?.length > 0) && (
+                    <button
+                      onClick={downloadSchuldenbereinigungsplan}
+                      disabled={downloadingDocument}
+                      className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {downloadingDocument ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
+                          Download Word Document
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
               
               {clientData.settlement_plan && clientData.settlement_plan.success ? (
