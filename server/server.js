@@ -17,6 +17,7 @@ const portalWebhooks = require('./routes/portal-webhooks');
 const agentReviewRoutes = require('./routes/agent-review');
 const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
+const documentGenerationRoutes = require('./routes/document-generation');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -49,6 +50,7 @@ app.use('/api/portal-webhook', portalWebhooks);
 app.use('/api/agent-review', agentReviewRoutes);
 app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
+app.use('/api/documents', documentGenerationRoutes);
 
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
