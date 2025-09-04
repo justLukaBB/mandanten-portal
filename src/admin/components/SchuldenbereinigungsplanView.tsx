@@ -8,7 +8,8 @@ import {
   UserIcon,
   InformationCircleIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 
@@ -102,6 +103,7 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [downloadingDocument, setDownloadingDocument] = useState(false);
   
   // Financial input form state
   const [financialForm, setFinancialForm] = useState({
@@ -255,6 +257,84 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
     }
   };
 
+  const downloadSchuldenbereinigungsplan = async () => {
+    if (!clientData?.settlement_plan || !clientData.settlement_plan.success) {
+      setError('No valid settlement plan data available for document generation');
+      return;
+    }
+
+    try {
+      setDownloadingDocument(true);
+      setError(null);
+      
+      console.log('🔄 Generating Schuldenbereinigungsplan document...');
+
+      // Prepare settlement data for document generation
+      const settlementData = {
+        monthly_payment: clientData.settlement_plan.garnishment?.garnishableAmount || 0,
+        duration_months: 36,
+        total_debt: clientData.settlement_plan.debtAnalysis.totalDebt,
+        creditor_payments: clientData.settlement_plan.debtAnalysis.creditorQuotas.map(quota => ({
+          creditor_name: quota.creditor_name,
+          debt_amount: quota.debt_amount,
+          quota_percentage: quota.debt_percentage
+        })),
+        average_quota_percentage: clientData.settlement_plan.debtAnalysis.creditorQuotas.reduce((sum, quota) => sum + quota.debt_percentage, 0) / clientData.settlement_plan.debtAnalysis.creditorQuotas.length,
+        total_payment_amount: (clientData.settlement_plan.garnishment?.garnishableAmount || 0) * 36
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/documents/schuldenbereinigungsplan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_reference: clientData.aktenzeichen,
+          settlement_data: settlementData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      // Get the document as a blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or create default
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `Schuldenbereinigungsplan_${clientData.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`;
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log(`✅ Document downloaded: ${filename}`);
+      
+    } catch (error) {
+      console.error('❌ Error downloading document:', error);
+      setError(error instanceof Error ? error.message : 'Failed to download document');
+    } finally {
+      setDownloadingDocument(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -578,9 +658,30 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
           {/* Settlement Plan Calculation Results */}
           {clientData.settlement_plan && (
             <div className="bg-green-50 rounded-lg p-6 border border-green-200">
-              <div className="flex items-center mb-4">
-                <CalculatorIcon className="w-6 h-6 mr-2 text-green-600" />
-                <h3 className="text-lg font-semibold text-green-800">Schuldenbereinigungsplan Calculation Results</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <CalculatorIcon className="w-6 h-6 mr-2 text-green-600" />
+                  <h3 className="text-lg font-semibold text-green-800">Schuldenbereinigungsplan Calculation Results</h3>
+                </div>
+                {clientData.settlement_plan.success && (
+                  <button
+                    onClick={downloadSchuldenbereinigungsplan}
+                    disabled={downloadingDocument}
+                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {downloadingDocument ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
+                        Download Word Document
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
               
               {clientData.settlement_plan && clientData.settlement_plan.success ? (
