@@ -5,7 +5,8 @@ import {
   CalendarIcon,
   MagnifyingGlassIcon,
   EyeIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  BoltIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
@@ -23,6 +24,11 @@ interface User {
   documents_count: number;
   creditors_count: number;
   zendesk_ticket_id?: string;
+  processing_complete_webhook_scheduled?: boolean;
+  processing_complete_webhook_scheduled_at?: string;
+  processing_complete_webhook_triggered?: boolean;
+  first_payment_received?: boolean;
+  all_documents_processed_at?: string;
 }
 
 interface StatusFilter {
@@ -40,6 +46,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [triggeringReview, setTriggeringReview] = useState<string | null>(null);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -105,6 +112,11 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
         last_login: client.last_login,
         documents_count: client.documents?.length || 0,
         creditors_count: client.final_creditor_list?.length || 0,
+        processing_complete_webhook_scheduled: client.processing_complete_webhook_scheduled,
+        processing_complete_webhook_scheduled_at: client.processing_complete_webhook_scheduled_at,
+        processing_complete_webhook_triggered: client.processing_complete_webhook_triggered,
+        first_payment_received: client.first_payment_received,
+        all_documents_processed_at: client.all_documents_processed_at,
         zendesk_ticket_id: client.zendesk_ticket_id
       }));
       
@@ -149,6 +161,54 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
     }
     
     setFilteredUsers(filtered);
+  };
+
+  const triggerImmediateReview = async (userId: string) => {
+    if (!confirm('Sofortige Gläubiger-Prüfung starten? Dies erstellt sofort ein Zendesk-Ticket für die manuelle Überprüfung.')) {
+      return;
+    }
+
+    setTriggeringReview(userId);
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/immediate-review/${userId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Gläubiger-Prüfung erfolgreich gestartet! Zendesk-Ticket wurde erstellt.');
+        // Refresh the user list to show updated status
+        await fetchUsers();
+      } else {
+        alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+      }
+    } catch (error) {
+      console.error('Error triggering immediate review:', error);
+      alert('Fehler beim Starten der Gläubiger-Prüfung. Bitte versuchen Sie es erneut.');
+    } finally {
+      setTriggeringReview(null);
+    }
+  };
+
+  const shouldShowImmediateReviewButton = (user: User): boolean => {
+    // Show button if:
+    // 1. Client has paid AND has documents processed but webhook is scheduled/pending
+    // 2. OR has documents processed but no webhook scheduled yet
+    return (
+      user.first_payment_received && 
+      user.documents_count > 0 && 
+      user.all_documents_processed_at &&
+      (
+        (user.processing_complete_webhook_scheduled && !user.processing_complete_webhook_triggered) ||
+        (!user.processing_complete_webhook_scheduled && !user.processing_complete_webhook_triggered)
+      )
+    );
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -354,14 +414,32 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
                     }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => setSelectedUserId(user.aktenzeichen)}
-                      className="inline-flex items-center hover:opacity-80"
-                      style={{color: '#9f1a1d'}}
-                    >
-                      <EyeIcon className="w-4 h-4 mr-1" />
-                      Details
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setSelectedUserId(user.aktenzeichen)}
+                        className="inline-flex items-center hover:opacity-80"
+                        style={{color: '#9f1a1d'}}
+                      >
+                        <EyeIcon className="w-4 h-4 mr-1" />
+                        Details
+                      </button>
+                      
+                      {shouldShowImmediateReviewButton(user) && (
+                        <button
+                          onClick={() => triggerImmediateReview(user.id)}
+                          disabled={triggeringReview === user.id}
+                          className={`inline-flex items-center px-2 py-1 text-xs rounded ${
+                            triggeringReview === user.id
+                              ? 'bg-gray-100 text-gray-400'
+                              : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                          }`}
+                          title="Sofort Gläubiger-Prüfung starten"
+                        >
+                          <BoltIcon className="w-3 h-3 mr-1" />
+                          {triggeringReview === user.id ? 'Lädt...' : 'Sofort prüfen'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

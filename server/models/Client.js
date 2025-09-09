@@ -221,6 +221,12 @@ const clientSchema = new mongoose.Schema({
   last_document_reminder_at: Date,
   documents_uploaded_after_payment_at: Date,
   
+  // Delayed processing webhook tracking
+  processing_complete_webhook_scheduled: { type: Boolean, default: false },
+  processing_complete_webhook_scheduled_at: Date,
+  processing_complete_webhook_triggered: { type: Boolean, default: false },
+  processing_complete_webhook_triggered_at: Date,
+  
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },

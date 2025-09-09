@@ -248,6 +248,10 @@ app.use('/api/agent-review', agentReviewRoutes);
 // Test agent review routes (admin auth required)
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 
+// Admin delayed processing routes
+const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
+app.use('/api', adminDelayedProcessingRoutes);
+
 // Dashboard status routes (admin auth required) - moved inline for consistent auth
 
 // Ensure uploads directory exists
@@ -4066,7 +4070,22 @@ function startScheduledTasks() {
     }
   }, REMINDER_CHECK_INTERVAL);
   
-  // Run initial check after 1 minute
+  // Run delayed processing webhook check every 30 minutes
+  const DELAYED_WEBHOOK_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
+  
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running scheduled delayed webhook check...');
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+      const result = await delayedService.checkAndTriggerPendingWebhooks();
+      console.log(`✅ Delayed webhook check complete: ${result.webhooksTriggered} webhooks triggered\n`);
+    } catch (error) {
+      console.error('❌ Error in scheduled delayed webhook check:', error);
+    }
+  }, DELAYED_WEBHOOK_CHECK_INTERVAL);
+  
+  // Run initial checks after 1 minute
   setTimeout(async () => {
     try {
       console.log('\n⏰ Running initial document reminder check...');
@@ -4077,7 +4096,22 @@ function startScheduledTasks() {
     }
   }, 60000); // 1 minute
   
-  console.log('📅 Scheduled tasks started: Document reminders will check every hour');
+  // Run initial delayed webhook check after 2 minutes
+  setTimeout(async () => {
+    try {
+      console.log('\n⏰ Running initial delayed webhook check...');
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+      const result = await delayedService.checkAndTriggerPendingWebhooks();
+      console.log(`✅ Initial delayed webhook check complete: ${result.webhooksTriggered} webhooks triggered\n`);
+    } catch (error) {
+      console.error('❌ Error in initial delayed webhook check:', error);
+    }
+  }, 120000); // 2 minutes
+  
+  console.log('📅 Scheduled tasks started:');
+  console.log('  • Document reminders: every hour');
+  console.log('  • Delayed processing webhooks: every 30 minutes');
 }
 
 // ============================================================================
@@ -4982,9 +5016,9 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             });
           }
           
-          // If payment is also received, populate creditor list and trigger webhook
+          // If payment is also received, populate creditor list and schedule delayed webhook
           if (allDocsCompleted && updatedClient.first_payment_received) {
-            console.log(`🎯 All documents completed for client ${clientId} after upload - triggering creditor list population`);
+            console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
             
             // Update final creditor list
             const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
@@ -5026,8 +5060,18 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             
             await saveClient(updatedClient);
             
-            // Trigger processing-complete webhook
-            await triggerProcessingCompleteWebhook(clientId);
+            // Schedule delayed processing-complete webhook (24 hours)
+            const delayedProcessingService = require('./services/delayedProcessingService');
+            const delayService = new delayedProcessingService();
+            
+            try {
+              await delayService.scheduleProcessingCompleteWebhook(clientId, documentId, 24);
+              console.log(`⏰ Scheduled processing-complete webhook for 24 hours from now`);
+            } catch (error) {
+              console.error(`❌ Failed to schedule delayed webhook, triggering immediately:`, error);
+              // Fallback to immediate trigger if scheduling fails
+              await triggerProcessingCompleteWebhook(clientId);
+            }
           }
         }
         
