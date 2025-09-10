@@ -25,8 +25,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build && cp build/index.html build/404.html",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "postinstall": "echo 'docx package should be available:' && node -e 'try { require(\"docx\"); console.log(\"✅ docx package found\"); } catch(e) { console.log(\"❌ docx package missing:\", e.message); }'"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
