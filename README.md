@@ -52,6 +52,9 @@ mandanten-portal/
 │   └── uploads/             # File upload directory
 ├── public/                   # Static assets
 └── docs/                    # Documentation
+    ├── VISUAL-FLOWCHART.html    # Interactive system flowchart (English)
+    ├── VISUAL-FLOWCHART-DE.html # Interactive system flowchart (German)
+    └── FLOWCHART.md             # Markdown flowchart documentation
 ```
 
 ## ✨ Key Features
@@ -227,6 +230,48 @@ POST /api/zendesk-webhooks/processing-complete
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+## 📊 System Documentation
+
+### Interactive Flowcharts
+
+The system includes comprehensive interactive flowcharts that visualize the complete workflow:
+
+#### **English Version** - `docs/VISUAL-FLOWCHART.html`
+- **Main Flow**: Complete client lifecycle from case creation to completion
+- **Document Processing**: AI analysis with 80% confidence threshold and OCR integration
+- **Settlement Calculation**: German garnishment calculator with detailed mathematical explanations
+- **Status Workflow**: State transitions and system progression
+- **Architecture**: High-level system component overview
+- **Admin Actions**: Administrative functions and immediate review capabilities
+- **Document Calculations**: Step-by-step breakdown of Schuldenbereinigungsplan and Forderungsübersicht generation
+
+#### **German Version** - `docs/VISUAL-FLOWCHART-DE.html`
+Complete German translation with proper legal terminology:
+- **Hauptablauf**: Vollständiger Mandanten-Lebenszyklus
+- **Dokumentenverarbeitung**: KI-Analyse mit 80%-Konfidenz-Schwellenwert
+- **Bereinigungsplan-Berechnung**: Deutsche Pfändungstabellen-Berechnung mit mathematischen Erklärungen
+- **Status-Workflow**: Zustandsübergänge und System-Progression
+- **Architektur**: Systemkomponenten-Übersicht
+- **Admin-Aktionen**: Administrative Funktionen
+- **Dokumenten-Berechnungen**: Schritt-für-Schritt Aufschlüsselung der Dokumentengenerierung
+
+### Key Features Visualized:
+- **3-Tier Creditor Amount System**: Creditor response > AI extracted > €100 default fallback
+- **30-Day Creditor Contact Process**: Automated verification and response tracking
+- **German Pfändungstabelle Integration**: Official 2025-2026 garnishment calculations with 334 income brackets
+- **Settlement Plan Generation**: Mathematical formulas for proportional creditor distribution
+- **Document Processing Logic**: 80% confidence threshold for AI vs manual review
+- **Payment-Dependent Workflows**: Agent review only triggered after payment confirmation
+- **Reminder Systems**: Login reminders (7-day cycle) and document reminders (2-day cycle)
+
+### Real Examples Included:
+- Complete calculation walkthrough with Max Mustermann case study
+- €169.42/month garnishable income distribution among 5 creditors
+- Detailed creditor response scenarios and fallback logic
+- 36-month settlement plan totaling €6,099.12 (43.3% of total debt)
+
+**To View**: Open the HTML files in any modern web browser for interactive navigation with tabbed sections, color-coded legends, and detailed explanations.
 
 ## 📄 License
 

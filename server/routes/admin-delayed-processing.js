@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
 const DelayedProcessingService = require('../services/delayedProcessingService');
+const LoginReminderService = require('../services/loginReminderService');
 
 const delayedProcessingService = new DelayedProcessingService();
+const loginReminderService = new LoginReminderService();
 
 /**
  * Get all clients with scheduled processing webhooks
@@ -337,6 +339,34 @@ router.post('/admin/delayed-processing/check-now', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to check delayed webhooks',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Manual trigger of the login reminder check (for testing)
+ */
+router.post('/admin/login-reminders/check-now', async (req, res) => {
+  try {
+    console.log('📧 Admin triggered manual login reminder check');
+    
+    const result = await loginReminderService.checkAndSendLoginReminders();
+    
+    res.json({
+      success: true,
+      message: 'Login reminder check completed',
+      totalChecked: result.totalChecked,
+      loginRemindersSent: result.loginRemindersSent,
+      documentRemindersSent: result.documentRemindersSent,
+      errors: result.errors
+    });
+    
+  } catch (error) {
+    console.error('Error in manual login reminder check:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check login reminders',
       details: error.message
     });
   }
