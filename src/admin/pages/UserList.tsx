@@ -164,7 +164,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
   };
 
   const triggerImmediateReview = async (userId: string) => {
-    if (!confirm('Sofortige Gläubiger-Prüfung starten? Dies erstellt sofort ein Zendesk-Ticket für die manuelle Überprüfung.')) {
+    if (!window.confirm('Sofortige Gläubiger-Prüfung starten? Dies erstellt sofort ein Zendesk-Ticket für die manuelle Überprüfung.')) {
       return;
     }
 
@@ -200,7 +200,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
     // Show button if:
     // 1. Client has paid AND has documents processed but webhook is scheduled/pending
     // 2. OR has documents processed but no webhook scheduled yet
-    return (
+    return !!(
       user.first_payment_received && 
       user.documents_count > 0 && 
       user.all_documents_processed_at &&

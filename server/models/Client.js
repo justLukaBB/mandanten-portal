@@ -221,6 +221,12 @@ const clientSchema = new mongoose.Schema({
   last_document_reminder_at: Date,
   documents_uploaded_after_payment_at: Date,
   
+  // Login reminder tracking (7-day cycle)
+  login_reminder_sent: { type: Boolean, default: false },
+  login_reminder_sent_at: Date,
+  login_document_reminder_sent: { type: Boolean, default: false },
+  login_document_reminder_sent_at: Date,
+  
   // Delayed processing webhook tracking
   processing_complete_webhook_scheduled: { type: Boolean, default: false },
   processing_complete_webhook_scheduled_at: Date,
