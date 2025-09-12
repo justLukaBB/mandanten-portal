@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ScaleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
@@ -14,52 +14,71 @@ const PortalLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const sessionToken = localStorage.getItem('portal_session_token');
+    const storedClientId = localStorage.getItem('portal_client_id');
+
+    console.log('🔍 PersonalPortal: Auth check:', {
+      hasSessionToken: !!sessionToken,
+      hasStoredClientId: !!storedClientId,
+      storedClientId
+    });
+
+    if (!sessionToken || !storedClientId) {
+      console.warn('❌ PersonalPortal: Authentication failed, redirecting to login');
+      navigate('/login', { replace: true });
+    } else {
+      console.log('✅ PersonalPortal: Authentication successful');
+      navigate(`/portal/${storedClientId}`, { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Clear any previous errors but keep credentials
     setError('');
     setLoading(true);
 
     try {
-      console.log('🔄 Attempting login with credentials:', { 
-        email: credentials.email, 
-        hasAktenzeichen: !!credentials.aktenzeichen 
+      console.log('🔄 Attempting login with credentials:', {
+        email: credentials.email,
+        hasAktenzeichen: !!credentials.aktenzeichen
       });
 
       const response = await axios.post(`${API_BASE_URL}/api/portal/login`, credentials);
-      
+
       if (response.data && response.data.success) {
         console.log('✅ Login API call successful');
-        
+
         // Store all required data
         const sessionToken = response.data.session_token;
         const jwtToken = response.data.token || sessionToken;
         const clientId = response.data.client.id;
         const clientData = JSON.stringify(response.data.client);
-        
+
         // Store tokens synchronously
         localStorage.setItem('portal_session_token', sessionToken);
         localStorage.setItem('auth_token', jwtToken);
         localStorage.setItem('portal_client_id', clientId);
         localStorage.setItem('portal_client_data', clientData);
-        
+
         console.log('💾 Tokens stored successfully');
-        
+
         // Dispatch custom event to notify ProtectedRoute
         window.dispatchEvent(new CustomEvent('loginSuccess'));
-        
+
         // Navigate immediately without setTimeout
         console.log('🚀 Navigating to portal...');
-        navigate('/portal', { replace: true });
-        
+        navigate(`/portal/${clientId}`, { replace: true });
+
       } else {
         console.error('❌ Login failed - invalid response structure:', response.data);
         setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.');
       }
     } catch (error: any) {
       console.error('❌ Login error:', error);
-      
+
       // Handle different types of errors
       if (error.response) {
         // Server responded with error status
@@ -106,7 +125,7 @@ const PortalLogin: React.FC = () => {
             Melden Sie sich mit Ihren Zugangsdaten an
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -125,7 +144,7 @@ const PortalLogin: React.FC = () => {
                 onChange={handleInputChange}
               />
             </div>
-            
+
             <div>
               <label htmlFor="aktenzeichen" className="block text-sm font-medium text-gray-700">
                 Aktenzeichen
@@ -196,7 +215,7 @@ const PortalLogin: React.FC = () => {
                 </a>
               </p>
             </div>
-            
+
             <div className="pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500">
                 Ihre Daten werden sicher übertragen und gemäß DSGVO verarbeitet.
@@ -210,3 +229,7 @@ const PortalLogin: React.FC = () => {
 };
 
 export default PortalLogin;
+
+
+// justlukax@gmail.com
+// 47698264928
