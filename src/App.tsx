@@ -84,16 +84,16 @@ function App() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<PortalLogin />} />
           <Route 
-            path="/portal" 
+            path="/portal/:clientId" 
             element={
               <ProtectedRoute>
                 <PersonalPortal 
-                  clientId={localStorage.getItem('portal_client_id') || ''}
-                  customTitle="Mandanten Portal"
-                  customColors={{
-                    primary: '#9f1a1d',
-                    primaryHover: '#7d1517'
-                  }}
+                  // clientId={localStorage.getItem('portal_client_id') || ''}
+                  // customTitle="Mandanten Portal"
+                  // customColors={{
+                  //   primary: '#9f1a1d',
+                  //   primaryHover: '#7d1517'
+                  // }}
                 />
               </ProtectedRoute>
             } 
