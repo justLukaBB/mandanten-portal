@@ -86,7 +86,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
       setLoading(true);
       
       // Fetch all clients from admin endpoint
-      const response = await fetch(`${API_BASE_URL}/admin/clients`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }

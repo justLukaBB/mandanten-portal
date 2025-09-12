@@ -54,7 +54,7 @@ const CreateUser: React.FC = () => {
         }]
       };
 
-      const response = await fetch(`${API_BASE_URL}/admin/clients`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
