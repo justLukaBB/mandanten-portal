@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 import { AlertCircle, Clock, Mail, Phone, FileX, AlertTriangle } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { de } from 'date-fns/locale';
 import axios from 'axios';
-import { API_BASE_URL } from '@/config/api';
+import { API_BASE_URL } from '../../config/api';
 
 interface ClientWithPendingDocs {
   id: string;
