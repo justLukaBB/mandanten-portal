@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import AdminLogin from './pages/AdminLogin';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -11,6 +12,7 @@ const AdminApp: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentPage, setCurrentPage] = useState<'analytics' | 'settings' | 'create-user' | 'user-list'>('analytics');
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -40,7 +42,9 @@ const AdminApp: React.FC = () => {
           
           if (response.status === 200) {
             console.log('✅ AdminApp: Authentication successful!');
+            navigate("/admin");
             setIsAuthenticated(true);
+            
           } else {
             throw new Error(`Token validation failed with status: ${response.status}`);
           }
@@ -70,6 +74,7 @@ const AdminApp: React.FC = () => {
     // Don't manually set headers - let the interceptor handle it
     console.log('✅ AdminApp: Login successful, authentication state updated');
     setIsAuthenticated(true);
+    navigate("/admin");
   };
 
   const handleNavigate = (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => {
