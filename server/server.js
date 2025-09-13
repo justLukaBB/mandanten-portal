@@ -9,6 +9,7 @@ require('dotenv').config();
 
 // Import configuration and middleware
 const config = require('./config');
+const { uploadsDir, upload } = require('./middleware/upload');
 const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
 const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
 const healthRoutes = require('./routes/health');
@@ -253,52 +254,6 @@ const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing'
 app.use('/api', adminDelayedProcessingRoutes);
 
 // Dashboard status routes (admin auth required) - moved inline for consistent auth
-
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-fs.ensureDirSync(uploadsDir);
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const clientId = req.params.clientId || 'default';
-    const clientDir = path.join(uploadsDir, clientId);
-    fs.ensureDirSync(clientDir);
-    cb(null, clientDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueId = uuidv4();
-    const extension = path.extname(file.originalname);
-    const filename = `${uniqueId}${extension}`;
-    cb(null, filename);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  // Accept only specific file types
-  const allowedTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Dateityp nicht unterstützt. Erlaubte Formate: PDF, JPG, PNG, DOC, DOCX'), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: config.MAX_FILE_SIZE
-  },
-  fileFilter: fileFilter
-});
 
 // Initialize database connection
 async function initializeDatabase() {
@@ -1669,7 +1624,7 @@ app.delete('/api/admin/clear-database',
     console.log(`✅ Deleted ${deleteResult.deletedCount} clients from MongoDB`);
     
     // Also clean up any uploaded files directory
-    const uploadsDir = path.join(__dirname, 'uploads');
+    // const uploadsDir = path.join(__dirname, 'uploads');
     if (fs.existsSync(uploadsDir)) {
       console.log('🗂️ Cleaning up uploads directory...');
       const clientDirs = fs.readdirSync(uploadsDir).filter(dir => {
