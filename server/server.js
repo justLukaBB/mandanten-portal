@@ -333,7 +333,7 @@ async function saveClient(clientData) {
 // Routes
 
 // Get client data
-app.get('/api/clients/:clientId', authenticateClient, async (req, res) => {
+app.get('/api/clients/:clientId', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
