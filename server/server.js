@@ -333,7 +333,7 @@ async function saveClient(clientData) {
 // Routes
 
 // Get client data
-app.get('/api/clients/:clientId', async (req, res) => {
+app.get('/api/clients/:clientId', authenticateClient, async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
@@ -354,6 +354,7 @@ app.get('/api/clients/:clientId', async (req, res) => {
 
 // Upload creditor documents with AI processing
 app.post('/api/clients/:clientId/documents', 
+  authenticateClient,
   rateLimits.upload,
   upload.array('documents', 10), 
   validateFileUpload,
