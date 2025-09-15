@@ -354,7 +354,6 @@ app.get('/api/clients/:clientId', authenticateClient, async (req, res) => {
 
 // Upload creditor documents with AI processing
 app.post('/api/clients/:clientId/documents', 
-  authenticateClient,
   rateLimits.upload,
   upload.array('documents', 10), 
   validateFileUpload,
