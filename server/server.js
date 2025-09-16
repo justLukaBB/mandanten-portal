@@ -4101,7 +4101,7 @@ function startScheduledTasks() {
 // ============================================================================
 
 // Save financial data for a client
-app.post('/api/clients/:clientId/financial-data', authenticateAdmin, async (req, res) => {
+app.post('/api/admin/clients/:clientId/financial-data', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const { net_income, dependents, marital_status, input_by } = req.body;
