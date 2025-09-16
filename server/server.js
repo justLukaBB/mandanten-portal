@@ -5227,9 +5227,18 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     // Generate Schuldenbereinigungsplan document
     console.log(`📄 Generating Schuldenbereinigungsplan for ${client.aktenzeichen}...`);
+    
+    // Prepare client data for document generation
+    const clientData = {
+      name: `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Client',
+      email: client.email || '',
+      reference: client.aktenzeichen
+    };
+    
     const settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
-      client.aktenzeichen,
-      settlementPlan
+      clientData,
+      settlementPlan,
+      settlementPlan // calculation result is part of settlement data
     );
     
     if (settlementResult.success) {
@@ -5240,8 +5249,24 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     // Generate Forderungsübersicht (Creditor Overview)
     console.log(`📄 Generating Forderungsübersicht for ${client.aktenzeichen}...`);
+    
+    // Prepare creditor data for document generation
+    const creditorData = (client.final_creditor_list || []).map(creditor => ({
+      creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
+      creditor_address: creditor.sender_address || '',
+      creditor_email: creditor.sender_email || '',
+      creditor_reference: creditor.reference_number || '',
+      debt_amount: creditor.claim_amount || 0,
+      debt_reason: creditor.debt_reason || 'Forderung',
+      remarks: creditor.remarks || '',
+      is_representative: creditor.is_representative || false,
+      representative_info: creditor.representative_info || null,
+      representative_reference: creditor.representative_reference || ''
+    }));
+    
     const overviewResult = await documentGenerator.generateForderungsuebersicht(
-      client.aktenzeichen
+      clientData,
+      creditorData
     );
     
     if (overviewResult.success) {
