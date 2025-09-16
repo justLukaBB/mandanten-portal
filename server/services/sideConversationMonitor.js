@@ -282,10 +282,10 @@ class SideConversationMonitor {
                     const isNew = messageTime > monitoringStartTime;
                     
                     // Check if message is inbound by looking at the from email
-                    // Inbound = not from our agent (luka@ra-scuric.de) but allow online@ra-scuric.de (creditor responses)
+                    // Inbound = not from our agent (luka@ra-scuric.de) but allow justlukax@gmail.com (creditor responses)
                     const fromEmail = message.message?.from?.email || message.actor?.email;
                     const isInbound = fromEmail && fromEmail !== 'luka@ra-scuric.de' && 
-                                     (fromEmail === 'online@ra-scuric.de' || !fromEmail.includes('ra-scuric.de'));
+                                     (fromEmail === 'justlukax@gmail.com' || !fromEmail.includes('ra-scuric.de'));
                     
                     const notProcessed = !this.processedMessages.has(messageId);
                     

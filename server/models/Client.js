@@ -181,6 +181,8 @@ const clientSchema = new mongoose.Schema({
       'creditor_contact_failed',
       'awaiting_client_confirmation',
       'creditor_contact_active',
+      'settlement_documents_generated',
+      'settlement_plan_sent_to_creditors',
       'completed'
     ],
     default: 'created'
@@ -246,17 +248,25 @@ const clientSchema = new mongoose.Schema({
   creditor_contact_started: { type: Boolean, default: false },
   creditor_contact_started_at: Date,
   
-  // Financial data for Schuldenbereinigungsplan (manual input)
+  // Settlement plan tracking
+  settlement_plan_sent_at: Date,
+  
+  // Financial data for Schuldenbereinigungsplan (client input after 30-day creditor response period)
   financial_data: {
-    net_income: Number,
-    dependents: { type: Number, default: 0 },
+    monthly_net_income: Number, // Monthly net income in euros
+    number_of_children: { type: Number, default: 0 }, // Number of dependent children
     marital_status: {
       type: String,
-      enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet']
+      enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend']
     },
-    pfaendbar_amount: Number, // Auto-calculated from garnishment table
-    input_date: Date,
-    input_by: String // Agent who entered data
+    garnishable_amount: Number, // Auto-calculated from Pfändungstabelle 2024
+    recommended_plan_type: {
+      type: String,
+      enum: ['quotenplan', 'nullplan']
+    }, // System recommendation based on garnishable amount
+    client_form_filled: { type: Boolean, default: false },
+    form_filled_at: Date,
+    calculation_completed_at: Date
   },
   
   // Debt settlement plan (Schuldenbereinigungsplan)
