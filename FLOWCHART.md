@@ -81,15 +81,12 @@ graph TB
     
     FinancialFormCheck -->|Yes| CalculateGarnishment[🧮 Calculate Garnishable Amount<br/>Based on:<br/>• Net Income<br/>• Number of Children<br/>• Marital Status<br/>Using Pfändungstabelle 2024]
     
-    CalculateGarnishment --> CreatePlanReview[📋 Create Plan Type Review<br/>in Agent Dashboard]
-    CreatePlanReview --> PlanTypeDecision{Agent Selects Plan Type}
+    CalculateGarnishment --> AutoPlanSelection{Automatic Plan Selection<br/>Based on Garnishable Amount}
     
-    PlanTypeDecision -->|Einmalzahlungsplan| OneTimePayment[Sofortige Abfindung Plan<br/>e.g. 18,000€ from third party]
-    PlanTypeDecision -->|Ratenzahlungsplan| InstallmentPlan[Monthly Installment Plan<br/>e.g. 750€/month or 880.78€/month<br/>36 months duration]
-    PlanTypeDecision -->|Nullplan/Quotenplan| ZeroPlan[Flexible Plan<br/>Only when garnishable income available]
+    AutoPlanSelection -->|Garnishable > 0€| QuotaPlan[✅ Quotenplan Selected<br/>Monthly Payment Plan<br/>e.g. 750€/month or 880.78€/month<br/>36 months duration]
+    AutoPlanSelection -->|Garnishable = 0€| ZeroPlan[✅ Nullplan Selected<br/>Zero Payment Plan<br/>No garnishable income available]
     
-    OneTimePayment --> GenerateWordDoc[📄 Generate Settlement Plan<br/>Word Document]
-    InstallmentPlan --> GenerateWordDoc
+    QuotaPlan --> GenerateWordDoc[📄 Generate Settlement Plan<br/>Word Document + Creditor List]
     ZeroPlan --> GenerateWordDoc
     
     GenerateWordDoc --> SendSecondEmail[📧 Send Second Email Round<br/>to All Creditors<br/>Plan Approval Request]
@@ -119,31 +116,11 @@ graph TB
     FormValidation -->|Yes| SaveFinancialData[💾 Save to Client.financial_data]
     SaveFinancialData --> CalculatePfaendung[🧮 Calculate Garnishable Amount<br/>Using Pfändungstabelle 2024]
     
-    CalculatePfaendung --> RecommendPlan{Automatic Plan Recommendation}
-    RecommendPlan -->|Has Third Party Payment| RecommendEinmal[💰 Recommend: Einmalzahlungsplan]
-    RecommendPlan -->|Garnishable > 0€| RecommendRaten[📅 Recommend: Ratenzahlungsplan]
-    RecommendPlan -->|Garnishable = 0€| RecommendNull[🔄 Recommend: Nullplan/Quotenplan]
+    CalculatePfaendung --> AutoSelectPlan{Automatic Plan Selection}
+    AutoSelectPlan -->|Garnishable > 0€| FinalQuoten[✅ Quotenplan Automatically Selected<br/>Based on Garnishable Income]
+    AutoSelectPlan -->|Garnishable = 0€| FinalNull[✅ Nullplan Automatically Selected<br/>Based on No Garnishable Income]
     
-    RecommendEinmal --> CreateZendeskTicket[🎫 Create Zendesk Review Ticket]
-    RecommendRaten --> CreateZendeskTicket
-    RecommendNull --> CreateZendeskTicket
-    
-    CreateZendeskTicket --> ZendeskContent[📋 Ticket Content:<br/>• Client Information<br/>• Financial Data Summary<br/>• Calculated Garnishable Amount<br/>• Recommended Plan Type<br/>• Action Required: Confirm Plan]
-    
-    ZendeskContent --> AgentReview[👤 Agent Reviews in Dashboard]
-    AgentReview --> PlanDecision{Agent Plan Selection}
-    
-    PlanDecision -->|Confirm Einmalzahlung| FinalEinmal[✅ Einmalzahlungsplan Selected]
-    PlanDecision -->|Confirm Quotenplan| FinalQuoten[✅ Quotenplan Selected]  
-    PlanDecision -->|Confirm Nullplan| FinalNull[✅ Nullplan Selected]
-    PlanDecision -->|Override Decision| ManualOverride[🔄 Agent Manual Override]
-    
-    ManualOverride --> FinalEinmal
-    ManualOverride --> FinalQuoten
-    ManualOverride --> FinalNull
-    
-    FinalEinmal --> GenerateDocuments[📄 Generate 2 Documents:<br/>1. Selected Settlement Plan<br/>2. Creditor List]
-    FinalQuoten --> GenerateDocuments
+    FinalQuoten --> GenerateDocuments[📄 Generate 2 Documents:<br/>1. Selected Settlement Plan<br/>2. Updated Creditor List]
     FinalNull --> GenerateDocuments
     
     GenerateDocuments --> SecondEmailRound[📧 Send Second Email to All Creditors<br/>Plan Approval Request via Zendesk Side Conversations]
@@ -158,13 +135,14 @@ graph TB
 - **Verwitwet** (Widowed)
 - **Getrennt lebend** (Separated)
 
-### Plan Type Decision Matrix:
+### Automatic Plan Type Selection Matrix:
 
-| Condition | Plan Type | Example |
-|-----------|-----------|---------|
-| Has third-party payment available | **Einmalzahlungsplan** | Schriewer: 18,000€ immediate settlement |
-| Garnishable income > 0€ | **Quotenplan** | Dall: 750€/month, Drewitz: 880.78€/month |
-| No garnishable income | **Nullplan** | Laux: Flexible, only when income available |
+| Pfändungstabelle Calculation | Automatically Selected Plan | Example |
+|------------------------------|---------------------------|---------|
+| Garnishable income > 0€ | **Quotenplan** (Schuldenbereinigungsplan) | Dall: 750€/month, Drewitz: 880.78€/month |
+| No garnishable income (= 0€) | **Nullplan** | Laux: Flexible payments only when income available |
+
+**Note:** The system automatically selects the appropriate plan type based on the garnishment calculation. No manual agent decision is required.
 
 ### Pfändungstabelle Integration:
 The system calculates garnishable amounts based on:

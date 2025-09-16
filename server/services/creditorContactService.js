@@ -505,7 +505,7 @@ class CreditorContactService {
                     ticket_id: ticketInfo.ticket_id,
                     contact_id: ticketInfo.contact_id,
                     success: true,
-                    sent_to: 'online@ra-scuric.de' // Test email
+                    sent_to: 'justlukax@gmail.com' // Test email
                 });
 
                 // Wait 3 seconds between emails to avoid rate limits

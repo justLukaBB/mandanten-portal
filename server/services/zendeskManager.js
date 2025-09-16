@@ -244,7 +244,7 @@ Diese Status-Updates werden automatisch aktualisiert wenn Gläubiger antworten.`
      */
     async sendCreditorEmailViaTicket(ticketId, creditorData, clientData) {
         // Use test email for now - moved outside try block for scope
-        const testEmail = 'online@ra-scuric.de';
+        const testEmail = 'justlukax@gmail.com';
         const emailBody = this.generateCreditorEmailBody(creditorData, clientData);
         const emailSubject = `Gläubiger-Anfrage: ${creditorData.creditor_name} - Az: ${creditorData.reference_number}`;
         

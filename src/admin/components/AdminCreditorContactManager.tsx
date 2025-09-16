@@ -108,7 +108,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
         // Refresh status
         await fetchCreditorContactStatus();
         
-        alert(`✅ Gläubiger-Kontakt erfolgreich gestartet!\n\nErgebnisse:\n- ${response.data.tickets_created} Main-Ticket erstellt\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an online@ra-scuric.de)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n🎫 Main Ticket: ${response.data.main_ticket_subject || `ID ${response.data.main_ticket_id}`}\n🔗 Zendesk: https://scuric.zendesk.com`);
+        alert(`✅ Gläubiger-Kontakt erfolgreich gestartet!\n\nErgebnisse:\n- ${response.data.tickets_created} Main-Ticket erstellt\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an justlukax@gmail.com)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n🎫 Main Ticket: ${response.data.main_ticket_subject || `ID ${response.data.main_ticket_id}`}\n🔗 Zendesk: https://scuric.zendesk.com`);
       } else {
         // Handle user action required errors specially
         if (response.data.user_action_required) {
@@ -156,7 +156,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
         // Refresh status
         await fetchCreditorContactStatus();
         
-        alert(`✅ Gläubiger-E-Mails erneut versendet!\n\nErgebnisse:\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an online@ra-scuric.de)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n📧 Prüfen Sie Ihr E-Mail-Postfach: online@ra-scuric.de\n🎫 Main Ticket: ${response.data.main_ticket_subject || 'Siehe Zendesk'}`);
+        alert(`✅ Gläubiger-E-Mails erneut versendet!\n\nErgebnisse:\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an justlukax@gmail.com)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n📧 Prüfen Sie Ihr E-Mail-Postfach: justlukax@gmail.com\n🎫 Main Ticket: ${response.data.main_ticket_subject || 'Siehe Zendesk'}`);
       } else {
         throw new Error(response.data.error || 'Unbekannter Fehler');
       }

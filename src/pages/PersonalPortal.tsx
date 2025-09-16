@@ -6,6 +6,7 @@ import ClientProgressTracker from '../components/ClientProgressTracker';
 import ClientDocumentsViewer from '../components/ClientDocumentsViewer';
 import ClientInvoicesViewer from '../components/ClientInvoicesViewer';
 import CreditorConfirmation from '../components/CreditorConfirmation';
+import FinancialDataForm from '../components/FinancialDataForm';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import api from '../config/api';
 
@@ -45,6 +46,9 @@ export const PersonalPortal = ({
   const [documents, setDocuments] = useState<any[]>([]);
   const [creditorConfirmationData, setCreditorConfirmationData] = useState<any>(null);
   const [showingCreditorConfirmation, setShowingCreditorConfirmation] = useState(false);
+  const [showingFinancialForm, setShowingFinancialForm] = useState(false);
+  const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
+  const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
 
   // Check authentication on load
   useEffect(() => {
@@ -127,6 +131,47 @@ export const PersonalPortal = ({
         setShowingCreditorConfirmation(false);
       }
 
+      // Check if financial data form should be shown (after creditor response period)
+      try {
+        const financialResponse = await api.get(`/api/clients/${clientId}/financial-form-status`);
+        
+        // Defensive programming - validate response structure
+        if (financialResponse?.data) {
+          const responseData = financialResponse.data;
+          const shouldShowFinancialForm = responseData.should_show_form === true;
+          const alreadySubmitted = responseData.form_submitted === true;
+          const periodInfo = responseData.creditor_response_period || null;
+          
+          console.log('📋 Financial form status:', {
+            shouldShow: shouldShowFinancialForm,
+            submitted: alreadySubmitted,
+            periodStatus: periodInfo?.status,
+            daysRemaining: periodInfo?.days_remaining,
+            responseReceived: true
+          });
+          
+          setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
+          setFinancialDataSubmitted(alreadySubmitted);
+          setCreditorResponsePeriod(periodInfo);
+        } else {
+          console.warn('Invalid financial form status response structure');
+          setShowingFinancialForm(false);
+          setFinancialDataSubmitted(false);
+          setCreditorResponsePeriod(null);
+        }
+      } catch (financialErr) {
+        console.error('Financial form status error:', financialErr);
+        // Differentiate between network errors and other errors
+        if (financialErr.code === 'NETWORK_ERROR' || financialErr.response?.status >= 500) {
+          console.log('Server error - financial form status not available');
+        } else {
+          console.log('Financial form not ready yet - creditor period may not be expired');
+        }
+        setShowingFinancialForm(false);
+        setFinancialDataSubmitted(false);
+        setCreditorResponsePeriod(null);
+      }
+
       setClient(clientData);
       setError(null);
     } catch (err) {
@@ -178,6 +223,15 @@ export const PersonalPortal = ({
   const handleUploadComplete = (newDocuments: any) => {
     // Add new documents to existing documents list
     setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
+  };
+
+  // Handle financial form submission
+  const handleFinancialFormSubmitted = (data: any) => {
+    setFinancialDataSubmitted(true);
+    setShowingFinancialForm(false);
+    
+    // Refresh client data to get updated status
+    fetchClientData();
   };
 
   // Handle logout
@@ -331,6 +385,90 @@ export const PersonalPortal = ({
 
         {/* Creditor confirmation component - shows when ready for client confirmation */}
         <CreditorConfirmation clientId={clientId!} />
+
+        {/* Creditor Response Period Status - shows during 30-day waiting period */}
+        {creditorResponsePeriod && creditorResponsePeriod.status === 'active' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Warten auf Gläubiger-Antworten
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Wir haben alle Gläubiger kontaktiert und warten auf ihre Antworten zu den Schuldenbeträgen.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4m-4 12h0m0 0h0m0 0h0" />
+                  </svg>
+                  <div className="text-center">
+                    <p className="font-medium text-blue-800">
+                      {creditorResponsePeriod.days_remaining} Tage verbleibend
+                    </p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      von 30 Tagen Antwortzeit für Gläubiger
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                Sobald die 30-Tage-Frist abgelaufen ist, werden Sie aufgefordert, Ihre aktuellen Finanzdaten 
+                für die Erstellung Ihres Schuldenbereinigungsplans anzugeben.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Financial Data Form - shows after 30-day creditor response period */}
+        {showingFinancialForm && (
+          <FinancialDataForm
+            clientId={clientId!}
+            onFormSubmitted={handleFinancialFormSubmitted}
+            customColors={customColors}
+          />
+        )}
+
+        {/* Financial Data Submitted Status */}
+        {financialDataSubmitted && !showingFinancialForm && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Finanzdaten übermittelt
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Ihre Finanzdaten wurden erfolgreich übermittelt und werden zur Erstellung Ihres Schuldenbereinigungsplans verwendet.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-800 mb-1">In Bearbeitung</p>
+                    <p className="text-blue-700">
+                      Unser Team erstellt jetzt Ihren individuellen Schuldenbereinigungsplan. 
+                      Sie werden benachrichtigt, sobald dieser zur Überprüfung bereit ist.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
 
 
