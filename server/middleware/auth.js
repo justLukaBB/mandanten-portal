@@ -7,6 +7,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-i
 const authenticateClient = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log(`🔐 Auth header: ${authHeader ? 'Present' : 'Missing'}`);
+    
     if (!authHeader) {
       return res.status(401).json({ error: 'No authorization header provided' });
     }
@@ -16,17 +18,22 @@ const authenticateClient = (req, res, next) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
+    console.log(`🔑 Token preview: ${token.substring(0, 20)}...`);
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log(`🎯 Decoded token:`, { clientId: decoded.clientId, email: decoded.email, type: decoded.type });
     
     // Check if token is for client portal
     if (decoded.type !== 'client') {
+      console.log(`❌ Invalid token type: ${decoded.type} (expected: client)`);
       return res.status(403).json({ error: 'Invalid token type' });
     }
 
     req.clientId = decoded.clientId;
     req.email = decoded.email;
+    console.log(`✅ Client authenticated: ${req.clientId}`);
     next();
   } catch (error) {
+    console.log(`❌ Authentication error:`, error.message);
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
