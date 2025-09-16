@@ -83,8 +83,14 @@ Az: {reference_number}`
             console.log('📧 Email sender:', emailData.sender_email || 'No sender');  
             console.log('📧 Email body preview:', emailData.body?.slice(0, 200) || 'No body');
             
-            // Extract reference number from email to find the right contact
-            const referenceNumber = this.extractReferenceNumber(emailData.body, emailData.subject);
+            // Use provided reference number or try to extract from email
+            let referenceNumber = emailData.reference_number;
+            if (!referenceNumber) {
+                console.log('🔍 No reference number provided, attempting to extract from email...');
+                referenceNumber = this.extractReferenceNumber(emailData.body, emailData.subject);
+            } else {
+                console.log(`📋 Using provided reference number: ${referenceNumber}`);
+            }
             
             if (!referenceNumber) {
                 console.error('❌ No reference number found in email');
