@@ -339,6 +339,7 @@ class SideConversationMonitor {
         for (const response of responses) {
             try {
                 console.log(`📧 Processing response from ${response.message.from_name}: "${response.message.body.substring(0, 100)}..."`);
+                console.log(`📋 Contact reference number: ${response.contact.reference_number}`);
                 
                 // Mark as processed to avoid duplicates
                 const messageId = `${response.side_conversation_id}-${response.message.id}`;
