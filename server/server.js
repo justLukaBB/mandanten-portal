@@ -5210,6 +5210,14 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       garnishable_amount: garnishmentResult.garnishableAmount,
       financial_data: client.financial_data,
       creditors: client.final_creditor_list || [],
+      // Add creditor_payments for document generation
+      creditor_payments: (client.final_creditor_list || []).map(creditor => ({
+        creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
+        debt_amount: creditor.claim_amount || 0,
+        payment_percentage: garnishmentResult.garnishableAmount > 0 ? (creditor.claim_amount || 0) / (client.final_creditor_list?.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || 1) * 100 : 0,
+        monthly_payment: garnishmentResult.garnishableAmount > 0 ? 
+          (garnishmentResult.garnishableAmount * ((creditor.claim_amount || 0) / (client.final_creditor_list?.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || 1))) : 0
+      })),
       generated_at: new Date().toISOString()
     };
     
