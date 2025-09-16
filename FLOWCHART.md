@@ -67,10 +67,111 @@ graph TB
     ClientConfirmed -->|No| FollowUpClient[Follow Up]
     FollowUpClient --> ClientConfirmation
     
-    ContactCreditors --> TrackResponses[Track Responses]
-    TrackResponses --> GeneratePlan[Settlement Plan]
-    GeneratePlan --> Complete([Complete])
+    ContactCreditors --> TrackResponses[Track Responses<br/>30-Day Waiting Period]
+    TrackResponses --> CreditorTimeout{30 Days Passed?}
+    CreditorTimeout -->|No| WaitResponses[Continue Waiting<br/>for Creditor Responses]
+    WaitResponses --> TrackResponses
+    
+    CreditorTimeout -->|Yes| ProcessResponses[Process Creditor Responses<br/>• 12 responded<br/>• 5 no response (use doc amounts)<br/>• 3 unknown (use 100€ default)]
+    ProcessResponses --> ShowFinancialForm[📋 Show Financial Data Form<br/>in Client Portal]
+    
+    ShowFinancialForm --> FinancialFormCheck{Client Filled Form?}
+    FinancialFormCheck -->|No| WaitFinancialData[Wait for Financial Data]
+    WaitFinancialData --> FinancialFormCheck
+    
+    FinancialFormCheck -->|Yes| CalculateGarnishment[🧮 Calculate Garnishable Amount<br/>Based on:<br/>• Net Income<br/>• Number of Children<br/>• Marital Status<br/>Using Pfändungstabelle 2024]
+    
+    CalculateGarnishment --> CreatePlanReview[📋 Create Plan Type Review<br/>in Agent Dashboard]
+    CreatePlanReview --> PlanTypeDecision{Agent Selects Plan Type}
+    
+    PlanTypeDecision -->|Einmalzahlungsplan| OneTimePayment[Sofortige Abfindung Plan<br/>e.g. 18,000€ from third party]
+    PlanTypeDecision -->|Ratenzahlungsplan| InstallmentPlan[Monthly Installment Plan<br/>e.g. 750€/month or 880.78€/month<br/>36 months duration]
+    PlanTypeDecision -->|Nullplan/Quotenplan| ZeroPlan[Flexible Plan<br/>Only when garnishable income available]
+    
+    OneTimePayment --> GenerateWordDoc[📄 Generate Settlement Plan<br/>Word Document]
+    InstallmentPlan --> GenerateWordDoc
+    ZeroPlan --> GenerateWordDoc
+    
+    GenerateWordDoc --> SendSecondEmail[📧 Send Second Email Round<br/>to All Creditors<br/>Plan Approval Request]
+    SendSecondEmail --> TrackPlanApproval[Track Plan Approval Responses]
+    TrackPlanApproval --> Complete([Complete])
 ```
+
+## 💰 Financial Data Collection & Plan Type Selection
+
+### New Financial Data Collection Workflow
+
+```mermaid
+graph TB
+    CreditorTimeout([30-Day Period Expired]) --> ProcessResponses[📊 Process All Creditor Responses]
+    
+    ProcessResponses --> ResponseBreakdown[Response Breakdown:<br/>✅ 12 Creditors Responded<br/>❌ 5 No Response (use original amounts)<br/>❓ 3 Unknown Amounts (100€ default)]
+    
+    ResponseBreakdown --> UpdateAmounts[Update Final Creditor List<br/>with Response Data]
+    UpdateAmounts --> TriggerFinancialForm[🎯 Trigger Financial Data Form<br/>in Client Portal]
+    
+    TriggerFinancialForm --> ClientPortalForm[📋 Client Portal Form Display:<br/>• Monthly Net Income (€)<br/>• Number of Children<br/>• Marital Status (dropdown)]
+    
+    ClientPortalForm --> FormValidation{Form Complete?}
+    FormValidation -->|No| ShowValidation[❌ Show Validation Errors]
+    ShowValidation --> ClientPortalForm
+    
+    FormValidation -->|Yes| SaveFinancialData[💾 Save to Client.financial_data]
+    SaveFinancialData --> CalculatePfaendung[🧮 Calculate Garnishable Amount<br/>Using Pfändungstabelle 2024]
+    
+    CalculatePfaendung --> RecommendPlan{Automatic Plan Recommendation}
+    RecommendPlan -->|Has Third Party Payment| RecommendEinmal[💰 Recommend: Einmalzahlungsplan]
+    RecommendPlan -->|Garnishable > 0€| RecommendRaten[📅 Recommend: Ratenzahlungsplan]
+    RecommendPlan -->|Garnishable = 0€| RecommendNull[🔄 Recommend: Nullplan/Quotenplan]
+    
+    RecommendEinmal --> CreateZendeskTicket[🎫 Create Zendesk Review Ticket]
+    RecommendRaten --> CreateZendeskTicket
+    RecommendNull --> CreateZendeskTicket
+    
+    CreateZendeskTicket --> ZendeskContent[📋 Ticket Content:<br/>• Client Information<br/>• Financial Data Summary<br/>• Calculated Garnishable Amount<br/>• Recommended Plan Type<br/>• Action Required: Confirm Plan]
+    
+    ZendeskContent --> AgentReview[👤 Agent Reviews in Dashboard]
+    AgentReview --> PlanDecision{Agent Plan Selection}
+    
+    PlanDecision -->|Confirm Einmalzahlung| FinalEinmal[✅ Einmalzahlungsplan Selected]
+    PlanDecision -->|Confirm Quotenplan| FinalQuoten[✅ Quotenplan Selected]  
+    PlanDecision -->|Confirm Nullplan| FinalNull[✅ Nullplan Selected]
+    PlanDecision -->|Override Decision| ManualOverride[🔄 Agent Manual Override]
+    
+    ManualOverride --> FinalEinmal
+    ManualOverride --> FinalQuoten
+    ManualOverride --> FinalNull
+    
+    FinalEinmal --> GenerateDocuments[📄 Generate 2 Documents:<br/>1. Selected Settlement Plan<br/>2. Creditor List]
+    FinalQuoten --> GenerateDocuments
+    FinalNull --> GenerateDocuments
+    
+    GenerateDocuments --> SecondEmailRound[📧 Send Second Email to All Creditors<br/>Plan Approval Request via Zendesk Side Conversations]
+    SecondEmailRound --> TrackApprovals[📈 Track Plan Approval Responses]
+    TrackApprovals --> FinalComplete([🎯 Settlement Plan Complete])
+```
+
+### Marital Status Options:
+- **Ledig** (Single)
+- **Verheiratet** (Married)  
+- **Geschieden** (Divorced)
+- **Verwitwet** (Widowed)
+- **Getrennt lebend** (Separated)
+
+### Plan Type Decision Matrix:
+
+| Condition | Plan Type | Example |
+|-----------|-----------|---------|
+| Has third-party payment available | **Einmalzahlungsplan** | Schriewer: 18,000€ immediate settlement |
+| Garnishable income > 0€ | **Quotenplan** | Dall: 750€/month, Drewitz: 880.78€/month |
+| No garnishable income | **Nullplan** | Laux: Flexible, only when income available |
+
+### Pfändungstabelle Integration:
+The system calculates garnishable amounts based on:
+1. **Net monthly income**
+2. **Number of dependent children** 
+3. **Marital status** (affects calculation base)
+4. **Current German garnishment table** (Pfändungstabelle 2024)
 
 ## 📧 Reminder System Details
 

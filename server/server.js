@@ -4006,9 +4006,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Document reminder service
+// Reminder services
 const DocumentReminderService = require('./services/documentReminderService');
+const LoginReminderService = require('./services/loginReminderService');
 const documentReminderService = new DocumentReminderService();
+const loginReminderService = new LoginReminderService();
 
 // Start scheduled document reminder checks
 function startScheduledTasks() {
@@ -4040,6 +4042,19 @@ function startScheduledTasks() {
     }
   }, DELAYED_WEBHOOK_CHECK_INTERVAL);
   
+  // Run login reminder check every 6 hours (for 7-day cycle checks)
+  const LOGIN_REMINDER_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+  
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running scheduled login reminder check...');
+      const result = await loginReminderService.checkAndSendLoginReminders();
+      console.log(`✅ Login reminder check complete: Login reminders: ${result.loginRemindersSent}, Doc reminders: ${result.documentRemindersSent}\n`);
+    } catch (error) {
+      console.error('❌ Error in scheduled login reminder check:', error);
+    }
+  }, LOGIN_REMINDER_CHECK_INTERVAL);
+  
   // Run initial checks after 1 minute
   setTimeout(async () => {
     try {
@@ -4064,9 +4079,21 @@ function startScheduledTasks() {
     }
   }, 120000); // 2 minutes
   
+  // Run initial login reminder check after 3 minutes
+  setTimeout(async () => {
+    try {
+      console.log('\n⏰ Running initial login reminder check...');
+      const result = await loginReminderService.checkAndSendLoginReminders();
+      console.log(`✅ Initial login reminder check complete: Login reminders: ${result.loginRemindersSent}, Doc reminders: ${result.documentRemindersSent}\n`);
+    } catch (error) {
+      console.error('❌ Error in initial login reminder check:', error);
+    }
+  }, 180000); // 3 minutes
+  
   console.log('📅 Scheduled tasks started:');
   console.log('  • Document reminders: every hour');
   console.log('  • Delayed processing webhooks: every 30 minutes');
+  console.log('  • Login reminders: every 6 hours (7-day cycle)');
 }
 
 // ============================================================================
