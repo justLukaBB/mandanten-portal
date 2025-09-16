@@ -352,7 +352,9 @@ class SideConversationMonitor {
                         author_id: response.contact.creditor_email,
                         created_at: response.message.created_at,
                         public: true,
-                        via: { channel: 'email' }
+                        via: { channel: 'email' },
+                        // Pass reference number from contact record
+                        reference_number: response.contact.reference_number
                     }
                 );
                 
