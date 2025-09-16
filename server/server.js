@@ -5262,7 +5262,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
 }
 
 // Check if financial form should be shown to client (after 30-day creditor response period)
-app.get('/api/clients/:clientId/financial-form-status', async (req, res) => {
+app.get('/api/clients/:clientId/financial-form-status', authenticateClient, async (req, res) => {
   try {
     const { clientId } = req.params;
     
@@ -5349,7 +5349,7 @@ app.get('/api/clients/:clientId/financial-form-status', async (req, res) => {
 });
 
 // Submit financial data from client portal (client-accessible endpoint)
-app.post('/api/clients/:clientId/financial-data', async (req, res) => {
+app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req, res) => {
   try {
     const { clientId } = req.params;
     const { monthly_net_income, number_of_children, marital_status } = req.body;
