@@ -79,6 +79,9 @@ Az: {reference_number}`
     async processCreditorResponse(emailData, isSimulation = false) {
         try {
             console.log(`📧 Processing creditor response${isSimulation ? ' (SIMULATION)' : ''}...`);
+            console.log('📧 Email subject:', emailData.subject || 'No subject');
+            console.log('📧 Email sender:', emailData.sender_email || 'No sender');  
+            console.log('📧 Email body preview:', emailData.body?.slice(0, 200) || 'No body');
             
             // Extract reference number from email to find the right contact
             const referenceNumber = this.extractReferenceNumber(emailData.body, emailData.subject);
@@ -99,6 +102,7 @@ Az: {reference_number}`
             
             if (!contactRecord) {
                 console.error(`❌ No contact record found for reference: ${referenceNumber}`);
+                console.log(`🔍 Available contact references:`, Array.from(this.creditorContactService.creditorContacts.values()).map(c => c.reference_number));
                 return {
                     success: false,
                     error: `Kein Gläubiger-Datensatz für Aktenzeichen ${referenceNumber} gefunden`,
