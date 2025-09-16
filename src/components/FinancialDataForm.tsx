@@ -132,6 +132,12 @@ const FinancialDataForm: React.FC<FinancialDataFormProps> = ({
       }
     } catch (error: any) {
       console.error('Error submitting financial data:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
       setErrors({
         submit: error.response?.data?.error || 'Fehler beim Speichern der Daten. Bitte versuchen Sie es erneut.'
       });
