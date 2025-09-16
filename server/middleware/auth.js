@@ -22,15 +22,17 @@ const authenticateClient = (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     console.log(`🎯 Decoded token:`, { clientId: decoded.clientId, email: decoded.email, type: decoded.type });
     
-    // Check if token is for client portal
-    if (decoded.type !== 'client') {
-      console.log(`❌ Invalid token type: ${decoded.type} (expected: client)`);
-      return res.status(403).json({ error: 'Invalid token type' });
+    // Accept client tokens, session tokens, or any token that has a client identifier
+    const hasClientId = decoded.clientId || decoded.sessionId || decoded.id;
+    if (decoded.type !== 'client' && !hasClientId) {
+      console.log(`❌ Invalid token: missing client identifier. Token structure:`, Object.keys(decoded));
+      return res.status(403).json({ error: 'Invalid token type - client access required' });
     }
 
-    req.clientId = decoded.clientId;
+    // Set client ID from various possible fields
+    req.clientId = decoded.clientId || decoded.sessionId || decoded.id;
     req.email = decoded.email;
-    console.log(`✅ Client authenticated: ${req.clientId}`);
+    console.log(`✅ Client authenticated: ${req.clientId} (token type: ${decoded.type || 'session'}, fields: ${Object.keys(decoded).join(', ')})`);
     next();
   } catch (error) {
     console.log(`❌ Authentication error:`, error.message);
