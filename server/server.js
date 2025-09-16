@@ -5267,10 +5267,23 @@ app.get('/api/clients/:clientId/financial-form-status', authenticateClient, asyn
     const { clientId } = req.params;
     
     console.log(`🔍 Checking financial form status for client: ${clientId}`);
+    console.log(`🔐 Authenticated client ID: ${req.clientId}`);
     
+    // Get the client to verify authentication
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Verify that the authenticated client matches the requested client
+    // Check against both id and aktenzeichen fields
+    const isAuthorized = req.clientId === client.id || 
+                        req.clientId === client.aktenzeichen || 
+                        req.clientId === clientId;
+    
+    if (!isAuthorized) {
+      console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
+      return res.status(403).json({ error: 'Access denied - client ID mismatch' });
     }
 
     // Check if client has already submitted financial data
@@ -5355,7 +5368,25 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
     const { monthly_net_income, number_of_children, marital_status } = req.body;
     
     console.log(`💰 Client submitting financial data: ${clientId}`);
+    console.log(`🔐 Authenticated client ID: ${req.clientId}`);
     console.log(`📊 Data: €${monthly_net_income}, ${number_of_children} children, status: ${marital_status}`);
+    
+    // Get the client to verify authentication
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Verify that the authenticated client matches the requested client
+    // Check against both id and aktenzeichen fields
+    const isAuthorized = req.clientId === client.id || 
+                        req.clientId === client.aktenzeichen || 
+                        req.clientId === clientId;
+    
+    if (!isAuthorized) {
+      console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
+      return res.status(403).json({ error: 'Access denied - client ID mismatch' });
+    }
     
     // Validate required parameters
     if (!monthly_net_income || marital_status === undefined || number_of_children === undefined) {
