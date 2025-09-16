@@ -24,9 +24,22 @@ const authenticateClient = (req, res, next) => {
     
     // Accept client tokens, session tokens, or any token that has a client identifier
     const hasClientId = decoded.clientId || decoded.sessionId || decoded.id;
+    
+    // Temporary debugging: log full token structure
+    console.log(`🔍 Full token structure:`, JSON.stringify(decoded, null, 2));
+    
     if (decoded.type !== 'client' && !hasClientId) {
       console.log(`❌ Invalid token: missing client identifier. Token structure:`, Object.keys(decoded));
-      return res.status(403).json({ error: 'Invalid token type - client access required' });
+      return res.status(403).json({ 
+        error: 'Invalid token type - client access required',
+        debug: {
+          tokenType: decoded.type,
+          availableFields: Object.keys(decoded),
+          hasClientId: !!decoded.clientId,
+          hasSessionId: !!decoded.sessionId,
+          hasId: !!decoded.id
+        }
+      });
     }
 
     // Set client ID from various possible fields
