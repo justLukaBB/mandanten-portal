@@ -159,7 +159,7 @@ export const PersonalPortal = ({
           setFinancialDataSubmitted(false);
           setCreditorResponsePeriod(null);
         }
-      } catch (financialErr) {
+      } catch (financialErr: any) {
         console.error('Financial form status error:', financialErr);
         // Differentiate between network errors and other errors
         if (financialErr.code === 'NETWORK_ERROR' || financialErr.response?.status >= 500) {
