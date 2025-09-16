@@ -766,8 +766,8 @@ class CreditorContactService {
                 body: commentData.body || commentData.comment || commentData,
                 subject: `Response from ${contactRecord.creditor_name}`,
                 sender_email: contactRecord.creditor_email,
-                // Pass reference number if available
-                reference_number: commentData.reference_number
+                // Pass reference number from contact record
+                reference_number: contactRecord.reference_number
             }, false);
 
             if (result.success) {
