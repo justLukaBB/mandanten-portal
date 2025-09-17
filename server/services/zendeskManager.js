@@ -617,58 +617,54 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Upload file specifically for Side Conversation attachments
+     * Create ticket comment with attachments (more reliable than Side Conversations)
      */
-    async uploadFileForSideConversation(filePath, filename) {
+    async addTicketCommentWithAttachments(ticketId, comment, attachmentPaths) {
         try {
-            console.log(`📎 Uploading file for Side Conversation: ${filename}`);
+            console.log(`📎 Adding ticket comment with ${attachmentPaths.length} attachments`);
             
-            const fs = require('fs');
-            const FormData = require('form-data');
-            
-            // Check if file exists
-            if (!fs.existsSync(filePath)) {
-                throw new Error(`File not found: ${filePath}`);
+            // Upload all files first
+            const uploadTokens = [];
+            for (const filePath of attachmentPaths) {
+                const filename = require('path').basename(filePath);
+                const uploadResult = await this.uploadFileToZendesk(filePath, filename);
+                if (uploadResult.success) {
+                    uploadTokens.push(uploadResult.token);
+                    console.log(`✅ Uploaded ${filename}: ${uploadResult.token}`);
+                }
             }
             
-            // Create form data for multipart upload
-            const formData = new FormData();
-            formData.append('uploaded_data', fs.createReadStream(filePath), {
-                filename: filename,
-                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            });
+            // Create ticket comment with attachments
+            const commentData = {
+                ticket: {
+                    comment: {
+                        body: comment,
+                        uploads: uploadTokens,
+                        public: false // Internal comment
+                    }
+                }
+            };
             
-            // Upload to Side Conversation attachments endpoint 
-            const uploadUrl = `${this.apiUrl}tickets/side_conversations/attachments.json`;
-            
-            const response = await axios.post(uploadUrl, formData, {
+            const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json`, commentData, {
                 auth: this.auth,
-                headers: {
-                    ...formData.getHeaders()
-                },
-                maxBodyLength: 50 * 1024 * 1024, // 50MB limit
-                maxContentLength: 50 * 1024 * 1024
+                headers: this.headers
             });
             
-            console.log(`✅ File uploaded for Side Conversation: ${filename}`);
-            console.log(`🎫 Attachment ID: ${response.data.attachment.id}`);
-            
+            console.log(`✅ Ticket comment added with ${uploadTokens.length} attachments`);
             return {
                 success: true,
-                attachment_id: response.data.attachment.id,
-                filename: filename,
-                size: response.data.attachment.size
+                comment_id: response.data.audit?.id,
+                attachments_count: uploadTokens.length
             };
             
         } catch (error) {
-            console.error(`❌ Error uploading file for Side Conversation ${filename}:`, error.message);
+            console.error(`❌ Error adding ticket comment with attachments:`, error.message);
             if (error.response?.data) {
-                console.error(`Side Conversation upload error details:`, error.response.data);
+                console.error(`Ticket comment error details:`, error.response.data);
             }
             return {
                 success: false,
-                error: error.message,
-                filename: filename
+                error: error.message
             };
         }
     }
@@ -753,72 +749,56 @@ Status updates will be posted to this ticket as emails are sent.
             // Upload documents and collect attachment IDs
             const attachmentIds = [];
             
-            // Upload Schuldenbereinigungsplan
-            const settlementUpload = await this.uploadFileForSideConversation(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
-            if (settlementUpload.success) {
-                attachmentIds.push(settlementUpload.attachment_id);
-                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.attachment_id}`);
+            // Add documents as ticket comment with attachments
+            const attachmentPaths = [];
+            
+            // Check if files exist and add to attachment list
+            const fs = require('fs');
+            if (fs.existsSync(settlementPlanFile)) {
+                attachmentPaths.push(settlementPlanFile);
+                console.log(`✅ Found Schuldenbereinigungsplan: ${settlementPlanFile}`);
             } else {
-                console.warn(`⚠️ Failed to upload Schuldenbereinigungsplan: ${settlementUpload.error}`);
+                console.warn(`⚠️ Schuldenbereinigungsplan not found: ${settlementPlanFile}`);
             }
             
-            // Upload Forderungsübersicht
-            const overviewUpload = await this.uploadFileForSideConversation(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
-            if (overviewUpload.success) {
-                attachmentIds.push(overviewUpload.attachment_id);
-                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.attachment_id}`);
+            if (fs.existsSync(creditorOverviewFile)) {
+                attachmentPaths.push(creditorOverviewFile);
+                console.log(`✅ Found Forderungsübersicht: ${creditorOverviewFile}`);
             } else {
-                console.warn(`⚠️ Failed to upload Forderungsübersicht: ${overviewUpload.error}`);
+                console.warn(`⚠️ Forderungsübersicht not found: ${creditorOverviewFile}`);
             }
             
-            // Create Side Conversation with settlement plan details and attachments
-            const sideConversationData = {
-                message: {
-                    to: [
-                        {
-                            email: testEmail,
-                            name: creditorName
-                        }
-                    ],
-                    subject: emailSubject,
-                    body: emailBody,
-                    // Add uploaded documents as attachments using attachment IDs
-                    attachment_ids: attachmentIds
-                }
-            };
-
-            // Use Side Conversations API endpoint
-            const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
-            console.log(`🔗 API URL: ${url}`);
-            console.log(`📎 Attaching ${attachmentIds.length} documents with IDs:`, attachmentIds);
-
-            const response = await axios.post(url, sideConversationData, {
-                auth: this.auth,
-                headers: this.headers
-            });
-
-            console.log(`✅ Settlement Plan Side Conversation created successfully!`);
-            console.log(`📨 Side Conversation ID: ${response.data.side_conversation?.id}`);
-            console.log(`📧 Settlement Plan E-Mail sent to: ${testEmail}`);
-            console.log(`📎 Attachments included: ${attachmentIds.length} documents`);
+            // Create detailed ticket comment with attachments
+            const ticketComment = `📄 SCHULDENBEREINIGUNGSPLAN - ${creditorName}
             
-            // Add internal note to main ticket about the side conversation
-            await this.addTicketComment(
-                ticketId, 
-                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nAnhänge: ${attachmentIds.length} Dokumente\n- Schuldenbereinigungsplan (ID: ${attachmentIds[0] || 'N/A'})\n- Forderungsübersicht (ID: ${attachmentIds[1] || 'N/A'})\n\nStatus: E-Mail erfolgreich versendet ✅`,
-                false // Internal comment
-            );
+Gläubiger-E-Mail: ${testEmail}
+Mandant: ${clientData.name || 'N/A'} (Az: ${clientData.reference || 'N/A'})
+
+${emailBody}
+
+📎 Anhänge: ${attachmentPaths.length} Dokumente
+- Schuldenbereinigungsplan
+- Forderungsübersicht
+
+Status: Dokumente zur manuellen Weiterleitung bereit ✅`;
+
+            // Add ticket comment with attachments
+            const commentResult = await this.addTicketCommentWithAttachments(ticketId, ticketComment, attachmentPaths);
+            
+            console.log(`✅ Settlement Plan documents added to ticket ${ticketId}`);
+            console.log(`📧 Manual forwarding to: ${testEmail} (${creditorName})`);
+            console.log(`📎 Attachments included: ${commentResult.attachments_count || 0} documents`);
             
             return {
                 success: true,
                 ticket_id: ticketId,
-                side_conversation_id: response.data.side_conversation?.id,
+                comment_id: commentResult.comment_id,
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                attachments_count: attachmentIds.length,
-                attachment_ids: attachmentIds,
-                email_sent: true
+                attachments_count: commentResult.attachments_count || 0,
+                method: 'ticket_comment_with_attachments',
+                documents_ready: true
             };
 
         } catch (error) {
