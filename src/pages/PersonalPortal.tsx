@@ -120,7 +120,8 @@ export const PersonalPortal = ({
           (
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
-            creditorResponse.data.workflow_status === 'creditor_review'
+            creditorResponse.data.workflow_status === 'creditor_review' || 
+            clientData.first_payment_received
           ) && 
           !creditorResponse.data.client_confirmed;
         
@@ -326,6 +327,7 @@ export const PersonalPortal = ({
               <CreditorUploadComponent 
                 client={client} 
                 onUploadComplete={handleUploadComplete} 
+                showingCreditorConfirmation={showingCreditorConfirmation}
               />
             </div>
             

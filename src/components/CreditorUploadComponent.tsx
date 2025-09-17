@@ -11,6 +11,7 @@ interface Client {
 interface CreditorUploadComponentProps {
   client: Client | null;
   onUploadComplete: (documents: any[]) => void;
+  showingCreditorConfirmation: boolean;
 }
 
 interface UploadedFile {
@@ -20,7 +21,7 @@ interface UploadedFile {
   status: 'uploading' | 'completed' | 'error';
 }
 
-const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ client, onUploadComplete }) => {
+const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ client, onUploadComplete, showingCreditorConfirmation }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -279,6 +280,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
           multiple
           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
           onChange={(e) => handleFileSelect(e.target.files)}
+          disabled={showingCreditorConfirmation}
           className="hidden"
         />
       </div>

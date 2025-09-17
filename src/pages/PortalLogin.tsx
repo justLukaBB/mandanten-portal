@@ -229,7 +229,3 @@ const PortalLogin: React.FC = () => {
 };
 
 export default PortalLogin;
-
-
-// justlukax@gmail.com
-// 47698264928
