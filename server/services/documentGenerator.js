@@ -253,18 +253,16 @@ class DocumentGenerator {
     }
 
     /**
-     * Create the creditor table matching the format in the screenshot
+     * Create the creditor table with correct German debt restructuring table specifications
      */
     async createCreditorTable(creditorPayments, settlementData) {
         // Calculate totals for the plan
         const totalDebt = creditorPayments.reduce((sum, c) => sum + c.debt_amount, 0);
-        const monthlyPayment = settlementData.monthly_payment || 0;
+        const monthlyBudget = settlementData.monthly_payment || 0;
         const duration = settlementData.duration_months || 36;
-        const totalPayment = monthlyPayment * duration;
-        const overallQuota = totalDebt > 0 ? (totalPayment / totalDebt) * 100 : 0;
 
         const tableRows = [
-            // Header Row - matching exact format from screenshot
+            // Header Row - exactly 7 columns as specified
             new TableRow({
                 children: [
                     new TableCell({
@@ -281,40 +279,13 @@ class DocumentGenerator {
                             children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 28, type: WidthType.PERCENTAGE },
+                        width: { size: 22, type: WidthType.PERCENTAGE },
                         shading: { fill: "D9D9FF" },
                         borders: this.createTableBorders()
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Zahlungsanspruch", bold: true, size: 18 })],
-                            alignment: AlignmentType.CENTER
-                        })],
-                        width: { size: 16, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" },
-                        borders: this.createTableBorders()
-                    }),
-                    new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Quote", bold: true, size: 18 })],
-                            alignment: AlignmentType.CENTER
-                        })],
-                        width: { size: 10, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" },
-                        borders: this.createTableBorders()
-                    }),
-                    new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ text: "%", bold: true, size: 18 })],
-                            alignment: AlignmentType.CENTER
-                        })],
-                        width: { size: 8, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" },
-                        borders: this.createTableBorders()
-                    }),
-                    new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Monatl. Quote", bold: true, size: 18 })],
+                            children: [new TextRun({ text: "Forderung", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
                         width: { size: 12, type: WidthType.PERCENTAGE },
@@ -323,10 +294,37 @@ class DocumentGenerator {
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Gesamtquote der Forderung", bold: true, size: 18 })],
+                            children: [new TextRun({ text: "Quote von Gesamtverschuldung", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 20, type: WidthType.PERCENTAGE },
+                        width: { size: 16, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "mtl.", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gesamthöhe des Tilgungsangebots", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 16, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Regulierungsquote", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 16, type: WidthType.PERCENTAGE },
                         shading: { fill: "D9D9FF" },
                         borders: this.createTableBorders()
                     })
@@ -334,17 +332,24 @@ class DocumentGenerator {
             })
         ];
 
-        // Data Rows - matching the exact format from screenshot
+        // Data Rows - with correct calculations as specified
         creditorPayments.forEach((creditor, index) => {
-            // Calculate individual creditor amounts
-            const creditorShare = totalDebt > 0 ? creditor.debt_amount / totalDebt : 0;
-            const monthlyAmount = monthlyPayment * creditorShare;
-            const totalAmount = monthlyAmount * duration;
-            const creditorQuota = creditor.debt_amount > 0 ? (totalAmount / creditor.debt_amount) * 100 : 0;
+            // Column 4: Quote von Gesamtverschuldung = (Individual Forderung / Sum of all Forderungen) × 100
+            const quoteTotalDebt = totalDebt > 0 ? (creditor.debt_amount / totalDebt) * 100 : 0;
+            
+            // Column 5: mtl. = (Total Monthly Budget × Quote von Gesamtverschuldung) / 100
+            const monthlyPayment = (monthlyBudget * quoteTotalDebt) / 100;
+            
+            // Column 6: Gesamthöhe des Tilgungsangebots = mtl. × 36 months
+            const totalRepayment = monthlyPayment * duration;
+            
+            // Column 7: Regulierungsquote = (Gesamthöhe des Tilgungsangebots / Forderung) × 100
+            const settlementRate = creditor.debt_amount > 0 ? (totalRepayment / creditor.debt_amount) * 100 : 0;
 
             tableRows.push(
                 new TableRow({
                     children: [
+                        // Column 1: Nr.
                         new TableCell({
                             children: [new Paragraph({ 
                                 children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
@@ -352,6 +357,7 @@ class DocumentGenerator {
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 2: Gläubiger
                         new TableCell({
                             children: [new Paragraph({ 
                                 children: [new TextRun({ text: creditor.creditor_name, size: 16 })],
@@ -359,6 +365,7 @@ class DocumentGenerator {
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 3: Forderung
                         new TableCell({
                             children: [new Paragraph({ 
                                 children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 16 })],
@@ -366,30 +373,34 @@ class DocumentGenerator {
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 4: Quote von Gesamtverschuldung
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(totalAmount), size: 16 })],
+                                children: [new TextRun({ text: this.formatPercentage(quoteTotalDebt), size: 16 })],
                                 alignment: AlignmentType.RIGHT
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 5: mtl.
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: `${creditorQuota.toFixed(2)}`, size: 16 })],
+                                children: [new TextRun({ text: this.formatCurrency(monthlyPayment), size: 16 })],
                                 alignment: AlignmentType.RIGHT
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 6: Gesamthöhe des Tilgungsangebots
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(monthlyAmount), size: 16 })],
+                                children: [new TextRun({ text: this.formatCurrency(totalRepayment), size: 16 })],
                                 alignment: AlignmentType.RIGHT
                             })],
                             borders: this.createTableBorders()
                         }),
+                        // Column 7: Regulierungsquote
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(totalAmount), size: 16 })],
+                                children: [new TextRun({ text: this.formatPercentage(settlementRate), size: 16 })],
                                 alignment: AlignmentType.RIGHT
                             })],
                             borders: this.createTableBorders()
@@ -399,7 +410,16 @@ class DocumentGenerator {
             );
         });
 
-        // Totals Row (matching the new table structure)
+        // Totals Row
+        const totalMonthlyPayments = creditorPayments.reduce((sum, creditor) => {
+            const quoteTotalDebt = totalDebt > 0 ? (creditor.debt_amount / totalDebt) * 100 : 0;
+            const monthlyPayment = (monthlyBudget * quoteTotalDebt) / 100;
+            return sum + monthlyPayment;
+        }, 0);
+
+        const totalRepayments = totalMonthlyPayments * duration;
+        const averageSettlementRate = totalDebt > 0 ? (totalRepayments / totalDebt) * 100 : 0;
+
         tableRows.push(
             new TableRow({
                 children: [
@@ -429,7 +449,7 @@ class DocumentGenerator {
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: this.formatCurrency(totalPayment), bold: true, size: 16 })],
+                            children: [new TextRun({ text: "100,00%", bold: true, size: 16 })],
                             alignment: AlignmentType.RIGHT
                         })],
                         borders: this.createTableBorders(),
@@ -437,7 +457,7 @@ class DocumentGenerator {
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: `${overallQuota.toFixed(2)}`, bold: true, size: 16 })],
+                            children: [new TextRun({ text: this.formatCurrency(monthlyBudget), bold: true, size: 16 })],
                             alignment: AlignmentType.RIGHT
                         })],
                         borders: this.createTableBorders(),
@@ -445,7 +465,7 @@ class DocumentGenerator {
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: this.formatCurrency(monthlyPayment), bold: true, size: 16 })],
+                            children: [new TextRun({ text: this.formatCurrency(totalRepayments), bold: true, size: 16 })],
                             alignment: AlignmentType.RIGHT
                         })],
                         borders: this.createTableBorders(),
@@ -453,7 +473,7 @@ class DocumentGenerator {
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: this.formatCurrency(totalPayment), bold: true, size: 16 })],
+                            children: [new TextRun({ text: this.formatPercentage(averageSettlementRate), bold: true, size: 16 })],
                             alignment: AlignmentType.RIGHT
                         })],
                         borders: this.createTableBorders(),
@@ -539,6 +559,21 @@ class DocumentGenerator {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(amount);
+    }
+
+    /**
+     * Format percentage to German format
+     */
+    formatPercentage(percentage) {
+        if (typeof percentage !== 'number' || isNaN(percentage)) {
+            return '0,00%';
+        }
+        
+        return new Intl.NumberFormat('de-DE', {
+            style: 'percent',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(percentage / 100);
     }
 
     /**
