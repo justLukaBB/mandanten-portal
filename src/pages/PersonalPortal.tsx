@@ -224,7 +224,7 @@ export const PersonalPortal = ({
   const handleUploadComplete = (newDocuments: any) => {    
     // Add new documents to existing documents list
     // setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
-    refreshDocuments()
+    // refreshDocuments()
   };
 
   // Handle financial form submission
