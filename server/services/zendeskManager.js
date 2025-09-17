@@ -617,6 +617,63 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
+     * Upload file specifically for Side Conversation attachments
+     */
+    async uploadFileForSideConversation(filePath, filename) {
+        try {
+            console.log(`📎 Uploading file for Side Conversation: ${filename}`);
+            
+            const fs = require('fs');
+            const FormData = require('form-data');
+            
+            // Check if file exists
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found: ${filePath}`);
+            }
+            
+            // Create form data for multipart upload
+            const formData = new FormData();
+            formData.append('uploaded_data', fs.createReadStream(filePath), {
+                filename: filename,
+                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
+            
+            // Upload to Side Conversation attachments endpoint
+            const uploadUrl = `${this.apiUrl}side_conversations/attachments.json`;
+            
+            const response = await axios.post(uploadUrl, formData, {
+                auth: this.auth,
+                headers: {
+                    ...formData.getHeaders()
+                },
+                maxBodyLength: 50 * 1024 * 1024, // 50MB limit
+                maxContentLength: 50 * 1024 * 1024
+            });
+            
+            console.log(`✅ File uploaded for Side Conversation: ${filename}`);
+            console.log(`🎫 Attachment ID: ${response.data.attachment.id}`);
+            
+            return {
+                success: true,
+                attachment_id: response.data.attachment.id,
+                filename: filename,
+                size: response.data.attachment.size
+            };
+            
+        } catch (error) {
+            console.error(`❌ Error uploading file for Side Conversation ${filename}:`, error.message);
+            if (error.response?.data) {
+                console.error(`Side Conversation upload error details:`, error.response.data);
+            }
+            return {
+                success: false,
+                error: error.message,
+                filename: filename
+            };
+        }
+    }
+
+    /**
      * Upload file to Zendesk using regular uploads endpoint (more reliable)
      */
     async uploadFileToZendesk(filePath, filename) {
@@ -697,19 +754,19 @@ Status updates will be posted to this ticket as emails are sent.
             const attachmentIds = [];
             
             // Upload Schuldenbereinigungsplan
-            const settlementUpload = await this.uploadFileToZendesk(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
+            const settlementUpload = await this.uploadFileForSideConversation(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
             if (settlementUpload.success) {
-                attachmentIds.push(settlementUpload.token);
-                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.token}`);
+                attachmentIds.push(settlementUpload.attachment_id);
+                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.attachment_id}`);
             } else {
                 console.warn(`⚠️ Failed to upload Schuldenbereinigungsplan: ${settlementUpload.error}`);
             }
             
             // Upload Forderungsübersicht
-            const overviewUpload = await this.uploadFileToZendesk(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
+            const overviewUpload = await this.uploadFileForSideConversation(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
             if (overviewUpload.success) {
-                attachmentIds.push(overviewUpload.token);
-                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.token}`);
+                attachmentIds.push(overviewUpload.attachment_id);
+                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.attachment_id}`);
             } else {
                 console.warn(`⚠️ Failed to upload Forderungsübersicht: ${overviewUpload.error}`);
             }
@@ -725,8 +782,8 @@ Status updates will be posted to this ticket as emails are sent.
                     ],
                     subject: emailSubject,
                     body: emailBody,
-                    // Add uploaded documents as attachments using upload tokens
-                    uploads: attachmentIds
+                    // Add uploaded documents as attachments using proper format
+                    attachment_ids: attachmentIds
                 }
             };
 
