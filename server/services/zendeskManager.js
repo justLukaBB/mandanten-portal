@@ -617,7 +617,59 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Send settlement plan email via Side Conversation
+     * Upload file to Zendesk and get upload token
+     */
+    async uploadFileToZendesk(filePath, filename) {
+        try {
+            console.log(`📎 Uploading file to Zendesk: ${filename}`);
+            
+            const fs = require('fs');
+            
+            // Check if file exists
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found: ${filePath}`);
+            }
+            
+            // Read file as buffer
+            const fileBuffer = fs.readFileSync(filePath);
+            
+            // Upload to Zendesk
+            const uploadUrl = `${this.apiUrl}uploads.json?filename=${encodeURIComponent(filename)}`;
+            
+            const response = await axios.post(uploadUrl, fileBuffer, {
+                auth: this.auth,
+                headers: {
+                    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                },
+                maxBodyLength: 50 * 1024 * 1024, // 50MB limit
+                maxContentLength: 50 * 1024 * 1024
+            });
+            
+            console.log(`✅ File uploaded successfully: ${filename}`);
+            console.log(`🎫 Upload token: ${response.data.upload.token}`);
+            
+            return {
+                success: true,
+                token: response.data.upload.token,
+                filename: filename,
+                size: response.data.upload.size || fileBuffer.length
+            };
+            
+        } catch (error) {
+            console.error(`❌ Error uploading file ${filename}:`, error.message);
+            if (error.response?.data) {
+                console.error(`Zendesk upload error details:`, error.response.data);
+            }
+            return {
+                success: false,
+                error: error.message,
+                filename: filename
+            };
+        }
+    }
+
+    /**
+     * Send settlement plan email via Side Conversation with attachments
      */
     async sendSettlementPlanEmailViaTicket(ticketId, creditorData, clientData, settlementData) {
         // Use test email for now
@@ -629,7 +681,40 @@ Status updates will be posted to this ticket as emails are sent.
         try {
             console.log(`📧 Creating Settlement Plan Side Conversation to send to ${testEmail}...`);
             
-            // Create Side Conversation with settlement plan details
+            // Upload settlement plan and creditor overview documents
+            const path = require('path');
+            const documentDir = path.join(__dirname, '../documents');
+            
+            // Expected document filenames
+            const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+            const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+            
+            console.log(`📎 Looking for documents:`);
+            console.log(`   Settlement Plan: ${settlementPlanFile}`);
+            console.log(`   Creditor Overview: ${creditorOverviewFile}`);
+            
+            // Upload documents and collect tokens
+            const uploadTokens = [];
+            
+            // Upload Schuldenbereinigungsplan
+            const settlementUpload = await this.uploadFileToZendesk(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
+            if (settlementUpload.success) {
+                uploadTokens.push(settlementUpload.token);
+                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.token}`);
+            } else {
+                console.warn(`⚠️ Failed to upload Schuldenbereinigungsplan: ${settlementUpload.error}`);
+            }
+            
+            // Upload Forderungsübersicht
+            const overviewUpload = await this.uploadFileToZendesk(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
+            if (overviewUpload.success) {
+                uploadTokens.push(overviewUpload.token);
+                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.token}`);
+            } else {
+                console.warn(`⚠️ Failed to upload Forderungsübersicht: ${overviewUpload.error}`);
+            }
+            
+            // Create Side Conversation with settlement plan details and attachments
             const sideConversationData = {
                 message: {
                     to: [
@@ -639,13 +724,16 @@ Status updates will be posted to this ticket as emails are sent.
                         }
                     ],
                     subject: emailSubject,
-                    body: emailBody
+                    body: emailBody,
+                    // Add uploaded documents as attachments
+                    uploads: uploadTokens
                 }
             };
 
             // Use Side Conversations API endpoint
             const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
             console.log(`🔗 API URL: ${url}`);
+            console.log(`📎 Attaching ${uploadTokens.length} documents`);
 
             const response = await axios.post(url, sideConversationData, {
                 auth: this.auth,
@@ -655,11 +743,12 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`✅ Settlement Plan Side Conversation created successfully!`);
             console.log(`📨 Side Conversation ID: ${response.data.side_conversation?.id}`);
             console.log(`📧 Settlement Plan E-Mail sent to: ${testEmail}`);
+            console.log(`📎 Attachments included: ${uploadTokens.length} documents`);
             
             // Add internal note to main ticket about the side conversation
             await this.addTicketComment(
                 ticketId, 
-                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nStatus: E-Mail erfolgreich versendet ✅`,
+                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nAnhänge: ${uploadTokens.length} Dokumente\n- Schuldenbereinigungsplan\n- Forderungsübersicht\n\nStatus: E-Mail erfolgreich versendet ✅`,
                 false // Internal comment
             );
             
@@ -670,6 +759,7 @@ Status updates will be posted to this ticket as emails are sent.
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
+                attachments_count: uploadTokens.length,
                 email_sent: true
             };
 
