@@ -514,6 +514,252 @@ Ticket-ID: [${creditorData.reference_number}] für interne Zuordnung.`;
             return false;
         }
     }
+
+    /**
+     * Create settlement plan distribution ticket
+     */
+    async createSettlementPlanTicket(zendeskUserId, clientData, settlementData, creditors) {
+        try {
+            console.log(`🎫 Creating settlement plan ticket for ${clientData.name}...`);
+            
+            const planType = settlementData.plan_type || 'Quotenplan';
+            const monthlyPayment = settlementData.monthly_payment || 0;
+            const totalDebt = settlementData.total_debt || 0;
+            const creditorCount = creditors.length;
+            
+            // Create the settlement plan ticket subject and description
+            const subject = `📄 Schuldenbereinigungsplan - ${clientData.name} - Az: ${clientData.reference || 'N/A'}`;
+            
+            const description = `
+**SCHULDENBEREINIGUNGSPLAN DISTRIBUTION**
+
+**Client Information:**
+- Name: ${clientData.name}
+- Email: ${clientData.email}
+- Reference: ${clientData.reference || 'N/A'}
+
+**Settlement Plan Details:**
+- Plan Type: ${planType}
+- Monthly Payment: €${monthlyPayment.toFixed(2)}
+- Total Debt: €${totalDebt.toFixed(2)}
+- Duration: ${settlementData.duration_months || 36} months
+
+**Distribution Summary:**
+- Total Creditors: ${creditorCount}
+- Documents to be sent:
+  • Schuldenbereinigungsplan (Settlement Plan)
+  • Forderungsübersicht (Creditor Overview)
+
+**Creditors to Contact:**
+${creditors.map((creditor, index) => {
+    const name = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
+    const amount = creditor.claim_amount || 0;
+    return `${index + 1}. ${name} - €${amount.toFixed(2)}`;
+}).join('\n')}
+
+---
+This ticket manages the second round of creditor communication for settlement plan distribution.
+Each creditor will receive an individual Side Conversation email with the settlement documents.
+
+Status updates will be posted to this ticket as emails are sent.
+            `.trim();
+
+            const ticketData = {
+                ticket: {
+                    requester_id: zendeskUserId,
+                    subject: subject,
+                    description: description,
+                    status: 'open',
+                    priority: 'normal',
+                    type: 'incident',
+                    tags: [
+                        'schuldenbereinigungsplan',
+                        'settlement-plan',
+                        'creditor-distribution',
+                        'second-round',
+                        `client-${clientData.reference || 'unknown'}`,
+                        `plan-type-${planType.toLowerCase()}`
+                    ],
+                    custom_fields: [
+                        { id: this.customFields.client_reference, value: clientData.reference || '' },
+                        { id: this.customFields.creditor_name, value: `${creditorCount} Creditors` },
+                        { id: this.customFields.original_claim_amount, value: totalDebt.toString() }
+                    ]
+                }
+            };
+
+            const url = `${this.apiUrl}tickets.json`;
+            const response = await axios.post(url, ticketData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Settlement plan ticket created successfully!`);
+            console.log(`🎫 Ticket ID: ${response.data.ticket.id}`);
+            console.log(`📋 Subject: ${response.data.ticket.subject}`);
+
+            return {
+                id: response.data.ticket.id,
+                subject: response.data.ticket.subject,
+                status: response.data.ticket.status,
+                created_at: response.data.ticket.created_at,
+                url: response.data.ticket.url
+            };
+
+        } catch (error) {
+            console.error('❌ Error creating settlement plan ticket:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Send settlement plan email via Side Conversation
+     */
+    async sendSettlementPlanEmailViaTicket(ticketId, creditorData, clientData, settlementData) {
+        // Use test email for now
+        const testEmail = 'justlukax@gmail.com';
+        const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
+        const emailBody = this.generateSettlementPlanEmailBody(creditorData, clientData, settlementData);
+        const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
+        
+        try {
+            console.log(`📧 Creating Settlement Plan Side Conversation to send to ${testEmail}...`);
+            
+            // Create Side Conversation with settlement plan details
+            const sideConversationData = {
+                message: {
+                    to: [
+                        {
+                            email: testEmail,
+                            name: creditorName
+                        }
+                    ],
+                    subject: emailSubject,
+                    body: emailBody
+                }
+            };
+
+            // Use Side Conversations API endpoint
+            const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
+            console.log(`🔗 API URL: ${url}`);
+
+            const response = await axios.post(url, sideConversationData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Settlement Plan Side Conversation created successfully!`);
+            console.log(`📨 Side Conversation ID: ${response.data.side_conversation?.id}`);
+            console.log(`📧 Settlement Plan E-Mail sent to: ${testEmail}`);
+            
+            // Add internal note to main ticket about the side conversation
+            await this.addTicketComment(
+                ticketId, 
+                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nStatus: E-Mail erfolgreich versendet ✅`,
+                false // Internal comment
+            );
+            
+            return {
+                success: true,
+                ticket_id: ticketId,
+                side_conversation_id: response.data.side_conversation?.id,
+                recipient_email: testEmail,
+                recipient_name: creditorName,
+                subject: emailSubject,
+                email_sent: true
+            };
+
+        } catch (error) {
+            console.error(`❌ Error creating Settlement Plan Side Conversation for ticket ${ticketId}:`, error.message);
+            
+            // Fallback to adding manual instruction comment if Side Conversation fails
+            const fallbackComment = `❌ Automatische E-Mail-Versendung für Schuldenbereinigungsplan fehlgeschlagen an ${creditorName}\n\nBitte manuell senden an: ${testEmail}\nBetreff: ${emailSubject}\n\nFehler: ${error.message}`;
+            
+            try {
+                await this.addTicketComment(ticketId, fallbackComment, false);
+            } catch (commentError) {
+                console.error('❌ Failed to add fallback comment:', commentError.message);
+            }
+            
+            return {
+                success: false,
+                error: error.message,
+                ticket_id: ticketId,
+                recipient_email: testEmail,
+                recipient_name: creditorName,
+                subject: emailSubject,
+                manual_action_required: true
+            };
+        }
+    }
+
+    /**
+     * Generate settlement plan email body
+     */
+    generateSettlementPlanEmailBody(creditorData, clientData, settlementData) {
+        const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Sehr geehrte Damen und Herren';
+        const planType = settlementData.plan_type || 'Quotenplan';
+        const monthlyPayment = settlementData.monthly_payment || 0;
+        const totalDebt = settlementData.total_debt || 0;
+        const creditorDebt = creditorData.claim_amount || 0;
+        const duration = settlementData.duration_months || 36;
+        
+        // Calculate creditor's share
+        const creditorShare = totalDebt > 0 ? (creditorDebt / totalDebt) * 100 : 0;
+        const creditorMonthlyPayment = totalDebt > 0 ? (monthlyPayment * (creditorDebt / totalDebt)) : 0;
+        const creditorTotalPayment = creditorMonthlyPayment * duration;
+
+        return `
+Sehr geehrte Damen und Herren,
+${creditorName !== 'Sehr geehrte Damen und Herren' ? `\nSehr geehrte/r ${creditorName},` : ''}
+
+wir übersenden Ihnen hiermit den außergerichtlichen Schuldenbereinigungsplan für unseren Mandanten ${clientData.name}.
+
+**SCHULDENBEREINIGUNGSPLAN DETAILS:**
+
+Plan-Typ: ${planType}
+Laufzeit: ${duration} Monate
+Gesamtschuldensumme: €${totalDebt.toFixed(2)}
+Monatliche Zahlungsrate gesamt: €${monthlyPayment.toFixed(2)}
+
+**IHRE FORDERUNG:**
+
+Forderungsbetrag: €${creditorDebt.toFixed(2)}
+Ihr Anteil an Gesamtschuld: ${creditorShare.toFixed(2)}%
+Ihre monatliche Zahlung: €${creditorMonthlyPayment.toFixed(2)}
+Ihre Gesamtzahlung über ${duration} Monate: €${creditorTotalPayment.toFixed(2)}
+
+**BEIGEFÜGTE DOKUMENTE:**
+
+1. Schuldenbereinigungsplan (detaillierte Aufstellung)
+2. Forderungsübersicht (vollständige Gläubigerliste)
+
+**NÄCHSTE SCHRITTE:**
+
+Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan und teilen uns Ihre Zustimmung oder etwaige Anmerkungen bis zum [DATUM] mit.
+
+Bei Zustimmung aller Gläubiger wird der Plan rechtsverbindlich und die Zahlungen beginnen zum [STARTDATUM].
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+
+Thomas Scuric Rechtsanwälte
+[Adresse]
+[Telefon]
+[E-Mail]
+
+---
+Aktenzeichen: ${clientData.reference || 'N/A'}
+Bearbeiter: [Name]
+Datum: ${new Date().toLocaleDateString('de-DE')}
+
+Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schuldenbereinigungsverfahrens.
+        `.trim();
+    }
 }
 
 module.exports = ZendeskManager;

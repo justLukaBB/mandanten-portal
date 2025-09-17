@@ -160,46 +160,11 @@ const FinancialDataForm: React.FC<FinancialDataFormProps> = ({
             </div>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Schuldenbereinigungsplan wird automatisch erstellt
+            Finanzdaten erfolgreich übermittelt
           </h3>
-          <p className="text-gray-600 mb-4">
-            Ihre Finanzdaten wurden erfolgreich verarbeitet. Das System erstellt jetzt automatisch 
-            Ihren individuellen Schuldenbereinigungsplan basierend auf der aktuellen Pfändungstabelle 2024.
+          <p className="text-gray-600">
+            Vielen Dank! Ihre Finanzdaten wurden erfolgreich gespeichert.
           </p>
-          
-          {/* Processing Status */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <div className="text-sm">
-                <p className="font-medium text-blue-800 mb-1">Automatische Verarbeitung läuft</p>
-                <ul className="text-blue-700 text-left space-y-1">
-                  <li>✅ Pfändungstabelle-Berechnung nach aktuellem Recht</li>
-                  <li>✅ Automatische Plan-Auswahl (Quotenplan/Nullplan)</li>
-                  <li>🔄 Word-Dokumente werden generiert</li>
-                  <li>🔄 Zweite E-Mail-Runde an alle Gläubiger</li>
-                  <li>⏳ Schuldenbereinigungsplan zur Genehmigung</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-sm">
-                <p className="font-medium text-green-800 mb-1">Vollautomatischer Prozess</p>
-                <p className="text-green-700">
-                  Keine weitere Eingabe erforderlich. Der optimale Plan wird basierend auf Ihren Finanzdaten 
-                  automatisch ausgewählt und an alle Gläubiger zur Genehmigung gesendet.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     );

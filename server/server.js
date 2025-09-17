@@ -5112,7 +5112,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 // ============================================================================
 
 // Helper function for triggering second round of creditor emails with documents
-async function triggerSecondRoundCreditorEmails(client, settlementResult, overviewResult) {
+async function triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult) {
   try {
     console.log(`📧 Starting second round creditor emails for ${client.aktenzeichen}`);
     
@@ -5127,8 +5127,8 @@ async function triggerSecondRoundCreditorEmails(client, settlementResult, overvi
     const creditorService = new CreditorContactService();
     
     // Prepare second round email content
-    const planType = client.financial_data?.recommended_plan_type;
-    const garnishableAmount = client.financial_data?.garnishable_amount || 0;
+    const planType = settlementPlan.plan_type;
+    const garnishableAmount = settlementPlan.monthly_payment || 0;
     
     console.log(`📋 Sending settlement plan to ${client.final_creditor_list.length} creditors`);
     console.log(`   Plan Type: ${planType}`);
@@ -5144,23 +5144,16 @@ async function triggerSecondRoundCreditorEmails(client, settlementResult, overvi
       if (typeof creditorService.sendSettlementPlanToCreditors === 'function') {
         emailResult = await creditorService.sendSettlementPlanToCreditors(
           client.aktenzeichen,
-          {
-            plan_type: planType,
-            monthly_payment: garnishableAmount,
-            settlement_document: settlementResult,
-            creditor_overview: overviewResult,
-            creditors: client.final_creditor_list,
-            financial_data: client.financial_data
-          }
+          settlementPlan
         );
       } else {
         console.warn(`⚠️ sendSettlementPlanToCreditors method not yet implemented in CreditorContactService`);
-        console.log(`📧 Would send settlement plan (${planType}) to ${client.final_creditor_list.length} creditors`);
+        console.log(`📧 Would send settlement plan (${planType}) to ${(client.final_creditor_list || []).length} creditors`);
         
         // Simulate success for now - documents are generated and ready
         emailResult = {
           success: true,
-          emails_sent: client.final_creditor_list.length,
+          emails_sent: (client.final_creditor_list || []).length,
           note: 'Documents generated successfully - email sending requires manual implementation'
         };
       }
@@ -5202,11 +5195,19 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     }
     
     // Create settlement plan data structure
+    const totalDebt = client.final_creditor_list?.reduce((sum, creditor) => sum + (creditor.claim_amount || 0), 0) || 0;
+    const monthlyPayment = garnishmentResult.garnishableAmount;
+    const durationMonths = 36;
+    const totalPaymentAmount = monthlyPayment * durationMonths;
+    const averageQuotaPercentage = totalDebt > 0 ? (totalPaymentAmount / totalDebt) * 100 : 0;
+    
     const settlementPlan = {
       plan_type: planType,
-      monthly_payment: garnishmentResult.garnishableAmount,
-      duration_months: 36,
-      total_debt: client.final_creditor_list?.reduce((sum, creditor) => sum + (creditor.claim_amount || 0), 0) || 0,
+      monthly_payment: monthlyPayment,
+      duration_months: durationMonths,
+      total_debt: totalDebt,
+      total_payment_amount: totalPaymentAmount,
+      average_quota_percentage: averageQuotaPercentage,
       garnishable_amount: garnishmentResult.garnishableAmount,
       financial_data: client.financial_data,
       creditors: client.final_creditor_list || [],
@@ -5214,9 +5215,9 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       creditor_payments: (client.final_creditor_list || []).map(creditor => ({
         creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
         debt_amount: creditor.claim_amount || 0,
-        payment_percentage: garnishmentResult.garnishableAmount > 0 ? (creditor.claim_amount || 0) / (client.final_creditor_list?.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || 1) * 100 : 0,
+        payment_percentage: garnishmentResult.garnishableAmount > 0 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
         monthly_payment: garnishmentResult.garnishableAmount > 0 ? 
-          (garnishmentResult.garnishableAmount * ((creditor.claim_amount || 0) / (client.final_creditor_list?.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || 1))) : 0
+          (garnishmentResult.garnishableAmount * ((creditor.claim_amount || 0) / totalDebt)) : 0
       })),
       generated_at: new Date().toISOString()
     };
@@ -5282,7 +5283,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     // Trigger automatic second round creditor emails
     try {
-      await triggerSecondRoundCreditorEmails(client, settlementResult, overviewResult);
+      await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult);
     } catch (emailError) {
       console.error(`❌ Error sending second round creditor emails for ${client.aktenzeichen}:`, emailError);
       // Continue without failing - emails can be sent manually if needed
