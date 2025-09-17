@@ -580,11 +580,12 @@ Status updates will be posted to this ticket as emails are sent.
                         `client-${clientData.reference || 'unknown'}`,
                         `plan-type-${planType.toLowerCase()}`
                     ],
-                    custom_fields: [
-                        { id: this.customFields.client_reference, value: clientData.reference || '' },
-                        { id: this.customFields.creditor_name, value: `${creditorCount} Creditors` },
-                        { id: this.customFields.original_claim_amount, value: totalDebt.toString() }
-                    ]
+                    // Custom fields removed to prevent 422 validation errors
+                    // custom_fields: [
+                    //     { id: this.customFields.client_reference, value: clientData.reference || '' },
+                    //     { id: this.customFields.creditor_name, value: `${creditorCount} Creditors` },
+                    //     { id: this.customFields.original_claim_amount, value: totalDebt.toString() }
+                    // ]
                 }
             };
 

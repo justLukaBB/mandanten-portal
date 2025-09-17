@@ -5265,15 +5265,36 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       representative_reference: creditor.representative_reference || ''
     }));
     
-    const overviewResult = await documentGenerator.generateForderungsuebersicht(
-      clientData,
-      creditorData
-    );
-    
-    if (overviewResult.success) {
+    let overviewResult;
+    try {
+      const overviewDoc = await documentGenerator.generateForderungsuebersicht(
+        clientData,
+        creditorData
+      );
+      
+      // Save the document
+      const saveResult = await documentGenerator.saveDocument(overviewDoc, client.aktenzeichen, `Forderungsübersicht_${client.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`);
+      
+      overviewResult = {
+        success: true,
+        document_info: {
+          filename: saveResult.filename,
+          path: saveResult.path,
+          size: saveResult.size,
+          client_reference: client.aktenzeichen,
+          generated_at: new Date().toISOString()
+        },
+        buffer: saveResult.buffer
+      };
+      
       console.log(`✅ Generated creditor overview: ${overviewResult.document_info.filename}`);
-    } else {
-      console.error(`❌ Creditor overview generation failed: ${overviewResult.error}`);
+    } catch (error) {
+      console.error(`❌ Creditor overview generation failed: ${error.message}`);
+      overviewResult = {
+        success: false,
+        error: error.message,
+        client_reference: client.aktenzeichen
+      };
     }
     
     // Save client with updated data
