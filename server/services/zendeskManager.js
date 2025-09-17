@@ -617,11 +617,11 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Upload file to Zendesk and get upload token
+     * Upload file to Zendesk Side Conversations and get attachment ID
      */
-    async uploadFileToZendesk(filePath, filename) {
+    async uploadFileToSideConversation(filePath, filename) {
         try {
-            console.log(`📎 Uploading file to Zendesk: ${filename}`);
+            console.log(`📎 Uploading file to Side Conversation: ${filename}`);
             
             const fs = require('fs');
             
@@ -630,35 +630,46 @@ Status updates will be posted to this ticket as emails are sent.
                 throw new Error(`File not found: ${filePath}`);
             }
             
-            // Read file as buffer
+            // Create multipart form data using Node.js built-in approach
+            const boundary = `----formdata-node-${Date.now()}`;
             const fileBuffer = fs.readFileSync(filePath);
             
-            // Upload to Zendesk
-            const uploadUrl = `${this.apiUrl}uploads.json?filename=${encodeURIComponent(filename)}`;
+            // Build multipart form data manually
+            const formData = [];
+            formData.push(`--${boundary}\r\n`);
+            formData.push(`Content-Disposition: form-data; name="uploaded_data"; filename="${filename}"\r\n`);
+            formData.push(`Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`);
             
-            const response = await axios.post(uploadUrl, fileBuffer, {
+            const header = Buffer.from(formData.join(''));
+            const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+            const body = Buffer.concat([header, fileBuffer, footer]);
+            
+            // Upload to Side Conversation attachments endpoint
+            const uploadUrl = `${this.apiUrl}tickets/side_conversations/attachments.json`;
+            
+            const response = await axios.post(uploadUrl, body, {
                 auth: this.auth,
                 headers: {
-                    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`
                 },
                 maxBodyLength: 50 * 1024 * 1024, // 50MB limit
                 maxContentLength: 50 * 1024 * 1024
             });
             
-            console.log(`✅ File uploaded successfully: ${filename}`);
-            console.log(`🎫 Upload token: ${response.data.upload.token}`);
+            console.log(`✅ File uploaded to Side Conversation successfully: ${filename}`);
+            console.log(`🆔 Attachment ID: ${response.data.attachment.id}`);
             
             return {
                 success: true,
-                token: response.data.upload.token,
+                attachment_id: response.data.attachment.id,
                 filename: filename,
-                size: response.data.upload.size || fileBuffer.length
+                size: response.data.attachment.size || fileBuffer.length
             };
             
         } catch (error) {
-            console.error(`❌ Error uploading file ${filename}:`, error.message);
+            console.error(`❌ Error uploading file to Side Conversation ${filename}:`, error.message);
             if (error.response?.data) {
-                console.error(`Zendesk upload error details:`, error.response.data);
+                console.error(`Zendesk Side Conversation upload error details:`, error.response.data);
             }
             return {
                 success: false,
@@ -693,23 +704,23 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`   Settlement Plan: ${settlementPlanFile}`);
             console.log(`   Creditor Overview: ${creditorOverviewFile}`);
             
-            // Upload documents and collect tokens
-            const uploadTokens = [];
+            // Upload documents and collect attachment IDs
+            const attachmentIds = [];
             
             // Upload Schuldenbereinigungsplan
-            const settlementUpload = await this.uploadFileToZendesk(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
+            const settlementUpload = await this.uploadFileToSideConversation(settlementPlanFile, `Schuldenbereinigungsplan_${creditorName}.docx`);
             if (settlementUpload.success) {
-                uploadTokens.push(settlementUpload.token);
-                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.token}`);
+                attachmentIds.push(settlementUpload.attachment_id);
+                console.log(`✅ Uploaded Schuldenbereinigungsplan: ${settlementUpload.attachment_id}`);
             } else {
                 console.warn(`⚠️ Failed to upload Schuldenbereinigungsplan: ${settlementUpload.error}`);
             }
             
             // Upload Forderungsübersicht
-            const overviewUpload = await this.uploadFileToZendesk(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
+            const overviewUpload = await this.uploadFileToSideConversation(creditorOverviewFile, `Forderungsübersicht_${creditorName}.docx`);
             if (overviewUpload.success) {
-                uploadTokens.push(overviewUpload.token);
-                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.token}`);
+                attachmentIds.push(overviewUpload.attachment_id);
+                console.log(`✅ Uploaded Forderungsübersicht: ${overviewUpload.attachment_id}`);
             } else {
                 console.warn(`⚠️ Failed to upload Forderungsübersicht: ${overviewUpload.error}`);
             }
@@ -725,15 +736,15 @@ Status updates will be posted to this ticket as emails are sent.
                     ],
                     subject: emailSubject,
                     body: emailBody,
-                    // Add uploaded documents as attachments
-                    uploads: uploadTokens
+                    // Add uploaded documents as attachments using Side Conversation format
+                    attachment_ids: attachmentIds
                 }
             };
 
             // Use Side Conversations API endpoint
             const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
             console.log(`🔗 API URL: ${url}`);
-            console.log(`📎 Attaching ${uploadTokens.length} documents`);
+            console.log(`📎 Attaching ${attachmentIds.length} documents with IDs:`, attachmentIds);
 
             const response = await axios.post(url, sideConversationData, {
                 auth: this.auth,
@@ -743,12 +754,12 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`✅ Settlement Plan Side Conversation created successfully!`);
             console.log(`📨 Side Conversation ID: ${response.data.side_conversation?.id}`);
             console.log(`📧 Settlement Plan E-Mail sent to: ${testEmail}`);
-            console.log(`📎 Attachments included: ${uploadTokens.length} documents`);
+            console.log(`📎 Attachments included: ${attachmentIds.length} documents`);
             
             // Add internal note to main ticket about the side conversation
             await this.addTicketComment(
                 ticketId, 
-                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nAnhänge: ${uploadTokens.length} Dokumente\n- Schuldenbereinigungsplan\n- Forderungsübersicht\n\nStatus: E-Mail erfolgreich versendet ✅`,
+                `📄 Schuldenbereinigungsplan E-Mail gesendet an ${testEmail} (${creditorName})\n\nBetreff: ${emailSubject}\nSide Conversation ID: ${response.data.side_conversation?.id}\n\nPlan Type: ${settlementData.plan_type || 'Quotenplan'}\nMonatliche Zahlung: €${(settlementData.monthly_payment || 0).toFixed(2)}\n\nAnhänge: ${attachmentIds.length} Dokumente\n- Schuldenbereinigungsplan (ID: ${attachmentIds[0] || 'N/A'})\n- Forderungsübersicht (ID: ${attachmentIds[1] || 'N/A'})\n\nStatus: E-Mail erfolgreich versendet ✅`,
                 false // Internal comment
             );
             
@@ -759,7 +770,8 @@ Status updates will be posted to this ticket as emails are sent.
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                attachments_count: uploadTokens.length,
+                attachments_count: attachmentIds.length,
+                attachment_ids: attachmentIds,
                 email_sent: true
             };
 
