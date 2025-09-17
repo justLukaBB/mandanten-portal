@@ -27,7 +27,7 @@ class DocumentGenerator {
     }
 
     /**
-     * Generate complete Schuldenbereinigungsplan Word document
+     * Generate complete Schuldenbereinigungsplan Word document with save
      */
     async generateSchuldenbereinigungsplan(clientData, settlementData, calculationResult) {
         if (!docxModule) {
@@ -37,229 +37,297 @@ class DocumentGenerator {
         try {
             console.log(`📄 Generating Schuldenbereinigungsplan for ${clientData.name}...`);
 
-            // Format the date for the document title
-            const currentDate = new Date().toLocaleDateString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
+            // Generate the document
+            const doc = await this.createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult);
 
-            // Calculate payment start date (usually next month)
-            const paymentStartDate = new Date();
-            paymentStartDate.setMonth(paymentStartDate.getMonth() + 1);
-            paymentStartDate.setDate(1);
+            // Save the document
+            const result = await this.saveDocument(doc, clientData.reference);
 
-            const doc = new Document({
-                ...this.documentOptions,
-                sections: [{
-                    properties: {},
-                    children: [
-                        // Document Title
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Außergerichtlicher Schuldenbereinigungsplan vom     ${currentDate}`,
-                                    bold: true,
-                                    size: 24
-                                })
-                            ],
-                            spacing: { after: 400 }
-                        }),
+            console.log(`✅ Schuldenbereinigungsplan document generated successfully`);
+            console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
 
-                        // Debtor Information
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: "Schuldner/-in:",
-                                    bold: true,
-                                    size: 22
-                                }),
-                                new TextRun({
-                                    text: `          ${clientData.name}`,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 400 }
-                        }),
-
-                        // Quota Plan Information
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: "Quotenplan",
-                                    bold: true,
-                                    size: 22
-                                }),
-                                new TextRun({
-                                    text: `                    Laufzeit: ${settlementData.duration_months || 36} Monate`,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 600 }
-                        }),
-
-                        // Payment Start Date
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: "Beginn des Zahlungsplans",
-                                    size: 22
-                                }),
-                                new TextRun({
-                                    text: `          ${paymentStartDate.toLocaleDateString('de-DE')}`,
-                                    size: 22,
-                                    underline: {}
-                                })
-                            ],
-                            spacing: { after: 600 }
-                        }),
-
-                        // Creditor Table
-                        await this.createCreditorTable(calculationResult.creditor_payments),
-
-                        // Spacing after table
-                        new Paragraph({
-                            children: [new TextRun({ text: "" })],
-                            spacing: { after: 400 }
-                        }),
-
-                        // Explanation Text (right side box in the original)
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: "Aufgrund schwankender Einkünfte oder mangels pfändbarem Einkommen wird nur die Quote angeboten. Die pfändbaren Beträge werden nach der Quote von Monat zu Monat neu errechnet. Die Verteilung der Zahlungen an die Gläubiger erfolgt einmal jährlich. Die Bedingungen in der Anlage sind Bestandteil dieses Plans.",
-                                    size: 20
-                                })
-                            ],
-                            alignment: AlignmentType.JUSTIFIED,
-                            indent: {
-                                left: 6000, // Right aligned like in the original
-                                right: 0
-                            },
-                            spacing: { after: 200 }
-                        }),
-
-                        // Summary Information
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `\n\nGesamtsumme aller Forderungen: ${this.formatCurrency(calculationResult.total_debt)}`,
-                                    bold: true,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        }),
-
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
-                                    bold: true,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        }),
-
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(calculationResult.total_payment_amount)}`,
-                                    bold: true,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        }),
-
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Durchschnittliche Quote: ${calculationResult.average_quota_percentage.toFixed(2)}%`,
-                                    bold: true,
-                                    size: 22
-                                })
-                            ],
-                            spacing: { after: 400 }
-                        }),
-
-                        // Legal Footer
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: "\n\nErstellt von Thomas Scuric Rechtsanwälte",
-                                    italics: true,
-                                    size: 18
-                                })
-                            ],
-                            alignment: AlignmentType.CENTER,
-                            spacing: { before: 800 }
-                        }),
-
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Datum: ${currentDate}`,
-                                    italics: true,
-                                    size: 18
-                                })
-                            ],
-                            alignment: AlignmentType.CENTER,
-                            spacing: { after: 200 }
-                        })
-                    ]
-                }]
-            });
-
-            console.log(`✅ Document structure created for ${clientData.name}`);
-            return doc;
+            return {
+                success: true,
+                document_info: {
+                    filename: result.filename,
+                    path: result.path,
+                    size: result.size,
+                    client_reference: clientData.reference,
+                    generated_at: new Date().toISOString()
+                },
+                buffer: result.buffer
+            };
 
         } catch (error) {
-            console.error('❌ Error generating Schuldenbereinigungsplan:', error.message);
-            throw new Error(`Document generation failed: ${error.message}`);
+            console.error(`❌ Error generating Schuldenbereinigungsplan: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientData.reference
+            };
         }
+    }
+
+    /**
+     * Create Schuldenbereinigungsplan document structure
+     */
+    async createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult) {
+        // Format the date for the document title
+        const currentDate = new Date().toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        // Calculate payment start date (usually next month)
+        const paymentStartDate = new Date();
+        paymentStartDate.setMonth(paymentStartDate.getMonth() + 1);
+        paymentStartDate.setDate(1);
+
+        const doc = new Document({
+            ...this.documentOptions,
+            sections: [{
+                properties: {},
+                children: [
+                    // Document Title
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Außergerichtlicher Schuldenbereinigungsplan vom     ${currentDate}`,
+                                bold: true,
+                                size: 24
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Debtor Information
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Schuldner/-in:",
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `          ${clientData.name}`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Quota Plan Information
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Quotenplan",
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `                    Laufzeit: ${settlementData.duration_months || 36} Monate`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 600 }
+                    }),
+
+                    // Payment Start Date
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Beginn des Zahlungsplans",
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `          ${paymentStartDate.toLocaleDateString('de-DE')}`,
+                                size: 22,
+                                underline: {}
+                            })
+                        ],
+                        spacing: { after: 600 }
+                    }),
+
+                    // Creditor Table
+                    await this.createCreditorTable(calculationResult.creditor_payments, settlementData),
+
+                    // Spacing after table
+                    new Paragraph({
+                        children: [new TextRun({ text: "" })],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Explanation Text (right side box in the original)
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Aufgrund schwankender Einkünfte oder mangels pfändbarem Einkommen wird nur die Quote angeboten. Die pfändbaren Beträge werden nach der Quote von Monat zu Monat neu errechnet. Die Verteilung der Zahlungen an die Gläubiger erfolgt einmal jährlich. Die Bedingungen in der Anlage sind Bestandteil dieses Plans.",
+                                size: 20
+                            })
+                        ],
+                        alignment: AlignmentType.JUSTIFIED,
+                        indent: {
+                            left: 6000, // Right aligned like in the original
+                            right: 0
+                        },
+                        spacing: { after: 200 }
+                    }),
+
+                    // Summary Information
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `\n\nGesamtsumme aller Forderungen: ${this.formatCurrency(calculationResult.total_debt)}`,
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(calculationResult.total_payment_amount)}`,
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Durchschnittliche Quote: ${calculationResult.average_quota_percentage.toFixed(2)}%`,
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Legal Footer
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "\n\nErstellt von Thomas Scuric Rechtsanwälte",
+                                italics: true,
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 800 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Datum: ${currentDate}`,
+                                italics: true,
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 }
+                    })
+                ]
+            }]
+        });
+
+        console.log(`✅ Document structure created for ${clientData.name}`);
+        return doc;
     }
 
     /**
      * Create the creditor table matching the format in the screenshot
      */
-    async createCreditorTable(creditorPayments) {
+    async createCreditorTable(creditorPayments, settlementData) {
+        // Calculate totals for the plan
+        const totalDebt = creditorPayments.reduce((sum, c) => sum + c.debt_amount, 0);
+        const monthlyPayment = settlementData.monthly_payment || 0;
+        const duration = settlementData.duration_months || 36;
+        const totalPayment = monthlyPayment * duration;
+        const overallQuota = totalDebt > 0 ? (totalPayment / totalDebt) * 100 : 0;
+
         const tableRows = [
             // Header Row
             new TableRow({
                 children: [
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Nr.", bold: true, size: 20 })],
+                            children: [new TextRun({ text: "Nr.", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
                         width: { size: 8, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" }
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Gläubiger", bold: true, size: 20 })],
+                            children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 40, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" }
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Forderung", bold: true, size: 20 })],
+                            children: [new TextRun({ text: "Zahlungsanspruch", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 26, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" }
+                        width: { size: 15, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Quote von Gesamtverschuldung", bold: true, size: 20 })],
+                            children: [new TextRun({ text: "Forderung", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 26, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" }
+                        width: { size: 15, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gläubigerquote", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Monatlicher Anteil", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gesamtanteil in 36 Monaten", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 13, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
                     })
                 ]
             })
@@ -267,74 +335,127 @@ class DocumentGenerator {
 
         // Data Rows
         creditorPayments.forEach((creditor, index) => {
+            // Calculate individual creditor amounts
+            const creditorShare = totalDebt > 0 ? creditor.debt_amount / totalDebt : 0;
+            const monthlyAmount = monthlyPayment * creditorShare;
+            const totalAmount = monthlyAmount * duration;
+
             tableRows.push(
                 new TableRow({
                     children: [
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: (index + 1).toString(), size: 20 })],
+                                children: [new TextRun({ text: (index + 1).toString(), size: 18 })],
                                 alignment: AlignmentType.CENTER
                             })],
-                            width: { size: 8, type: WidthType.PERCENTAGE }
+                            borders: this.createTableBorders()
                         }),
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: creditor.creditor_name, size: 20 })],
+                                children: [new TextRun({ text: creditor.creditor_name, size: 18 })],
                                 alignment: AlignmentType.LEFT
                             })],
-                            width: { size: 40, type: WidthType.PERCENTAGE }
+                            borders: this.createTableBorders()
                         }),
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 20 })],
+                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 18 })],
                                 alignment: AlignmentType.RIGHT
                             })],
-                            width: { size: 26, type: WidthType.PERCENTAGE }
+                            borders: this.createTableBorders()
                         }),
                         new TableCell({
                             children: [new Paragraph({ 
-                                children: [new TextRun({ text: `${creditor.quota_percentage.toFixed(2)}%`, size: 20 })],
+                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 18 })],
                                 alignment: AlignmentType.RIGHT
                             })],
-                            width: { size: 26, type: WidthType.PERCENTAGE }
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: `${overallQuota.toFixed(2)}%`, size: 18 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: this.formatCurrency(monthlyAmount), size: 18 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: this.formatCurrency(totalAmount), size: 18 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
                         })
                     ]
                 })
             );
         });
 
-        // Totals Row
-        const totalDebt = creditorPayments.reduce((sum, c) => sum + c.debt_amount, 0);
+        // Totals Row (matching the new table structure)
         tableRows.push(
             new TableRow({
                 children: [
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "", size: 20 })],
+                            children: [new TextRun({ text: "", size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 8, type: WidthType.PERCENTAGE }
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "Summe", bold: true, size: 20 })],
+                            children: [new TextRun({ text: "Summe", bold: true, size: 18 })],
                             alignment: AlignmentType.LEFT
                         })],
-                        width: { size: 40, type: WidthType.PERCENTAGE }
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: this.formatCurrency(totalDebt), bold: true, size: 20 })],
+                            children: [new TextRun({ text: this.formatCurrency(totalDebt), bold: true, size: 18 })],
                             alignment: AlignmentType.RIGHT
                         })],
-                        width: { size: 26, type: WidthType.PERCENTAGE }
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
                         children: [new Paragraph({ 
-                            children: [new TextRun({ text: "100,00%", bold: true, size: 20 })],
+                            children: [new TextRun({ text: this.formatCurrency(totalDebt), bold: true, size: 18 })],
                             alignment: AlignmentType.RIGHT
                         })],
-                        width: { size: 26, type: WidthType.PERCENTAGE }
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: `${overallQuota.toFixed(2)}%`, bold: true, size: 18 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(monthlyPayment), bold: true, size: 18 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(totalPayment), bold: true, size: 18 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     })
                 ]
             })
@@ -388,6 +509,18 @@ class DocumentGenerator {
             console.error('❌ Error saving document:', error.message);
             throw new Error(`Document save failed: ${error.message}`);
         }
+    }
+
+    /**
+     * Create table borders configuration
+     */
+    createTableBorders() {
+        return {
+            top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+            left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+            right: { style: BorderStyle.SINGLE, size: 1, color: "000000" }
+        };
     }
 
     /**

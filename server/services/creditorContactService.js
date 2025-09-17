@@ -785,6 +785,166 @@ class CreditorContactService {
             };
         }
     }
+
+    /**
+     * Send settlement plan documents to all creditors (second round of emails)
+     */
+    async sendSettlementPlanToCreditors(clientReference, settlementData) {
+        try {
+            console.log(`\n📄 Starting second round: Sending settlement plan to creditors for ${clientReference}`);
+            
+            // Step 1: Test Zendesk connection
+            const connectionOk = await this.zendesk.testConnection();
+            if (!connectionOk) {
+                throw new Error('Zendesk connection failed - check configuration');
+            }
+
+            // Step 2: Get client data
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            const clientData = {
+                name: `${client.firstName} ${client.lastName}`,
+                email: client.email,
+                phone: client.phone || '',
+                address: client.address || '',
+                reference: clientReference
+            };
+
+            // Step 3: Find existing Zendesk user for client
+            const zendeskUser = await this.zendesk.findClientUser(
+                clientReference,
+                clientData.name,
+                clientData.email
+            );
+
+            // Step 4: Get all creditors for this client
+            const creditors = settlementData.creditors || client.final_creditor_list || [];
+            console.log(`📊 Sending settlement plan to ${creditors.length} creditors`);
+            
+            if (creditors.length === 0) {
+                return {
+                    success: true,
+                    message: 'No creditors found for settlement plan distribution',
+                    client_reference: clientReference,
+                    emails_sent: 0
+                };
+            }
+
+            // Step 5: Create a new Zendesk ticket for settlement plan distribution
+            console.log(`🎫 Creating settlement plan distribution ticket...`);
+            
+            const settlementTicket = await this.zendesk.createSettlementPlanTicket(
+                zendeskUser.id, 
+                clientData, 
+                settlementData,
+                creditors
+            );
+
+            console.log(`✅ Settlement plan ticket created: ${settlementTicket.subject} (ID: ${settlementTicket.id})`);
+
+            // Step 6: Send Side Conversation emails with settlement plan to each creditor
+            const sideConversationResults = await this.sendSettlementPlanEmailsViaSideConversations(
+                settlementTicket.id,
+                creditors,
+                clientData,
+                settlementData
+            );
+
+            const successfulEmails = sideConversationResults.filter(r => r.success);
+
+            // Step 7: Add status update to settlement ticket
+            const statusUpdates = sideConversationResults.map(result => ({
+                creditor_name: result.creditor_name,
+                creditor_email: result.recipient_email,
+                status: result.success ? 'Schuldenbereinigungsplan E-Mail versendet' : `Fehler: ${result.error}`,
+                success: result.success
+            }));
+
+            await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
+
+            console.log(`✅ Settlement plan distribution completed:`);
+            console.log(`   - Settlement ticket created: 1`);
+            console.log(`   - Emails sent: ${successfulEmails.length}/${creditors.length}`);
+
+            return {
+                success: true,
+                client_reference: clientReference,
+                zendesk_user_id: zendeskUser.id,
+                settlement_ticket_id: settlementTicket.id,
+                settlement_ticket_subject: settlementTicket.subject,
+                emails_sent: successfulEmails.length,
+                total_creditors: creditors.length,
+                side_conversation_results: sideConversationResults,
+                processing_timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('❌ Error in sendSettlementPlanToCreditors:', error.message);
+            return {
+                success: false,
+                client_reference: clientReference,
+                error: error.message,
+                processing_timestamp: new Date().toISOString()
+            };
+        }
+    }
+
+    /**
+     * Send settlement plan emails via Side Conversations
+     */
+    async sendSettlementPlanEmailsViaSideConversations(settlementTicketId, creditors, clientData, settlementData) {
+        const sideConversationResults = [];
+        
+        for (let i = 0; i < creditors.length; i++) {
+            const creditor = creditors[i];
+            const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
+            
+            try {
+                console.log(`📧 Creating Settlement Plan Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
+                
+                // Send Side Conversation email with settlement plan
+                const result = await this.zendesk.sendSettlementPlanEmailViaTicket(
+                    settlementTicketId,
+                    creditor,
+                    clientData,
+                    settlementData
+                );
+
+                sideConversationResults.push({
+                    creditor_id: creditor.id,
+                    creditor_name: creditorName,
+                    settlement_ticket_id: settlementTicketId,
+                    side_conversation_id: result.side_conversation_id,
+                    success: result.success,
+                    recipient_email: result.recipient_email,
+                    subject: result.subject
+                });
+
+                // Wait 3 seconds between Side Conversations to avoid rate limits
+                if (i < creditors.length - 1) {
+                    console.log(`⏰ Waiting 3 seconds before next Side Conversation...`);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                }
+
+            } catch (error) {
+                console.error(`❌ Failed to create Settlement Plan Side Conversation for ${creditorName}:`, error.message);
+                
+                sideConversationResults.push({
+                    creditor_id: creditor.id,
+                    creditor_name: creditorName,
+                    settlement_ticket_id: settlementTicketId,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        return sideConversationResults;
+    }
 }
 
 module.exports = CreditorContactService;
