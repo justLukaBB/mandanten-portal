@@ -5541,8 +5541,143 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
   }
 });
 
+// Reset client data endpoint (client-accessible endpoint)
+app.post('/api/clients/:clientId/reset-financial-data', authenticateClient, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    console.log(`🔄 Resetting financial data for client: ${clientId}`);
+    
+    // Find and reset client data
+    const Client = require('./models/Client');
+    const client = await Client.findOne({ 
+      $or: [
+        { _id: clientId },
+        { aktenzeichen: clientId }
+      ]
+    });
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Reset all financial and settlement data
+    client.financial_data = null;
+    client.debt_settlement_plan = null;
+    client.calculated_settlement_plan = null;
+    client.creditor_calculation_table = null;
+    client.creditor_contact_started = false;
+    client.creditor_contact_started_at = null;
+    client.settlement_plan_sent_at = null;
+    
+    await client.save();
+    
+    console.log(`✅ Client data reset successfully for ${client.aktenzeichen}`);
+    
+    res.json({
+      success: true,
+      message: 'Client data reset successfully',
+      client_reference: client.aktenzeichen
+    });
+    
+  } catch (error) {
+    console.error('❌ Error resetting client data:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Reset financial data for a client (client-accessible endpoint)
+app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    console.log(`🔄 Client requesting financial data reset: ${clientId}`);
+    console.log(`🔐 Authenticated client ID: ${req.clientId}`);
+    
+    // Get the client to verify authentication
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Verify that the authenticated client matches the requested client
+    const isAuthorized = req.clientId === client.id || 
+                        req.clientId === client.aktenzeichen || 
+                        req.clientId === clientId;
+    
+    if (!isAuthorized) {
+      console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
+      return res.status(403).json({ error: 'Access denied - client ID mismatch' });
+    }
+    
+    // Check if financial data exists
+    if (!client.financial_data || !client.financial_data.client_form_filled) {
+      return res.status(400).json({ 
+        error: 'No financial data to reset',
+        message: 'Financial form has not been submitted yet'
+      });
+    }
+    
+    // Reset financial data using safeClientUpdate
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      // Reset financial data to null but keep historical record
+      const previousData = { ...client.financial_data };
+      
+      client.financial_data = {
+        client_form_filled: false,
+        form_reset_at: new Date(),
+        previous_data: previousData,
+        reset_count: (client.financial_data.reset_count || 0) + 1
+      };
+      
+      // Add note to admin_notes if it exists
+      if (!client.admin_notes) {
+        client.admin_notes = [];
+      }
+      client.admin_notes.push({
+        timestamp: new Date().toISOString(),
+        note: `💰 Client reset financial data form (reset #${(client.financial_data.reset_count || 0) + 1})`,
+        admin: 'client_self_reset'
+      });
+      
+      return client;
+    });
+    
+    if (!updatedClient) {
+      return res.status(404).json({ error: 'Client not found during update' });
+    }
+    
+    console.log(`✅ Financial data reset for ${updatedClient.aktenzeichen}`);
+    console.log(`   Previous garnishable amount: €${updatedClient.financial_data.previous_data?.garnishable_amount || 0}/month`);
+    console.log(`   Reset count: ${updatedClient.financial_data.reset_count}`);
+    
+    res.json({
+      success: true,
+      message: 'Financial data has been reset successfully',
+      client_id: updatedClient.id,
+      aktenzeichen: updatedClient.aktenzeichen,
+      reset_info: {
+        reset_at: updatedClient.financial_data.form_reset_at,
+        reset_count: updatedClient.financial_data.reset_count,
+        previous_garnishable_amount: updatedClient.financial_data.previous_data?.garnishable_amount || 0,
+        can_resubmit: true
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error resetting client financial data:', error.message);
+    res.status(500).json({
+      error: 'Failed to reset financial data',
+      details: error.message
+    });
+  }
+});
+
 // Test agent creation endpoint (for development only)
-app.post('/api/test/create-agent', async (req, res) => {
+app.post('/api/test/create-agent', async (_req, res) => {
   try {
     const Agent = require('./models/Agent');
     const bcrypt = require('bcryptjs');
