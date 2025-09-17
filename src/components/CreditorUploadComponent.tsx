@@ -12,6 +12,7 @@ interface CreditorUploadComponentProps {
   client: Client | null;
   onUploadComplete: (documents: any[]) => void;
   showingCreditorConfirmation: boolean;
+  documents: any[]
 }
 
 interface UploadedFile {
@@ -21,7 +22,7 @@ interface UploadedFile {
   status: 'uploading' | 'completed' | 'error';
 }
 
-const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ client, onUploadComplete, showingCreditorConfirmation }) => {
+const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ client, onUploadComplete, showingCreditorConfirmation, documents }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -37,13 +38,13 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
     // Check file type
     const allowedTypes = [
       'application/pdf',
-      'image/jpeg', 
+      'image/jpeg',
       'image/jpg',
       'image/png',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
-    
+
     if (!allowedTypes.includes(file.type)) {
       return `Dateityp "${file.type}" wird nicht unterstützt. Erlaubte Formate: PDF, JPG, PNG, DOC, DOCX`;
     }
@@ -104,7 +105,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
     console.log('Upload: Client ID:', client?.id);
     console.log('Upload: Client Aktenzeichen:', client?.aktenzeichen);
     console.log('Upload: Client _id:', client?._id);
-    
+
     // Show debug info to user temporarily
     if (!client?.id && !client?.aktenzeichen && !client?._id) {
       alert('Debug: Kein Client-Objekt verfügbar! Client: ' + JSON.stringify(client));
@@ -112,14 +113,14 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
     try {
       const xhr = new XMLHttpRequest();
-      
+
       // Track upload progress
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
           const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadedFiles(prev => 
-            prev.map(f => 
-              f.id === uploadedFile.id 
+          setUploadedFiles(prev =>
+            prev.map(f =>
+              f.id === uploadedFile.id
                 ? { ...f, progress }
                 : f
             )
@@ -130,9 +131,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
       xhr.addEventListener('load', () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText);
-          setUploadedFiles(prev => 
-            prev.map(f => 
-              f.id === uploadedFile.id 
+          setUploadedFiles(prev =>
+            prev.map(f =>
+              f.id === uploadedFile.id
                 ? { ...f, progress: 100, status: 'completed' as const }
                 : f
             )
@@ -152,13 +153,13 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
           } catch (e) {
             // Use default message if JSON parsing fails
           }
-          
+
           console.error('Upload failed:', errorMessage);
           alert(`Upload Fehler: ${errorMessage}`);
-          
-          setUploadedFiles(prev => 
-            prev.map(f => 
-              f.id === uploadedFile.id 
+
+          setUploadedFiles(prev =>
+            prev.map(f =>
+              f.id === uploadedFile.id
                 ? { ...f, status: 'error' as const }
                 : f
             )
@@ -167,36 +168,36 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
       });
 
       xhr.addEventListener('error', () => {
-        setUploadedFiles(prev => 
-          prev.map(f => 
-            f.id === uploadedFile.id 
+        setUploadedFiles(prev =>
+          prev.map(f =>
+            f.id === uploadedFile.id
               ? { ...f, status: 'error' as const }
-            : f
+              : f
           )
         );
       });
 
       // Use client ID, aktenzeichen, or _id as fallback
       const clientIdentifier = client?.id || client?.aktenzeichen || client?._id;
-      
+
       if (!clientIdentifier) {
         throw new Error('Keine gültige Client-ID verfügbar. Bitte melden Sie sich erneut an.');
       }
-      
+
       xhr.open('POST', `${API_BASE_URL}/api/clients/${clientIdentifier}/documents`);
       xhr.send(formData);
 
     } catch (error) {
       console.error('Upload error:', error);
-      
+
       // Show specific error message to user
       if (error instanceof Error && error.message.includes('Client-ID')) {
         alert('Fehler: ' + error.message);
       }
-      
-      setUploadedFiles(prev => 
-        prev.map(f => 
-          f.id === uploadedFile.id 
+
+      setUploadedFiles(prev =>
+        prev.map(f =>
+          f.id === uploadedFile.id
             ? { ...f, status: 'error' as const }
             : f
         )
@@ -251,11 +252,10 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          isDragOver 
-            ? 'border-blue-400 bg-blue-50' 
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragOver
+            ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400'
-        }`}
+          }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -273,7 +273,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         <p className="text-xs text-gray-500">
           Unterstützte Formate: PDF, JPG, PNG, DOC, DOCX (max. 10MB)
         </p>
-        
+
         <input
           ref={fileInputRef}
           type="file"
@@ -288,7 +288,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (
         <div className="mt-6 space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">Hochgeladene Dateien</h4>
+          <h4 className="text-sm font-medium text-gray-900">Aktuell hochgeladene Dateien</h4>
           {uploadedFiles.map((uploadedFile) => (
             <div key={uploadedFile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center flex-1 min-w-0">
@@ -300,10 +300,10 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                   <p className="text-xs text-gray-500">
                     {formatFileSize(uploadedFile.file.size)}
                   </p>
-                  
+
                   {uploadedFile.status === 'uploading' && (
                     <div className="mt-1 w-full bg-gray-200 rounded-full h-1">
-                      <div 
+                      <div
                         className="bg-red-800 h-1 rounded-full transition-all duration-300"
                         style={{ width: `${uploadedFile.progress}%` }}
                       />
@@ -311,7 +311,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                   )}
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-2 ml-4">
                 {uploadedFile.status === 'completed' && (
                   <CheckCircleIcon className="w-5 h-5 text-green-500" />
@@ -337,6 +337,30 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {documents.length > 0 && (
+        <div className="mt-6 space-y-3">
+          <h4 className="text-sm font-medium text-gray-900">Zuvor hochgeladene Dokumentes</h4>
+          {documents
+            .filter((doc) => !uploadedFiles.some((file) => file.file.name ===  doc.filename)) // skip current files
+            .map((document) => (
+              <div key={document.extracted_data?.document_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center flex-1 min-w-0">
+                  <DocumentIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {document.extracted_data?.original_name}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 ml-4">
+                  <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+            ))}
         </div>
       )}
     </div>
