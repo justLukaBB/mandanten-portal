@@ -657,13 +657,16 @@ Status updates will be posted to this ticket as emails are sent.
             });
             
             console.log(`✅ Created creditor settlement ticket: ${response.data.ticket.id} for ${creditorName}`);
+            console.log(`👤 Ticket requester: ${response.data.ticket.requester?.email || 'Unknown'}`);
+            console.log(`📧 Notifications should be sent to: ${creditorEmail}`);
             
             return {
                 success: true,
                 ticket_id: response.data.ticket.id,
                 ticket_url: response.data.ticket.url,
                 creditor_name: creditorName,
-                creditor_email: creditorEmail
+                creditor_email: creditorEmail,
+                requester_email: response.data.ticket.requester?.email
             };
             
         } catch (error) {
@@ -709,7 +712,7 @@ Bei Fragen zu den Dokumenten kontaktieren Sie bitte unser Büro.
 ---
 Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
             
-            // Create public comment that should trigger email notification
+            // Create public comment with forced email notification
             const commentData = {
                 ticket: {
                     comment: {
@@ -724,9 +727,24 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
                 }
             };
             
+            // First, verify the ticket requester before adding comment
+            const ticketCheck = await axios.get(`${this.apiUrl}tickets/${ticketId}.json`, {
+                auth: this.auth,
+                headers: this.headers
+            });
+            
+            const actualRequester = ticketCheck.data.ticket.requester?.email;
+            console.log(`🔍 Verifying ticket ${ticketId} requester: ${actualRequester}`);
+            console.log(`🎯 Expected requester: ${creditorEmail}`);
+            
+            if (actualRequester !== creditorEmail) {
+                console.warn(`⚠️ Requester mismatch! Expected ${creditorEmail}, got ${actualRequester}`);
+            }
+            
             console.log(`📧 Creating public comment with ${uploadTokens.length} attachments for ${creditorEmail}`);
             
-            const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json`, commentData, {
+            // Add the comment with notifications enabled
+            const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json?notify=true`, commentData, {
                 auth: this.auth,
                 headers: this.headers
             });
