@@ -638,8 +638,8 @@ Status updates will be posted to this ticket as emails are sent.
                 contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
             });
             
-            // Upload to Side Conversation attachments endpoint
-            const uploadUrl = `${this.apiUrl}side_conversations/attachments.json`;
+            // Upload to regular Zendesk uploads endpoint 
+            const uploadUrl = `${this.apiUrl}uploads.json?filename=${encodeURIComponent(filename)}`;
             
             const response = await axios.post(uploadUrl, formData, {
                 auth: this.auth,
@@ -651,13 +651,13 @@ Status updates will be posted to this ticket as emails are sent.
             });
             
             console.log(`✅ File uploaded for Side Conversation: ${filename}`);
-            console.log(`🎫 Attachment ID: ${response.data.attachment.id}`);
+            console.log(`🎫 Upload Token: ${response.data.upload.token}`);
             
             return {
                 success: true,
-                attachment_id: response.data.attachment.id,
+                attachment_id: response.data.upload.token,
                 filename: filename,
-                size: response.data.attachment.size
+                size: response.data.upload.size
             };
             
         } catch (error) {
@@ -782,8 +782,8 @@ Status updates will be posted to this ticket as emails are sent.
                     ],
                     subject: emailSubject,
                     body: emailBody,
-                    // Add uploaded documents as attachments using proper format
-                    attachment_ids: attachmentIds
+                    // Add uploaded documents as attachments using upload tokens
+                    uploads: attachmentIds
                 }
             };
 
