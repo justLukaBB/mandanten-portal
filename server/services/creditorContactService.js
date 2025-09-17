@@ -846,28 +846,33 @@ class CreditorContactService {
 
             console.log(`✅ Settlement plan ticket created: ${settlementTicket.subject} (ID: ${settlementTicket.id})`);
 
-            // Step 6: Send Side Conversation emails with settlement plan to each creditor
-            const sideConversationResults = await this.sendSettlementPlanEmailsViaSideConversations(
+            // Step 6: Send emails via individual creditor tickets with attachments
+            const emailResults = await this.sendSettlementPlanEmailsViaSideConversations(
                 settlementTicket.id,
                 creditors,
                 clientData,
                 settlementData
             );
 
-            const successfulEmails = sideConversationResults.filter(r => r.success);
+            const successfulEmails = emailResults.filter(r => r.success && r.email_sent);
 
             // Step 7: Add status update to settlement ticket
-            const statusUpdates = sideConversationResults.map(result => ({
+            const statusUpdates = emailResults.map(result => ({
                 creditor_name: result.creditor_name,
                 creditor_email: result.recipient_email,
-                status: result.success ? 'Schuldenbereinigungsplan E-Mail versendet' : `Fehler: ${result.error}`,
-                success: result.success
+                creditor_ticket_id: result.creditor_ticket_id,
+                attachments_count: result.attachments_count || 0,
+                status: result.success && result.email_sent ? 
+                    `Schuldenbereinigungsplan E-Mail versendet (Ticket: ${result.creditor_ticket_id})` : 
+                    `Fehler: ${result.error}`,
+                success: result.success && result.email_sent
             }));
 
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
             console.log(`✅ Settlement plan distribution completed:`);
-            console.log(`   - Settlement ticket created: 1`);
+            console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
+            console.log(`   - Individual creditor tickets created: ${emailResults.filter(r => r.creditor_ticket_id).length}`);
             console.log(`   - Emails sent: ${successfulEmails.length}/${creditors.length}`);
 
             return {
@@ -878,7 +883,8 @@ class CreditorContactService {
                 settlement_ticket_subject: settlementTicket.subject,
                 emails_sent: successfulEmails.length,
                 total_creditors: creditors.length,
-                side_conversation_results: sideConversationResults,
+                creditor_tickets_created: emailResults.filter(r => r.creditor_ticket_id).length,
+                email_results: emailResults,
                 processing_timestamp: new Date().toISOString()
             };
 
@@ -894,19 +900,19 @@ class CreditorContactService {
     }
 
     /**
-     * Send settlement plan emails via Side Conversations
+     * Send settlement plan emails via individual creditor tickets
      */
     async sendSettlementPlanEmailsViaSideConversations(settlementTicketId, creditors, clientData, settlementData) {
-        const sideConversationResults = [];
+        const emailResults = [];
         
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
             const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
             
             try {
-                console.log(`📧 Creating Settlement Plan Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
+                console.log(`📧 Creating individual creditor ticket and email ${i + 1}/${creditors.length} for ${creditorName}...`);
                 
-                // Send Side Conversation email with settlement plan
+                // Create individual ticket and send email with attachments
                 const result = await this.zendesk.sendSettlementPlanEmailViaTicket(
                     settlementTicketId,
                     creditor,
@@ -914,36 +920,40 @@ class CreditorContactService {
                     settlementData
                 );
 
-                sideConversationResults.push({
+                emailResults.push({
                     creditor_id: creditor.id,
                     creditor_name: creditorName,
-                    settlement_ticket_id: settlementTicketId,
-                    side_conversation_id: result.side_conversation_id,
+                    main_ticket_id: settlementTicketId,
+                    creditor_ticket_id: result.creditor_ticket_id,
                     success: result.success,
                     recipient_email: result.recipient_email,
-                    subject: result.subject
+                    subject: result.subject,
+                    attachments_count: result.attachments_count || 0,
+                    method: result.method,
+                    email_sent: result.email_sent
                 });
 
-                // Wait 3 seconds between Side Conversations to avoid rate limits
+                // Wait 2 seconds between emails to avoid rate limits
                 if (i < creditors.length - 1) {
-                    console.log(`⏰ Waiting 3 seconds before next Side Conversation...`);
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    console.log(`⏰ Waiting 2 seconds before next creditor email...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }
 
             } catch (error) {
-                console.error(`❌ Failed to create Settlement Plan Side Conversation for ${creditorName}:`, error.message);
+                console.error(`❌ Failed to create creditor ticket and email for ${creditorName}:`, error.message);
                 
-                sideConversationResults.push({
+                emailResults.push({
                     creditor_id: creditor.id,
                     creditor_name: creditorName,
-                    settlement_ticket_id: settlementTicketId,
+                    main_ticket_id: settlementTicketId,
                     success: false,
-                    error: error.message
+                    error: error.message,
+                    email_sent: false
                 });
             }
         }
 
-        return sideConversationResults;
+        return emailResults;
     }
 }
 
