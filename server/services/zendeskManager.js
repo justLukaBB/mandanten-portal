@@ -617,6 +617,117 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
+     * Create individual ticket for creditor settlement plan
+     */
+    async createCreditorSettlementTicket(creditorData, clientData, settlementData, creditorEmail) {
+        try {
+            const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
+            const subject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
+            
+            // Create ticket with creditor as requester
+            const ticketData = {
+                ticket: {
+                    subject: subject,
+                    comment: {
+                        body: `Schuldenbereinigungsplan für Mandant: ${clientData.name || 'N/A'}\nAktenzeichen: ${clientData.reference || 'N/A'}\nGläubiger: ${creditorName}`,
+                        public: false // Initial comment is internal
+                    },
+                    requester: {
+                        email: creditorEmail,
+                        name: creditorName
+                    },
+                    status: 'open',
+                    priority: 'normal',
+                    type: 'task',
+                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication']
+                }
+            };
+            
+            const response = await axios.post(`${this.apiUrl}tickets.json`, ticketData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+            
+            console.log(`✅ Created creditor settlement ticket: ${response.data.ticket.id} for ${creditorName}`);
+            
+            return {
+                success: true,
+                ticket_id: response.data.ticket.id,
+                ticket_url: response.data.ticket.url,
+                creditor_name: creditorName,
+                creditor_email: creditorEmail
+            };
+            
+        } catch (error) {
+            console.error(`❌ Error creating creditor settlement ticket:`, error.message);
+            if (error.response?.data) {
+                console.error(`Ticket creation error details:`, error.response.data);
+            }
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Send email to creditor via public comment with attachments
+     */
+    async sendCreditorEmailWithAttachments(ticketId, creditorEmail, creditorName, subject, emailBody, attachmentPaths) {
+        try {
+            console.log(`📧 Sending email to ${creditorEmail} via public comment on ticket ${ticketId}`);
+            
+            // Upload all files first
+            const uploadTokens = [];
+            for (const filePath of attachmentPaths) {
+                const filename = require('path').basename(filePath);
+                const uploadResult = await this.uploadFileToZendesk(filePath, filename);
+                if (uploadResult.success) {
+                    uploadTokens.push(uploadResult.token);
+                    console.log(`✅ Uploaded ${filename}: ${uploadResult.token}`);
+                }
+            }
+            
+            // Create public comment with attachments (this sends email)
+            const commentData = {
+                ticket: {
+                    comment: {
+                        body: emailBody,
+                        uploads: uploadTokens,
+                        public: true, // Public comment sends email to requester
+                        author_id: null // Use default agent
+                    }
+                }
+            };
+            
+            const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json`, commentData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+            
+            console.log(`✅ Email sent to ${creditorEmail} with ${uploadTokens.length} attachments`);
+            
+            return {
+                success: true,
+                comment_id: response.data.audit?.id,
+                attachments_count: uploadTokens.length,
+                recipient_email: creditorEmail,
+                ticket_id: ticketId
+            };
+            
+        } catch (error) {
+            console.error(`❌ Error sending email to ${creditorEmail}:`, error.message);
+            if (error.response?.data) {
+                console.error(`Email sending error details:`, error.response.data);
+            }
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * Create ticket comment with attachments (more reliable than Side Conversations)
      */
     async addTicketCommentWithAttachments(ticketId, comment, attachmentPaths) {
@@ -722,9 +833,9 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Send settlement plan email via Side Conversation with attachments
+     * Create individual ticket for creditor and send settlement plan email via public comment
      */
-    async sendSettlementPlanEmailViaTicket(ticketId, creditorData, clientData, settlementData) {
+    async sendSettlementPlanEmailViaTicket(mainTicketId, creditorData, clientData, settlementData) {
         // Use test email for now
         const testEmail = 'justlukax@gmail.com';
         const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
@@ -732,7 +843,17 @@ Status updates will be posted to this ticket as emails are sent.
         const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
         
         try {
-            console.log(`📧 Creating Settlement Plan Side Conversation to send to ${testEmail}...`);
+            console.log(`🎫 Creating individual ticket for creditor: ${creditorName}`);
+            
+            // Create individual ticket for this creditor
+            const creditorTicket = await this.createCreditorSettlementTicket(creditorData, clientData, settlementData, testEmail);
+            
+            if (!creditorTicket.success) {
+                throw new Error(`Failed to create creditor ticket: ${creditorTicket.error}`);
+            }
+            
+            const creditorTicketId = creditorTicket.ticket_id;
+            console.log(`✅ Created creditor ticket: ${creditorTicketId}`);
             
             // Upload settlement plan and creditor overview documents
             const path = require('path');
@@ -746,13 +867,8 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`   Settlement Plan: ${settlementPlanFile}`);
             console.log(`   Creditor Overview: ${creditorOverviewFile}`);
             
-            // Upload documents and collect attachment IDs
-            const attachmentIds = [];
-            
-            // Add documents as ticket comment with attachments
-            const attachmentPaths = [];
-            
             // Check if files exist and add to attachment list
+            const attachmentPaths = [];
             const fs = require('fs');
             if (fs.existsSync(settlementPlanFile)) {
                 attachmentPaths.push(settlementPlanFile);
@@ -768,41 +884,38 @@ Status updates will be posted to this ticket as emails are sent.
                 console.warn(`⚠️ Forderungsübersicht not found: ${creditorOverviewFile}`);
             }
             
-            // Create detailed ticket comment with attachments
-            const ticketComment = `📄 SCHULDENBEREINIGUNGSPLAN - ${creditorName}
+            // Send public comment with attachments (this will email the creditor)
+            const emailResult = await this.sendCreditorEmailWithAttachments(
+                creditorTicketId, 
+                testEmail, 
+                creditorName,
+                emailSubject,
+                emailBody,
+                attachmentPaths
+            );
             
-Gläubiger-E-Mail: ${testEmail}
-Mandant: ${clientData.name || 'N/A'} (Az: ${clientData.reference || 'N/A'})
-
-${emailBody}
-
-📎 Anhänge: ${attachmentPaths.length} Dokumente
-- Schuldenbereinigungsplan
-- Forderungsübersicht
-
-Status: Dokumente zur manuellen Weiterleitung bereit ✅`;
-
-            // Add ticket comment with attachments
-            const commentResult = await this.addTicketCommentWithAttachments(ticketId, ticketComment, attachmentPaths);
+            if (!emailResult.success) {
+                throw new Error(`Failed to send email: ${emailResult.error}`);
+            }
             
-            console.log(`✅ Settlement Plan documents added to ticket ${ticketId}`);
-            console.log(`📧 Manual forwarding to: ${testEmail} (${creditorName})`);
-            console.log(`📎 Attachments included: ${commentResult.attachments_count || 0} documents`);
+            console.log(`✅ Settlement Plan email sent to: ${testEmail} (${creditorName})`);
+            console.log(`📎 Attachments included: ${emailResult.attachments_count || 0} documents`);
             
             return {
                 success: true,
-                ticket_id: ticketId,
-                comment_id: commentResult.comment_id,
+                main_ticket_id: mainTicketId,
+                creditor_ticket_id: creditorTicketId,
+                comment_id: emailResult.comment_id,
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                attachments_count: commentResult.attachments_count || 0,
-                method: 'ticket_comment_with_attachments',
-                documents_ready: true
+                attachments_count: emailResult.attachments_count || 0,
+                method: 'individual_ticket_with_email',
+                email_sent: true
             };
 
         } catch (error) {
-            console.error(`❌ Error creating Settlement Plan Side Conversation for ticket ${ticketId}:`, error.message);
+            console.error(`❌ Error creating Settlement Plan email for creditor ${creditorName}:`, error.message);
             
             // Fallback to adding manual instruction comment if Side Conversation fails
             const fallbackComment = `❌ Automatische E-Mail-Versendung für Schuldenbereinigungsplan fehlgeschlagen an ${creditorName}\n\nBitte manuell senden an: ${testEmail}\nBetreff: ${emailSubject}\n\nFehler: ${error.message}`;
