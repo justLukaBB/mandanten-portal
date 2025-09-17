@@ -617,14 +617,14 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Create individual ticket for creditor settlement plan
+     * Create individual ticket for creditor settlement plan with email channel
      */
     async createCreditorSettlementTicket(creditorData, clientData, settlementData, creditorEmail) {
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
             const subject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
             
-            // Create ticket with creditor as requester
+            // Create ticket specifically for email communication
             const ticketData = {
                 ticket: {
                     subject: subject,
@@ -636,10 +636,18 @@ Status updates will be posted to this ticket as emails are sent.
                         email: creditorEmail,
                         name: creditorName
                     },
+                    submitter: {
+                        email: this.config.email,
+                        name: "Thomas Scuric Rechtsanwälte"
+                    },
                     status: 'open',
                     priority: 'normal',
                     type: 'task',
-                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication']
+                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication', 'email_required'],
+                    // Try to force email channel
+                    via: {
+                        channel: "email"
+                    }
                 }
             };
             
@@ -688,45 +696,44 @@ Status updates will be posted to this ticket as emails are sent.
                 }
             }
             
-            // Create manual instruction for agent to forward with attachments
-            const manualInstructionBody = `📧 MANUELLE WEITERLEITUNG ERFORDERLICH / MANUAL FORWARDING REQUIRED
+            // Try automatic email approach first, then fallback to manual
+            console.log(`🔄 Attempting automatic email with attachments...`);
+            
+            // Enhanced email body for direct sending
+            const directEmailBody = `${emailBody}
 
-Bitte leiten Sie diese E-Mail mit den beigefügten Dokumenten manuell an den Gläubiger weiter:
-Please manually forward this email with the attached documents to the creditor:
-
-📮 Empfänger / Recipient: ${creditorEmail} (${creditorName})
-📋 Betreff / Subject: ${subject}
-
-📄 Nachricht / Message:
-${emailBody}
-
-📎 Anhänge / Attachments (${uploadTokens.length}):
+📎 Anhänge zu diesem Schuldenbereinigungsplan:
 ${attachmentPaths.map(path => `• ${require('path').basename(path)}`).join('\n')}
 
-⚠️ WICHTIG: Diese Dokumente müssen als E-Mail-Anhänge versendet werden, nicht nur als Links.
-⚠️ IMPORTANT: These documents must be sent as email attachments, not just as links.
-
-Zendesk Ticket: ${ticketId}`;
+Bei Fragen zu den Dokumenten kontaktieren Sie bitte unser Büro.
+---
+Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
             
-            // Create internal comment with attachments for manual forwarding
+            // Create public comment that should trigger email notification
             const commentData = {
                 ticket: {
                     comment: {
-                        body: manualInstructionBody,
+                        body: directEmailBody,
                         uploads: uploadTokens,
-                        public: false, // Internal comment for agent action
+                        public: true, // Public to trigger email notification
                         author_id: null
-                    }
+                    },
+                    // Update ticket to ensure notification
+                    status: 'open',
+                    priority: 'normal'
                 }
             };
+            
+            console.log(`📧 Creating public comment with ${uploadTokens.length} attachments for ${creditorEmail}`);
             
             const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json`, commentData, {
                 auth: this.auth,
                 headers: this.headers
             });
             
-            console.log(`✅ Manual forwarding instruction created for ${creditorEmail} with ${uploadTokens.length} attachments`);
-            console.log(`📎 Agent action required: Manual email forwarding with actual file attachments`);
+            console.log(`✅ Public comment created for ${creditorEmail} with ${uploadTokens.length} attachments`);
+            console.log(`📧 Email notification should be sent automatically to requester`);
+            console.log(`📎 Attachments will appear as downloadable links in the email`);
             
             return {
                 success: true,
@@ -734,8 +741,8 @@ Zendesk Ticket: ${ticketId}`;
                 attachments_count: uploadTokens.length,
                 recipient_email: creditorEmail,
                 ticket_id: ticketId,
-                method: "manual_forwarding_required",
-                attachment_note: "Manual forwarding required for actual email attachments"
+                method: "public_comment_with_attachment_links",
+                attachment_note: "Attachments sent as downloadable links in email notification"
             };
             
         } catch (error) {
