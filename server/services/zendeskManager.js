@@ -688,14 +688,34 @@ Status updates will be posted to this ticket as emails are sent.
                 }
             }
             
-            // Create public comment with attachments (this sends email)
+            // Create manual instruction for agent to forward with attachments
+            const manualInstructionBody = `📧 MANUELLE WEITERLEITUNG ERFORDERLICH / MANUAL FORWARDING REQUIRED
+
+Bitte leiten Sie diese E-Mail mit den beigefügten Dokumenten manuell an den Gläubiger weiter:
+Please manually forward this email with the attached documents to the creditor:
+
+📮 Empfänger / Recipient: ${creditorEmail} (${creditorName})
+📋 Betreff / Subject: ${subject}
+
+📄 Nachricht / Message:
+${emailBody}
+
+📎 Anhänge / Attachments (${uploadTokens.length}):
+${attachmentPaths.map(path => `• ${require('path').basename(path)}`).join('\n')}
+
+⚠️ WICHTIG: Diese Dokumente müssen als E-Mail-Anhänge versendet werden, nicht nur als Links.
+⚠️ IMPORTANT: These documents must be sent as email attachments, not just as links.
+
+Zendesk Ticket: ${ticketId}`;
+            
+            // Create internal comment with attachments for manual forwarding
             const commentData = {
                 ticket: {
                     comment: {
-                        body: emailBody,
+                        body: manualInstructionBody,
                         uploads: uploadTokens,
-                        public: true, // Public comment sends email to requester
-                        author_id: null // Use default agent
+                        public: false, // Internal comment for agent action
+                        author_id: null
                     }
                 }
             };
@@ -705,14 +725,17 @@ Status updates will be posted to this ticket as emails are sent.
                 headers: this.headers
             });
             
-            console.log(`✅ Email sent to ${creditorEmail} with ${uploadTokens.length} attachments`);
+            console.log(`✅ Manual forwarding instruction created for ${creditorEmail} with ${uploadTokens.length} attachments`);
+            console.log(`📎 Agent action required: Manual email forwarding with actual file attachments`);
             
             return {
                 success: true,
                 comment_id: response.data.audit?.id,
                 attachments_count: uploadTokens.length,
                 recipient_email: creditorEmail,
-                ticket_id: ticketId
+                ticket_id: ticketId,
+                method: "manual_forwarding_required",
+                attachment_note: "Manual forwarding required for actual email attachments"
             };
             
         } catch (error) {
