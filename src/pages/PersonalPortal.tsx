@@ -221,9 +221,10 @@ export const PersonalPortal = ({
   }, [clientId]);
 
   // Handle upload complete
-  const handleUploadComplete = (newDocuments: any) => {
+  const handleUploadComplete = (newDocuments: any) => {    
     // Add new documents to existing documents list
-    setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
+    // setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
+    refreshDocuments()
   };
 
   // Handle financial form submission
@@ -328,6 +329,7 @@ export const PersonalPortal = ({
                 client={client} 
                 onUploadComplete={handleUploadComplete} 
                 showingCreditorConfirmation={showingCreditorConfirmation}
+                documents={documents}
               />
             </div>
             
