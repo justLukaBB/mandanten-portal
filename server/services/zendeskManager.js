@@ -917,23 +917,15 @@ Status updates will be posted to this ticket as emails are sent.
         } catch (error) {
             console.error(`❌ Error creating Settlement Plan email for creditor ${creditorName}:`, error.message);
             
-            // Fallback to adding manual instruction comment if Side Conversation fails
-            const fallbackComment = `❌ Automatische E-Mail-Versendung für Schuldenbereinigungsplan fehlgeschlagen an ${creditorName}\n\nBitte manuell senden an: ${testEmail}\nBetreff: ${emailSubject}\n\nFehler: ${error.message}`;
-            
-            try {
-                await this.addTicketComment(ticketId, fallbackComment, false);
-            } catch (commentError) {
-                console.error('❌ Failed to add fallback comment:', commentError.message);
-            }
-            
             return {
                 success: false,
                 error: error.message,
-                ticket_id: ticketId,
+                main_ticket_id: mainTicketId,
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                manual_action_required: true
+                method: 'individual_ticket_with_email',
+                email_sent: false
             };
         }
     }
