@@ -617,15 +617,15 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Create individual ticket for creditor settlement plan with email channel
+     * Create ticket AND send email with attachments to creditor in one API call
      */
-    async createCreditorSettlementTicket(creditorData, clientData, settlementData, creditorEmail) {
+    async createCreditorSettlementTicket(creditorData, clientData, settlementData, creditorEmail, attachmentTokens = [], emailBody = '') {
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
             const subject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
             
-            // Create ticket specifically for email communication
-            const ticketData = {
+            // Step 1: Create ticket with minimal initial comment
+            const initialTicketData = {
                 ticket: {
                     subject: subject,
                     comment: {
@@ -638,57 +638,91 @@ Status updates will be posted to this ticket as emails are sent.
                     },
                     submitter: {
                         email: this.config.email,
-                        name: "Thomas Scuric Rechtsanwälte"
+                        name: "Thomas Scuric Rechtsanwälte"  
                     },
                     status: 'open',
                     priority: 'normal',
                     type: 'task',
-                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication', 'email_required'],
-                    // Try to force email channel
-                    via: {
-                        channel: "email"
-                    }
+                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication']
                 }
             };
             
-            const response = await axios.post(`${this.apiUrl}tickets.json`, ticketData, {
+            console.log(`🎫 Step 1: Creating ticket for ${creditorEmail}`);
+            
+            // Create the ticket first
+            const ticketResponse = await axios.post(`${this.apiUrl}tickets.json`, initialTicketData, {
                 auth: this.auth,
                 headers: this.headers
             });
             
-            console.log(`✅ Created creditor settlement ticket: ${response.data.ticket.id} for ${creditorName}`);
-            console.log(`👤 Ticket requester: ${response.data.ticket.requester?.email || 'Unknown'}`);
-            console.log(`📧 Notifications should be sent to: ${creditorEmail}`);
+            const ticketId = ticketResponse.data.ticket.id;
+            console.log(`✅ Created ticket ${ticketId} for ${creditorName}`);
+            console.log(`👤 Ticket requester: ${ticketResponse.data.ticket.requester?.email || 'Unknown'}`);
+            
+            // Step 2: Add public comment with attachments to trigger email
+            console.log(`📧 Step 2: Adding public comment with ${attachmentTokens.length} attachments`);
+            
+            const publicCommentData = {
+                ticket: {
+                    comment: {
+                        body: emailBody || `Sehr geehrte Damen und Herren,
+
+im Anhang erhalten Sie den Schuldenbereinigungsplan für unseren Mandanten ${clientData.name || 'N/A'} (Az: ${clientData.reference || 'N/A'}).
+
+Bitte prüfen Sie die beigefügten Dokumente und teilen Sie uns Ihre Stellungnahme mit.
+
+Mit freundlichen Grüßen
+Thomas Scuric Rechtsanwälte`,
+                        public: true, // PUBLIC COMMENT SENDS EMAIL
+                        uploads: attachmentTokens,
+                        author_id: null
+                    }
+                }
+            };
+            
+            // Add public comment with explicit notification
+            const commentResponse = await axios.put(`${this.apiUrl}tickets/${ticketId}.json?notify_requester=true`, publicCommentData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+            
+            console.log(`✅ Added public comment to ticket ${ticketId}`);
+            console.log(`📧 Email notification should be sent to: ${creditorEmail}`);
+            console.log(`📎 Attachments included: ${attachmentTokens.length} documents`);
             
             return {
                 success: true,
-                ticket_id: response.data.ticket.id,
-                ticket_url: response.data.ticket.url,
+                ticket_id: ticketId,
+                ticket_url: ticketResponse.data.ticket.url,
                 creditor_name: creditorName,
                 creditor_email: creditorEmail,
-                requester_email: response.data.ticket.requester?.email
+                requester_email: ticketResponse.data.ticket.requester?.email,
+                email_sent: true,
+                attachments_count: attachmentTokens.length,
+                comment_id: commentResponse.data.audit?.id
             };
             
         } catch (error) {
-            console.error(`❌ Error creating creditor settlement ticket:`, error.message);
+            console.error(`❌ Error creating ticket with email for ${creditorEmail}:`, error.message);
             if (error.response?.data) {
                 console.error(`Ticket creation error details:`, error.response.data);
             }
             return {
                 success: false,
-                error: error.message
+                error: error.message,
+                email_sent: false
             };
         }
     }
 
     /**
-     * Send email to creditor via public comment with attachments
+     * Upload files and create ticket with email in one workflow
      */
-    async sendCreditorEmailWithAttachments(ticketId, creditorEmail, creditorName, subject, emailBody, attachmentPaths) {
+    async sendCreditorEmailWithAttachments(mainTicketId, creditorEmail, creditorName, subject, emailBody, attachmentPaths) {
         try {
-            console.log(`📧 Sending email to ${creditorEmail} via public comment on ticket ${ticketId}`);
+            console.log(`📧 Uploading files and sending email to ${creditorEmail}`);
             
-            // Upload all files first
+            // Step 1: Upload all files first to get tokens
             const uploadTokens = [];
             for (const filePath of attachmentPaths) {
                 const filename = require('path').basename(filePath);
@@ -698,75 +732,24 @@ Status updates will be posted to this ticket as emails are sent.
                     console.log(`✅ Uploaded ${filename}: ${uploadResult.token}`);
                 }
             }
-            
-            // Try automatic email approach first, then fallback to manual
-            console.log(`🔄 Attempting automatic email with attachments...`);
-            
-            // Enhanced email body for direct sending
-            const directEmailBody = `${emailBody}
 
-📎 Anhänge zu diesem Schuldenbereinigungsplan:
-${attachmentPaths.map(path => `• ${require('path').basename(path)}`).join('\n')}
-
-Bei Fragen zu den Dokumenten kontaktieren Sie bitte unser Büro.
----
-Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
-            
-            // Create public comment with forced email notification
-            const commentData = {
-                ticket: {
-                    comment: {
-                        body: directEmailBody,
-                        uploads: uploadTokens,
-                        public: true, // Public to trigger email notification
-                        author_id: null
-                    },
-                    // Update ticket to ensure notification
-                    status: 'open',
-                    priority: 'normal'
-                }
-            };
-            
-            // First, verify the ticket requester before adding comment
-            const ticketCheck = await axios.get(`${this.apiUrl}tickets/${ticketId}.json`, {
-                auth: this.auth,
-                headers: this.headers
-            });
-            
-            const actualRequester = ticketCheck.data.ticket.requester?.email;
-            console.log(`🔍 Verifying ticket ${ticketId} requester: ${actualRequester}`);
-            console.log(`🎯 Expected requester: ${creditorEmail}`);
-            
-            if (actualRequester !== creditorEmail) {
-                console.warn(`⚠️ Requester mismatch! Expected ${creditorEmail}, got ${actualRequester}`);
-            }
-            
-            console.log(`📧 Creating public comment with ${uploadTokens.length} attachments for ${creditorEmail}`);
-            
-            // Add the comment with notifications enabled
-            const response = await axios.put(`${this.apiUrl}tickets/${ticketId}.json?notify=true`, commentData, {
-                auth: this.auth,
-                headers: this.headers
-            });
-            
-            console.log(`✅ Public comment created for ${creditorEmail} with ${uploadTokens.length} attachments`);
-            console.log(`📧 Email notification should be sent automatically to requester`);
-            console.log(`📎 Attachments will appear as downloadable links in the email`);
+            // Step 2: Now we don't actually use the mainTicketId - we create a NEW ticket 
+            // that immediately sends an email with attachments to the creditor
+            console.log(`🎫 Creating new ticket that sends email with ${uploadTokens.length} attachments`);
             
             return {
                 success: true,
-                comment_id: response.data.audit?.id,
+                upload_tokens: uploadTokens,
                 attachments_count: uploadTokens.length,
                 recipient_email: creditorEmail,
-                ticket_id: ticketId,
-                method: "public_comment_with_attachment_links",
-                attachment_note: "Attachments sent as downloadable links in email notification"
+                ready_for_ticket_creation: true,
+                method: "upload_then_create_ticket_with_email"
             };
             
         } catch (error) {
-            console.error(`❌ Error sending email to ${creditorEmail}:`, error.message);
+            console.error(`❌ Error uploading files for ${creditorEmail}:`, error.message);
             if (error.response?.data) {
-                console.error(`Email sending error details:`, error.response.data);
+                console.error(`Upload error details:`, error.response.data);
             }
             return {
                 success: false,
@@ -881,7 +864,7 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
     }
 
     /**
-     * Create individual ticket for creditor and send settlement plan email via public comment
+     * Create ticket with immediate email and attachments to creditor (NEW APPROACH)
      */
     async sendSettlementPlanEmailViaTicket(mainTicketId, creditorData, clientData, settlementData) {
         // Use test email for now
@@ -891,23 +874,12 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
         const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
         
         try {
-            console.log(`🎫 Creating individual ticket for creditor: ${creditorName}`);
+            console.log(`📧 Creating ticket with immediate email for creditor: ${creditorName}`);
             
-            // Create individual ticket for this creditor
-            const creditorTicket = await this.createCreditorSettlementTicket(creditorData, clientData, settlementData, testEmail);
-            
-            if (!creditorTicket.success) {
-                throw new Error(`Failed to create creditor ticket: ${creditorTicket.error}`);
-            }
-            
-            const creditorTicketId = creditorTicket.ticket_id;
-            console.log(`✅ Created creditor ticket: ${creditorTicketId}`);
-            
-            // Upload settlement plan and creditor overview documents
+            // Step 1: Get file paths and upload files
             const path = require('path');
             const documentDir = path.join(__dirname, '../documents');
             
-            // Expected document filenames
             const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
             const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
             
@@ -915,7 +887,7 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
             console.log(`   Settlement Plan: ${settlementPlanFile}`);
             console.log(`   Creditor Overview: ${creditorOverviewFile}`);
             
-            // Check if files exist and add to attachment list
+            // Check if files exist and upload them
             const attachmentPaths = [];
             const fs = require('fs');
             if (fs.existsSync(settlementPlanFile)) {
@@ -931,39 +903,52 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
             } else {
                 console.warn(`⚠️ Forderungsübersicht not found: ${creditorOverviewFile}`);
             }
-            
-            // Send public comment with attachments (this will email the creditor)
-            const emailResult = await this.sendCreditorEmailWithAttachments(
-                creditorTicketId, 
+
+            // Step 2: Upload files to get tokens
+            console.log(`📤 Uploading ${attachmentPaths.length} files to Zendesk...`);
+            const uploadTokens = [];
+            for (const filePath of attachmentPaths) {
+                const filename = require('path').basename(filePath);
+                const uploadResult = await this.uploadFileToZendesk(filePath, filename);
+                if (uploadResult.success) {
+                    uploadTokens.push(uploadResult.token);
+                    console.log(`✅ Uploaded ${filename}: ${uploadResult.token}`);
+                }
+            }
+
+            // Step 3: Create ticket WITH attachments that immediately sends email
+            console.log(`🎫 Creating ticket with immediate email and ${uploadTokens.length} attachments`);
+            const ticketResult = await this.createCreditorSettlementTicket(
+                creditorData, 
+                clientData, 
+                settlementData, 
                 testEmail, 
-                creditorName,
-                emailSubject,
-                emailBody,
-                attachmentPaths
+                uploadTokens, 
+                emailBody
             );
             
-            if (!emailResult.success) {
-                throw new Error(`Failed to send email: ${emailResult.error}`);
+            if (!ticketResult.success) {
+                throw new Error(`Failed to create ticket with email: ${ticketResult.error}`);
             }
             
-            console.log(`✅ Settlement Plan email sent to: ${testEmail} (${creditorName})`);
-            console.log(`📎 Attachments included: ${emailResult.attachments_count || 0} documents`);
+            console.log(`✅ Settlement Plan ticket created and email sent to: ${testEmail} (${creditorName})`);
+            console.log(`🎫 Ticket ID: ${ticketResult.ticket_id}`);
+            console.log(`📎 Attachments included: ${uploadTokens.length} documents`);
             
             return {
                 success: true,
                 main_ticket_id: mainTicketId,
-                creditor_ticket_id: creditorTicketId,
-                comment_id: emailResult.comment_id,
+                creditor_ticket_id: ticketResult.ticket_id,
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                attachments_count: emailResult.attachments_count || 0,
-                method: 'individual_ticket_with_email',
-                email_sent: true
+                attachments_count: uploadTokens.length,
+                method: 'ticket_with_immediate_email',
+                email_sent: ticketResult.email_sent
             };
 
         } catch (error) {
-            console.error(`❌ Error creating Settlement Plan email for creditor ${creditorName}:`, error.message);
+            console.error(`❌ Error creating ticket with email for creditor ${creditorName}:`, error.message);
             
             return {
                 success: false,
@@ -972,7 +957,7 @@ Bei Problemen mit den Anhängen wenden Sie sich bitte an: ${this.config.email}`;
                 recipient_email: testEmail,
                 recipient_name: creditorName,
                 subject: emailSubject,
-                method: 'individual_ticket_with_email',
+                method: 'ticket_with_immediate_email',
                 email_sent: false
             };
         }
