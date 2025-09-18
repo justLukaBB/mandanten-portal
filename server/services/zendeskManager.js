@@ -659,7 +659,9 @@ Status updates will be posted to this ticket as emails are sent.
                 documents: documentAttachments.map(attachment => ({
                     filename: attachment.filename,
                     type: attachment.type,
-                    attachment_token: attachment.token,
+                    attachment_id: attachment.attachment_id,
+                    attachment_token: attachment.token, // Keep token for fallback
+                    content_url: attachment.content_url,
                     size: attachment.size
                 })),
                 
@@ -691,9 +693,9 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`📧 Creditor: ${creditorName} (${creditorEmail})`);
             console.log(`📎 Documents: ${documentAttachments.length}`);
             
-            // Log document attachment tokens for debugging
+            // Log document attachment IDs for debugging
             webhookData.documents.forEach(doc => {
-                console.log(`   📄 ${doc.filename}: ${doc.attachment_token} (${doc.type})`);
+                console.log(`   📄 ${doc.filename}: ID ${doc.attachment_id} (${doc.type})`);
             });
             
             // Send to Make.com webhook
@@ -1085,6 +1087,49 @@ Status updates will be posted to this ticket as emails are sent.
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Get attachment IDs from a ticket
+     */
+    async getTicketAttachmentIds(ticketId) {
+        try {
+            console.log(`🔍 Getting attachment IDs for ticket ${ticketId}`);
+            
+            const url = `${this.apiUrl}tickets/${ticketId}/comments.json`;
+            const response = await axios.get(url, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            const attachmentIds = [];
+            
+            // Look through all comments for attachments
+            if (response.data.comments) {
+                response.data.comments.forEach(comment => {
+                    if (comment.attachments && comment.attachments.length > 0) {
+                        comment.attachments.forEach(attachment => {
+                            attachmentIds.push({
+                                id: attachment.id,
+                                filename: attachment.file_name,
+                                content_url: attachment.content_url,
+                                size: attachment.size
+                            });
+                        });
+                    }
+                });
+            }
+
+            console.log(`✅ Found ${attachmentIds.length} attachments in ticket ${ticketId}`);
+            return attachmentIds;
+
+        } catch (error) {
+            console.error('❌ Error getting ticket attachment IDs:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            return [];
         }
     }
 
