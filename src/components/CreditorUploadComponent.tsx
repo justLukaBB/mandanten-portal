@@ -340,7 +340,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         </div>
       )}
 
-      {documents.length > 0 && (
+      {!showingCreditorConfirmation && documents.length > 0 && (
         <div className="mt-6 space-y-3">
           <h4 className="text-sm font-medium text-gray-900">Zuvor hochgeladene Dokumentes</h4>
           {documents
