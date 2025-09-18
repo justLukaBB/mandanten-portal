@@ -617,100 +617,116 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Create ticket AND send email with attachments to creditor in one API call
+     * Send settlement plan data to Make.com webhook
      */
-    async createCreditorSettlementTicket(creditorData, clientData, settlementData, creditorEmail, attachmentTokens = [], emailBody = '') {
+    async sendToMakeWebhook(creditorData, clientData, settlementData, documentPaths, mainTicketId) {
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
-            const subject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
+            const creditorEmail = 'justlukax@gmail.com'; // Test email
             
-            // Step 1: Create ticket with minimal initial comment
-            const initialTicketData = {
-                ticket: {
-                    subject: subject,
-                    comment: {
-                        body: `Schuldenbereinigungsplan für Mandant: ${clientData.name || 'N/A'}\nAktenzeichen: ${clientData.reference || 'N/A'}\nGläubiger: ${creditorName}`,
-                        public: false // Initial comment is internal
-                    },
-                    requester: {
-                        email: creditorEmail,
-                        name: creditorName
-                    },
-                    submitter: {
-                        email: this.config.email,
-                        name: "Thomas Scuric Rechtsanwälte"  
-                    },
-                    status: 'open',
-                    priority: 'normal',
-                    type: 'task',
-                    tags: ['schuldenbereinigungsplan', 'settlement_plan', 'creditor_communication']
+            // Prepare webhook payload
+            const webhookData = {
+                // Client information
+                client: {
+                    name: clientData.name,
+                    email: clientData.email,
+                    reference: clientData.reference,
+                    phone: clientData.phone || '',
+                    address: clientData.address || ''
+                },
+                
+                // Creditor information
+                creditor: {
+                    name: creditorName,
+                    email: creditorEmail,
+                    original_debt: creditorData.debt_amount || 0,
+                    reference_number: creditorData.reference_number || '',
+                    address: creditorData.creditor_address || ''
+                },
+                
+                // Settlement plan details
+                settlement: {
+                    plan_type: settlementData.plan_type || 'quotenplan',
+                    monthly_payment: settlementData.monthly_payment || 0,
+                    duration_months: settlementData.duration_months || 36,
+                    total_debt: settlementData.total_debt || 0,
+                    creditor_share: creditorData.debt_amount / settlementData.total_debt,
+                    creditor_monthly_payment: (settlementData.monthly_payment || 0) * (creditorData.debt_amount / settlementData.total_debt),
+                    total_payment: ((settlementData.monthly_payment || 0) * (creditorData.debt_amount / settlementData.total_debt)) * 36
+                },
+                
+                // Document URLs (Make.com can download these via HTTP)
+                documents: documentPaths.map(filePath => {
+                    const filename = require('path').basename(filePath);
+                    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+                    return {
+                        filename: filename,
+                        url: `${baseUrl}/documents/${filename}`,
+                        local_path: filePath, // Keep for debugging
+                        type: filePath.includes('Schuldenbereinigungsplan') ? 'settlement_plan' : 'creditor_overview'
+                    };
+                }),
+                
+                // Email content
+                email: {
+                    subject: `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`,
+                    body: this.generateSettlementPlanEmailBody(creditorData, clientData, settlementData)
+                },
+                
+                // Zendesk ticket information
+                zendesk: {
+                    main_ticket_id: mainTicketId,
+                    ticket_url: `https://${this.config.subdomain}.zendesk.com/agent/tickets/${mainTicketId}`
+                },
+                
+                // Metadata
+                metadata: {
+                    timestamp: new Date().toISOString(),
+                    source: 'mandanten_portal',
+                    action: 'create_side_conversation'
                 }
             };
             
-            console.log(`🎫 Step 1: Creating ticket for ${creditorEmail}`);
+            // Get webhook URL from environment or use the provided URL
+            const webhookUrl = process.env.MAKE_WEBHOOK_URL || 'https://hook.eu2.make.com/z22vqf13jm19hchx8e1e9qh0joq3rym7';
             
-            // Create the ticket first
-            const ticketResponse = await axios.post(`${this.apiUrl}tickets.json`, initialTicketData, {
-                auth: this.auth,
-                headers: this.headers
+            console.log(`🔗 Sending creditor data to Make.com webhook for Side Conversation`);
+            console.log(`🎫 Main Ticket ID: ${mainTicketId}`);
+            console.log(`📧 Creditor: ${creditorName} (${creditorEmail})`);
+            console.log(`📎 Documents: ${documentPaths.length}`);
+            
+            // Log document URLs for debugging
+            webhookData.documents.forEach(doc => {
+                console.log(`   📄 ${doc.filename}: ${doc.url}`);
             });
             
-            const ticketId = ticketResponse.data.ticket.id;
-            console.log(`✅ Created ticket ${ticketId} for ${creditorName}`);
-            console.log(`👤 Ticket requester: ${ticketResponse.data.ticket.requester?.email || 'Unknown'}`);
-            
-            // Step 2: Add public comment with attachments to trigger email
-            console.log(`📧 Step 2: Adding public comment with ${attachmentTokens.length} attachments`);
-            
-            const publicCommentData = {
-                ticket: {
-                    comment: {
-                        body: emailBody || `Sehr geehrte Damen und Herren,
-
-im Anhang erhalten Sie den Schuldenbereinigungsplan für unseren Mandanten ${clientData.name || 'N/A'} (Az: ${clientData.reference || 'N/A'}).
-
-Bitte prüfen Sie die beigefügten Dokumente und teilen Sie uns Ihre Stellungnahme mit.
-
-Mit freundlichen Grüßen
-Thomas Scuric Rechtsanwälte`,
-                        public: true, // PUBLIC COMMENT SENDS EMAIL
-                        uploads: attachmentTokens,
-                        author_id: null
-                    }
-                }
-            };
-            
-            // Add public comment with explicit notification
-            const commentResponse = await axios.put(`${this.apiUrl}tickets/${ticketId}.json?notify_requester=true`, publicCommentData, {
-                auth: this.auth,
-                headers: this.headers
+            // Send to Make.com webhook
+            const response = await axios.post(webhookUrl, webhookData, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 30000 // 30 second timeout
             });
             
-            console.log(`✅ Added public comment to ticket ${ticketId}`);
-            console.log(`📧 Email notification should be sent to: ${creditorEmail}`);
-            console.log(`📎 Attachments included: ${attachmentTokens.length} documents`);
+            console.log(`✅ Successfully sent creditor data to Make.com for Side Conversation creation`);
+            console.log(`🎫 Make.com response:`, response.data);
             
             return {
                 success: true,
-                ticket_id: ticketId,
-                ticket_url: ticketResponse.data.ticket.url,
+                webhook_response: response.data,
                 creditor_name: creditorName,
                 creditor_email: creditorEmail,
-                requester_email: ticketResponse.data.ticket.requester?.email,
-                email_sent: true,
-                attachments_count: attachmentTokens.length,
-                comment_id: commentResponse.data.audit?.id
+                documents_count: documentPaths.length
             };
             
         } catch (error) {
-            console.error(`❌ Error creating ticket with email for ${creditorEmail}:`, error.message);
+            console.error(`❌ Error sending to Make.com webhook:`, error.message);
             if (error.response?.data) {
-                console.error(`Ticket creation error details:`, error.response.data);
+                console.error(`Webhook error details:`, error.response.data);
             }
             return {
                 success: false,
-                error: error.message,
-                email_sent: false
+                error: error.message
             };
         }
     }
@@ -958,6 +974,79 @@ Thomas Scuric Rechtsanwälte`,
                 recipient_name: creditorName,
                 subject: emailSubject,
                 method: 'ticket_with_immediate_email',
+                email_sent: false
+            };
+        }
+    }
+
+    /**
+     * Create ticket with immediate email and attachments to creditor
+     */
+    async createCreditorSettlementTicket(creditorData, clientData, settlementData, testEmail, uploadTokens, emailBody) {
+        try {
+            const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
+            const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
+            
+            console.log(`🎫 Creating settlement ticket for creditor: ${creditorName}`);
+            console.log(`📎 Including ${uploadTokens.length} attachments`);
+            
+            // Find the client's Zendesk user
+            const zendeskUser = await this.findClientUser(
+                clientData.reference,
+                clientData.name,
+                clientData.email
+            );
+
+            const ticketData = {
+                ticket: {
+                    requester_id: zendeskUser.id,
+                    subject: emailSubject,
+                    comment: {
+                        body: emailBody,
+                        uploads: uploadTokens, // Attach the uploaded files
+                        public: true // This makes it an email that gets sent
+                    },
+                    type: 'task',
+                    priority: 'normal',
+                    status: 'open',
+                    tags: [
+                        'schuldenbereinigungsplan',
+                        'settlement-plan-email',
+                        'creditor-individual',
+                        clientData.reference || 'unknown',
+                        creditorName.toLowerCase().replace(/\s+/g, '-')
+                    ]
+                }
+            };
+
+            const url = `${this.apiUrl}tickets.json`;
+            const response = await axios.post(url, ticketData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Settlement ticket created and email sent: ${creditorName} (ID: ${response.data.ticket.id})`);
+            console.log(`📧 Email sent to: ${testEmail} with ${uploadTokens.length} attachments`);
+            
+            return {
+                success: true,
+                ticket_id: response.data.ticket.id,
+                email_sent: true,
+                subject: emailSubject,
+                recipient_email: testEmail,
+                recipient_name: creditorName,
+                attachments_count: uploadTokens.length
+            };
+
+        } catch (error) {
+            console.error('❌ Error creating settlement ticket with email:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            
+            return {
+                success: false,
+                error: error.message,
                 email_sent: false
             };
         }

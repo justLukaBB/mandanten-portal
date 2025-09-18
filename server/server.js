@@ -53,6 +53,35 @@ app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 
+// Serve generated documents statically for Make.com webhook downloads
+app.use('/documents', express.static(path.join(__dirname, 'documents')));
+
+// Test endpoint to list available documents (for debugging)
+app.get('/api/documents-list', (req, res) => {
+    try {
+        const documentsDir = path.join(__dirname, 'documents');
+        const files = fs.readdirSync(documentsDir).filter(file => file.endsWith('.docx'));
+        const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+        
+        const documentUrls = files.map(filename => ({
+            filename,
+            url: `${baseUrl}/documents/${filename}`,
+            size: fs.statSync(path.join(documentsDir, filename)).size
+        }));
+        
+        res.json({
+            success: true,
+            count: files.length,
+            documents: documentUrls
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
 
