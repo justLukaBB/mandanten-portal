@@ -960,7 +960,7 @@ class CreditorContactService {
                 console.log(`❌ Creditor overview file not found: ${creditorOverviewFile}`);
             }
             
-            // Add attachments to main ticket via comment
+            // Add attachments to main ticket via comment and get attachment IDs
             if (attachments.length > 0) {
                 const uploadTokens = attachments.map(att => att.token);
                 const attachmentList = attachments.map(att => `• ${att.filename} (${Math.round(att.size / 1024)} KB)`).join('\n');
@@ -973,6 +973,21 @@ class CreditorContactService {
                 
                 if (commentResult.success) {
                     console.log(`✅ Documents attached to main ticket ${ticketId}`);
+                    
+                    // Get the attachment IDs from the ticket
+                    console.log(`🔍 Retrieving attachment IDs from ticket ${ticketId}...`);
+                    const attachmentIds = await this.zendesk.getTicketAttachmentIds(ticketId);
+                    
+                    if (attachmentIds.length > 0) {
+                        // Update attachments array with attachment IDs
+                        for (let i = 0; i < Math.min(attachments.length, attachmentIds.length); i++) {
+                            attachments[i].attachment_id = attachmentIds[i].id;
+                            attachments[i].content_url = attachmentIds[i].content_url;
+                            console.log(`📎 ${attachments[i].filename} → Attachment ID: ${attachmentIds[i].id}`);
+                        }
+                    } else {
+                        console.log(`⚠️ No attachment IDs found for ticket ${ticketId}`);
+                    }
                 } else {
                     console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
                 }
