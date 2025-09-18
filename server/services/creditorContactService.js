@@ -846,17 +846,25 @@ class CreditorContactService {
 
             console.log(`✅ Settlement plan ticket created: ${settlementTicket.subject} (ID: ${settlementTicket.id})`);
 
-            // Step 6: Send webhook calls for each creditor with main ticket ID
-            const emailResults = await this.sendSettlementPlanEmailsViaMakeWebhook(
+            // Step 6: Upload documents to main ticket and get attachment IDs
+            const documentAttachments = await this.uploadDocumentsToMainTicket(
                 settlementTicket.id,
-                creditors,
                 clientData,
                 settlementData
             );
 
+            // Step 7: Send webhook calls for each creditor with main ticket ID and attachment IDs
+            const emailResults = await this.sendSettlementPlanEmailsViaMakeWebhook(
+                settlementTicket.id,
+                creditors,
+                clientData,
+                settlementData,
+                documentAttachments
+            );
+
             const successfulEmails = emailResults.filter(r => r.success && r.email_sent);
 
-            // Step 7: Add status update to settlement ticket
+            // Step 8: Add status update to settlement ticket
             const statusUpdates = emailResults.map(result => ({
                 creditor_name: result.creditor_name,
                 creditor_email: result.recipient_email,
@@ -901,27 +909,91 @@ class CreditorContactService {
     }
 
     /**
+     * Upload settlement plan documents to main ticket and get attachment IDs
+     */
+    async uploadDocumentsToMainTicket(ticketId, clientData, settlementData) {
+        try {
+            console.log(`📎 Uploading documents to main ticket ${ticketId}...`);
+            
+            // Get document paths
+            const path = require('path');
+            const documentDir = path.join(__dirname, '../documents');
+            const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+            const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+            
+            const fs = require('fs');
+            const attachments = [];
+            
+            // Upload settlement plan document
+            if (fs.existsSync(settlementPlanFile)) {
+                const filename = require('path').basename(settlementPlanFile);
+                console.log(`📤 Uploading settlement plan: ${filename}`);
+                const uploadResult = await this.zendesk.uploadFileToZendesk(settlementPlanFile, filename);
+                if (uploadResult.success) {
+                    attachments.push({
+                        type: 'settlement_plan',
+                        filename: filename,
+                        token: uploadResult.token,
+                        size: uploadResult.size
+                    });
+                    console.log(`✅ Settlement plan uploaded: ${uploadResult.token}`);
+                }
+            } else {
+                console.log(`❌ Settlement plan file not found: ${settlementPlanFile}`);
+            }
+            
+            // Upload creditor overview document  
+            if (fs.existsSync(creditorOverviewFile)) {
+                const filename = require('path').basename(creditorOverviewFile);
+                console.log(`📤 Uploading creditor overview: ${filename}`);
+                const uploadResult = await this.zendesk.uploadFileToZendesk(creditorOverviewFile, filename);
+                if (uploadResult.success) {
+                    attachments.push({
+                        type: 'creditor_overview', 
+                        filename: filename,
+                        token: uploadResult.token,
+                        size: uploadResult.size
+                    });
+                    console.log(`✅ Creditor overview uploaded: ${uploadResult.token}`);
+                }
+            } else {
+                console.log(`❌ Creditor overview file not found: ${creditorOverviewFile}`);
+            }
+            
+            // Add attachments to main ticket via comment
+            if (attachments.length > 0) {
+                const uploadTokens = attachments.map(att => att.token);
+                const attachmentList = attachments.map(att => `• ${att.filename} (${Math.round(att.size / 1024)} KB)`).join('\n');
+                
+                const commentResult = await this.zendesk.addTicketComment(ticketId, {
+                    body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen:\n\n${attachmentList}\n\nDiese Dokumente werden für die Side Conversations mit den Gläubigern verwendet.`,
+                    public: false,
+                    uploads: uploadTokens
+                });
+                
+                if (commentResult.success) {
+                    console.log(`✅ Documents attached to main ticket ${ticketId}`);
+                } else {
+                    console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
+                }
+            }
+            
+            console.log(`📎 Successfully prepared ${attachments.length} document attachments`);
+            return attachments;
+            
+        } catch (error) {
+            console.error(`❌ Error uploading documents to main ticket:`, error.message);
+            return [];
+        }
+    }
+
+    /**
      * Send settlement plan emails via individual creditor tickets
      */
-    async sendSettlementPlanEmailsViaMakeWebhook(settlementTicketId, creditors, clientData, settlementData) {
+    async sendSettlementPlanEmailsViaMakeWebhook(settlementTicketId, creditors, clientData, settlementData, documentAttachments = []) {
         const emailResults = [];
         
-        // Get document paths for attachments
-        const path = require('path');
-        const documentDir = path.join(__dirname, '../documents');
-        const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-        const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-        
-        const fs = require('fs');
-        const documentPaths = [];
-        if (fs.existsSync(settlementPlanFile)) {
-            documentPaths.push(settlementPlanFile);
-        }
-        if (fs.existsSync(creditorOverviewFile)) {
-            documentPaths.push(creditorOverviewFile);
-        }
-        
-        console.log(`📎 Found ${documentPaths.length} documents for settlement plan distribution`);
+        console.log(`📎 Using ${documentAttachments.length} uploaded document attachments for settlement plan distribution`);
         
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
@@ -930,13 +1002,13 @@ class CreditorContactService {
             try {
                 console.log(`📧 Sending settlement plan via Make.com webhook ${i + 1}/${creditors.length} for ${creditorName}...`);
                 
-                // Send via Make.com webhook with main ticket ID for Side Conversation
+                // Send via Make.com webhook with main ticket ID and attachment tokens for Side Conversation
                 const result = await this.zendesk.sendToMakeWebhook(
                     creditor,
                     clientData,
                     settlementData,
-                    documentPaths,
-                    settlementTicketId  // Main ticket ID for Side Conversation creation
+                    documentAttachments,  // Upload tokens for existing attachments
+                    settlementTicketId    // Main ticket ID for Side Conversation creation
                 );
 
                 emailResults.push({
@@ -946,7 +1018,7 @@ class CreditorContactService {
                     success: result.success,
                     recipient_email: 'justlukax@gmail.com', // Test email
                     subject: `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`,
-                    attachments_count: documentPaths.length,
+                    attachments_count: documentAttachments.length,
                     method: 'make_webhook',
                     email_sent: result.success,
                     webhook_response: result.webhook_response
