@@ -195,10 +195,10 @@ const PortalLogin: React.FC = () => {
               {loading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Anmeldung läuft...
+                  Einloggen läuft...
                 </div>
               ) : (
-                'Anmelden'
+                'Einloggen'
               )}
             </button>
           </div>
