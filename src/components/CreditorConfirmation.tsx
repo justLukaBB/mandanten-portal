@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  CheckCircleIcon, 
+import {
+  CheckCircleIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
   BuildingOfficeIcon,
@@ -42,6 +42,8 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionResult, setCompletionResult] = useState<any>(null);
 
   useEffect(() => {
     fetchConfirmationData();
@@ -53,13 +55,13 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
       setError(null);
       const response = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
       setConfirmationData(response.data);
-      
+
       // Pre-select all creditors by default
       const allCreditorIds = new Set<string>(response.data.creditors.map((c: Creditor) => c.id));
       setSelectedCreditors(allCreditorIds);
     } catch (error: any) {
       console.error('Error fetching confirmation data:', error);
-      
+
       // Don't show error if workflow isn't ready yet - this is expected
       if (error.response?.status === 400 && error.response?.data?.current_status) {
         setError(null); // No error, just not ready yet
@@ -84,7 +86,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
 
   const handleSelectAll = () => {
     if (!confirmationData) return;
-    
+
     if (selectedCreditors.size === confirmationData.creditors.length) {
       setSelectedCreditors(new Set());
     } else {
@@ -97,15 +99,17 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
     try {
       setSubmitting(true);
       const confirmedCreditors = Array.from(selectedCreditors);
-      
-      const response = await api.post(`/api/clients/${clientId}/confirm-creditors`, {
+
+      await api.post(`/api/clients/${clientId}/confirm-creditors`, {
         confirmed_creditors: confirmedCreditors
       });
-      
+
       // Refresh data to show updated status
-      await fetchConfirmationData();
-      
-      alert(`✅ ${response.data.confirmed_count} Gläubiger erfolgreich bestätigt!`);
+      // await fetchConfirmationData();
+
+      // alert(`✅ ${response.data.confirmed_count} Gläubiger erfolgreich bestätigt!`);
+
+      setShowCompletionModal(true)
     } catch (error: any) {
       console.error('Error confirming creditors:', error);
       setError(error.response?.data?.error || 'Fehler beim Bestätigen der Gläubiger');
@@ -145,9 +149,9 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
   }
 
   // Only show creditor confirmation when admin has approved it
-  if (confirmationData.workflow_status !== 'awaiting_client_confirmation' && 
-      confirmationData.workflow_status !== 'client_confirmation' && 
-      confirmationData.workflow_status !== 'completed') {
+  if (confirmationData.workflow_status !== 'awaiting_client_confirmation' &&
+    confirmationData.workflow_status !== 'client_confirmation' &&
+    confirmationData.workflow_status !== 'completed') {
     return null;
   }
 
@@ -174,7 +178,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
           Gläubiger-Bestätigung erforderlich
         </h3>
         <p className="text-gray-600">
-          Basierend auf Ihren hochgeladenen Dokumenten haben wir {confirmationData.creditors.length} Gläubiger identifiziert. 
+          Basierend auf Ihren hochgeladenen Dokumenten haben wir {confirmationData.creditors.length} Gläubiger identifiziert.
           Bitte überprüfen Sie diese Liste und bestätigen Sie die Richtigkeit.
         </p>
       </div>
@@ -192,7 +196,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
             {selectedCreditors.size} von {confirmationData.creditors.length} ausgewählt
           </span>
         </div>
-        
+
         <button
           onClick={handleConfirmation}
           disabled={submitting || selectedCreditors.size === 0}
@@ -206,26 +210,24 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
       <div className="space-y-4">
         {confirmationData.creditors.map((creditor) => {
           const isSelected = selectedCreditors.has(creditor.id);
-          
+
           return (
             <div
               key={creditor.id}
-              className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                isSelected 
-                  ? 'border-green-500 bg-green-50' 
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
+              className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${isSelected
+                ? 'border-green-500 bg-green-50'
+                : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
               onClick={() => handleCreditorToggle(creditor.id)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3">
                   {/* Selection Indicator */}
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-1 ${
-                    isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
-                  }`}>
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-1 ${isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                    }`}>
                     {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
                   </div>
-                  
+
                   {/* Creditor Info */}
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
@@ -237,7 +239,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
                         </span>
                       )}
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
@@ -249,7 +251,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
                           <span className="text-gray-600">{creditor.sender_address || 'Keine Adresse'}</span>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
                           <DocumentTextIcon className="w-4 h-4 text-gray-400" />
@@ -263,7 +265,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                       <span>Quelle: {creditor.source_document}</span>
                       <span>KI-Sicherheit: {Math.round(creditor.ai_confidence * 100)}%</span>
@@ -276,6 +278,41 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         })}
       </div>
 
+      {showCompletionModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full text-center">
+            <svg
+              className="w-12 h-12 text-green-500 mx-auto mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2l4-4m6 2a9 9 0 11-18 0a9 9 0 0118 0z"
+              />
+            </svg>
+
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              {selectedCreditors.size} Gläubiger erfolgreich bestätigt!
+            </h2>
+
+            <button
+              onClick={async () => {
+                setShowCompletionModal(false);
+                await fetchConfirmationData();
+              }}
+              className="px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition"
+            >
+              Okay
+            </button>
+          </div>
+        </div>
+      )}
+
+
       {/* Warning */}
       <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <div className="flex items-start space-x-2">
@@ -283,7 +320,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
           <div className="text-sm">
             <p className="font-medium text-yellow-800">Wichtiger Hinweis:</p>
             <p className="text-yellow-700 mt-1">
-              Bitte überprüfen Sie alle Gläubiger sorgfältig. Nur bestätigte Gläubiger werden in den weiteren Prozess einbezogen. 
+              Bitte überprüfen Sie alle Gläubiger sorgfältig. Nur bestätigte Gläubiger werden in den weiteren Prozess einbezogen.
               Falls ein Gläubiger fehlt oder falsch ist, wenden Sie sich an unseren Support.
             </p>
           </div>
