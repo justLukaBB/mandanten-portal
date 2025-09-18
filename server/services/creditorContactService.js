@@ -846,8 +846,8 @@ class CreditorContactService {
 
             console.log(`✅ Settlement plan ticket created: ${settlementTicket.subject} (ID: ${settlementTicket.id})`);
 
-            // Step 6: Send emails via individual creditor tickets with attachments
-            const emailResults = await this.sendSettlementPlanEmailsViaSideConversations(
+            // Step 6: Send webhook calls for each creditor with main ticket ID
+            const emailResults = await this.sendSettlementPlanEmailsViaMakeWebhook(
                 settlementTicket.id,
                 creditors,
                 clientData,
@@ -860,20 +860,20 @@ class CreditorContactService {
             const statusUpdates = emailResults.map(result => ({
                 creditor_name: result.creditor_name,
                 creditor_email: result.recipient_email,
-                creditor_ticket_id: result.creditor_ticket_id,
+                method: result.method || 'make_webhook',
                 attachments_count: result.attachments_count || 0,
                 status: result.success && result.email_sent ? 
-                    `Schuldenbereinigungsplan E-Mail versendet (Ticket: ${result.creditor_ticket_id})` : 
+                    `Schuldenbereinigungsplan E-Mail versendet via Make.com (${result.attachments_count} Anhänge)` : 
                     `Fehler: ${result.error}`,
                 success: result.success && result.email_sent
             }));
 
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
-            console.log(`✅ Settlement plan distribution completed:`);
+            console.log(`✅ Settlement plan distribution completed via Make.com Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
-            console.log(`   - Individual creditor tickets created: ${emailResults.filter(r => r.creditor_ticket_id).length}`);
-            console.log(`   - Emails sent: ${successfulEmails.length}/${creditors.length}`);
+            console.log(`   - Webhook calls sent to Make.com: ${emailResults.length}`);
+            console.log(`   - Side Conversations to be created: ${successfulEmails.length}/${creditors.length}`);
 
             return {
                 success: true,
@@ -883,7 +883,8 @@ class CreditorContactService {
                 settlement_ticket_subject: settlementTicket.subject,
                 emails_sent: successfulEmails.length,
                 total_creditors: creditors.length,
-                creditor_tickets_created: emailResults.filter(r => r.creditor_ticket_id).length,
+                webhook_calls_sent: emailResults.length,
+                method: 'make_webhook',
                 email_results: emailResults,
                 processing_timestamp: new Date().toISOString()
             };
@@ -902,45 +903,63 @@ class CreditorContactService {
     /**
      * Send settlement plan emails via individual creditor tickets
      */
-    async sendSettlementPlanEmailsViaSideConversations(settlementTicketId, creditors, clientData, settlementData) {
+    async sendSettlementPlanEmailsViaMakeWebhook(settlementTicketId, creditors, clientData, settlementData) {
         const emailResults = [];
+        
+        // Get document paths for attachments
+        const path = require('path');
+        const documentDir = path.join(__dirname, '../documents');
+        const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+        const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+        
+        const fs = require('fs');
+        const documentPaths = [];
+        if (fs.existsSync(settlementPlanFile)) {
+            documentPaths.push(settlementPlanFile);
+        }
+        if (fs.existsSync(creditorOverviewFile)) {
+            documentPaths.push(creditorOverviewFile);
+        }
+        
+        console.log(`📎 Found ${documentPaths.length} documents for settlement plan distribution`);
         
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
             const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
             
             try {
-                console.log(`📧 Creating individual creditor ticket and email ${i + 1}/${creditors.length} for ${creditorName}...`);
+                console.log(`📧 Sending settlement plan via Make.com webhook ${i + 1}/${creditors.length} for ${creditorName}...`);
                 
-                // Create individual ticket and send email with attachments
-                const result = await this.zendesk.sendSettlementPlanEmailViaTicket(
-                    settlementTicketId,
+                // Send via Make.com webhook with main ticket ID for Side Conversation
+                const result = await this.zendesk.sendToMakeWebhook(
                     creditor,
                     clientData,
-                    settlementData
+                    settlementData,
+                    documentPaths,
+                    settlementTicketId  // Main ticket ID for Side Conversation creation
                 );
 
                 emailResults.push({
                     creditor_id: creditor.id,
                     creditor_name: creditorName,
                     main_ticket_id: settlementTicketId,
-                    creditor_ticket_id: result.creditor_ticket_id,
                     success: result.success,
-                    recipient_email: result.recipient_email,
-                    subject: result.subject,
-                    attachments_count: result.attachments_count || 0,
-                    method: result.method,
-                    email_sent: result.email_sent
+                    recipient_email: 'justlukax@gmail.com', // Test email
+                    subject: `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`,
+                    attachments_count: documentPaths.length,
+                    method: 'make_webhook',
+                    email_sent: result.success,
+                    webhook_response: result.webhook_response
                 });
 
-                // Wait 2 seconds between emails to avoid rate limits
+                // Wait 1 second between webhook calls to avoid overwhelming Make.com
                 if (i < creditors.length - 1) {
-                    console.log(`⏰ Waiting 2 seconds before next creditor email...`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    console.log(`⏰ Waiting 1 second before next webhook call...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
             } catch (error) {
-                console.error(`❌ Failed to create creditor ticket and email for ${creditorName}:`, error.message);
+                console.error(`❌ Failed to send via Make.com webhook for ${creditorName}:`, error.message);
                 
                 emailResults.push({
                     creditor_id: creditor.id,
@@ -948,7 +967,8 @@ class CreditorContactService {
                     main_ticket_id: settlementTicketId,
                     success: false,
                     error: error.message,
-                    email_sent: false
+                    email_sent: false,
+                    method: 'make_webhook'
                 });
             }
         }
