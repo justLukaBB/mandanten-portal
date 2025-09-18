@@ -619,7 +619,7 @@ Status updates will be posted to this ticket as emails are sent.
     /**
      * Send settlement plan data to Make.com webhook
      */
-    async sendToMakeWebhook(creditorData, clientData, settlementData, documentPaths, mainTicketId) {
+    async sendToMakeWebhook(creditorData, clientData, settlementData, documentAttachments, mainTicketId) {
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
             const creditorEmail = 'justlukax@gmail.com'; // Test email
@@ -655,17 +655,13 @@ Status updates will be posted to this ticket as emails are sent.
                     total_payment: ((settlementData.monthly_payment || 0) * (creditorData.debt_amount / settlementData.total_debt)) * 36
                 },
                 
-                // Document URLs (Make.com can download these via HTTP)
-                documents: documentPaths.map(filePath => {
-                    const filename = require('path').basename(filePath);
-                    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
-                    return {
-                        filename: filename,
-                        url: `${baseUrl}/documents/${filename}`,
-                        local_path: filePath, // Keep for debugging
-                        type: filePath.includes('Schuldenbereinigungsplan') ? 'settlement_plan' : 'creditor_overview'
-                    };
-                }),
+                // Document attachment IDs (already uploaded to main ticket)
+                documents: documentAttachments.map(attachment => ({
+                    filename: attachment.filename,
+                    type: attachment.type,
+                    attachment_token: attachment.token,
+                    size: attachment.size
+                })),
                 
                 // Email content
                 email: {
@@ -693,11 +689,11 @@ Status updates will be posted to this ticket as emails are sent.
             console.log(`🔗 Sending creditor data to Make.com webhook for Side Conversation`);
             console.log(`🎫 Main Ticket ID: ${mainTicketId}`);
             console.log(`📧 Creditor: ${creditorName} (${creditorEmail})`);
-            console.log(`📎 Documents: ${documentPaths.length}`);
+            console.log(`📎 Documents: ${documentAttachments.length}`);
             
-            // Log document URLs for debugging
+            // Log document attachment tokens for debugging
             webhookData.documents.forEach(doc => {
-                console.log(`   📄 ${doc.filename}: ${doc.url}`);
+                console.log(`   📄 ${doc.filename}: ${doc.attachment_token} (${doc.type})`);
             });
             
             // Send to Make.com webhook
@@ -1048,6 +1044,46 @@ Status updates will be posted to this ticket as emails are sent.
                 success: false,
                 error: error.message,
                 email_sent: false
+            };
+        }
+    }
+
+    /**
+     * Add comment with attachments to existing ticket
+     */
+    async addTicketComment(ticketId, commentData) {
+        try {
+            console.log(`💬 Adding comment to ticket ${ticketId}`);
+            
+            const ticketData = {
+                ticket: {
+                    comment: commentData
+                }
+            };
+
+            const url = `${this.apiUrl}tickets/${ticketId}.json`;
+            const response = await axios.put(url, ticketData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Comment added to ticket ${ticketId}`);
+            
+            return {
+                success: true,
+                ticket_id: ticketId,
+                comment_id: response.data.ticket.comments?.[0]?.id || 'unknown'
+            };
+
+        } catch (error) {
+            console.error('❌ Error adding ticket comment:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            
+            return {
+                success: false,
+                error: error.message
             };
         }
     }

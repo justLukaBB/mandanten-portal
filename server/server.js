@@ -72,8 +72,39 @@ app.get('/api/documents-list', (req, res) => {
         res.json({
             success: true,
             count: files.length,
-            documents: documentUrls
+            documents: documentUrls,
+            documentsDir: documentsDir,
+            baseUrl: baseUrl
         });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error.message,
+            documentsDir: path.join(__dirname, 'documents')
+        });
+    }
+});
+
+// Test endpoint to check if static file serving is working
+app.get('/api/test-document', (req, res) => {
+    try {
+        const testFile = path.join(__dirname, 'documents', 'TEST_Schuldenbereinigungsplan.docx');
+        if (fs.existsSync(testFile)) {
+            const stats = fs.statSync(testFile);
+            res.json({
+                success: true,
+                message: 'TEST document exists',
+                file: testFile,
+                size: stats.size,
+                testUrl: `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/documents/TEST_Schuldenbereinigungsplan.docx`
+            });
+        } else {
+            res.json({
+                success: false,
+                message: 'TEST document not found',
+                file: testFile
+            });
+        }
     } catch (error) {
         res.json({
             success: false,
