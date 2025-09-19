@@ -40,6 +40,9 @@ const AgentLogin: React.FC = () => {
       console.log('✅ Agent login successful');
 
       // Store agent token and data
+      localStorage.clear();
+      localStorage.setItem("active_role", "agent");
+      localStorage.setItem("auth_token", data.token);
       localStorage.setItem('agent_token', data.token);
       localStorage.setItem('agent_data', JSON.stringify(data.agent));
 
