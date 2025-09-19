@@ -1258,10 +1258,14 @@ Status updates will be posted to this ticket as emails are sent.
         const creditorMonthlyPayment = totalDebt > 0 ? (monthlyPayment * (creditorDebt / totalDebt)) : 0;
         const creditorTotalPayment = creditorMonthlyPayment * duration;
 
-        // Generate download links section
+        // Generate download links section with hyperlinks
         const downloadLinksSection = downloadUrls.map(doc => {
             const documentName = doc.type === 'settlement_plan' ? 'Schuldenbereinigungsplan' : 'Forderungsübersicht';
-            return `📄 ${documentName}: ${doc.download_url}`;
+            if (doc.download_url) {
+                return `📄 [${documentName}](${doc.download_url})`;
+            } else {
+                return `📄 ${documentName}: (Download-Link wird vorbereitet)`;
+            }
         }).join('\n');
 
         return `
