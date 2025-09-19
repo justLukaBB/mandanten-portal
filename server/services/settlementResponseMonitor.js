@@ -18,13 +18,13 @@ class SettlementResponseMonitor {
     /**
      * Start monitoring settlement plan responses for a specific client
      */
-    startMonitoringSettlementResponses(clientReference, intervalMinutes = 5) {
+    startMonitoringSettlementResponses(clientReference, intervalMinutes = 1) {
         if (this.activeMonitoringSessions.has(clientReference)) {
             console.log(`⚠️ Settlement response monitor already running for client ${clientReference}`);
             return this.activeMonitoringSessions.get(clientReference);
         }
 
-        console.log(`🔄 Starting settlement response monitor for client ${clientReference} (checking every ${intervalMinutes} minutes)`);
+        console.log(`🔄 Starting settlement response monitor for client ${clientReference} (checking every ${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''})`);
         
         const session = {
             clientReference,
@@ -55,13 +55,13 @@ class SettlementResponseMonitor {
     /**
      * Start global monitoring loop for all active sessions
      */
-    startGlobalMonitoring(intervalMinutes = 5) {
+    startGlobalMonitoring(intervalMinutes = 1) {
         if (this.globalMonitorInterval) {
             console.log(`⚠️ Global settlement monitoring already running`);
             return;
         }
 
-        console.log(`🔄 Starting global settlement response monitoring (every ${intervalMinutes} minutes)`);
+        console.log(`🔄 Starting global settlement response monitoring (every ${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''})`);
         
         this.globalMonitorInterval = setInterval(async () => {
             await this.checkAllActiveSessions();
