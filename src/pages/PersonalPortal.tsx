@@ -50,27 +50,6 @@ export const PersonalPortal = ({
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
 
-  // Check authentication on load
-  useEffect(() => {
-    const sessionToken = localStorage.getItem('portal_session_token');
-    const storedClientId = localStorage.getItem('portal_client_id');
-    
-    console.log('🔍 PersonalPortal: Auth check:', {
-      hasSessionToken: !!sessionToken,
-      hasStoredClientId: !!storedClientId,
-      storedClientId,
-      expectedClientId: clientId,
-      match: storedClientId === clientId
-    });
-    
-    if (!sessionToken || !storedClientId || storedClientId !== clientId) {
-      console.warn('❌ PersonalPortal: Authentication failed, redirecting to login');
-      navigate('/login', { replace: true });
-    } else {
-      console.log('✅ PersonalPortal: Authentication successful');
-    }
-  }, [clientId, navigate]);
-
   // Default progress phases
   const defaultProgressPhases = [
     { name: 'Anfrage', description: 'Ihre Anfrage wurde erfasst und bearbeitet.' },
@@ -113,18 +92,18 @@ export const PersonalPortal = ({
       try {
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
-        
+
         // Show creditor confirmation if workflow is ready and not completed
-        const shouldShowCreditorConfirmation = 
-          creditorResponse.data && 
+        const shouldShowCreditorConfirmation =
+          creditorResponse.data &&
           (
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
-            creditorResponse.data.workflow_status === 'creditor_review' || 
+            creditorResponse.data.workflow_status === 'creditor_review' ||
             clientData.first_payment_received
-          ) && 
+          ) &&
           !creditorResponse.data.client_confirmed;
-        
+
         setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
       } catch (creditorErr) {
         console.log('No creditor confirmation data available yet');
@@ -135,14 +114,14 @@ export const PersonalPortal = ({
       // Check if financial data form should be shown (after creditor response period)
       try {
         const financialResponse = await api.get(`/api/clients/${clientId}/financial-form-status`);
-        
+
         // Defensive programming - validate response structure
         if (financialResponse?.data) {
           const responseData = financialResponse.data;
           const shouldShowFinancialForm = responseData.should_show_form === true;
           const alreadySubmitted = responseData.form_submitted === true;
           const periodInfo = responseData.creditor_response_period || null;
-          
+
           console.log('📋 Financial form status:', {
             shouldShow: shouldShowFinancialForm,
             submitted: alreadySubmitted,
@@ -150,7 +129,7 @@ export const PersonalPortal = ({
             daysRemaining: periodInfo?.days_remaining,
             responseReceived: true
           });
-          
+
           setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
           setFinancialDataSubmitted(alreadySubmitted);
           setCreditorResponsePeriod(periodInfo);
@@ -177,7 +156,10 @@ export const PersonalPortal = ({
       setError(null);
     } catch (err) {
       console.error('Error fetching client data:', err);
-      setError('Fehler beim Laden Ihrer Daten. Bitte versuchen Sie es später erneut.');
+      setError(
+        "Es tut uns leid, wir können die Inhalte oder die Seite für Sie nicht anzeigen. Bitte versuchen Sie es erneut oder melden Sie sich mit Ihren Zugangsdaten erneut an."
+      );
+
     } finally {
       setLoading(false);
     }
@@ -188,21 +170,21 @@ export const PersonalPortal = ({
     try {
       const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
       setDocuments(documentsResponse.data || []);
-      
+
       // Also refresh creditor confirmation status
       try {
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
-        
-        const shouldShowCreditorConfirmation = 
-          creditorResponse.data && 
+
+        const shouldShowCreditorConfirmation =
+          creditorResponse.data &&
           (
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
             creditorResponse.data.workflow_status === 'creditor_review'
-          ) && 
+          ) &&
           !creditorResponse.data.client_confirmed;
-        
+
         setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
       } catch (creditorErr) {
         console.log('No creditor confirmation data available during refresh');
@@ -221,7 +203,7 @@ export const PersonalPortal = ({
   }, [clientId]);
 
   // Handle upload complete
-  const handleUploadComplete = (newDocuments: any) => {    
+  const handleUploadComplete = (newDocuments: any) => {
     // Add new documents to existing documents list
     // setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
     // refreshDocuments()
@@ -231,19 +213,15 @@ export const PersonalPortal = ({
   const handleFinancialFormSubmitted = (data: any) => {
     setFinancialDataSubmitted(true);
     setShowingFinancialForm(false);
-    
+
     // Refresh client data to get updated status
     fetchClientData();
   };
 
   // Handle logout
   const handleLogout = () => {
-    // Clear all portal authentication data
-    localStorage.removeItem('portal_session_token');
-    localStorage.removeItem('portal_client_id');
-    localStorage.removeItem('portal_client_data');
-    localStorage.removeItem('portal_auth_' + clientId);
-    
+    localStorage.clear();
+
     if (onLogout) {
       onLogout();
     } else {
@@ -254,7 +232,7 @@ export const PersonalPortal = ({
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center justify-center">
-        <ArrowPathIcon className={`h-8 w-8 animate-spin mb-4`} style={{color: customColors.primary}} />
+        <ArrowPathIcon className={`h-8 w-8 animate-spin mb-4`} style={{ color: customColors.primary }} />
         <p className="text-gray-600">Daten werden geladen...</p>
       </div>
     );
@@ -264,12 +242,12 @@ export const PersonalPortal = ({
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center justify-center">
         <div className="w-full max-w-lg text-center">
-          <h2 className="text-xl font-bold mb-2" style={{color: customColors.primary}}>Fehler</h2>
+          <h2 className="text-xl font-bold mb-2" style={{ color: customColors.primary }}>Fehler</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 text-white rounded-lg"
-            style={{backgroundColor: customColors.primary}}
+            style={{ backgroundColor: customColors.primary }}
           >
             Erneut versuchen
           </button>
@@ -284,17 +262,17 @@ export const PersonalPortal = ({
       <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="h-10 flex items-center justify-center">
-            <img 
-              src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"} 
-              alt="Logo" 
-              className="h-auto w-auto max-h-full max-w-[100px] object-contain" 
+            <img
+              src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
+              alt="Logo"
+              className="h-auto w-auto max-h-full max-w-[100px] object-contain"
             />
           </div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-xl font-bold" style={{color: customColors.primary}}>
+            <h1 className="text-xl font-bold" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
-            <button 
+            <button
               onClick={handleLogout}
               className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded-full transition-colors"
             >
@@ -325,14 +303,14 @@ export const PersonalPortal = ({
         {client?.workflow_status !== 'completed' ? (
           <div className={`relative ${showingCreditorConfirmation ? 'pointer-events-none' : ''}`}>
             <div className={showingCreditorConfirmation ? 'filter blur-sm' : ''}>
-              <CreditorUploadComponent 
-                client={client} 
-                onUploadComplete={handleUploadComplete} 
+              <CreditorUploadComponent
+                client={client}
+                onUploadComplete={handleUploadComplete}
                 showingCreditorConfirmation={showingCreditorConfirmation}
                 documents={documents}
               />
             </div>
-            
+
             {/* Overlay message when creditor confirmation is shown */}
             {showingCreditorConfirmation && (
               <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 rounded-lg">
@@ -377,7 +355,7 @@ export const PersonalPortal = ({
                   <div className="text-sm">
                     <p className="font-medium text-blue-800 mb-1">Weitere Gläubiger?</p>
                     <p className="text-blue-700">
-                      Falls Sie weitere Gläubigerdokumente haben, wenden Sie sich bitte an unseren Support. 
+                      Falls Sie weitere Gläubigerdokumente haben, wenden Sie sich bitte an unseren Support.
                       Weitere Uploads über das Portal sind nicht mehr möglich.
                     </p>
                   </div>
@@ -423,7 +401,7 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <p className="text-sm text-gray-500">
-                Sobald die 30-Tage-Frist abgelaufen ist, werden Sie aufgefordert, Ihre aktuellen Finanzdaten 
+                Sobald die 30-Tage-Frist abgelaufen ist, werden Sie aufgefordert, Ihre aktuellen Finanzdaten
                 für die Erstellung Ihres Schuldenbereinigungsplans anzugeben.
               </p>
             </div>
@@ -464,7 +442,7 @@ export const PersonalPortal = ({
                   <div className="text-sm">
                     <p className="font-medium text-blue-800 mb-1">In Bearbeitung</p>
                     <p className="text-blue-700">
-                      Unser Team erstellt jetzt Ihren individuellen Schuldenbereinigungsplan. 
+                      Unser Team erstellt jetzt Ihren individuellen Schuldenbereinigungsplan.
                       Sie werden benachrichtigt, sobald dieser zur Überprüfung bereit ist.
                     </p>
                   </div>
@@ -480,12 +458,12 @@ export const PersonalPortal = ({
         <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-start flex-1">
-              <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3" 
-                   style={{backgroundColor: `${customColors.primary}10`}}>
-                <img 
-                  src="https://www.provenexpert.com/favicon.ico" 
-                  alt="ProvenExpert" 
-                  className="h-6 w-6 object-contain" 
+              <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
+                style={{ backgroundColor: `${customColors.primary}10` }}>
+                <img
+                  src="https://www.provenexpert.com/favicon.ico"
+                  alt="ProvenExpert"
+                  className="h-6 w-6 object-contain"
                 />
               </div>
               <div>
@@ -495,7 +473,7 @@ export const PersonalPortal = ({
                 </p>
               </div>
             </div>
-            <a 
+            <a
               href="https://www.provenexpert.com/rechtsanwalt-thomas-scuric/9298/"
               target="_blank"
               rel="noopener noreferrer"
@@ -513,10 +491,10 @@ export const PersonalPortal = ({
         <div className="text-center text-xs text-gray-500 pt-4 pb-16">
           <div className="flex justify-center mb-3">
             <div className="h-8 flex items-center justify-center">
-              <img 
-                src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"} 
-                alt="Logo" 
-                className="h-auto w-auto max-h-full max-w-[80px] object-contain opacity-70" 
+              <img
+                src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
+                alt="Logo"
+                className="h-auto w-auto max-h-full max-w-[80px] object-contain opacity-70"
               />
             </div>
           </div>

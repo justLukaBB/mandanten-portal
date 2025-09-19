@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import api from '../../config/api';
+import { useNavigate } from 'react-router-dom';
 
 interface AdminLoginProps {
-  onLogin: () => void;
+  // onLogin: () => void;
 }
 
-const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
+const AdminLogin: React.FC<AdminLoginProps> = () => {
+  const navigate = useNavigate();
   const [credentials, setCredentials] = useState({
     email: '',
     password: ''
@@ -30,6 +32,9 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
         console.log('🔑 AdminLogin: Login successful, storing tokens...');
 
         // Store admin token - let the API interceptor handle headers automatically
+        localStorage.clear();
+        localStorage.setItem("active_role", "admin");
+        localStorage.setItem("auth_token", response.data.token);
         localStorage.setItem('admin_token', response.data.token);
         localStorage.setItem('admin_auth', 'true');
         localStorage.setItem('admin_email', response.data.user.email);
@@ -40,8 +45,10 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
           email: response.data.user.email
         });
 
+        navigate("/admin");
+
         // Don't manually set headers - let the interceptor handle it
-        onLogin();
+        // onLogin();
       }
     } catch (error: any) {
       console.error('Admin login error:', error);
