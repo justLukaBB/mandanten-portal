@@ -111,7 +111,20 @@ const creditorSchema = new mongoose.Schema({
     enum: ['creditor_response', 'original_document', 'default_fallback'],
     default: 'original_document'
   },
-  response_received_at: Date
+  response_received_at: Date,
+  
+  // Settlement plan response fields
+  settlement_response_status: {
+    type: String,
+    enum: ['pending', 'accepted', 'declined', 'counter_offer', 'no_response'],
+    default: 'pending'
+  },
+  settlement_response_received_at: Date,
+  settlement_response_text: String,
+  settlement_side_conversation_id: String,
+  settlement_plan_sent_at: Date,
+  settlement_acceptance_confidence: Number, // AI confidence in acceptance/rejection detection
+  settlement_response_metadata: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 // Status History Schema for tracking all status changes

@@ -113,6 +113,72 @@ app.get('/api/test-document', (req, res) => {
     }
 });
 
+// Settlement response monitoring endpoints
+app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
+        const monitor = new SettlementResponseMonitor();
+        
+        const summary = await monitor.generateSettlementSummary(clientId);
+        res.json({
+            success: true,
+            summary: summary
+        });
+        
+    } catch (error) {
+        console.error('❌ Error getting settlement responses:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticateAdmin, async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const { timeoutDays = 30 } = req.body;
+        
+        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
+        const monitor = new SettlementResponseMonitor();
+        
+        const result = await monitor.processTimeouts(clientId, timeoutDays);
+        res.json({
+            success: true,
+            result: result
+        });
+        
+    } catch (error) {
+        console.error('❌ Error processing settlement timeouts:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
+        const monitor = new SettlementResponseMonitor();
+        
+        const status = monitor.getMonitoringStatus(clientId);
+        res.json({
+            success: true,
+            status: status
+        });
+        
+    } catch (error) {
+        console.error('❌ Error getting monitoring status:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
 

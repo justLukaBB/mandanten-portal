@@ -889,10 +889,19 @@ class CreditorContactService {
 
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
+            // Step 10: Update creditor records with Side Conversation IDs and start monitoring
+            await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
+            
+            // Step 11: Start settlement response monitoring
+            const SettlementResponseMonitor = require('./settlementResponseMonitor');
+            const settlementMonitor = new SettlementResponseMonitor();
+            const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 5);
+            
             console.log(`✅ Settlement plan distribution completed via direct Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
             console.log(`   - Side Conversations created: ${emailResults.length}`);
             console.log(`   - Successful emails sent: ${successfulEmails.length}/${creditors.length}`);
+            console.log(`   - Settlement response monitoring: ${monitoringResult.success ? 'STARTED' : 'FAILED'}`);
 
             return {
                 success: true,
@@ -904,6 +913,7 @@ class CreditorContactService {
                 total_creditors: creditors.length,
                 side_conversations_created: emailResults.length,
                 method: 'side_conversation_with_links',
+                monitoring_started: monitoringResult.success,
                 email_results: emailResults,
                 processing_timestamp: new Date().toISOString()
             };
@@ -1259,6 +1269,61 @@ class CreditorContactService {
         }
 
         return emailResults;
+    }
+
+    /**
+     * Update creditor records with Side Conversation IDs for settlement response tracking
+     */
+    async updateCreditorsWithSideConversationIds(clientReference, emailResults) {
+        try {
+            console.log(`📋 Updating creditor records with Side Conversation IDs for ${clientReference}`);
+            
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            let updatedCount = 0;
+            
+            for (const emailResult of emailResults) {
+                if (emailResult.success && emailResult.side_conversation_id) {
+                    // Find matching creditor by name or ID
+                    const creditor = client.final_creditor_list.find(c => 
+                        c.sender_name === emailResult.creditor_name ||
+                        c.id === emailResult.creditor_id
+                    );
+                    
+                    if (creditor) {
+                        creditor.settlement_side_conversation_id = emailResult.side_conversation_id;
+                        creditor.settlement_plan_sent_at = new Date();
+                        creditor.settlement_response_status = 'pending';
+                        updatedCount++;
+                        
+                        console.log(`📎 Updated ${creditor.sender_name} with Side Conversation ID: ${emailResult.side_conversation_id}`);
+                    } else {
+                        console.warn(`⚠️ Could not find creditor for result: ${emailResult.creditor_name}`);
+                    }
+                }
+            }
+
+            if (updatedCount > 0) {
+                await client.save();
+                console.log(`✅ Updated ${updatedCount} creditor records with Side Conversation IDs`);
+            }
+
+            return {
+                success: true,
+                updated_count: updatedCount
+            };
+
+        } catch (error) {
+            console.error(`❌ Error updating creditors with Side Conversation IDs:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 }
 
