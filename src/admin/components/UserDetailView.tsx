@@ -89,6 +89,10 @@ interface Creditor {
   reference_number?: string;
   claim_amount?: number;
   status: string;
+  settlement_plan_sent_at?: string;
+  settlement_side_conversation_id?: string;
+  settlement_response_status?: string;
+  settlement_response_received_at?: string;
 }
 
 const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
