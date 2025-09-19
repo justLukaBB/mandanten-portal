@@ -109,6 +109,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [pfaendbarAmount, setPfaendbarAmount] = useState<number | null>(null);
   const [savingFinancial, setSavingFinancial] = useState(false);
 
+  // Check if client has settlement plans sent (to determine if we should show the table)
+  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
+    creditor.settlement_plan_sent_at
+  );
+
   useEffect(() => {
     fetchUserDetails();
   }, [userId]);
@@ -367,11 +372,6 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       setSettlementSummary(null);
     }
   };
-
-  // Check if client has settlement plans sent (to determine if we should show the table)
-  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
-    creditor.settlement_plan_sent_at
-  );
 
   // Debug logging
   React.useEffect(() => {
