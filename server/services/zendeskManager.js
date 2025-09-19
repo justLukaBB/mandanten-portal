@@ -655,14 +655,15 @@ Status updates will be posted to this ticket as emails are sent.
                     total_payment: ((settlementData.monthly_payment || 0) * (creditorData.debt_amount / settlementData.total_debt)) * 36
                 },
                 
-                // Document attachment IDs (already uploaded to main ticket)
+                // Document attachment info (for Side Conversation creation)
                 documents: documentAttachments.map(attachment => ({
                     filename: attachment.filename,
                     type: attachment.type,
-                    attachment_id: attachment.attachment_id,
-                    attachment_token: attachment.token, // Keep token for fallback
-                    content_url: attachment.content_url,
-                    size: attachment.size
+                    attachment_id: attachment.attachment_id || null,
+                    fresh_upload_token: attachment.token, // For fresh upload to Side Conversation
+                    content_url: attachment.content_url || null,
+                    size: attachment.size,
+                    file_path: attachment.file_path || null // In case Make.com needs to re-upload
                 })),
                 
                 // Email content
@@ -681,7 +682,8 @@ Status updates will be posted to this ticket as emails are sent.
                 metadata: {
                     timestamp: new Date().toISOString(),
                     source: 'mandanten_portal',
-                    action: 'create_side_conversation'
+                    action: 'create_side_conversation',
+                    note: 'For Side Conversations, you may need to re-upload documents using file_path or use fresh_upload_token'
                 }
             };
             
@@ -1091,7 +1093,50 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Get attachment IDs from a ticket
+     * Get attachment download URLs from a ticket  
+     */
+    async getTicketAttachmentUrls(ticketId) {
+        try {
+            console.log(`🔗 Getting attachment URLs for ticket ${ticketId}`);
+            
+            const url = `${this.apiUrl}tickets/${ticketId}/comments.json`;
+            const response = await axios.get(url, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            const attachmentUrls = [];
+            
+            // Look through all comments for attachments
+            if (response.data.comments) {
+                response.data.comments.forEach(comment => {
+                    if (comment.attachments && comment.attachments.length > 0) {
+                        comment.attachments.forEach(attachment => {
+                            attachmentUrls.push({
+                                id: attachment.id,
+                                filename: attachment.file_name,
+                                content_url: attachment.content_url,
+                                size: attachment.size
+                            });
+                        });
+                    }
+                });
+            }
+
+            console.log(`✅ Found ${attachmentUrls.length} attachment URLs in ticket ${ticketId}`);
+            return attachmentUrls;
+
+        } catch (error) {
+            console.error('❌ Error getting ticket attachment URLs:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            return [];
+        }
+    }
+
+    /**
+     * Get attachment IDs from a ticket (DEPRECATED - use getTicketAttachmentUrls)
      */
     async getTicketAttachmentIds(ticketId) {
         try {
@@ -1131,6 +1176,132 @@ Status updates will be posted to this ticket as emails are sent.
             }
             return [];
         }
+    }
+
+    /**
+     * Create Side Conversation with download links
+     */
+    async createSideConversationWithDownloadLinks(ticketId, creditorData, clientData, settlementData, downloadUrls) {
+        try {
+            const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
+            // Use actual creditor email if available, fallback to test email for development
+            const creditorEmail = creditorData.creditor_email || creditorData.email || 'justlukax@gmail.com';
+            const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
+            
+            console.log(`📧 Sending to: ${creditorEmail} (${creditorEmail === 'justlukax@gmail.com' ? 'TEST EMAIL' : 'CREDITOR EMAIL'})`);
+            
+            console.log(`💬 Creating Side Conversation for ${creditorName} in ticket ${ticketId}`);
+            
+            // Generate email body with download links
+            const emailBody = this.generateSettlementPlanEmailBodyWithLinks(creditorData, clientData, settlementData, downloadUrls);
+            
+            const sideConversationData = {
+                message: {
+                    to: [
+                        {
+                            email: creditorEmail,
+                            name: creditorName
+                        }
+                    ],
+                    subject: emailSubject,
+                    body: emailBody
+                }
+            };
+
+            const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
+            const response = await axios.post(url, sideConversationData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Side Conversation created for ${creditorName}: ${response.data.side_conversation.id}`);
+            
+            return {
+                success: true,
+                side_conversation_id: response.data.side_conversation.id,
+                creditor_name: creditorName,
+                creditor_email: creditorEmail,
+                subject: emailSubject,
+                download_links_count: downloadUrls.length
+            };
+
+        } catch (error) {
+            const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown';
+            console.error(`❌ Error creating Side Conversation for ${creditorName}:`, error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+                console.error('Response status:', error.response.status);
+            }
+            
+            return {
+                success: false,
+                error: error.message,
+                creditor_name: creditorName,
+                creditor_email: creditorData.creditor_email || creditorData.email || 'justlukax@gmail.com'
+            };
+        }
+    }
+
+    /**
+     * Generate settlement plan email body with download links
+     */
+    generateSettlementPlanEmailBodyWithLinks(creditorData, clientData, settlementData, downloadUrls) {
+        const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Sehr geehrte Damen und Herren';
+        const planType = settlementData.plan_type || 'Quotenplan';
+        const monthlyPayment = settlementData.monthly_payment || 0;
+        const totalDebt = settlementData.total_debt || 0;
+        const creditorDebt = creditorData.claim_amount || 0;
+        const duration = settlementData.duration_months || 36;
+        
+        // Calculate creditor's share
+        const creditorShare = totalDebt > 0 ? (creditorDebt / totalDebt) * 100 : 0;
+        const creditorMonthlyPayment = totalDebt > 0 ? (monthlyPayment * (creditorDebt / totalDebt)) : 0;
+        const creditorTotalPayment = creditorMonthlyPayment * duration;
+
+        // Generate download links section
+        const downloadLinksSection = downloadUrls.map(doc => {
+            const documentName = doc.type === 'settlement_plan' ? 'Schuldenbereinigungsplan' : 'Forderungsübersicht';
+            return `📄 ${documentName}: ${doc.download_url}`;
+        }).join('\n');
+
+        return `
+Sehr geehrte Damen und Herren,
+${creditorName !== 'Sehr geehrte Damen und Herren' ? `\nSehr geehrte/r ${creditorName},` : ''}
+
+wir übersenden Ihnen hiermit den außergerichtlichen Schuldenbereinigungsplan für unseren Mandanten ${clientData.name}.
+
+**SCHULDENBEREINIGUNGSPLAN DETAILS:**
+
+Plan-Typ: ${planType}
+Laufzeit: ${duration} Monate
+Gesamtschuldensumme: €${totalDebt.toFixed(2)}
+Monatliche Zahlungsrate gesamt: €${monthlyPayment.toFixed(2)}
+
+**IHRE FORDERUNG:**
+
+Forderungsbetrag: €${creditorDebt.toFixed(2)}
+Ihr Anteil an Gesamtschuld: ${creditorShare.toFixed(2)}%
+Ihre monatliche Zahlung: €${creditorMonthlyPayment.toFixed(2)}
+Ihre Gesamtzahlung über ${duration} Monate: €${creditorTotalPayment.toFixed(2)}
+
+**DOKUMENTE ZUM DOWNLOAD:**
+
+${downloadLinksSection}
+
+**NÄCHSTE SCHRITTE:**
+
+Bitte laden Sie die Dokumente über die obigen Links herunter und prüfen Sie den Schuldenbereinigungsplan. Teilen Sie uns Ihre Zustimmung oder etwaige Anmerkungen bis zum [DATUM] mit.
+
+Bei Zustimmung aller Gläubiger wird der Plan rechtsverbindlich und die Zahlungen beginnen zum [STARTDATUM].
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+Thomas Scuric Rechtsanwälte
+
+---
+📱 Diese E-Mail wurde automatisch über unser Mandanten-Portal generiert.
+        `.trim();
     }
 
     /**

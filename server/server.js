@@ -5204,7 +5204,8 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
       if (typeof creditorService.sendSettlementPlanToCreditors === 'function') {
         emailResult = await creditorService.sendSettlementPlanToCreditors(
           client.aktenzeichen,
-          settlementPlan
+          settlementPlan,
+          { settlementResult, overviewResult }
         );
       } else {
         console.warn(`⚠️ sendSettlementPlanToCreditors method not yet implemented in CreditorContactService`);
