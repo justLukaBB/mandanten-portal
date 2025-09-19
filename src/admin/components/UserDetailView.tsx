@@ -97,6 +97,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSettlementPlan, setShowSettlementPlan] = useState(false);
+  const [showSettlementResponses, setShowSettlementResponses] = useState(false);
+  const [settlementSummary, setSettlementSummary] = useState<any>(null);
+  const [loadingSettlement, setLoadingSettlement] = useState(false);
   
   // Financial data form state
   const [financialForm, setFinancialForm] = useState({
@@ -322,6 +325,47 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
+  const analyze30DaySettlementResponses = async () => {
+    try {
+      setLoadingSettlement(true);
+      
+      // First, process any timeouts (mark non-responders as "no_response")
+      const timeoutResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/process-settlement-timeouts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ timeoutDays: 30 })
+      });
+
+      if (!timeoutResponse.ok) {
+        console.warn('Timeout processing failed, continuing with analysis...');
+      }
+
+      // Fetch settlement summary
+      const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/settlement-responses`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!summaryResponse.ok) {
+        throw new Error(`Failed to fetch settlement summary: ${summaryResponse.status}`);
+      }
+
+      const summary = await summaryResponse.json();
+      setSettlementSummary(summary);
+      setShowSettlementResponses(true);
+      
+    } catch (error) {
+      console.error('Error analyzing settlement responses:', error);
+      alert(`❌ Fehler beim Analysieren der Gläubiger-Antworten: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingSettlement(false);
+    }
+  };
+
   const getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       'created': 'bg-gray-100 text-gray-800',
@@ -450,6 +494,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             >
               <ClockIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-pulse' : ''}`} />
               30-Day Simulation
+            </button>
+            <button
+              onClick={analyze30DaySettlementResponses}
+              disabled={loadingSettlement}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-purple-600 text-purple-600 hover:bg-purple-50 transition-colors"
+              title="Analyze settlement plan responses after 30-day period"
+            >
+              <ChartBarIcon className={`w-4 h-4 mr-1 ${loadingSettlement ? 'animate-pulse' : ''}`} />
+              30-Day (2) Simulation
             </button>
             <button
               onClick={fetchUserDetails}
@@ -1016,6 +1069,151 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           onClose={() => setShowSettlementPlan(false)}
           onBack={() => setShowSettlementPlan(false)}
         />
+      )}
+
+      {/* Settlement Response Analysis Modal */}
+      {showSettlementResponses && settlementSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-5xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">
+                📊 Settlement Response Analysis: {user.firstName} {user.lastName}
+              </h2>
+              <button
+                onClick={() => setShowSettlementResponses(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Summary Statistics */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+                <p className="text-2xl font-bold text-blue-600">{settlementSummary.total_creditors}</p>
+                <p className="text-sm text-blue-800">Total Creditors</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+                <p className="text-2xl font-bold text-green-600">{settlementSummary.accepted}</p>
+                <p className="text-sm text-green-800">Accepted</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-4 text-center border border-red-200">
+                <p className="text-2xl font-bold text-red-600">{settlementSummary.declined}</p>
+                <p className="text-sm text-red-800">Declined</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-4 text-center border border-yellow-200">
+                <p className="text-2xl font-bold text-yellow-600">{settlementSummary.counter_offers}</p>
+                <p className="text-sm text-yellow-800">Counter Offers</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+                <p className="text-2xl font-bold text-gray-600">{settlementSummary.no_responses}</p>
+                <p className="text-sm text-gray-800">No Response</p>
+              </div>
+            </div>
+
+            {/* Acceptance Rate */}
+            <div className="bg-purple-50 rounded-lg p-4 mb-6 border border-purple-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-purple-900">Settlement Plan Acceptance Rate</h3>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-purple-600">{settlementSummary.acceptance_rate}%</p>
+                  <p className="text-sm text-purple-800">
+                    ({settlementSummary.accepted} of {settlementSummary.total_creditors} creditors)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Creditor Table */}
+            <div className="bg-gray-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">📋 Detailed Creditor Response Analysis</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Creditor
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Claim Amount
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Response Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Response Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {settlementSummary.creditors && settlementSummary.creditors.map((creditor: any, index: number) => {
+                      const getStatusColor = (status: string) => {
+                        switch (status) {
+                          case 'accepted': return 'bg-green-100 text-green-800';
+                          case 'declined': return 'bg-red-100 text-red-800';
+                          case 'counter_offer': return 'bg-yellow-100 text-yellow-800';
+                          case 'no_response': return 'bg-gray-100 text-gray-800';
+                          case 'pending': return 'bg-blue-100 text-blue-800';
+                          default: return 'bg-gray-100 text-gray-800';
+                        }
+                      };
+
+                      const getStatusIcon = (status: string) => {
+                        switch (status) {
+                          case 'accepted': return '✅';
+                          case 'declined': return '❌';
+                          case 'counter_offer': return '🔄';
+                          case 'no_response': return '⏰';
+                          case 'pending': return '⏳';
+                          default: return '❓';
+                        }
+                      };
+
+                      return (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{creditor.name}</div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-600">{creditor.email}</div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {creditor.claim_amount ? `€${creditor.claim_amount.toFixed(2)}` : 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(creditor.status)}`}>
+                              {getStatusIcon(creditor.status)} {creditor.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {creditor.response_date 
+                              ? new Date(creditor.response_date).toLocaleDateString('de-DE')
+                              : 'No response'
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowSettlementResponses(false)}
+                className="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close Analysis
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
