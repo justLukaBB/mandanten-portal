@@ -27,12 +27,16 @@ const Client = require('./models/Client');
 const DocumentProcessor = require('./services/documentProcessor');
 const CreditorContactService = require('./services/creditorContactService');
 const SideConversationMonitor = require('./services/sideConversationMonitor');
+const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
 const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
+
+// Initialize global settlement response monitor
+const globalSettlementResponseMonitor = new SettlementResponseMonitor();
 
 const app = express();
 const PORT = config.PORT;
@@ -429,6 +433,20 @@ async function getClient(clientId) {
   } catch (error) {
     console.error('Error getting client from MongoDB:', error);
     throw error;
+  }
+}
+
+// Helper function to get client's aktenzeichen for settlement services
+async function getClientAktenzeichen(clientId) {
+  try {
+    const client = await getClient(clientId);
+    if (!client) {
+      return null;
+    }
+    return client.aktenzeichen;
+  } catch (error) {
+    console.error('Error getting client aktenzeichen:', error);
+    return null;
   }
 }
 
@@ -5803,6 +5821,101 @@ app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (r
   }
 });
 
+// ============================================================================
+// SETTLEMENT RESPONSE ENDPOINTS
+// ============================================================================
+
+// Get settlement responses for a client
+app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    // Get client's aktenzeichen for settlement services
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Generate settlement response summary using aktenzeichen
+    const result = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
+    
+    res.json({
+      success: true,
+      client_id: clientId,
+      aktenzeichen: aktenzeichen,
+      settlement_responses: result
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting settlement responses:', error.message);
+    res.status(500).json({
+      error: 'Failed to get settlement responses',
+      details: error.message
+    });
+  }
+});
+
+// Process settlement timeouts for a client
+app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const { timeoutDays = 30 } = req.body;
+    
+    // Get client's aktenzeichen for settlement services
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Process timeouts using aktenzeichen
+    const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
+    
+    res.json({
+      success: true,
+      client_id: clientId,
+      aktenzeichen: aktenzeichen,
+      timeout_processing: result
+    });
+    
+  } catch (error) {
+    console.error('❌ Error processing settlement timeouts:', error.message);
+    res.status(500).json({
+      error: 'Failed to process settlement timeouts',
+      details: error.message
+    });
+  }
+});
+
+// Get settlement monitoring status for a client
+app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    // Get client's aktenzeichen for settlement services
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get monitoring status using aktenzeichen
+    const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
+    
+    res.json({
+      success: true,
+      client_id: clientId,
+      aktenzeichen: aktenzeichen,
+      monitoring_status: status
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting settlement monitoring status:', error.message);
+    res.status(500).json({
+      error: 'Failed to get settlement monitoring status',
+      details: error.message
+    });
+  }
+});
+
 // Test agent creation endpoint (for development only)
 app.post('/api/test/create-agent', async (_req, res) => {
   try {
@@ -5877,4 +5990,4 @@ process.on('SIGTERM', async () => {
 startServer();
 
 // Export for other services
-module.exports = { app, clientsData, getClient, saveClient };
+module.exports = { app, clientsData, getClient, saveClient, getClientAktenzeichen };

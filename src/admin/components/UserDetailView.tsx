@@ -348,8 +348,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       });
 
       if (summaryResponse.ok) {
-        const summary = await summaryResponse.json();
-        setSettlementSummary(summary);
+        const result = await summaryResponse.json();
+        setSettlementSummary(result.summary);
       } else {
         // If settlement data doesn't exist yet, clear any existing data
         setSettlementSummary(null);
