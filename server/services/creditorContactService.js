@@ -892,10 +892,13 @@ class CreditorContactService {
             // Step 10: Update creditor records with Side Conversation IDs and start monitoring
             await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
             
-            // Step 11: Start settlement response monitoring
+            // Wait for database save to complete before starting monitoring
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Step 11: Start settlement response monitoring (1-minute intervals)
             const SettlementResponseMonitor = require('./settlementResponseMonitor');
             const settlementMonitor = new SettlementResponseMonitor();
-            const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 5);
+            const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 1);
             
             console.log(`✅ Settlement plan distribution completed via direct Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
