@@ -357,12 +357,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   const fetchSettlementResponses = async () => {
     try {
+      const adminToken = localStorage.getItem('admin_token');
       console.log('🔄 Fetching settlement responses for userId:', userId);
+      console.log('🔑 Admin token available:', !!adminToken);
+      console.log('🔑 Token preview:', adminToken ? adminToken.substring(0, 20) + '...' : 'No token');
       
       // Fetch settlement summary (silently, no loading state for auto-refresh)
       const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/settlement-responses`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${adminToken}`
         }
       });
 
@@ -558,6 +561,29 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
                 >
                   Test Settlement API
+                </button>
+                <button
+                  onClick={async () => {
+                    const token = localStorage.getItem('admin_token');
+                    console.log('🔑 Testing admin token:', {
+                      hasToken: !!token,
+                      tokenLength: token?.length,
+                      tokenPreview: token ? token.substring(0, 50) + '...' : 'No token'
+                    });
+                    
+                    try {
+                      // Test a simple admin endpoint
+                      const response = await fetch(`${API_BASE_URL}/api/clients`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      console.log('🔑 Token test result:', response.status, response.statusText);
+                    } catch (error) {
+                      console.error('🔑 Token test error:', error);
+                    }
+                  }}
+                  className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                >
+                  Test Token
                 </button>
               </div>
             )}
