@@ -103,6 +103,8 @@ class SettlementResponseMonitor {
                 return;
             }
 
+            console.log(`🔍 Settlement monitor for ${clientReference}: Found client with ${client.final_creditor_list.length} creditors`);
+
             // Get all Side Conversations for settlement plans
             const settlementSideConversations = client.final_creditor_list
                 .filter(creditor => creditor.settlement_side_conversation_id)
@@ -112,8 +114,20 @@ class SettlementResponseMonitor {
                     creditor_email: creditor.sender_email
                 }));
 
+            console.log(`🔍 Settlement Side Conversations for ${clientReference}:`, 
+                settlementSideConversations.map(sc => ({
+                    creditor: sc.creditor_name,
+                    side_conversation_id: sc.side_conversation_id
+                }))
+            );
+
             if (settlementSideConversations.length === 0) {
                 console.log(`📋 No settlement Side Conversations found for client ${clientReference}`);
+                console.log(`🔍 Creditor settlement fields:`, client.final_creditor_list.map(c => ({
+                    name: c.sender_name,
+                    settlement_side_conversation_id: c.settlement_side_conversation_id,
+                    settlement_plan_sent_at: c.settlement_plan_sent_at
+                })));
                 return;
             }
 
