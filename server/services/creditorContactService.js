@@ -789,7 +789,7 @@ class CreditorContactService {
     /**
      * Send settlement plan documents to all creditors (second round of emails)
      */
-    async sendSettlementPlanToCreditors(clientReference, settlementData) {
+    async sendSettlementPlanToCreditors(clientReference, settlementData, generatedDocuments = null) {
         try {
             console.log(`\n📄 Starting second round: Sending settlement plan to creditors for ${clientReference}`);
             
@@ -846,42 +846,53 @@ class CreditorContactService {
 
             console.log(`✅ Settlement plan ticket created: ${settlementTicket.subject} (ID: ${settlementTicket.id})`);
 
-            // Step 6: Upload documents to main ticket and get attachment IDs
-            const documentAttachments = await this.uploadDocumentsToMainTicket(
+            // Step 6: Upload documents to main ticket and get download URLs
+            const documentDownloadUrls = await this.uploadDocumentsToMainTicketWithUrls(
                 settlementTicket.id,
                 clientData,
-                settlementData
+                settlementData,
+                generatedDocuments
             );
 
-            // Step 7: Send webhook calls for each creditor with main ticket ID and attachment IDs
-            const emailResults = await this.sendSettlementPlanEmailsViaMakeWebhook(
+            // Step 7: Validate we have documents and download URLs
+            if (documentDownloadUrls.length === 0) {
+                console.warn(`⚠️ No documents were uploaded successfully - Side Conversations will be created without attachments`);
+            } else {
+                console.log(`📋 Successfully prepared ${documentDownloadUrls.length} document download URLs`);
+                documentDownloadUrls.forEach(doc => {
+                    console.log(`   📄 ${doc.filename}: ${doc.download_url ? 'HAS URL' : 'NO URL'}`);
+                });
+            }
+
+            // Step 8: Create Side Conversations for each creditor with download links
+            const emailResults = await this.createSideConversationsWithDownloadLinks(
                 settlementTicket.id,
                 creditors,
                 clientData,
                 settlementData,
-                documentAttachments
+                documentDownloadUrls
             );
 
             const successfulEmails = emailResults.filter(r => r.success && r.email_sent);
 
-            // Step 8: Add status update to settlement ticket
+            // Step 9: Add status update to settlement ticket
             const statusUpdates = emailResults.map(result => ({
                 creditor_name: result.creditor_name,
                 creditor_email: result.recipient_email,
-                method: result.method || 'make_webhook',
-                attachments_count: result.attachments_count || 0,
+                method: result.method || 'side_conversation_with_links',
+                download_links_count: result.download_links_count || 0,
                 status: result.success && result.email_sent ? 
-                    `Schuldenbereinigungsplan E-Mail versendet via Make.com (${result.attachments_count} Anhänge)` : 
+                    `Schuldenbereinigungsplan E-Mail versendet via Side Conversation (${result.download_links_count || 0} Download-Links)` : 
                     `Fehler: ${result.error}`,
                 success: result.success && result.email_sent
             }));
 
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
-            console.log(`✅ Settlement plan distribution completed via Make.com Side Conversations:`);
+            console.log(`✅ Settlement plan distribution completed via direct Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
-            console.log(`   - Webhook calls sent to Make.com: ${emailResults.length}`);
-            console.log(`   - Side Conversations to be created: ${successfulEmails.length}/${creditors.length}`);
+            console.log(`   - Side Conversations created: ${emailResults.length}`);
+            console.log(`   - Successful emails sent: ${successfulEmails.length}/${creditors.length}`);
 
             return {
                 success: true,
@@ -891,8 +902,8 @@ class CreditorContactService {
                 settlement_ticket_subject: settlementTicket.subject,
                 emails_sent: successfulEmails.length,
                 total_creditors: creditors.length,
-                webhook_calls_sent: emailResults.length,
-                method: 'make_webhook',
+                side_conversations_created: emailResults.length,
+                method: 'side_conversation_with_links',
                 email_results: emailResults,
                 processing_timestamp: new Date().toISOString()
             };
@@ -909,7 +920,125 @@ class CreditorContactService {
     }
 
     /**
-     * Upload settlement plan documents to main ticket and get attachment IDs
+     * Upload settlement plan documents to main ticket and get download URLs
+     */
+    async uploadDocumentsToMainTicketWithUrls(ticketId, clientData, settlementData, generatedDocuments = null) {
+        try {
+            console.log(`📎 Uploading documents to main ticket ${ticketId} for download URLs...`);
+            
+            let documentFiles = [];
+            
+            // If generatedDocuments info is provided, use actual filenames
+            if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
+                console.log(`📋 Using provided document info from generation`);
+                const settlementPath = generatedDocuments.settlementResult.document_info?.path;
+                const overviewPath = generatedDocuments.overviewResult.document_info?.path;
+                
+                if (settlementPath) documentFiles.push({ path: settlementPath, type: 'settlement_plan' });
+                if (overviewPath) documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
+                
+            } else {
+                // Fallback: search for documents by pattern
+                console.log(`🔍 Searching for documents by pattern...`);
+                const path = require('path');
+                const documentDir = path.join(__dirname, '../documents');
+                const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+                const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+                
+                documentFiles = [
+                    { path: settlementPlanFile, type: 'settlement_plan' },
+                    { path: creditorOverviewFile, type: 'creditor_overview' }
+                ];
+            }
+            
+            const fs = require('fs');
+            const documentUrls = [];
+            
+            // Upload each document file
+            for (const docFile of documentFiles) {
+                if (fs.existsSync(docFile.path)) {
+                    const filename = require('path').basename(docFile.path);
+                    console.log(`📤 Uploading ${docFile.type}: ${filename}`);
+                    const uploadResult = await this.zendesk.uploadFileToZendesk(docFile.path, filename);
+                    if (uploadResult.success) {
+                        documentUrls.push({
+                            type: docFile.type,
+                            filename: filename,
+                            token: uploadResult.token,
+                            size: uploadResult.size
+                        });
+                        console.log(`✅ ${docFile.type} uploaded: ${uploadResult.token}`);
+                    } else {
+                        console.log(`❌ Failed to upload ${docFile.type}: ${uploadResult.error}`);
+                    }
+                } else {
+                    console.log(`❌ Document file not found: ${docFile.path}`);
+                }
+            }
+            
+            // Add attachments to main ticket as internal note and get download URLs
+            if (documentUrls.length > 0) {
+                const uploadTokens = documentUrls.map(doc => doc.token);
+                const attachmentList = documentUrls.map(doc => `• ${doc.filename} (${Math.round(doc.size / 1024)} KB)`).join('\n');
+                
+                const commentResult = await this.zendesk.addTicketComment(ticketId, {
+                    body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen:\n\n${attachmentList}\n\nDiese Dokumente werden als Download-Links in Side Conversations mit den Gläubigern geteilt.`,
+                    public: false,
+                    uploads: uploadTokens
+                });
+                
+                if (commentResult.success) {
+                    console.log(`✅ Documents attached to main ticket ${ticketId}`);
+                    
+                    // Wait a moment for Zendesk to process the attachments
+                    console.log(`⏰ Waiting 3 seconds for Zendesk attachment processing...`);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    // Get the download URLs from the ticket attachments
+                    console.log(`🔗 Retrieving download URLs from ticket ${ticketId}...`);
+                    const attachmentDetails = await this.zendesk.getTicketAttachmentUrls(ticketId);
+                    
+                    if (attachmentDetails.length > 0) {
+                        // Update document URLs array with download URLs
+                        console.log(`🔗 Found ${attachmentDetails.length} download URLs from ticket:`);
+                        attachmentDetails.forEach(att => {
+                            console.log(`   - ${att.filename}: ${att.content_url}`);
+                        });
+                        
+                        // Match uploaded files with their download URLs
+                        for (let i = 0; i < documentUrls.length; i++) {
+                            const matchingAttachment = attachmentDetails.find(att => 
+                                att.filename === documentUrls[i].filename
+                            );
+                            if (matchingAttachment) {
+                                documentUrls[i].download_url = matchingAttachment.content_url;
+                                documentUrls[i].attachment_id = matchingAttachment.id;
+                                console.log(`🔗 ${documentUrls[i].filename} → ${matchingAttachment.content_url}`);
+                            }
+                        }
+                    } else {
+                        console.log(`⚠️ No download URLs found for ticket ${ticketId}`);
+                        console.log(`📋 This means attachments may not have been processed yet or there was an upload issue`);
+                        
+                        // Continue with empty URLs - Side Conversations will be created without download links
+                        // This is better than failing completely
+                    }
+                } else {
+                    console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
+                }
+            }
+            
+            console.log(`🔗 Successfully prepared ${documentUrls.length} document download URLs`);
+            return documentUrls;
+            
+        } catch (error) {
+            console.error(`❌ Error uploading documents to main ticket:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Upload settlement plan documents to main ticket and get attachment IDs (DEPRECATED - use uploadDocumentsToMainTicketWithUrls)
      */
     async uploadDocumentsToMainTicket(ticketId, clientData, settlementData) {
         try {
@@ -934,7 +1063,8 @@ class CreditorContactService {
                         type: 'settlement_plan',
                         filename: filename,
                         token: uploadResult.token,
-                        size: uploadResult.size
+                        size: uploadResult.size,
+                        file_path: settlementPlanFile
                     });
                     console.log(`✅ Settlement plan uploaded: ${uploadResult.token}`);
                 }
@@ -952,7 +1082,8 @@ class CreditorContactService {
                         type: 'creditor_overview', 
                         filename: filename,
                         token: uploadResult.token,
-                        size: uploadResult.size
+                        size: uploadResult.size,
+                        file_path: creditorOverviewFile
                     });
                     console.log(`✅ Creditor overview uploaded: ${uploadResult.token}`);
                 }
@@ -980,6 +1111,11 @@ class CreditorContactService {
                     
                     if (attachmentIds.length > 0) {
                         // Update attachments array with attachment IDs
+                        console.log(`🔍 Found ${attachmentIds.length} attachment IDs from ticket:`);
+                        attachmentIds.forEach(att => {
+                            console.log(`   - ID: ${att.id}, File: ${att.filename}, Size: ${att.size}`);
+                        });
+                        
                         for (let i = 0; i < Math.min(attachments.length, attachmentIds.length); i++) {
                             attachments[i].attachment_id = attachmentIds[i].id;
                             attachments[i].content_url = attachmentIds[i].content_url;
@@ -987,6 +1123,7 @@ class CreditorContactService {
                         }
                     } else {
                         console.log(`⚠️ No attachment IDs found for ticket ${ticketId}`);
+                        console.log(`🔍 This might be a timing issue - attachments may not be processed yet`);
                     }
                 } else {
                     console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
@@ -1003,7 +1140,68 @@ class CreditorContactService {
     }
 
     /**
-     * Send settlement plan emails via individual creditor tickets
+     * Create Side Conversations for each creditor with download links
+     */
+    async createSideConversationsWithDownloadLinks(settlementTicketId, creditors, clientData, settlementData, downloadUrls = []) {
+        const emailResults = [];
+        
+        console.log(`💬 Creating ${creditors.length} Side Conversations with ${downloadUrls.length} download links`);
+        
+        for (let i = 0; i < creditors.length; i++) {
+            const creditor = creditors[i];
+            const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
+            
+            try {
+                console.log(`💬 Creating Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
+                
+                // Create Side Conversation with download links
+                const result = await this.zendesk.createSideConversationWithDownloadLinks(
+                    settlementTicketId,
+                    creditor,
+                    clientData,
+                    settlementData,
+                    downloadUrls
+                );
+
+                emailResults.push({
+                    creditor_id: creditor.id,
+                    creditor_name: creditorName,
+                    main_ticket_id: settlementTicketId,
+                    side_conversation_id: result.side_conversation_id,
+                    success: result.success,
+                    recipient_email: result.creditor_email || 'justlukax@gmail.com',
+                    subject: result.subject,
+                    download_links_count: result.download_links_count || downloadUrls.length,
+                    method: 'side_conversation_with_links',
+                    email_sent: result.success
+                });
+
+                // Wait 2 seconds between Side Conversations to avoid rate limits
+                if (i < creditors.length - 1) {
+                    console.log(`⏰ Waiting 2 seconds before next Side Conversation...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+            } catch (error) {
+                console.error(`❌ Failed to create Side Conversation for ${creditorName}:`, error.message);
+                
+                emailResults.push({
+                    creditor_id: creditor.id,
+                    creditor_name: creditorName,
+                    main_ticket_id: settlementTicketId,
+                    success: false,
+                    error: error.message,
+                    email_sent: false,
+                    method: 'side_conversation_with_links'
+                });
+            }
+        }
+
+        return emailResults;
+    }
+
+    /**
+     * Send settlement plan emails via individual creditor tickets (DEPRECATED - use createSideConversationsWithDownloadLinks)
      */
     async sendSettlementPlanEmailsViaMakeWebhook(settlementTicketId, creditors, clientData, settlementData, documentAttachments = []) {
         const emailResults = [];
