@@ -125,6 +125,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       }, 60000); // 1 minute = 60,000ms
       
       return () => clearInterval(interval);
+    } else {
+      // If no settlement plans detected yet, periodically check if they've been sent
+      // This handles the case where settlement emails are sent after the admin panel is open
+      const checkInterval = setInterval(async () => {
+        await fetchUserDetails(); // Refresh user data to check for new settlement_plan_sent_at fields
+      }, 30000); // Check every 30 seconds
+      
+      return () => clearInterval(checkInterval);
     }
   }, [hasSettlementPlansSent, userId]);
 
@@ -365,6 +373,17 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     creditor.settlement_plan_sent_at
   );
 
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔍 Settlement Debug Info:', {
+      hasUser: !!user,
+      creditorCount: user?.final_creditor_list?.length || 0,
+      hasSettlementPlansSent,
+      settlementSummary: !!settlementSummary,
+      creditorsWithSettlementDate: user?.final_creditor_list?.filter(c => c.settlement_plan_sent_at)?.length || 0
+    });
+  }, [user, hasSettlementPlansSent, settlementSummary]);
+
   const getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       'created': 'bg-gray-100 text-gray-800',
@@ -504,6 +523,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               <ArrowPathIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+            {/* Debug info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="text-xs text-gray-500">
+                Plans sent: {hasSettlementPlansSent ? 'Yes' : 'No'} | 
+                Summary: {settlementSummary ? 'Yes' : 'No'} |
+                Creditors: {user?.final_creditor_list?.length || 0}
+              </div>
+            )}
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"
