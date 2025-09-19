@@ -357,6 +357,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   const fetchSettlementResponses = async () => {
     try {
+      console.log('🔄 Fetching settlement responses for userId:', userId);
+      
       // Fetch settlement summary (silently, no loading state for auto-refresh)
       const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/settlement-responses`, {
         headers: {
@@ -364,15 +366,20 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         }
       });
 
+      console.log('📡 Settlement API response status:', summaryResponse.status);
+
       if (summaryResponse.ok) {
         const result = await summaryResponse.json();
+        console.log('✅ Settlement API result:', result);
         setSettlementSummary(result.summary);
       } else {
+        const errorText = await summaryResponse.text();
+        console.log('❌ Settlement API error:', summaryResponse.status, errorText);
         // If settlement data doesn't exist yet, clear any existing data
         setSettlementSummary(null);
       }
     } catch (error) {
-      console.error('Error fetching settlement responses:', error);
+      console.error('❌ Error fetching settlement responses:', error);
       setSettlementSummary(null);
     }
   };
@@ -384,8 +391,19 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       creditorCount: user?.final_creditor_list?.length || 0,
       hasSettlementPlansSent,
       settlementSummary: !!settlementSummary,
-      creditorsWithSettlementDate: user?.final_creditor_list?.filter(c => c.settlement_plan_sent_at)?.length || 0
+      creditorsWithSettlementDate: user?.final_creditor_list?.filter(c => c.settlement_plan_sent_at)?.length || 0,
+      fullCreditorData: user?.final_creditor_list?.map(c => ({
+        name: c.sender_name,
+        settlement_plan_sent_at: c.settlement_plan_sent_at,
+        settlement_side_conversation_id: c.settlement_side_conversation_id,
+        settlement_response_status: c.settlement_response_status
+      }))
     });
+    
+    // Log the settlement API response
+    if (settlementSummary) {
+      console.log('📊 Settlement Summary Data:', settlementSummary);
+    }
   }, [user, hasSettlementPlansSent, settlementSummary]);
 
   const getStatusBadgeColor = (status: string) => {
@@ -529,10 +547,18 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </button>
             {/* Debug info */}
             {process.env.NODE_ENV === 'development' && (
-              <div className="text-xs text-gray-500">
-                Plans sent: {hasSettlementPlansSent ? 'Yes' : 'No'} | 
-                Summary: {settlementSummary ? 'Yes' : 'No'} |
-                Creditors: {user?.final_creditor_list?.length || 0}
+              <div className="flex flex-col text-xs text-gray-500 space-y-1">
+                <div>
+                  Plans sent: {hasSettlementPlansSent ? 'Yes' : 'No'} | 
+                  Summary: {settlementSummary ? 'Yes' : 'No'} |
+                  Creditors: {user?.final_creditor_list?.length || 0}
+                </div>
+                <button
+                  onClick={fetchSettlementResponses}
+                  className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                >
+                  Test Settlement API
+                </button>
               </div>
             )}
             <button
