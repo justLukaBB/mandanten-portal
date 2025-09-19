@@ -1289,7 +1289,26 @@ class CreditorContactService {
 
             let updatedCount = 0;
             
+            console.log(`🔍 Email results to process:`, emailResults.map(r => ({
+                creditor_name: r.creditor_name,
+                creditor_id: r.creditor_id,
+                success: r.success,
+                side_conversation_id: r.side_conversation_id
+            })));
+            
+            console.log(`🔍 Available creditors in final_creditor_list:`, client.final_creditor_list.map(c => ({
+                id: c.id,
+                sender_name: c.sender_name
+            })));
+
             for (const emailResult of emailResults) {
+                console.log(`🔍 Processing email result:`, {
+                    creditor_name: emailResult.creditor_name,
+                    creditor_id: emailResult.creditor_id,
+                    success: emailResult.success,
+                    has_side_conversation_id: !!emailResult.side_conversation_id
+                });
+
                 if (emailResult.success && emailResult.side_conversation_id) {
                     // Find matching creditor by name or ID
                     const creditor = client.final_creditor_list.find(c => 
@@ -1297,22 +1316,50 @@ class CreditorContactService {
                         c.id === emailResult.creditor_id
                     );
                     
+                    console.log(`🔍 Creditor matching result:`, {
+                        found: !!creditor,
+                        searching_for: emailResult.creditor_name,
+                        creditor_id: emailResult.creditor_id
+                    });
+                    
                     if (creditor) {
+                        console.log(`📝 Before update:`, {
+                            settlement_side_conversation_id: creditor.settlement_side_conversation_id,
+                            settlement_plan_sent_at: creditor.settlement_plan_sent_at
+                        });
+
                         creditor.settlement_side_conversation_id = emailResult.side_conversation_id;
                         creditor.settlement_plan_sent_at = new Date();
                         creditor.settlement_response_status = 'pending';
                         updatedCount++;
                         
+                        console.log(`📝 After update:`, {
+                            settlement_side_conversation_id: creditor.settlement_side_conversation_id,
+                            settlement_plan_sent_at: creditor.settlement_plan_sent_at
+                        });
+                        
                         console.log(`📎 Updated ${creditor.sender_name} with Side Conversation ID: ${emailResult.side_conversation_id}`);
                     } else {
-                        console.warn(`⚠️ Could not find creditor for result: ${emailResult.creditor_name}`);
+                        console.warn(`⚠️ Could not find creditor for result: ${emailResult.creditor_name} (ID: ${emailResult.creditor_id})`);
                     }
+                } else {
+                    console.warn(`⚠️ Skipping email result - success: ${emailResult.success}, has_side_conversation_id: ${!!emailResult.side_conversation_id}`);
                 }
             }
 
             if (updatedCount > 0) {
                 await client.save();
                 console.log(`✅ Updated ${updatedCount} creditor records with Side Conversation IDs`);
+                
+                // Verify the save worked by re-fetching the client
+                const Client = require('../models/Client');
+                const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
+                console.log(`🔍 Verification - Settlement fields after save:`, verifyClient.final_creditor_list.map(c => ({
+                    name: c.sender_name,
+                    settlement_side_conversation_id: c.settlement_side_conversation_id,
+                    settlement_plan_sent_at: c.settlement_plan_sent_at,
+                    settlement_response_status: c.settlement_response_status
+                })));
             }
 
             return {
