@@ -16,7 +16,7 @@ const AgentLogin: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setError('');
     setLoading(true);
 
@@ -38,11 +38,14 @@ const AgentLogin: React.FC = () => {
       }
 
       console.log('✅ Agent login successful');
-      
+
       // Store agent token and data
+      localStorage.clear();
+      localStorage.setItem("active_role", "agent");
+      localStorage.setItem("auth_token", data.token);
       localStorage.setItem('agent_token', data.token);
       localStorage.setItem('agent_data', JSON.stringify(data.agent));
-      
+
       // Check if there's a redirect URL (for direct review links)
       const clientId = searchParams.get('clientId');
       if (clientId) {
@@ -50,7 +53,7 @@ const AgentLogin: React.FC = () => {
       } else {
         navigate('/agent/dashboard', { replace: true });
       }
-      
+
     } catch (error: any) {
       console.error('❌ Agent login error:', error);
       setError(error.message || 'Login failed');
@@ -69,7 +72,7 @@ const AgentLogin: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <div className="p-3 rounded-full" style={{backgroundColor: '#9f1a1d'}}>
+            <div className="p-3 rounded-full" style={{ backgroundColor: '#9f1a1d' }}>
               <ShieldCheckIcon className="h-12 w-12 text-white" />
             </div>
           </div>
@@ -80,7 +83,7 @@ const AgentLogin: React.FC = () => {
             Melden Sie sich mit Ihren Agent-Zugangsdaten an
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -99,7 +102,7 @@ const AgentLogin: React.FC = () => {
                 onChange={handleInputChange}
               />
             </div>
-            
+
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Passwort
@@ -154,21 +157,22 @@ const AgentLogin: React.FC = () => {
                   Anmeldung läuft...
                 </div>
               ) : (
-                'Als Agent anmelden'
+                'Als Agent einloggen'
               )}
             </button>
           </div>
+
 
           <div className="text-center space-y-4">
             <div className="text-sm text-gray-600">
               <p>
                 Sind Sie ein Mandant?{' '}
-                <a href="/login" className="font-medium hover:opacity-80" style={{color: '#9f1a1d'}}>
+                <a href="/login" className="font-medium hover:opacity-80" style={{ color: '#9f1a1d' }}>
                   Zum Mandanten-Portal →
                 </a>
               </p>
             </div>
-            
+
             <div className="pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500">
                 Sichere Agent-Authentifizierung für die manuelle Dokumentenprüfung
