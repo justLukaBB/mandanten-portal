@@ -342,8 +342,20 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       
       if (result.success) {
         alert(`✅ 30-Day Simulation erfolgreich!\n\n${result.message}\n\nStatus: ${result.new_status || 'N/A'}`);
+        
         // Refresh user data to show updated status
         await fetchUserDetails();
+        
+        // Force show settlement table immediately after 30-day simulation
+        console.log('🎯 30-day simulation completed - forcing settlement table display');
+        
+        // Wait a moment for settlement emails to be sent, then fetch settlement data
+        setTimeout(async () => {
+          await fetchSettlementResponses();
+          // Force table to show by setting a flag
+          setShowSettlementPlan(true);
+        }, 3000); // Wait 3 seconds for settlement emails to be processed
+        
       } else {
         alert(`❌ Simulation fehlgeschlagen: ${result.message || 'Unknown error'}`);
       }
@@ -795,7 +807,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         </div>
 
         {/* Settlement Response Tracking Section */}
-        {hasSettlementPlansSent && settlementSummary && (
+        {showSettlementPlan && (
           <div className="mt-6 bg-purple-50 rounded-lg p-6 border border-purple-200">
             <div className="flex items-center mb-4">
               <ChartBarIcon className="w-6 h-6 mr-2 text-purple-600" />
@@ -866,7 +878,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {settlementSummary.creditors && settlementSummary.creditors.map((creditor: any, index: number) => {
+                    {user?.final_creditor_list?.filter(creditor => creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at).map((creditor: Creditor, index: number) => {
+                      // Use settlement status from database, fallback to 'pending'
+                      const status = creditor.settlement_response_status || 'pending';
+                      
                       const getStatusColor = (status: string) => {
                         switch (status) {
                           case 'accepted': return 'bg-green-100 text-green-800';
@@ -890,10 +905,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       };
 
                       return (
-                        <tr key={index} className="hover:bg-gray-50">
+                        <tr key={creditor.id || index} className="hover:bg-gray-50">
                           <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{creditor.name}</div>
-                            <div className="text-xs text-gray-500">{creditor.email}</div>
+                            <div className="text-sm font-medium text-gray-900">{creditor.sender_name}</div>
+                            <div className="text-xs text-gray-500">{creditor.sender_email}</div>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">
@@ -901,13 +916,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             </div>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(creditor.status)}`}>
-                              {getStatusIcon(creditor.status)} {creditor.status === 'no_response' ? 'No Answer' : creditor.status === 'counter_offer' ? 'Counter' : creditor.status.charAt(0).toUpperCase() + creditor.status.slice(1)}
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                              {getStatusIcon(status)} {status === 'no_response' ? 'No Answer' : status === 'counter_offer' ? 'Counter' : status.charAt(0).toUpperCase() + status.slice(1)}
                             </span>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                            {creditor.response_date 
-                              ? new Date(creditor.response_date).toLocaleDateString('de-DE')
+                            {creditor.settlement_response_received_at 
+                              ? new Date(creditor.settlement_response_received_at).toLocaleDateString('de-DE')
+                              : creditor.settlement_plan_sent_at 
+                              ? new Date(creditor.settlement_plan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
                               : '-'
                             }
                           </td>
@@ -916,6 +933,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     })}
                   </tbody>
                 </table>
+                {(!user?.final_creditor_list?.some(creditor => creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at)) && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No settlement plans have been sent yet.</p>
+                    <p className="text-xs mt-1">Click the "30-Day Simulation" button to trigger settlement emails.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
