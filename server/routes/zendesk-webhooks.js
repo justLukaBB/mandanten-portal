@@ -1115,13 +1115,23 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
-    const client = await Client.findOne({ id: client_id });
+    // Use safeClientUpdate to prevent race conditions with settlement field updates
+    const { safeClientUpdate } = require('../server');
     
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: client_id
+    let client;
+    try {
+      client = await safeClientUpdate(client_id, async (currentClient) => {
+        // All the processing logic will be moved inside this function
+        return currentClient; // We'll modify this after moving the logic
       });
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: client_id
+        });
+      }
+      throw error;
     }
 
     // Check if this client paid first rate and is waiting for processing
@@ -1199,7 +1209,25 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       }
     });
 
+    // Preserve settlement fields before saving to prevent race conditions
+    const preserveSettlementFields = {};
+    if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
+      preserveSettlementFields.creditor_calculation_table = client.creditor_calculation_table;
+      preserveSettlementFields.creditor_calculation_total_debt = client.creditor_calculation_total_debt;
+      preserveSettlementFields.creditor_calculation_created_at = client.creditor_calculation_created_at;
+      preserveSettlementFields.calculated_settlement_plan = client.calculated_settlement_plan;
+      
+      // Also preserve settlement Side Conversation IDs
+      client.final_creditor_list.forEach(creditor => {
+        if (creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at) {
+          console.log(`🔧 Preserving settlement fields for ${creditor.sender_name}: side_conversation_id=${creditor.settlement_side_conversation_id}, sent_at=${creditor.settlement_plan_sent_at}`);
+        }
+      });
+    }
+
     await client.save();
+    
+    console.log(`✅ Processing complete webhook saved client ${client.aktenzeichen} with preserved settlement fields`);
 
     // ADD PROCESSING COMPLETE COMMENT TO ORIGINAL TICKET
     let zendeskComment = null;
