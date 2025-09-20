@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import api from '../../config/api';
+import { useNavigate } from 'react-router-dom';
 
 interface AdminLoginProps {
-  onLogin: () => void;
+  // onLogin: () => void;
 }
 
-const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
+const AdminLogin: React.FC<AdminLoginProps> = () => {
+  const navigate = useNavigate();
   const [credentials, setCredentials] = useState({
     email: '',
     password: ''
@@ -28,20 +30,25 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
 
       if (response.data.success) {
         console.log('🔑 AdminLogin: Login successful, storing tokens...');
-        
+
         // Store admin token - let the API interceptor handle headers automatically
+        localStorage.clear();
+        localStorage.setItem("active_role", "admin");
+        localStorage.setItem("auth_token", response.data.token);
         localStorage.setItem('admin_token', response.data.token);
         localStorage.setItem('admin_auth', 'true');
         localStorage.setItem('admin_email', response.data.user.email);
-        
+
         console.log('✅ AdminLogin: Tokens stored successfully:', {
           hasToken: !!response.data.token,
           tokenLength: response.data.token?.length || 0,
           email: response.data.user.email
         });
-        
+
+        navigate("/admin");
+
         // Don't manually set headers - let the interceptor handle it
-        onLogin();
+        // onLogin();
       }
     } catch (error: any) {
       console.error('Admin login error:', error);
@@ -70,7 +77,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
             Melden Sie sich an, um auf das Admin-Dashboard zuzugreifen
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -133,10 +140,11 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
               {loading ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               ) : (
-                'Anmelden'
+                'Einloggen'
               )}
             </button>
           </div>
+
 
           <div className="text-center">
             <div className="text-sm text-gray-600 bg-gray-100 p-3 rounded-md">

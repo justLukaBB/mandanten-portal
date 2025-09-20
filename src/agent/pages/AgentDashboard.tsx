@@ -101,8 +101,7 @@ const AgentDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('agent_token');
-    localStorage.removeItem('agent_data');
+    localStorage.clear();
     navigate('/agent/login');
   };
 
