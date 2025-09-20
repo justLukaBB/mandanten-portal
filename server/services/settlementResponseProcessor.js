@@ -9,23 +9,29 @@ class SettlementResponseProcessor {
     constructor(creditorContactService) {
         this.creditorContactService = creditorContactService;
         
-        // Keywords for detecting acceptance/rejection
+        // Enhanced keywords for detecting acceptance/rejection
         this.acceptanceKeywords = [
             'zustimmung', 'einverstanden', 'akzeptiert', 'genehmigt', 'angenommen',
             'zusagen', 'bestätigt', 'ok', 'einverständnis', 'akzeptable', 
-            'zustimmen', 'einverstanden', 'vereinbarung', 'abkommen'
+            'zustimmen', 'vereinbarung', 'abkommen', 'einigkeit', 'billigung',
+            'ja', 'positiv', 'nehmen an', 'sind bereit', 'stimmen zu',
+            'können zustimmen', 'sind einverstanden', 'akzeptieren wir'
         ];
         
         this.rejectionKeywords = [
             'ablehnung', 'ablehnen', 'nicht einverstanden', 'zurückweisen', 'verwerfen',
             'nicht akzeptabel', 'unzureichend', 'inakzeptabel', 'nicht zufrieden',
-            'widersprechen', 'nicht möglich', 'ungenügend', 'zu niedrig'
+            'widersprechen', 'nicht möglich', 'ungenügend', 'zu niedrig',
+            'nein', 'negativ', 'lehnen ab', 'können nicht', 'unmöglich',
+            'nicht akzeptieren', 'nicht zustimmen', 'verweigern', 'absagen'
         ];
         
         this.counterOfferKeywords = [
             'gegenangebot', 'alternativ', 'stattdessen', 'vorschlag', 'gegenvorschlag',
             'andere', 'modifikation', 'änderung', 'anpassung', 'alternative',
-            'kompromiss', 'verhandlung'
+            'kompromiss', 'verhandlung', 'jedoch', 'aber', 'allerdings',
+            'unter der bedingung', 'wenn', 'falls', 'rate', 'ratenzahlung',
+            'höhere', 'niedrigere', 'anders', 'bedingung'
         ];
     }
 
@@ -104,56 +110,192 @@ class SettlementResponseProcessor {
     }
 
     /**
-     * Analyze response content to determine acceptance/rejection
+     * Enhanced content analysis to determine acceptance/rejection with better intelligence
      */
     analyzeResponseContent(emailBody) {
         const normalizedBody = emailBody.toLowerCase();
         
-        // Count keyword matches
-        const acceptanceMatches = this.acceptanceKeywords.filter(keyword => 
-            normalizedBody.includes(keyword.toLowerCase())
-        );
+        // Remove common email signatures and footers
+        const cleanBody = this.cleanEmailContent(normalizedBody);
         
-        const rejectionMatches = this.rejectionKeywords.filter(keyword => 
-            normalizedBody.includes(keyword.toLowerCase())
-        );
-        
-        const counterOfferMatches = this.counterOfferKeywords.filter(keyword => 
-            normalizedBody.includes(keyword.toLowerCase())
-        );
+        // Count keyword matches with context analysis
+        const acceptanceMatches = this.findKeywordsWithContext(cleanBody, this.acceptanceKeywords);
+        const rejectionMatches = this.findKeywordsWithContext(cleanBody, this.rejectionKeywords);
+        const counterOfferMatches = this.findKeywordsWithContext(cleanBody, this.counterOfferKeywords);
 
-        // Determine status based on keyword strength
+        // Enhanced decision logic
         let status = 'no_response';
         let confidence = 0;
         let keywords_found = [];
+        let analysis_notes = [];
 
-        if (counterOfferMatches.length > 0) {
-            status = 'counter_offer';
-            confidence = Math.min(0.9, counterOfferMatches.length * 0.3);
-            keywords_found = counterOfferMatches;
-        } else if (acceptanceMatches.length > rejectionMatches.length && acceptanceMatches.length > 0) {
+        // Check for clear acceptance patterns
+        if (this.hasStrongAcceptancePattern(cleanBody) || 
+            (acceptanceMatches.length >= 2 && rejectionMatches.length === 0 && counterOfferMatches.length === 0)) {
             status = 'accepted';
-            confidence = Math.min(0.95, acceptanceMatches.length * 0.4);
-            keywords_found = acceptanceMatches;
-        } else if (rejectionMatches.length > 0) {
+            confidence = Math.min(0.95, 0.7 + (acceptanceMatches.length * 0.1));
+            keywords_found = acceptanceMatches.map(m => m.keyword);
+            analysis_notes.push('Strong acceptance pattern detected');
+        }
+        // Check for clear rejection patterns
+        else if (this.hasStrongRejectionPattern(cleanBody) || 
+                 (rejectionMatches.length >= 2 && acceptanceMatches.length === 0)) {
             status = 'declined';
-            confidence = Math.min(0.9, rejectionMatches.length * 0.35);
-            keywords_found = rejectionMatches;
-        } else if (normalizedBody.length > 50) {
-            // Has content but no clear keywords - might need manual review
-            status = 'counter_offer'; // Conservative assumption
-            confidence = 0.2;
+            confidence = Math.min(0.9, 0.6 + (rejectionMatches.length * 0.1));
+            keywords_found = rejectionMatches.map(m => m.keyword);
+            analysis_notes.push('Strong rejection pattern detected');
+        }
+        // Check for counter offer patterns
+        else if (counterOfferMatches.length > 0 || this.hasCounterOfferPattern(cleanBody)) {
+            status = 'counter_offer';
+            confidence = Math.min(0.85, 0.5 + (counterOfferMatches.length * 0.15));
+            keywords_found = counterOfferMatches.map(m => m.keyword);
+            analysis_notes.push('Counter-offer or negotiation detected');
+        }
+        // Mixed signals - prioritize based on strength
+        else if (acceptanceMatches.length > 0 && rejectionMatches.length > 0) {
+            if (acceptanceMatches.length > rejectionMatches.length) {
+                status = 'accepted';
+                confidence = 0.6;
+                analysis_notes.push('Mixed signals, leaning towards acceptance');
+            } else {
+                status = 'declined';
+                confidence = 0.6;
+                analysis_notes.push('Mixed signals, leaning towards rejection');
+            }
+            keywords_found = [...acceptanceMatches, ...rejectionMatches].map(m => m.keyword);
+        }
+        // Single keyword matches
+        else if (acceptanceMatches.length > 0) {
+            status = 'accepted';
+            confidence = 0.7;
+            keywords_found = acceptanceMatches.map(m => m.keyword);
+        }
+        else if (rejectionMatches.length > 0) {
+            status = 'declined';
+            confidence = 0.7;
+            keywords_found = rejectionMatches.map(m => m.keyword);
+        }
+        // Has substantial content but unclear intent
+        else if (cleanBody.length > 100) {
+            status = 'counter_offer';
+            confidence = 0.3;
             keywords_found = ['manual_review_required'];
+            analysis_notes.push('Substantial content requires manual review');
         }
 
         return {
             status,
             confidence: Math.round(confidence * 100) / 100,
             keywords_found,
+            analysis_notes,
             acceptance_count: acceptanceMatches.length,
             rejection_count: rejectionMatches.length,
-            counter_offer_count: counterOfferMatches.length
+            counter_offer_count: counterOfferMatches.length,
+            content_length: cleanBody.length
         };
+    }
+
+    /**
+     * Clean email content by removing signatures and footers
+     */
+    cleanEmailContent(emailBody) {
+        let cleaned = emailBody;
+        
+        // Remove common German email signatures
+        const signaturePatterns = [
+            /mit freundlichen grüßen[\s\S]*$/gi,
+            /freundliche grüße[\s\S]*$/gi,
+            /hochachtungsvoll[\s\S]*$/gi,
+            /beste grüße[\s\S]*$/gi,
+            /--[\s\S]*$/gi, // Common signature separator
+            /________________________________[\s\S]*$/gi,
+            /diese e-mail[\s\S]*$/gi,
+            /confidential[\s\S]*$/gi
+        ];
+        
+        signaturePatterns.forEach(pattern => {
+            cleaned = cleaned.replace(pattern, '');
+        });
+        
+        return cleaned.trim();
+    }
+
+    /**
+     * Find keywords with context analysis
+     */
+    findKeywordsWithContext(text, keywords) {
+        const matches = [];
+        
+        keywords.forEach(keyword => {
+            const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'gi');
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const context = this.getContext(text, match.index, 50);
+                matches.push({
+                    keyword: keyword,
+                    position: match.index,
+                    context: context
+                });
+            }
+        });
+        
+        return matches;
+    }
+
+    /**
+     * Get context around a keyword match
+     */
+    getContext(text, position, radius) {
+        const start = Math.max(0, position - radius);
+        const end = Math.min(text.length, position + radius);
+        return text.substring(start, end);
+    }
+
+    /**
+     * Check for strong acceptance patterns
+     */
+    hasStrongAcceptancePattern(text) {
+        const strongPatterns = [
+            /wir\s+akzeptieren/gi,
+            /stimmen\s+zu/gi,
+            /sind\s+einverstanden/gi,
+            /nehmen\s+an/gi,
+            /bestätigen\s+hiermit/gi
+        ];
+        
+        return strongPatterns.some(pattern => pattern.test(text));
+    }
+
+    /**
+     * Check for strong rejection patterns
+     */
+    hasStrongRejectionPattern(text) {
+        const strongPatterns = [
+            /lehnen\s+ab/gi,
+            /nicht\s+akzeptabel/gi,
+            /können\s+nicht\s+zustimmen/gi,
+            /widersprechen\s+dem/gi,
+            /verweigern/gi
+        ];
+        
+        return strongPatterns.some(pattern => pattern.test(text));
+    }
+
+    /**
+     * Check for counter offer patterns
+     */
+    hasCounterOfferPattern(text) {
+        const counterPatterns = [
+            /€\s*\d+/gi, // Euro amounts suggesting different offer
+            /\d+\s*prozent/gi, // Percentage offers
+            /rate\w*/gi, // Payment installments
+            /monatlich/gi, // Monthly payments
+            /wenn.*dann/gi, // Conditional statements
+            /unter.*bedingung/gi // Conditions
+        ];
+        
+        return counterPatterns.some(pattern => pattern.test(text));
     }
 
     /**

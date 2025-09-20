@@ -121,10 +121,17 @@ app.get('/api/test-document', (req, res) => {
 app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
     try {
         const { clientId } = req.params;
-        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
-        const monitor = new SettlementResponseMonitor();
         
-        const summary = await monitor.generateSettlementSummary(clientId);
+        // Convert clientId to aktenzeichen
+        const aktenzeichen = await getClientAktenzeichen(clientId);
+        if (!aktenzeichen) {
+            return res.status(404).json({
+                success: false,
+                error: 'Client not found'
+            });
+        }
+        
+        const summary = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
         res.json({
             success: true,
             summary: summary
@@ -144,10 +151,16 @@ app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticat
         const { clientId } = req.params;
         const { timeoutDays = 30 } = req.body;
         
-        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
-        const monitor = new SettlementResponseMonitor();
+        // Convert clientId to aktenzeichen
+        const aktenzeichen = await getClientAktenzeichen(clientId);
+        if (!aktenzeichen) {
+            return res.status(404).json({
+                success: false,
+                error: 'Client not found'
+            });
+        }
         
-        const result = await monitor.processTimeouts(clientId, timeoutDays);
+        const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
         res.json({
             success: true,
             result: result
@@ -165,10 +178,17 @@ app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticat
 app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
     try {
         const { clientId } = req.params;
-        const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
-        const monitor = new SettlementResponseMonitor();
         
-        const status = monitor.getMonitoringStatus(clientId);
+        // Convert clientId to aktenzeichen
+        const aktenzeichen = await getClientAktenzeichen(clientId);
+        if (!aktenzeichen) {
+            return res.status(404).json({
+                success: false,
+                error: 'Client not found'
+            });
+        }
+        
+        const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
         res.json({
             success: true,
             status: status
