@@ -1310,10 +1310,12 @@ class CreditorContactService {
                 });
 
                 if (emailResult.success && emailResult.side_conversation_id) {
-                    // Find matching creditor by name or ID
+                    // Find matching creditor by ID first (most specific), then by name
                     const creditor = client.final_creditor_list.find(c => 
-                        c.sender_name === emailResult.creditor_name ||
                         c.id === emailResult.creditor_id
+                    ) || client.final_creditor_list.find(c => 
+                        c.sender_name === emailResult.creditor_name && 
+                        !c.settlement_side_conversation_id  // Only match if not already updated
                     );
                     
                     console.log(`🔍 Creditor matching result:`, {
@@ -1348,18 +1350,71 @@ class CreditorContactService {
             }
 
             if (updatedCount > 0) {
-                await client.save();
-                console.log(`✅ Updated ${updatedCount} creditor records with Side Conversation IDs`);
+                console.log(`💾 Attempting to save client with ${updatedCount} settlement updates...`);
                 
-                // Verify the save worked by re-fetching the client
-                const Client = require('../models/Client');
-                const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
-                console.log(`🔍 Verification - Settlement fields after save:`, verifyClient.final_creditor_list.map(c => ({
+                // Log the changes before saving
+                console.log(`🔍 Client fields before save:`, client.final_creditor_list.map(c => ({
                     name: c.sender_name,
                     settlement_side_conversation_id: c.settlement_side_conversation_id,
                     settlement_plan_sent_at: c.settlement_plan_sent_at,
                     settlement_response_status: c.settlement_response_status
                 })));
+                
+                try {
+                    // Mark the final_creditor_list as modified to ensure Mongoose saves the changes
+                    client.markModified('final_creditor_list');
+                    
+                    const saveResult = await client.save();
+                    console.log(`✅ Successfully saved client ${clientReference} with settlement updates`);
+                    console.log(`💾 Save result ID: ${saveResult._id}, modified paths: ${saveResult.modifiedPaths ? saveResult.modifiedPaths() : 'N/A'}`);
+                } catch (saveError) {
+                    console.error(`❌ Failed to save client:`, saveError);
+                    console.error(`❌ Save error details:`, {
+                        name: saveError.name,
+                        message: saveError.message,
+                        errors: saveError.errors
+                    });
+                    throw saveError;
+                }
+                
+                console.log(`✅ Updated ${updatedCount} creditor records with Side Conversation IDs`);
+                
+                // Immediate verification of the save
+                const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
+                console.log(`🔍 Immediate verification - Settlement fields after save:`, verifyClient.final_creditor_list.map(c => ({
+                    name: c.sender_name,
+                    settlement_side_conversation_id: c.settlement_side_conversation_id,
+                    settlement_plan_sent_at: c.settlement_plan_sent_at,
+                    settlement_response_status: c.settlement_response_status
+                })));
+                
+                // Check if save actually worked
+                const savedSettlementIds = verifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
+                if (savedSettlementIds.length !== updatedCount) {
+                    console.error(`❌ Save verification failed! Expected ${updatedCount} settlement IDs, found ${savedSettlementIds.length}`);
+                    
+                    // Retry with direct database updates for each creditor
+                    console.log(`🔄 Attempting direct database update fallback for ${emailResults.length} creditors...`);
+                    
+                    for (const emailResult of emailResults) {
+                        if (emailResult.success && emailResult.side_conversation_id) {
+                            const updateResult = await Client.updateOne(
+                                { 
+                                    aktenzeichen: clientReference,
+                                    'final_creditor_list.id': emailResult.creditor_id
+                                },
+                                { 
+                                    $set: {
+                                        'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
+                                        'final_creditor_list.$.settlement_plan_sent_at': new Date(),
+                                        'final_creditor_list.$.settlement_response_status': 'pending'
+                                    }
+                                }
+                            );
+                            console.log(`🔄 Direct update for ${emailResult.creditor_name}:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED');
+                        }
+                    }
+                }
             }
 
             return {
