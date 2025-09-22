@@ -820,23 +820,23 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             {/* Summary Statistics */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <div className="bg-white rounded-lg p-3 text-center border border-purple-200">
-                <p className="text-lg font-bold text-purple-600">{settlementSummary.total_creditors}</p>
+                <p className="text-lg font-bold text-purple-600">{settlementSummary?.total_creditors}</p>
                 <p className="text-xs text-purple-800">Total</p>
               </div>
               <div className="bg-white rounded-lg p-3 text-center border border-green-200">
-                <p className="text-lg font-bold text-green-600">{settlementSummary.accepted}</p>
+                <p className="text-lg font-bold text-green-600">{settlementSummary?.accepted}</p>
                 <p className="text-xs text-green-800">Accepted</p>
               </div>
               <div className="bg-white rounded-lg p-3 text-center border border-red-200">
-                <p className="text-lg font-bold text-red-600">{settlementSummary.declined}</p>
+                <p className="text-lg font-bold text-red-600">{settlementSummary?.declined}</p>
                 <p className="text-xs text-red-800">Declined</p>
               </div>
               <div className="bg-white rounded-lg p-3 text-center border border-yellow-200">
-                <p className="text-lg font-bold text-yellow-600">{settlementSummary.counter_offers}</p>
+                <p className="text-lg font-bold text-yellow-600">{settlementSummary?.counter_offers}</p>
                 <p className="text-xs text-yellow-800">Counter</p>
               </div>
               <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
-                <p className="text-lg font-bold text-gray-600">{settlementSummary.no_responses}</p>
+                <p className="text-lg font-bold text-gray-600">{settlementSummary?.no_responses}</p>
                 <p className="text-xs text-gray-800">No Response</p>
               </div>
             </div>
@@ -846,9 +846,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-purple-900">Acceptance Rate</span>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-purple-600">{settlementSummary.acceptance_rate}%</span>
+                  <span className="text-xl font-bold text-purple-600">{settlementSummary?.acceptance_rate}%</span>
                   <span className="text-xs text-purple-800 ml-2">
-                    ({settlementSummary.accepted}/{settlementSummary.total_creditors})
+                    ({settlementSummary?.accepted}/{settlementSummary?.total_creditors})
                   </span>
                 </div>
               </div>
