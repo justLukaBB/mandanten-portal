@@ -890,10 +890,16 @@ class CreditorContactService {
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
             // Step 10: Update creditor records with Side Conversation IDs and start monitoring
-            await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
+            const updateResult = await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
+            
+            if (!updateResult.success) {
+                console.error(`❌ Failed to update creditors with Side Conversation IDs: ${updateResult.error}`);
+                // Implement additional robust fallback
+                await this.robustUpdateCreditorsWithRetry(clientReference, emailResults);
+            }
             
             // Wait for database save to complete before starting monitoring
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             // Step 11: Start settlement response monitoring (1-minute intervals)
             const SettlementResponseMonitor = require('./settlementResponseMonitor');
@@ -1396,9 +1402,11 @@ class CreditorContactService {
                     // Retry with direct database updates for each creditor
                     console.log(`🔄 Attempting direct database update fallback for ${emailResults.length} creditors...`);
                     
+                    let directUpdateCount = 0;
                     for (const emailResult of emailResults) {
                         if (emailResult.success && emailResult.side_conversation_id) {
-                            const updateResult = await Client.updateOne(
+                            // Try updating by creditor ID first
+                            let updateResult = await Client.updateOne(
                                 { 
                                     aktenzeichen: clientReference,
                                     'final_creditor_list.id': emailResult.creditor_id
@@ -1411,9 +1419,41 @@ class CreditorContactService {
                                     }
                                 }
                             );
-                            console.log(`🔄 Direct update for ${emailResult.creditor_name}:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED');
+                            
+                            // If creditor ID update failed, try by name
+                            if (updateResult.modifiedCount === 0) {
+                                console.log(`⚠️ Creditor ID update failed, trying by name: ${emailResult.creditor_name}`);
+                                updateResult = await Client.updateOne(
+                                    { 
+                                        aktenzeichen: clientReference,
+                                        'final_creditor_list.sender_name': emailResult.creditor_name,
+                                        'final_creditor_list.settlement_side_conversation_id': { $exists: false } // Only update if not already set
+                                    },
+                                    { 
+                                        $set: {
+                                            'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
+                                            'final_creditor_list.$.settlement_plan_sent_at': new Date(),
+                                            'final_creditor_list.$.settlement_response_status': 'pending'
+                                        }
+                                    }
+                                );
+                            }
+                            
+                            if (updateResult.modifiedCount > 0) {
+                                console.log(`🔄 Direct update for ${emailResult.creditor_name}: SUCCESS`);
+                                directUpdateCount++;
+                            } else {
+                                console.log(`🔄 Direct update for ${emailResult.creditor_name}: FAILED - no matching document or already updated`);
+                            }
                         }
                     }
+                    
+                    console.log(`🔄 Direct update results: ${directUpdateCount}/${emailResults.filter(r => r.success && r.side_conversation_id).length} creditors updated`);
+                    
+                    // Final verification after direct updates
+                    const finalVerifyClient = await Client.findOne({ aktenzeichen: clientReference });
+                    const finalSettlementIds = finalVerifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
+                    console.log(`🔍 Final verification: ${finalSettlementIds.length} creditors have settlement_side_conversation_id`);
                 }
             }
 
@@ -1843,6 +1883,112 @@ class CreditorContactService {
                 error: error.message
             };
         }
+    }
+
+    /**
+     * Robust fallback method to update creditors with retry logic and multiple approaches
+     */
+    async robustUpdateCreditorsWithRetry(clientReference, emailResults, maxRetries = 3) {
+        console.log(`🔄 Starting robust creditor update fallback for ${clientReference} with ${maxRetries} retries`);
+        
+        const Client = require('../models/Client');
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`📝 Attempt ${attempt}/${maxRetries} - Updating creditors with Side Conversation IDs`);
+                
+                // Approach 1: Direct MongoDB update operations (most reliable)
+                let successCount = 0;
+                for (const emailResult of emailResults) {
+                    if (emailResult.success && emailResult.side_conversation_id) {
+                        console.log(`🔧 Direct update for creditor: ${emailResult.creditor_name} (ID: ${emailResult.creditor_id})`);
+                        
+                        // Try updating by creditor ID first
+                        let updateResult = await Client.updateOne(
+                            { 
+                                aktenzeichen: clientReference,
+                                'final_creditor_list.id': emailResult.creditor_id
+                            },
+                            { 
+                                $set: {
+                                    'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
+                                    'final_creditor_list.$.settlement_plan_sent_at': new Date(),
+                                    'final_creditor_list.$.settlement_response_status': 'pending'
+                                }
+                            }
+                        );
+                        
+                        // If creditor ID update failed, try by name
+                        if (updateResult.modifiedCount === 0) {
+                            console.log(`⚠️ Creditor ID update failed, trying by name: ${emailResult.creditor_name}`);
+                            updateResult = await Client.updateOne(
+                                { 
+                                    aktenzeichen: clientReference,
+                                    'final_creditor_list.sender_name': emailResult.creditor_name
+                                },
+                                { 
+                                    $set: {
+                                        'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
+                                        'final_creditor_list.$.settlement_plan_sent_at': new Date(),
+                                        'final_creditor_list.$.settlement_response_status': 'pending'
+                                    }
+                                }
+                            );
+                        }
+                        
+                        if (updateResult.modifiedCount > 0) {
+                            console.log(`✅ Successfully updated ${emailResult.creditor_name} with Side Conversation ID: ${emailResult.side_conversation_id}`);
+                            successCount++;
+                        } else {
+                            console.error(`❌ Failed to update ${emailResult.creditor_name} - no matching document found`);
+                        }
+                    }
+                }
+                
+                // Approach 2: Verify updates worked
+                const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
+                const updatedCreditors = verifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
+                const expectedUpdates = emailResults.filter(r => r.success && r.side_conversation_id).length;
+                
+                console.log(`🔍 Verification: Found ${updatedCreditors.length} creditors with settlement_side_conversation_id, expected ${expectedUpdates}`);
+                
+                if (updatedCreditors.length >= expectedUpdates) {
+                    console.log(`✅ Verification successful: ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
+                    return {
+                        success: true,
+                        updated_count: updatedCreditors.length,
+                        attempt: attempt
+                    };
+                } else {
+                    console.warn(`⚠️ Verification failed: ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
+                    if (attempt === maxRetries) {
+                        throw new Error(`Final verification failed: only ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
+                    }
+                    // Wait before next attempt
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    continue;
+                }
+                
+            } catch (error) {
+                console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
+                if (attempt === maxRetries) {
+                    console.error(`❌ All ${maxRetries} attempts failed for robust creditor update`);
+                    return {
+                        success: false,
+                        error: `Failed after ${maxRetries} attempts: ${error.message}`,
+                        attempts_made: attempt
+                    };
+                }
+                // Wait before next attempt
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
+        return {
+            success: false,
+            error: 'Maximum retry attempts exceeded',
+            attempts_made: maxRetries
+        };
     }
 }
 
