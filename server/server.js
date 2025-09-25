@@ -6047,6 +6047,97 @@ app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticat
   }
 });
 
+// Manual fix for settlement tracking IDs
+app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    console.log(`🔧 Manual settlement tracking fix requested for client ${clientId}`);
+    
+    // Get client's aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get the client to check current state
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Check creditors without settlement_side_conversation_id
+    const creditorsWithoutIds = client.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
+    const creditorsWithIds = client.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
+    
+    console.log(`📊 Settlement tracking status for ${aktenzeichen}:`);
+    console.log(`   - Creditors with IDs: ${creditorsWithIds.length}`);
+    console.log(`   - Creditors without IDs: ${creditorsWithoutIds.length}`);
+    
+    if (creditorsWithoutIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'All creditors already have settlement_side_conversation_id',
+        client_id: clientId,
+        aktenzeichen: aktenzeichen,
+        creditors_with_ids: creditorsWithIds.length,
+        creditors_without_ids: 0,
+        action_needed: false
+      });
+    }
+    
+    // Try to find and apply any missing Side Conversation IDs from Zendesk
+    const CreditorContactService = require('./services/creditorContactService');
+    const creditorService = new CreditorContactService();
+    
+    // Create mock email results for the robust update method
+    const mockEmailResults = creditorsWithoutIds.map(creditor => ({
+      success: true,
+      creditor_name: creditor.sender_name || creditor.creditor_name,
+      creditor_id: creditor.id,
+      side_conversation_id: `manual_fix_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Generate placeholder ID
+      email_sent: true,
+      recipient_email: creditor.sender_email,
+      manual_fix: true
+    }));
+    
+    console.log(`🔧 Attempting to fix ${mockEmailResults.length} creditor tracking IDs...`);
+    
+    const fixResult = await creditorService.robustUpdateCreditorsWithRetry(aktenzeichen, mockEmailResults);
+    
+    // Get updated client state
+    const updatedClient = await getClient(clientId);
+    const finalCreditorsWithIds = updatedClient.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
+    const finalCreditorsWithoutIds = updatedClient.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
+    
+    res.json({
+      success: fixResult.success,
+      message: fixResult.success ? 
+        `Fixed settlement tracking for ${fixResult.updated_count} creditors` :
+        `Failed to fix settlement tracking: ${fixResult.error}`,
+      client_id: clientId,
+      aktenzeichen: aktenzeichen,
+      fix_result: fixResult,
+      before: {
+        creditors_with_ids: creditorsWithIds.length,
+        creditors_without_ids: creditorsWithoutIds.length
+      },
+      after: {
+        creditors_with_ids: finalCreditorsWithIds.length,
+        creditors_without_ids: finalCreditorsWithoutIds.length
+      },
+      creditors_fixed: finalCreditorsWithIds.length - creditorsWithIds.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fixing settlement tracking:', error.message);
+    res.status(500).json({
+      error: 'Failed to fix settlement tracking',
+      details: error.message
+    });
+  }
+});
+
 // Test agent creation endpoint (for development only)
 app.post('/api/test/create-agent', async (_req, res) => {
   try {
