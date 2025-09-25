@@ -1430,6 +1430,420 @@ class CreditorContactService {
             };
         }
     }
+
+    /**
+     * Send Nullplan documents to creditors via Side Conversations with download links
+     * For clients with no garnishable income (pfändbar amount = 0)
+     */
+    async sendNullplanToCreditors(clientReference, nullplanData, generatedDocuments = null) {
+        try {
+            console.log(`📧 Starting Nullplan distribution for client ${clientReference}...`);
+
+            // Test Zendesk connection
+            const connectionTest = await this.zendesk.testConnection();
+            if (!connectionTest.success) {
+                console.error(`❌ Zendesk connection failed: ${connectionTest.error}`);
+                return {
+                    success: false,
+                    error: 'Zendesk connection failed',
+                    details: connectionTest.error
+                };
+            }
+
+            // Get client data
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            if (!client) {
+                console.error(`❌ Client not found: ${clientReference}`);
+                return {
+                    success: false,
+                    error: 'Client not found'
+                };
+            }
+
+            // Find existing Zendesk user for client
+            const zendeskUser = await this.zendesk.findOrCreateUser(client.email, `${client.firstName} ${client.lastName}`);
+            if (!zendeskUser) {
+                console.error(`❌ Could not create Zendesk user for ${client.email}`);
+                return {
+                    success: false,
+                    error: 'Could not create Zendesk user'
+                };
+            }
+
+            // Get creditors
+            const creditors = nullplanData.creditors || client.final_creditor_list?.filter(c => c.status === 'confirmed') || [];
+            if (creditors.length === 0) {
+                console.warn(`⚠️ No creditors found for Nullplan distribution`);
+                return {
+                    success: false,
+                    error: 'No creditors found'
+                };
+            }
+
+            console.log(`📋 Found ${creditors.length} creditors for Nullplan distribution`);
+
+            // Create main ticket for Nullplan distribution
+            const nullplanTicket = await this.zendesk.createNullplanTicket(
+                zendeskUser.id,
+                client,
+                nullplanData,
+                creditors.length
+            );
+
+            console.log(`🎫 Created Nullplan ticket: ${nullplanTicket.id}`);
+
+            // Upload documents to main ticket and get download URLs
+            const uploadResult = await this.uploadNullplanDocumentsWithUrls(
+                nullplanTicket.id,
+                {
+                    name: `${client.firstName} ${client.lastName}`,
+                    reference: client.aktenzeichen,
+                    email: client.email
+                },
+                nullplanData,
+                generatedDocuments
+            );
+
+            if (!uploadResult.success) {
+                console.error(`❌ Document upload failed: ${uploadResult.error}`);
+                return {
+                    success: false,
+                    error: 'Document upload failed',
+                    details: uploadResult.error
+                };
+            }
+
+            console.log(`📎 Uploaded ${uploadResult.documents_uploaded} documents with URLs`);
+
+            // Create Side Conversations with download links for each creditor
+            const emailResults = await this.createNullplanSideConversationsWithLinks(
+                nullplanTicket.id,
+                {
+                    name: `${client.firstName} ${client.lastName}`,
+                    reference: client.aktenzeichen,
+                    email: client.email
+                },
+                creditors,
+                nullplanData,
+                uploadResult.download_urls
+            );
+
+            // Add status update to ticket
+            await this.zendesk.addInternalNote(
+                nullplanTicket.id,
+                `🎯 Nullplan-Distribution abgeschlossen\n\n` +
+                `✅ E-Mails versendet: ${emailResults.length}/${creditors.length}\n` +
+                `📄 Dokumente: Nullplan + Forderungsübersicht\n` +
+                `⏰ Timestamp: ${new Date().toISOString()}`
+            );
+
+            // Update creditor records with Side Conversation IDs for tracking
+            const updateResult = await this.updateCreditorsWithNullplanSideConversationIds(
+                clientReference, 
+                emailResults
+            );
+
+            // Count successful emails
+            const successfulEmails = emailResults.filter(result => result.success);
+
+            console.log(`✅ Nullplan distribution completed:`);
+            console.log(`   📧 Emails sent: ${successfulEmails.length}/${creditors.length}`);
+            console.log(`   🎫 Ticket ID: ${nullplanTicket.id}`);
+
+            return {
+                success: true,
+                client_reference: clientReference,
+                zendesk_user_id: zendeskUser.id,
+                nullplan_ticket_id: nullplanTicket.id,
+                nullplan_ticket_subject: nullplanTicket.subject,
+                emails_sent: successfulEmails.length,
+                total_creditors: creditors.length,
+                side_conversations_created: emailResults.length,
+                method: 'side_conversation_with_links',
+                email_results: emailResults,
+                processing_timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error(`❌ Error in sendNullplanToCreditors: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientReference,
+                processing_timestamp: new Date().toISOString()
+            };
+        }
+    }
+
+    /**
+     * Upload Nullplan documents to main ticket and get download URLs
+     */
+    async uploadNullplanDocumentsWithUrls(ticketId, clientData, nullplanData, generatedDocuments = null) {
+        try {
+            console.log(`📤 Uploading Nullplan documents to ticket ${ticketId}...`);
+
+            let documentPaths = [];
+            let buffers = [];
+
+            if (generatedDocuments && generatedDocuments.nullplan && generatedDocuments.forderungsuebersicht) {
+                // Use already generated documents
+                documentPaths = [
+                    {
+                        path: generatedDocuments.nullplan.document_info.path,
+                        type: 'nullplan',
+                        filename: generatedDocuments.nullplan.document_info.filename
+                    },
+                    {
+                        path: generatedDocuments.forderungsuebersicht.document_info.path,
+                        type: 'forderungsuebersicht',
+                        filename: generatedDocuments.forderungsuebersicht.document_info.filename
+                    }
+                ];
+                buffers = [
+                    generatedDocuments.nullplan.buffer,
+                    generatedDocuments.forderungsuebersicht.buffer
+                ];
+            } else {
+                // Generate documents on the fly
+                const DocumentGenerator = require('./documentGenerator');
+                const documentGenerator = new DocumentGenerator();
+                
+                const documentsResult = await documentGenerator.generateNullplanDocuments(clientData.reference);
+                
+                if (!documentsResult.success) {
+                    throw new Error(`Document generation failed: ${documentsResult.error}`);
+                }
+
+                documentPaths = [
+                    {
+                        path: documentsResult.nullplan.document_info.path,
+                        type: 'nullplan',
+                        filename: documentsResult.nullplan.document_info.filename
+                    },
+                    {
+                        path: documentsResult.forderungsuebersicht.document_info.path,
+                        type: 'forderungsuebersicht',
+                        filename: documentsResult.forderungsuebersicht.document_info.filename
+                    }
+                ];
+                buffers = [
+                    documentsResult.nullplan.buffer,
+                    documentsResult.forderungsuebersicht.buffer
+                ];
+            }
+
+            // Upload documents to Zendesk
+            const uploadResults = [];
+            for (let i = 0; i < documentPaths.length; i++) {
+                const docPath = documentPaths[i];
+                const buffer = buffers[i];
+                
+                console.log(`📄 Uploading ${docPath.type}: ${docPath.filename}`);
+                
+                const uploadResult = await this.zendesk.uploadFileToZendesk(
+                    docPath.filename,
+                    buffer
+                );
+                
+                if (uploadResult.success) {
+                    uploadResults.push({
+                        ...uploadResult,
+                        type: docPath.type,
+                        filename: docPath.filename
+                    });
+                } else {
+                    console.error(`❌ Upload failed for ${docPath.filename}: ${uploadResult.error}`);
+                }
+            }
+
+            if (uploadResults.length === 0) {
+                throw new Error('No documents were successfully uploaded');
+            }
+
+            // Attach uploaded files to the ticket
+            const comment = {
+                body: `📄 Nullplan-Dokumente für ${clientData.name} (${clientData.reference})\n\n` +
+                      `Datum: ${new Date().toLocaleDateString('de-DE')}\n` +
+                      `Pfändbares Einkommen: 0,00 EUR\n` +
+                      `Gesamtschulden: €${nullplanData.total_debt?.toFixed(2) || '0.00'}\n\n` +
+                      `Hochgeladene Dokumente:\n` +
+                      uploadResults.map(doc => `• ${doc.filename} (${doc.type})`).join('\n'),
+                uploads: uploadResults.map(result => result.upload.token),
+                public: false
+            };
+
+            await this.zendesk.addCommentToTicket(ticketId, comment);
+            console.log(`📎 Attached ${uploadResults.length} documents to ticket ${ticketId}`);
+
+            // Get download URLs from ticket attachments
+            const downloadUrls = await this.zendesk.getTicketAttachmentUrls(ticketId, uploadResults);
+
+            return {
+                success: true,
+                documents_uploaded: uploadResults.length,
+                upload_results: uploadResults,
+                download_urls: downloadUrls,
+                ticket_id: ticketId
+            };
+
+        } catch (error) {
+            console.error(`❌ Error uploading Nullplan documents: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                ticket_id: ticketId
+            };
+        }
+    }
+
+    /**
+     * Create Side Conversations with download links for Nullplan distribution
+     */
+    async createNullplanSideConversationsWithLinks(ticketId, clientData, creditors, nullplanData, downloadUrls) {
+        console.log(`📧 Creating Side Conversations for ${creditors.length} creditors with download links...`);
+
+        const emailResults = [];
+
+        for (const creditor of creditors) {
+            try {
+                console.log(`📤 Sending Nullplan to: ${creditor.sender_name || creditor.creditor_name} (${creditor.sender_email || creditor.creditor_email})`);
+
+                // Generate email content with download links
+                const emailBody = this.zendesk.generateNullplanEmailBodyWithLinks(
+                    creditor,
+                    clientData,
+                    nullplanData,
+                    downloadUrls
+                );
+
+                const subject = `Nullplan - ${creditor.sender_name || creditor.creditor_name} - Az: ${clientData.reference}`;
+
+                // Create Side Conversation
+                const sideConversationResult = await this.zendesk.createSideConversationWithDownloadLinks(
+                    ticketId,
+                    creditor.sender_email || creditor.creditor_email,
+                    subject,
+                    emailBody
+                );
+
+                if (sideConversationResult.success) {
+                    console.log(`✅ Side Conversation created: ${sideConversationResult.side_conversation_id}`);
+                    emailResults.push({
+                        success: true,
+                        creditor_name: creditor.sender_name || creditor.creditor_name,
+                        creditor_email: creditor.sender_email || creditor.creditor_email,
+                        creditor_id: creditor.id,
+                        side_conversation_id: sideConversationResult.side_conversation_id,
+                        method: 'side_conversation_with_links'
+                    });
+                } else {
+                    console.error(`❌ Side Conversation failed for ${creditor.sender_name}: ${sideConversationResult.error}`);
+                    emailResults.push({
+                        success: false,
+                        creditor_name: creditor.sender_name || creditor.creditor_name,
+                        creditor_email: creditor.sender_email || creditor.creditor_email,
+                        creditor_id: creditor.id,
+                        error: sideConversationResult.error,
+                        method: 'side_conversation_with_links'
+                    });
+                }
+
+            } catch (error) {
+                console.error(`❌ Error creating Side Conversation for ${creditor.sender_name}: ${error.message}`);
+                emailResults.push({
+                    success: false,
+                    creditor_name: creditor.sender_name || creditor.creditor_name,
+                    creditor_email: creditor.sender_email || creditor.creditor_email,
+                    creditor_id: creditor.id,
+                    error: error.message,
+                    method: 'side_conversation_with_links'
+                });
+            }
+        }
+
+        console.log(`📊 Side Conversation creation completed: ${emailResults.filter(r => r.success).length}/${emailResults.length} successful`);
+        return emailResults;
+    }
+
+    /**
+     * Update creditor records with Nullplan Side Conversation IDs for tracking
+     */
+    async updateCreditorsWithNullplanSideConversationIds(clientReference, emailResults) {
+        try {
+            console.log(`🔄 Updating creditor records with Nullplan Side Conversation IDs...`);
+
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            let updatedCount = 0;
+
+            if (client.final_creditor_list) {
+                for (const emailResult of emailResults) {
+                    if (emailResult.success && emailResult.side_conversation_id) {
+                        // Find creditor by ID first, then by name if needed
+                        const creditor = client.final_creditor_list.find(c => 
+                            c.id === emailResult.creditor_id
+                        ) || client.final_creditor_list.find(c => 
+                            c.sender_name === emailResult.creditor_name && 
+                            !c.nullplan_side_conversation_id
+                        );
+
+                        if (creditor) {
+                            creditor.nullplan_side_conversation_id = emailResult.side_conversation_id;
+                            creditor.nullplan_sent_at = new Date();
+                            creditor.nullplan_response_status = 'pending';
+                            updatedCount++;
+                            console.log(`📧 Updated ${creditor.sender_name} with Nullplan Side Conversation ID: ${emailResult.side_conversation_id}`);
+                        } else {
+                            console.warn(`⚠️ Creditor not found in final_creditor_list: ${emailResult.creditor_name}`);
+                        }
+                    }
+                }
+
+                // Save client with updated Side Conversation IDs
+                client.markModified('final_creditor_list');
+                await client.save();
+                console.log(`💾 Client ${clientReference} saved with ${updatedCount} updated creditors`);
+
+                // Try direct MongoDB updates as fallback for any missed updates
+                for (const emailResult of emailResults) {
+                    if (emailResult.success && emailResult.side_conversation_id) {
+                        const updateResult = await Client.updateOne(
+                            { 
+                                aktenzeichen: clientReference,
+                                'final_creditor_list.id': emailResult.creditor_id
+                            },
+                            { 
+                                $set: {
+                                    'final_creditor_list.$.nullplan_side_conversation_id': emailResult.side_conversation_id,
+                                    'final_creditor_list.$.nullplan_sent_at': new Date(),
+                                    'final_creditor_list.$.nullplan_response_status': 'pending'
+                                }
+                            }
+                        );
+                        console.log(`🔄 Direct update for ${emailResult.creditor_name}:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED');
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                updated_count: updatedCount
+            };
+
+        } catch (error) {
+            console.error(`❌ Error updating creditors with Nullplan Side Conversation IDs:`, error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 }
 
 module.exports = CreditorContactService;

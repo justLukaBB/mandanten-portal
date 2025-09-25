@@ -4725,20 +4725,20 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     
     // Generate automatic Schuldenbereinigungsplan calculation if financial data exists
     let settlementPlan = null;
-    if (updatedClient.financial_data && updatedClient.financial_data.net_income) {
+    if (updatedClient.financial_data && updatedClient.financial_data.monthly_net_income) {
       try {
         console.log(`🧮 Generating automatic settlement plan calculation...`);
         console.log(`   Financial data:`, {
-          netIncome: updatedClient.financial_data.net_income,
+          netIncome: updatedClient.financial_data.monthly_net_income,
           maritalStatus: updatedClient.financial_data.marital_status,
           dependents: updatedClient.financial_data.dependents
         });
         console.log(`   Creditors to include:`, creditorCalculationTable.length);
         
         const financialData = {
-          netIncome: updatedClient.financial_data.net_income,
+          netIncome: updatedClient.financial_data.monthly_net_income,
           maritalStatus: updatedClient.financial_data.marital_status || 'ledig',
-          numberOfChildren: updatedClient.financial_data.dependents || 0
+          numberOfChildren: updatedClient.financial_data.number_of_children || 0
         };
         
         // Create mock creditor contact service that matches the expected interface
