@@ -124,7 +124,20 @@ const creditorSchema = new mongoose.Schema({
   settlement_side_conversation_id: String,
   settlement_plan_sent_at: Date,
   settlement_acceptance_confidence: Number, // AI confidence in acceptance/rejection detection
-  settlement_response_metadata: mongoose.Schema.Types.Mixed
+  settlement_response_metadata: mongoose.Schema.Types.Mixed,
+  
+  // Nullplan response fields
+  nullplan_response_status: {
+    type: String,
+    enum: ['pending', 'accepted', 'declined', 'no_response'],
+    default: 'pending'
+  },
+  nullplan_response_received_at: Date,
+  nullplan_response_text: String,
+  nullplan_side_conversation_id: String,
+  nullplan_sent_at: Date,
+  nullplan_acceptance_confidence: Number, // AI confidence in acceptance/rejection detection
+  nullplan_response_metadata: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 // Status History Schema for tracking all status changes
