@@ -94,34 +94,57 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If API is not available, return mock data
-    if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-      const url = error.config?.url || '';
-      
-      if (url.includes('/clients/')) {
+    const url = error.config?.url || '';
+    const status = error.response?.status;
+
+    // ✅ Handle token expired / unauthorized
+    if (status === 401 || error.response?.data?.error === "Token expired") {
+      console.warn("⚠️ Token expired, clearing storage and redirecting...");
+
+      // Save role before clearing
+      const role = localStorage.getItem("active_role");
+
+      // Clear everything
+      localStorage.clear();
+
+      // Redirect user to the correct login page
+      if (role === "admin") {
+        window.location.href = "/admin/login";
+      } else if (role === "agent") {
+        window.location.href = "/agent/login";
+      } else {
+        window.location.href = "/login";
+      }
+    }
+
+    // ✅ Handle mock data for network errors
+    if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK") {
+      if (url.includes("/clients/")) {
         return Promise.resolve({
           data: mockClient,
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           headers: {},
-          config: error.config
+          config: error.config,
         });
       }
-      
-      if (url.includes('/proxy/forms/')) {
+
+      if (url.includes("/proxy/forms/")) {
         return Promise.resolve({
-          data: { additionalInfo: 'Demo form data' },
+          data: { additionalInfo: "Demo form data" },
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           headers: {},
-          config: error.config
+          config: error.config,
         });
       }
     }
-    
+
+    // Otherwise, reject as usual
     return Promise.reject(error);
   }
 );
+
 
 // Request interceptor to add auth token if available
 api.interceptors.request.use(

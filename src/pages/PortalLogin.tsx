@@ -14,25 +14,6 @@ const PortalLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const sessionToken = localStorage.getItem('portal_session_token');
-    const storedClientId = localStorage.getItem('portal_client_id');
-
-    console.log('🔍 PersonalPortal: Auth check:', {
-      hasSessionToken: !!sessionToken,
-      hasStoredClientId: !!storedClientId,
-      storedClientId
-    });
-
-    if (!sessionToken || !storedClientId) {
-      console.warn('❌ PersonalPortal: Authentication failed, redirecting to login');
-      navigate('/login', { replace: true });
-    } else {
-      console.log('✅ PersonalPortal: Authentication successful');
-      navigate(`/portal/${storedClientId}`, { replace: true });
-    }
-  }, [navigate]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -58,6 +39,8 @@ const PortalLogin: React.FC = () => {
         const clientData = JSON.stringify(response.data.client);
 
         // Store tokens synchronously
+        localStorage.clear();
+        localStorage.setItem("active_role", "portal");
         localStorage.setItem('portal_session_token', sessionToken);
         localStorage.setItem('auth_token', jwtToken);
         localStorage.setItem('portal_client_id', clientId);
@@ -195,10 +178,10 @@ const PortalLogin: React.FC = () => {
               {loading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Anmeldung läuft...
+                  Einloggen läuft...
                 </div>
               ) : (
-                'Anmelden'
+                'Einloggen'
               )}
             </button>
           </div>
@@ -229,7 +212,3 @@ const PortalLogin: React.FC = () => {
 };
 
 export default PortalLogin;
-
-
-// justlukax@gmail.com
-// 47698264928
