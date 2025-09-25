@@ -43,6 +43,7 @@ interface DetailedUser {
   updated_at: string;
   last_login?: string;
   documents: Document[];
+  settlement_plan_sent_at?: string;
   final_creditor_list?: Creditor[];
   zendesk_ticket_id?: string;
   workflow_status?: string;
@@ -114,9 +115,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [savingFinancial, setSavingFinancial] = useState(false);
 
   // Check if client has settlement plans sent (to determine if we should show the table)
-  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
-    creditor.settlement_plan_sent_at
-  );
+  // const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
+  //   creditor.settlement_plan_sent_at
+  // );
+
+   const hasSettlementPlansSent = user?.settlement_plan_sent_at;
 
   useEffect(() => {
     fetchUserDetails();
@@ -807,7 +810,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         </div>
 
         {/* Settlement Response Tracking Section */}
-        {showSettlementPlan && (
+        {/* {showSettlementPlan && ( */}
           <div className="mt-6 bg-purple-50 rounded-lg p-6 border border-purple-200">
             <div className="flex items-center mb-4">
               <ChartBarIcon className="w-6 h-6 mr-2 text-purple-600" />
@@ -942,10 +945,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               </div>
             </div>
           </div>
-        )}
+        {/* )} */}
 
         {/* Financial Data Section */}
-        <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
+        {/* <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
           <div className="flex items-center mb-4">
             <CurrencyEuroIcon className="w-6 h-6 mr-2 text-yellow-600" />
             <h3 className="text-lg font-semibold text-yellow-800">Financial Data</h3>
@@ -1050,7 +1053,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               </div>
             </div>
           )}
-        </div>
+        </div> */}
         
         <div className="mt-6 flex justify-end">
           <button
