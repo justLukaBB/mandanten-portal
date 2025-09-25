@@ -362,7 +362,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const simulate30DayPeriod = async () => {
-    if (!window.confirm(`🕐 30-Day Period Simulation\n\nDies simuliert das Ende der 30-Tage-Periode für Client ${user?.firstName} ${user?.lastName} (${user?.aktenzeichen}).\n\nDer Gläubigerkontakt-Prozess wird gestartet.\n\nFortfahren?`)) {
+    if (!window.confirm(`🕐 30-Day Period Simulation\n\nDies simuliert das Ende der 30-Tage-Periode für Client ${user?.firstName} ${user?.lastName} (${user?.aktenzeichen}).\n\n✅ Erstellt Gläubiger-Berechnungstabelle\n✅ Aktiviert Finanzdaten-Formular\n✅ Simuliert Finanzdaten-Eingabe\n✅ Generiert Schuldenbereinigungsplan\n✅ Sendet Settlement-E-Mails an Gläubiger\n\nFortfahren?`)) {
       return;
     }
 
@@ -374,7 +374,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          simulate_complete: true  // Trigger complete simulation including settlement plan emails
+        })
       });
 
       if (!response.ok) {
