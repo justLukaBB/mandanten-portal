@@ -4815,92 +4815,15 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     
     console.log(`🎯 Financial data form activated for ${finalUpdatedClient.aktenzeichen} - form should be available in client portal`);
     
-    // Optional: Also simulate financial data submission and settlement plan generation
-    const simulateComplete = req.body?.simulate_complete === true;
-    let settlementPlanResult = null;
-    
-    if (simulateComplete) {
-      console.log(`🚀 Simulating complete workflow including financial data submission and settlement plan generation...`);
-      
-      try {
-        // Simulate realistic financial data
-        const simulatedFinancialData = {
-          monthly_net_income: 2000,
-          number_of_children: 0,
-          marital_status: 'ledig'
-        };
-        
-        // Use the same garnishment calculator as the real flow
-        const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
-        const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
-        const garnishmentResult = germanGarnishmentCalculator.calculate(
-          simulatedFinancialData.monthly_net_income, 
-          simulatedFinancialData.marital_status, 
-          simulatedFinancialData.number_of_children
-        );
-        
-        const recommendedPlanType = garnishmentResult.garnishableAmount > 0 ? 'quotenplan' : 'nullplan';
-        
-        // Add financial data to client
-        const clientWithFinancialData = await safeClientUpdate(clientId, async (client) => {
-          client.financial_data = {
-            monthly_net_income: simulatedFinancialData.monthly_net_income,
-            number_of_children: simulatedFinancialData.number_of_children,
-            marital_status: simulatedFinancialData.marital_status,
-            garnishable_amount: garnishmentResult.garnishableAmount,
-            recommended_plan_type: recommendedPlanType,
-            client_form_filled: true,
-            form_filled_at: new Date(),
-            calculation_completed_at: new Date(),
-            simulated: true  // Mark as simulated
-          };
-          return client;
-        });
-        
-        console.log(`💰 Simulated financial data: €${simulatedFinancialData.monthly_net_income}/month net income`);
-        console.log(`   Garnishable: €${garnishmentResult.garnishableAmount}/month`);
-        console.log(`   Plan Type: ${recommendedPlanType} (simulated selection)`);
-        
-        // Trigger the same document generation and settlement email process as real submission
-        try {
-          await processFinancialDataAndGenerateDocuments(clientWithFinancialData, garnishmentResult, recommendedPlanType);
-          settlementPlanResult = {
-            success: true,
-            plan_type: recommendedPlanType,
-            garnishable_amount: garnishmentResult.garnishableAmount,
-            settlement_emails_triggered: true
-          };
-          console.log(`✅ Simulated settlement plan workflow completed successfully`);
-        } catch (settlementError) {
-          console.error(`❌ Error in simulated settlement plan workflow:`, settlementError);
-          settlementPlanResult = {
-            success: false,
-            error: settlementError.message
-          };
-        }
-        
-      } catch (simulationError) {
-        console.error(`❌ Error in complete simulation:`, simulationError);
-        settlementPlanResult = {
-          success: false,
-          error: simulationError.message
-        };
-      }
-    }
-    
     res.json({
       success: true,
-      message: simulateComplete ? 
-        `Complete 30-Day simulation finished! Settlement plan emails ${settlementPlanResult?.success ? 'sent' : 'failed'} to creditors.` :
-        `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.`,
+      message: `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.`,
       client_id: finalUpdatedClient.id,
       aktenzeichen: finalUpdatedClient.aktenzeichen,
       creditor_count: creditorCalculationTable.length,
       total_debt: totalDebt,
       creditor_calculation_table: creditorCalculationTable,
       settlement_plan: settlementPlan,
-      complete_simulation: simulateComplete,
-      settlement_plan_result: settlementPlanResult,
       created_at: currentTime
     });
     
