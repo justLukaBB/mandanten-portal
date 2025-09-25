@@ -8,7 +8,6 @@ const AgentApp: React.FC = () => {
   return (
     <div className="agent-app">
       <Routes>
-        <Route path="/login" element={<AgentLogin />} />
         <Route path="/review/:clientId" element={<ReviewDashboard />} />
         <Route path="/dashboard" element={<AgentDashboard />} />
         <Route path="/" element={<Navigate to="/agent/login" replace />} />

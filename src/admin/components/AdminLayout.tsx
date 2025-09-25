@@ -42,9 +42,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 
   const handleLogout = () => {
     // Clear all admin tokens and headers
-    localStorage.removeItem('admin_auth');
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_email');
+   localStorage.clear();
     
     // Remove authorization header
     delete api.defaults.headers.common['Authorization'];
