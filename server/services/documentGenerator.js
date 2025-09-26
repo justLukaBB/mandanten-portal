@@ -1125,6 +1125,535 @@ class DocumentGenerator {
             };
         }
     }
+
+    /**
+     * Generate complete Nullplan Word document
+     * For clients with no garnishable income (pfändbar amount = 0)
+     */
+    async generateNullplan(clientData, creditorData) {
+        if (!docxModule) {
+            throw new Error('Document generation is not available - docx package not installed. Please run: npm install docx');
+        }
+
+        try {
+            console.log(`📄 Generating Nullplan for ${clientData.name}...`);
+
+            // Generate the document
+            const doc = await this.createNullplanDocument(clientData, creditorData);
+
+            // Save the document
+            const result = await this.saveDocument(doc, clientData.reference);
+
+            console.log(`✅ Nullplan document generated successfully`);
+            console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
+
+            return {
+                success: true,
+                document_info: {
+                    filename: result.filename,
+                    path: result.path,
+                    size: result.size,
+                    client_reference: clientData.reference,
+                    document_type: 'nullplan',
+                    generated_at: new Date().toISOString()
+                },
+                buffer: result.buffer
+            };
+
+        } catch (error) {
+            console.error(`❌ Error generating Nullplan: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientData.reference,
+                document_type: 'nullplan'
+            };
+        }
+    }
+
+    /**
+     * Create Nullplan document structure
+     */
+    async createNullplanDocument(clientData, creditorData) {
+        // Format the date for the document title
+        const currentDate = new Date().toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        // Calculate total debt amount
+        const totalDebt = creditorData.reduce((sum, creditor) => sum + (creditor.debt_amount || 0), 0);
+
+        const doc = new Document({
+            ...this.documentOptions,
+            title: "Außergerichtlicher Nullplan",
+            sections: [{
+                properties: {},
+                children: [
+                    // Document Title
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Außergerichtlicher Nullplan vom ${currentDate}`,
+                                bold: true,
+                                size: 26
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 400 }
+                    }),
+
+                    // Client Information Header
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Schuldnerin/Schuldner: ${clientData.name}`,
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    // Introduction Text
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Die Schuldnerin/Der Schuldner ist nicht in der Lage, Ratenzahlungen zu leisten, da das pfändbare Einkommen 0,00 EUR beträgt.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Gemäß § 305 Abs. 1 Nr. 1 InsO wird den Gläubigern folgender außergerichtlicher Nullplan vorgelegt:",
+                                size: 18,
+                                bold: true
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Key Information Section
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Zusammenfassung der Schulden:",
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `• Gesamtschuldensumme: ${this.formatCurrency(totalDebt)}`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `• Anzahl Gläubiger: ${creditorData.length}`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `• Pfändbares Einkommen: 0,00 EUR`,
+                                size: 18,
+                                bold: true
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Plan Details
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Nullplan-Regelung:",
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "• Die Schuldnerin/Der Schuldner kann aufgrund ihrer/seiner wirtschaftlichen Verhältnisse keine Ratenzahlungen leisten.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "• Eine Befriedigung der Gläubiger ist derzeit nicht möglich.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "• Bei Verbesserung der wirtschaftlichen Verhältnisse wird unverzüglich eine angemessene Regelung angestrebt.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Creditor List Table
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Gläubigerverzeichnis:",
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    await this.createNullplanCreditorTable(creditorData, totalDebt),
+
+                    // Footer Information
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Erstellt am: ${currentDate}`,
+                                size: 16,
+                                italics: true
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { before: 400 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Thomas Scuric Rechtsanwälte",
+                                size: 16,
+                                italics: true
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 200 }
+                    })
+                ]
+            }]
+        });
+
+        return doc;
+    }
+
+    /**
+     * Create creditor table for Nullplan document
+     */
+    async createNullplanCreditorTable(creditorData, totalDebt) {
+        const tableRows = [
+            // Header Row
+            new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Nr.", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 8, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 35, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Aktenzeichen", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 20, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Forderungshöhe", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 15, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Anteil", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Zahlung", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 10, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    })
+                ]
+            })
+        ];
+
+        // Data Rows
+        creditorData.forEach((creditor, index) => {
+            const debtPercentage = totalDebt > 0 ? (creditor.debt_amount / totalDebt) * 100 : 0;
+            
+            tableRows.push(
+                new TableRow({
+                    children: [
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
+                                alignment: AlignmentType.CENTER
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.creditor_name || 'N/A', size: 16 })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: creditor.creditor_reference || 'N/A', size: 16 })],
+                                alignment: AlignmentType.CENTER
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount || 0), size: 16 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: this.formatPercentage(debtPercentage), size: 16 })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: "0,00 EUR", size: 16, bold: true })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        })
+                    ]
+                })
+            );
+        });
+
+        // Totals Row
+        tableRows.push(
+            new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "", size: 16 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Summe", bold: true, size: 16 })],
+                            alignment: AlignmentType.LEFT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "", size: 16 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(totalDebt), bold: true, size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "100,00%", bold: true, size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "0,00 EUR", bold: true, size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
+                    })
+                ]
+            })
+        );
+
+        return new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 1 },
+                bottom: { style: BorderStyle.SINGLE, size: 1 },
+                left: { style: BorderStyle.SINGLE, size: 1 },
+                right: { style: BorderStyle.SINGLE, size: 1 },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1 }
+            }
+        });
+    }
+
+    /**
+     * Generate Nullplan documents (both Nullplan and Forderungsübersicht)
+     * Public method that handles the complete Nullplan generation process
+     */
+    async generateNullplanDocuments(clientReference) {
+        try {
+            console.log(`📄 Starting Nullplan document generation for client ${clientReference}...`);
+            
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+
+            if (!client) {
+                throw new Error(`Client not found with reference: ${clientReference}`);
+            }
+
+            if (!client.financial_data || client.financial_data.recommended_plan_type !== 'nullplan') {
+                throw new Error(`Client ${clientReference} is not eligible for Nullplan (recommended_plan_type: ${client.financial_data?.recommended_plan_type})`);
+            }
+
+            // Prepare client data
+            const clientData = {
+                name: `${client.firstName} ${client.lastName}`,
+                email: client.email,
+                reference: client.aktenzeichen
+            };
+
+            // Get creditor data
+            let creditorData = [];
+            
+            if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
+                // Use creditor calculation table if available
+                creditorData = client.creditor_calculation_table.map(creditor => ({
+                    creditor_name: creditor.name,
+                    creditor_address: creditor.address,
+                    creditor_email: creditor.email,
+                    creditor_reference: creditor.reference_number,
+                    debt_amount: creditor.final_amount,
+                    debt_reason: '',
+                    remarks: creditor.contact_status === 'responded' ? 'Antwort erhalten' : 
+                             creditor.contact_status === 'no_response' ? 'Keine Antwort' : 
+                             'E-Mail fehlgeschlagen',
+                    is_representative: creditor.is_representative,
+                    representative_info: creditor.is_representative ? {
+                        name: creditor.actual_creditor,
+                        address: '',
+                        email: ''
+                    } : null
+                }));
+            } else if (client.final_creditor_list && client.final_creditor_list.length > 0) {
+                // Fallback to final_creditor_list
+                creditorData = client.final_creditor_list
+                    .filter(creditor => creditor.status === 'confirmed')
+                    .map(creditor => ({
+                        creditor_name: creditor.sender_name,
+                        creditor_address: creditor.sender_address,
+                        creditor_email: creditor.sender_email,
+                        creditor_reference: creditor.reference_number,
+                        debt_amount: creditor.claim_amount || 0,
+                        debt_reason: '',
+                        remarks: '',
+                        is_representative: creditor.is_representative || false,
+                        representative_info: creditor.is_representative ? {
+                            name: creditor.actual_creditor,
+                            address: '',
+                            email: ''
+                        } : null
+                    }));
+            }
+
+            if (creditorData.length === 0) {
+                throw new Error('No creditor data available for Nullplan generation');
+            }
+
+            console.log(`📊 Processing ${creditorData.length} creditors for Nullplan`);
+
+            // Generate both documents
+            const nullplanResult = await this.generateNullplan(clientData, creditorData);
+            const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
+
+            return {
+                success: true,
+                nullplan: nullplanResult,
+                forderungsuebersicht: forderungsuebersichtResult,
+                client_reference: clientReference,
+                generated_at: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error(`❌ Error generating Nullplan documents: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientReference
+            };
+        }
+    }
 }
 
 module.exports = DocumentGenerator;

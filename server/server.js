@@ -203,6 +203,62 @@ app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticat
     }
 });
 
+// Nullplan response monitoring endpoints
+app.get('/api/admin/clients/:clientId/nullplan-responses', authenticateAdmin, async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        
+        // Convert clientId to aktenzeichen
+        const aktenzeichen = await getClientAktenzeichen(clientId);
+        if (!aktenzeichen) {
+            return res.status(404).json({
+                success: false,
+                error: 'Client not found'
+            });
+        }
+        
+        // Get client data to analyze nullplan responses
+        const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                error: 'Client not found'
+            });
+        }
+        
+        // Generate nullplan summary from creditor data
+        const nullplanCreditors = client.final_creditor_list?.filter(c => 
+            c.nullplan_side_conversation_id || c.nullplan_sent_at
+        ) || [];
+        
+        const summary = {
+            total_creditors: nullplanCreditors.length,
+            accepted: nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length,
+            declined: nullplanCreditors.filter(c => c.nullplan_response_status === 'declined').length,
+            no_responses: nullplanCreditors.filter(c => c.nullplan_response_status === 'no_response').length,
+            pending: nullplanCreditors.filter(c => !c.nullplan_response_status || c.nullplan_response_status === 'pending').length,
+            total_debt: nullplanCreditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0),
+            acceptance_rate: nullplanCreditors.length > 0 ? 
+                Math.round((nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length / nullplanCreditors.length) * 100) : 0,
+            plan_type: 'Nullplan',
+            garnishable_amount: 0,
+            legal_reference: '§ 305 Abs. 1 Nr. 1 InsO'
+        };
+        
+        res.json({
+            success: true,
+            summary: summary
+        });
+        
+    } catch (error) {
+        console.error('❌ Error getting nullplan responses:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Promise-based mutex for database operations to prevent race conditions
 const processingMutex = new Map();
 
@@ -5391,8 +5447,8 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     client.calculated_settlement_plan = settlementPlan;
     client.current_status = 'settlement_documents_generated';
     
-    // Generate Schuldenbereinigungsplan document
-    console.log(`📄 Generating Schuldenbereinigungsplan for ${client.aktenzeichen}...`);
+    // Generate document based on plan type
+    console.log(`📄 Generating ${planType === 'nullplan' ? 'Nullplan' : 'Schuldenbereinigungsplan'} for ${client.aktenzeichen}...`);
     
     // Prepare client data for document generation
     const clientData = {
@@ -5401,65 +5457,120 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       reference: client.aktenzeichen
     };
     
-    const settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
-      clientData,
-      settlementPlan,
-      settlementPlan // calculation result is part of settlement data
-    );
-    
-    if (settlementResult.success) {
-      console.log(`✅ Generated settlement plan: ${settlementResult.document_info.filename}`);
+    let settlementResult;
+    if (planType === 'nullplan') {
+      // Generate Nullplan document for clients with no garnishable income
+      settlementResult = await documentGenerator.generateNullplanDocuments(client.aktenzeichen);
+      
+      if (settlementResult.success) {
+        console.log(`✅ Generated Nullplan documents:`);
+        console.log(`   - Nullplan: ${settlementResult.nullplan.document_info.filename}`);
+        console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
+        // Store both documents in client for creditor emails
+        client.nullplan_document = settlementResult.nullplan;
+        client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
+        
+        // Automatically send Nullplan to creditors
+        console.log(`📧 Automatically sending Nullplan to creditors...`);
+        try {
+          const CreditorContactService = require('./services/creditorContactService');
+          const creditorContactService = new CreditorContactService();
+          
+          const nullplanData = {
+            total_debt: totalDebt,
+            creditors: client.final_creditor_list?.filter(c => c.status === 'confirmed') || [],
+            plan_type: 'Nullplan'
+          };
+          
+          const emailResult = await creditorContactService.sendNullplanToCreditors(
+            client.aktenzeichen,
+            nullplanData,
+            settlementResult
+          );
+          
+          if (emailResult.success) {
+            console.log(`✅ Nullplan emails sent to ${emailResult.emails_sent}/${emailResult.total_creditors} creditors`);
+            console.log(`🎫 Nullplan ticket ID: ${emailResult.nullplan_ticket_id}`);
+            // Store email results in client
+            client.nullplan_email_results = emailResult;
+          } else {
+            console.error(`❌ Nullplan email sending failed: ${emailResult.error}`);
+          }
+        } catch (emailError) {
+          console.error(`❌ Error sending Nullplan emails: ${emailError.message}`);
+        }
+      } else {
+        console.error(`❌ Nullplan generation failed: ${settlementResult.error}`);
+      }
     } else {
-      console.error(`❌ Settlement plan generation failed: ${settlementResult.error}`);
-    }
-    
-    // Generate Forderungsübersicht (Creditor Overview)
-    console.log(`📄 Generating Forderungsübersicht for ${client.aktenzeichen}...`);
-    
-    // Prepare creditor data for document generation
-    const creditorData = (client.final_creditor_list || []).map(creditor => ({
-      creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
-      creditor_address: creditor.sender_address || '',
-      creditor_email: creditor.sender_email || '',
-      creditor_reference: creditor.reference_number || '',
-      debt_amount: creditor.claim_amount || 0,
-      debt_reason: creditor.debt_reason || 'Forderung',
-      remarks: creditor.remarks || '',
-      is_representative: creditor.is_representative || false,
-      representative_info: creditor.representative_info || null,
-      representative_reference: creditor.representative_reference || ''
-    }));
-    
-    let overviewResult;
-    try {
-      const overviewDoc = await documentGenerator.generateForderungsuebersicht(
+      // Generate Schuldenbereinigungsplan document for clients with garnishable income
+      settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
         clientData,
-        creditorData
+        settlementPlan,
+        settlementPlan // calculation result is part of settlement data
       );
       
-      // Save the document
-      const saveResult = await documentGenerator.saveDocument(overviewDoc, client.aktenzeichen, `Forderungsübersicht_${client.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`);
+      if (settlementResult.success) {
+        console.log(`✅ Generated settlement plan: ${settlementResult.document_info.filename}`);
+      } else {
+        console.error(`❌ Settlement plan generation failed: ${settlementResult.error}`);
+      }
+    }
+    
+    // Generate Forderungsübersicht (Creditor Overview) - only for Schuldenbereinigungsplan cases
+    // For Nullplan cases, Forderungsübersicht is already generated as part of generateNullplanDocuments
+    let overviewResult;
+    if (planType !== 'nullplan') {
+      console.log(`📄 Generating Forderungsübersicht for ${client.aktenzeichen}...`);
       
-      overviewResult = {
-        success: true,
-        document_info: {
-          filename: saveResult.filename,
-          path: saveResult.path,
-          size: saveResult.size,
-          client_reference: client.aktenzeichen,
-          generated_at: new Date().toISOString()
-        },
-        buffer: saveResult.buffer
-      };
+      // Prepare creditor data for document generation
+      const creditorData = (client.final_creditor_list || []).map(creditor => ({
+        creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
+        creditor_address: creditor.sender_address || '',
+        creditor_email: creditor.sender_email || '',
+        creditor_reference: creditor.reference_number || '',
+        debt_amount: creditor.claim_amount || 0,
+        debt_reason: creditor.debt_reason || 'Forderung',
+        remarks: creditor.remarks || '',
+        is_representative: creditor.is_representative || false,
+        representative_info: creditor.representative_info || null,
+        representative_reference: creditor.representative_reference || ''
+      }));
       
-      console.log(`✅ Generated creditor overview: ${overviewResult.document_info.filename}`);
-    } catch (error) {
-      console.error(`❌ Creditor overview generation failed: ${error.message}`);
-      overviewResult = {
-        success: false,
-        error: error.message,
-        client_reference: client.aktenzeichen
-      };
+      try {
+        const overviewDoc = await documentGenerator.generateForderungsuebersicht(
+          clientData,
+          creditorData
+        );
+        
+        // Save the document
+        const saveResult = await documentGenerator.saveDocument(overviewDoc, client.aktenzeichen, `Forderungsübersicht_${client.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`);
+        
+        overviewResult = {
+          success: true,
+          document_info: {
+            filename: saveResult.filename,
+            path: saveResult.path,
+            size: saveResult.size,
+            client_reference: client.aktenzeichen,
+            generated_at: new Date().toISOString()
+          },
+          buffer: saveResult.buffer
+        };
+        
+        console.log(`✅ Generated creditor overview: ${overviewResult.document_info.filename}`);
+      } catch (error) {
+        console.error(`❌ Creditor overview generation failed: ${error.message}`);
+        overviewResult = {
+          success: false,
+          error: error.message,
+          client_reference: client.aktenzeichen
+        };
+      }
+    } else {
+      // For Nullplan cases, use the already generated Forderungsübersicht
+      overviewResult = client.forderungsuebersicht_document;
+      console.log(`✅ Using Nullplan-generated Forderungsübersicht document`);
     }
     
     // Save client with updated data
@@ -5931,6 +6042,97 @@ app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticat
     console.error('❌ Error getting settlement monitoring status:', error.message);
     res.status(500).json({
       error: 'Failed to get settlement monitoring status',
+      details: error.message
+    });
+  }
+});
+
+// Manual fix for settlement tracking IDs
+app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    console.log(`🔧 Manual settlement tracking fix requested for client ${clientId}`);
+    
+    // Get client's aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get the client to check current state
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Check creditors without settlement_side_conversation_id
+    const creditorsWithoutIds = client.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
+    const creditorsWithIds = client.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
+    
+    console.log(`📊 Settlement tracking status for ${aktenzeichen}:`);
+    console.log(`   - Creditors with IDs: ${creditorsWithIds.length}`);
+    console.log(`   - Creditors without IDs: ${creditorsWithoutIds.length}`);
+    
+    if (creditorsWithoutIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'All creditors already have settlement_side_conversation_id',
+        client_id: clientId,
+        aktenzeichen: aktenzeichen,
+        creditors_with_ids: creditorsWithIds.length,
+        creditors_without_ids: 0,
+        action_needed: false
+      });
+    }
+    
+    // Try to find and apply any missing Side Conversation IDs from Zendesk
+    const CreditorContactService = require('./services/creditorContactService');
+    const creditorService = new CreditorContactService();
+    
+    // Create mock email results for the robust update method
+    const mockEmailResults = creditorsWithoutIds.map(creditor => ({
+      success: true,
+      creditor_name: creditor.sender_name || creditor.creditor_name,
+      creditor_id: creditor.id,
+      side_conversation_id: `manual_fix_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Generate placeholder ID
+      email_sent: true,
+      recipient_email: creditor.sender_email,
+      manual_fix: true
+    }));
+    
+    console.log(`🔧 Attempting to fix ${mockEmailResults.length} creditor tracking IDs...`);
+    
+    const fixResult = await creditorService.robustUpdateCreditorsWithRetry(aktenzeichen, mockEmailResults);
+    
+    // Get updated client state
+    const updatedClient = await getClient(clientId);
+    const finalCreditorsWithIds = updatedClient.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
+    const finalCreditorsWithoutIds = updatedClient.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
+    
+    res.json({
+      success: fixResult.success,
+      message: fixResult.success ? 
+        `Fixed settlement tracking for ${fixResult.updated_count} creditors` :
+        `Failed to fix settlement tracking: ${fixResult.error}`,
+      client_id: clientId,
+      aktenzeichen: aktenzeichen,
+      fix_result: fixResult,
+      before: {
+        creditors_with_ids: creditorsWithIds.length,
+        creditors_without_ids: creditorsWithoutIds.length
+      },
+      after: {
+        creditors_with_ids: finalCreditorsWithIds.length,
+        creditors_without_ids: finalCreditorsWithoutIds.length
+      },
+      creditors_fixed: finalCreditorsWithIds.length - creditorsWithIds.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fixing settlement tracking:', error.message);
+    res.status(500).json({
+      error: 'Failed to fix settlement tracking',
       details: error.message
     });
   }

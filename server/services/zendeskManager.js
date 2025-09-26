@@ -617,6 +617,109 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
+     * Create nullplan distribution ticket
+     * For clients with no garnishable income (pfändbar amount = 0)
+     */
+    async createNullplanTicket(zendeskUserId, clientData, nullplanData, creditorCount) {
+        try {
+            console.log(`🎫 Creating nullplan ticket for ${clientData.firstName} ${clientData.lastName}...`);
+            
+            const totalDebt = nullplanData.total_debt || 0;
+            const creditors = clientData.final_creditor_list?.filter(c => c.status === 'confirmed') || [];
+            
+            // Create the nullplan ticket subject and description
+            const subject = `📄 Nullplan - ${clientData.firstName} ${clientData.lastName} - Az: ${clientData.aktenzeichen}`;
+            
+            const description = `
+**NULLPLAN DISTRIBUTION**
+
+**Client Information:**
+- Name: ${clientData.firstName} ${clientData.lastName}
+- Email: ${clientData.email}
+- Reference: ${clientData.aktenzeichen}
+
+**Nullplan Details:**
+- Plan Type: Nullplan (§ 305 Abs. 1 Nr. 1 InsO)
+- Pfändbares Einkommen: 0,00 EUR
+- Total Debt: €${totalDebt.toFixed(2)}
+- Monthly Payment: 0,00 EUR (keine Zahlungen möglich)
+
+**Distribution Summary:**
+- Total Creditors: ${creditorCount}
+- Documents to be sent:
+  • Nullplan (Nullplan Documentation)
+  • Forderungsübersicht (Creditor Overview)
+
+**Creditors to Contact:**
+${creditors.map((creditor, index) => {
+    const name = creditor.sender_name || 'Unknown Creditor';
+    const amount = creditor.claim_amount || 0;
+    return `${index + 1}. ${name} - €${amount.toFixed(2)}`;
+}).join('\n')}
+
+**Legal Basis:**
+Client cannot make any payments due to economic circumstances (no garnishable income).
+According to § 305 Abs. 1 Nr. 1 InsO, this nullplan is presented to all creditors.
+
+**Expected Response:**
+- Bei Annahme des Nullplans durch alle Gläubiger wird das Verfahren eingestellt
+- Bei Ablehnung kann der Mandant das gerichtliche Insolvenzverfahren beantragen
+- Eine Befriedigung der Forderungen ist derzeit nicht möglich
+
+---
+This ticket manages the nullplan distribution to all creditors.
+Each creditor will receive an individual Side Conversation email with the nullplan documents.
+
+Status updates will be posted to this ticket as emails are sent.
+            `.trim();
+
+            const ticketData = {
+                ticket: {
+                    requester_id: zendeskUserId,
+                    subject: subject,
+                    description: description,
+                    status: 'open',
+                    priority: 'normal',
+                    type: 'incident',
+                    tags: [
+                        'nullplan',
+                        'null-plan',
+                        'creditor-distribution',
+                        'insolvency',
+                        `client-${clientData.aktenzeichen}`,
+                        'plan-type-nullplan'
+                    ]
+                }
+            };
+
+            const url = `${this.apiUrl}tickets.json`;
+            const response = await axios.post(url, ticketData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Nullplan ticket created successfully!`);
+            console.log(`🎫 Ticket ID: ${response.data.ticket.id}`);
+            console.log(`📋 Subject: ${response.data.ticket.subject}`);
+
+            return {
+                id: response.data.ticket.id,
+                subject: response.data.ticket.subject,
+                status: response.data.ticket.status,
+                created_at: response.data.ticket.created_at,
+                url: response.data.ticket.url
+            };
+
+        } catch (error) {
+            console.error('❌ Error creating nullplan ticket:', error.message);
+            if (error.response?.data) {
+                console.error('Zendesk API error details:', error.response.data);
+            }
+            throw error;
+        }
+    }
+
+    /**
      * Send settlement plan data to Make.com webhook
      */
     async sendToMakeWebhook(creditorData, clientData, settlementData, documentAttachments, mainTicketId) {
@@ -1356,6 +1459,145 @@ Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan und teilen uns Ihre 
 Bei Zustimmung aller Gläubiger wird der Plan rechtsverbindlich und die Zahlungen beginnen zum [STARTDATUM].
 
 Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+
+Thomas Scuric Rechtsanwälte
+[Adresse]
+[Telefon]
+[E-Mail]
+
+---
+Aktenzeichen: ${clientData.reference || 'N/A'}
+Bearbeiter: [Name]
+Datum: ${new Date().toLocaleDateString('de-DE')}
+
+Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schuldenbereinigungsverfahrens.
+        `.trim();
+    }
+
+    /**
+     * Generate Nullplan email body with download links
+     * For clients with no garnishable income (pfändbar amount = 0)
+     */
+    generateNullplanEmailBodyWithLinks(creditorData, clientData, nullplanData, downloadUrls) {
+        const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Sehr geehrte Damen und Herren';
+        const totalDebt = nullplanData.total_debt || 0;
+        const creditorDebt = creditorData.claim_amount || 0;
+        
+        // Calculate creditor's share  
+        const creditorShare = totalDebt > 0 ? (creditorDebt / totalDebt) * 100 : 0;
+
+        // Generate download links section with hyperlinks
+        const downloadLinksSection = downloadUrls.map(doc => {
+            const documentName = doc.type === 'nullplan' ? 'Nullplan' : 'Forderungsübersicht';
+            if (doc.download_url) {
+                return `📄 [${documentName}](${doc.download_url})`;
+            } else {
+                return `📄 ${documentName}: (Download-Link wird vorbereitet)`;
+            }
+        }).join('\n');
+
+        return `
+Sehr geehrte Damen und Herren,
+${creditorName !== 'Sehr geehrte Damen und Herren' ? `\nSehr geehrte/r ${creditorName},` : ''}
+
+wir übersenden Ihnen hiermit den außergerichtlichen Nullplan für unseren Mandanten ${clientData.name}.
+
+**NULLPLAN DETAILS:**
+
+Plan-Typ: Nullplan (§ 305 Abs. 1 Nr. 1 InsO)
+Pfändbares Einkommen: 0,00 EUR
+Gesamtschuldensumme: €${totalDebt.toFixed(2)}
+Zahlungsrate: 0,00 EUR (keine Zahlungen möglich)
+
+**IHRE FORDERUNG:**
+
+Forderungsbetrag: €${creditorDebt.toFixed(2)}
+Ihr Anteil an Gesamtschuld: ${creditorShare.toFixed(2)}%
+Zahlung an Sie: 0,00 EUR
+
+**RECHTLICHE GRUNDLAGE:**
+
+Unser Mandant kann aufgrund seiner wirtschaftlichen Verhältnisse keine Ratenzahlungen leisten, da das pfändbare Einkommen 0,00 EUR beträgt. Gemäß § 305 Abs. 1 Nr. 1 InsO wird Ihnen daher dieser außergerichtliche Nullplan vorgelegt.
+
+**DOKUMENTE ZUM DOWNLOAD:**
+
+${downloadLinksSection}
+
+**RECHTSWIRKUNG:**
+
+• Bei Annahme des Nullplans durch alle Gläubiger wird das Verfahren eingestellt
+• Bei Ablehnung kann der Mandant das gerichtliche Insolvenzverfahren beantragen
+• Eine Befriedigung der Forderungen ist derzeit nicht möglich
+• Bei Verbesserung der wirtschaftlichen Verhältnisse wird unverzüglich eine angemessene Regelung angestrebt
+
+**NÄCHSTE SCHRITTE:**
+
+Bitte laden Sie die Dokumente über die obigen Links herunter und prüfen Sie den Nullplan. Teilen Sie uns Ihre Stellungnahme bis zum [DATUM] mit.
+
+Bei Fragen zum Nullplan oder zum weiteren Verfahren stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+Thomas Scuric Rechtsanwälte
+
+---
+📱 Diese E-Mail wurde automatisch über unser Mandanten-Portal generiert.
+        `.trim();
+    }
+
+    /**
+     * Generate Nullplan email body (without download links)
+     * Fallback version for when documents are attached directly
+     */
+    generateNullplanEmailBody(creditorData, clientData, nullplanData) {
+        const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Sehr geehrte Damen und Herren';
+        const totalDebt = nullplanData.total_debt || 0;
+        const creditorDebt = creditorData.claim_amount || 0;
+        
+        // Calculate creditor's share  
+        const creditorShare = totalDebt > 0 ? (creditorDebt / totalDebt) * 100 : 0;
+
+        return `
+Sehr geehrte Damen und Herren,
+${creditorName !== 'Sehr geehrte Damen und Herren' ? `\nSehr geehrte/r ${creditorName},` : ''}
+
+wir übersenden Ihnen hiermit den außergerichtlichen Nullplan für unseren Mandanten ${clientData.name}.
+
+**NULLPLAN DETAILS:**
+
+Plan-Typ: Nullplan (§ 305 Abs. 1 Nr. 1 InsO)
+Pfändbares Einkommen: 0,00 EUR
+Gesamtschuldensumme: €${totalDebt.toFixed(2)}
+Zahlungsrate: 0,00 EUR (keine Zahlungen möglich)
+
+**IHRE FORDERUNG:**
+
+Forderungsbetrag: €${creditorDebt.toFixed(2)}
+Ihr Anteil an Gesamtschuld: ${creditorShare.toFixed(2)}%
+Zahlung an Sie: 0,00 EUR
+
+**RECHTLICHE GRUNDLAGE:**
+
+Unser Mandant kann aufgrund seiner wirtschaftlichen Verhältnisse keine Ratenzahlungen leisten, da das pfändbare Einkommen 0,00 EUR beträgt. Gemäß § 305 Abs. 1 Nr. 1 InsO wird Ihnen daher dieser außergerichtliche Nullplan vorgelegt.
+
+**BEIGEFÜGTE DOKUMENTE:**
+
+1. Nullplan (detaillierte Darstellung der wirtschaftlichen Verhältnisse)
+2. Forderungsübersicht (Auflistung aller Gläubiger und Forderungen)
+
+**RECHTSWIRKUNG:**
+
+• Bei Annahme des Nullplans durch alle Gläubiger wird das Verfahren eingestellt
+• Bei Ablehnung kann der Mandant das gerichtliche Insolvenzverfahren beantragen
+• Eine Befriedigung der Forderungen ist derzeit nicht möglich
+• Bei Verbesserung der wirtschaftlichen Verhältnisse wird unverzüglich eine angemessene Regelung angestrebt
+
+**NÄCHSTE SCHRITTE:**
+
+Bitte prüfen Sie den beigefügten Nullplan und teilen Sie uns Ihre Stellungnahme bis zum [DATUM] mit.
+
+Bei Fragen zum Nullplan oder zum weiteren Verfahren stehen wir Ihnen gerne zur Verfügung.
 
 Mit freundlichen Grüßen
 

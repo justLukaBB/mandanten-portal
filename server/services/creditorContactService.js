@@ -921,7 +921,7 @@ class CreditorContactService {
 
             // Wait for database save to complete before starting monitoring
             await new Promise(resolve => setTimeout(resolve, 2000));
-
+          
             // Step 11: Start settlement response monitoring (1-minute intervals)
             const SettlementResponseMonitor = require('./settlementResponseMonitor');
             const settlementMonitor = new SettlementResponseMonitor();
@@ -1304,7 +1304,7 @@ class CreditorContactService {
     /**
      * Update creditor records with Side Conversation IDs for settlement response tracking
      */
-    async updateCreditorsWithSideConversationIds(clientReference, emailResults) {
+      async updateCreditorsWithSideConversationIds(clientReference, emailResults) {
         try {
             console.log(`📋 Updating creditor records with Side Conversation IDs for ${clientReference}`);
 
