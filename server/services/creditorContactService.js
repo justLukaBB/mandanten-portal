@@ -1361,6 +1361,9 @@ class CreditorContactService {
                 })));
                 
                 try {
+                    client.current_status = 'settlement_plan_sent_to_creditors';
+                    client.settlement_plan_sent_at = new Date();
+
                     // Mark the final_creditor_list as modified to ensure Mongoose saves the changes
                     client.markModified('final_creditor_list');
                     
