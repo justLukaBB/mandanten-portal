@@ -244,7 +244,7 @@ Diese Status-Updates werden automatisch aktualisiert wenn Gläubiger antworten.`
      */
     async sendCreditorEmailViaTicket(ticketId, creditorData, clientData) {
         // Use test email for now - moved outside try block for scope
-        const testEmail = 'justlukax@gmail.com';
+        const testEmail = 'farhanfaqir29963@gmail.com';
         const emailBody = this.generateCreditorEmailBody(creditorData, clientData);
         const emailSubject = `Gläubiger-Anfrage: ${creditorData.creditor_name} - Az: ${creditorData.reference_number}`;
         
@@ -622,7 +622,7 @@ Status updates will be posted to this ticket as emails are sent.
     async sendToMakeWebhook(creditorData, clientData, settlementData, documentAttachments, mainTicketId) {
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
-            const creditorEmail = 'justlukax@gmail.com'; // Test email
+            const creditorEmail = 'farhanfaqir29963@gmail.com'; // Test email
             
             // Prepare webhook payload
             const webhookData = {
@@ -884,7 +884,7 @@ Status updates will be posted to this ticket as emails are sent.
      */
     async sendSettlementPlanEmailViaTicket(mainTicketId, creditorData, clientData, settlementData) {
         // Use test email for now
-        const testEmail = 'justlukax@gmail.com';
+        const testEmail = 'farhanfaqir29963@gmail.com';
         const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
         const emailBody = this.generateSettlementPlanEmailBody(creditorData, clientData, settlementData);
         const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
@@ -1185,10 +1185,10 @@ Status updates will be posted to this ticket as emails are sent.
         try {
             const creditorName = creditorData.sender_name || creditorData.creditor_name || 'Unknown Creditor';
             // Use actual creditor email if available, fallback to test email for development
-            const creditorEmail = creditorData.creditor_email || creditorData.email || 'justlukax@gmail.com';
+            const creditorEmail = creditorData.creditor_email || creditorData.email || 'farhanfaqir29963@gmail.com';
             const emailSubject = `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`;
             
-            console.log(`📧 Sending to: ${creditorEmail} (${creditorEmail === 'justlukax@gmail.com' ? 'TEST EMAIL' : 'CREDITOR EMAIL'})`);
+            console.log(`📧 Sending to: ${creditorEmail} (${creditorEmail === 'farhanfaqir29963@gmail.com' ? 'TEST EMAIL' : 'CREDITOR EMAIL'})`);
             
             console.log(`💬 Creating Side Conversation for ${creditorName} in ticket ${ticketId}`);
             
@@ -1237,7 +1237,7 @@ Status updates will be posted to this ticket as emails are sent.
                 success: false,
                 error: error.message,
                 creditor_name: creditorName,
-                creditor_email: creditorData.creditor_email || creditorData.email || 'justlukax@gmail.com'
+                creditor_email: creditorData.creditor_email || creditorData.email || 'farhanfaqir29963@gmail.com'
             };
         }
     }
