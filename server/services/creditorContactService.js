@@ -9,11 +9,11 @@ const ZendeskManager = require('./zendeskManager');
 class CreditorContactService {
     constructor() {
         this.zendesk = new ZendeskManager();
-        
+
         // In-memory storage for demo - in production, use proper database
         this.creditorContacts = new Map();
         this.zendeskSync = new Map();
-        
+
         // Initialize response processor (will be set after construction to avoid circular dependency)
         this.responseProcessor = null;
     }
@@ -36,7 +36,7 @@ class CreditorContactService {
     async processClientCreditorConfirmation(clientReference, clientData = null) {
         try {
             console.log(`\n🚀 Starting creditor contact process for client: ${clientReference}`);
-            
+
             // If clientData not provided, fetch from database
             if (!clientData) {
                 const Client = require('../models/Client');
@@ -51,7 +51,7 @@ class CreditorContactService {
                     address: client.address || ''
                 };
             }
-            
+
             console.log(`📋 Client: ${clientData.name} (${clientData.email})`);
 
             // Step 1: Test Zendesk connection
@@ -70,7 +70,7 @@ class CreditorContactService {
             // Step 3: Get all creditors for this client from confirmed documents
             const creditors = await this.getConfirmedCreditorsForClient(clientReference);
             console.log(`📊 Found ${creditors.length} confirmed creditors to contact`);
-            
+
             // Debug: Log all creditors that will be contacted
             if (creditors.length > 0) {
                 console.log(`📧 Creditors to be contacted:`);
@@ -92,16 +92,16 @@ class CreditorContactService {
 
             // Step 4: Create ONE main Zendesk ticket for all creditors
             console.log(`🎫 Creating main ticket for ${creditors.length} creditors...`);
-            
+
             const mainTicket = await this.zendesk.createMainCreditorTicket(
-                zendeskUser.id, 
+                zendeskUser.id,
                 {
                     id: clientReference,
                     name: clientData.name,
                     email: clientData.email,
                     phone: clientData.phone || '',
                     address: clientData.address || ''
-                }, 
+                },
                 creditors
             );
 
@@ -135,8 +135,8 @@ class CreditorContactService {
 
             // Step 6: Send Side Conversation emails from the main ticket
             const sideConversationResults = await this.sendCreditorEmailsViaSideConversations(
-                mainTicket.id, 
-                contactRecords.filter(r => r.success), 
+                mainTicket.id,
+                contactRecords.filter(r => r.success),
                 clientData
             );
 
@@ -186,13 +186,13 @@ class CreditorContactService {
 
         } catch (error) {
             console.error('❌ Error in processClientCreditorConfirmation:', error.message);
-            
+
             // Provide user-friendly error messages
             let errorMessage = error.message;
             if (error.message.includes('not found')) {
                 errorMessage = `❌ Zendesk User nicht gefunden!\n\nBitte erstellen Sie manuell einen Zendesk User mit:\n- Name: ${clientData.name}\n- E-Mail: ${clientData.email}\n\nDann versuchen Sie es erneut.`;
             }
-            
+
             return {
                 success: false,
                 client_reference: clientReference,
@@ -212,7 +212,7 @@ class CreditorContactService {
             // Query MongoDB for the client
             const Client = require('../models/Client');
             const client = await Client.findOne({ aktenzeichen: clientReference });
-            
+
             if (!client) {
                 throw new Error(`Client ${clientReference} not found in database`);
             }
@@ -220,7 +220,7 @@ class CreditorContactService {
             // Use final_creditor_list which contains confirmed creditors
             const allCreditors = client.final_creditor_list || [];
             console.log(`🔍 Total creditors in final_creditor_list: ${allCreditors.length}`);
-            
+
             // Debug each creditor's filtering criteria
             allCreditors.forEach((creditor, index) => {
                 console.log(`🔍 Creditor ${index + 1}:`, {
@@ -234,19 +234,19 @@ class CreditorContactService {
                 });
             });
 
-            const confirmedCreditors = allCreditors.filter(creditor => 
-                creditor.status === 'confirmed' && 
-                creditor.sender_name && 
+            const confirmedCreditors = allCreditors.filter(creditor =>
+                creditor.status === 'confirmed' &&
+                creditor.sender_name &&
                 creditor.sender_email
             );
 
             console.log(`📋 Found ${confirmedCreditors.length} confirmed creditors in final_creditor_list for client ${clientReference}`);
-            
+
             // Log filtered out creditors
-            const filteredOut = allCreditors.filter(creditor => 
+            const filteredOut = allCreditors.filter(creditor =>
                 !(creditor.status === 'confirmed' && creditor.sender_name && creditor.sender_email)
             );
-            
+
             if (filteredOut.length > 0) {
                 console.log(`⚠️ ${filteredOut.length} creditors were filtered out:`);
                 filteredOut.forEach((creditor, index) => {
@@ -254,18 +254,18 @@ class CreditorContactService {
                     if (creditor.status !== 'confirmed') reasons.push(`status: ${creditor.status}`);
                     if (!creditor.sender_name) reasons.push('missing sender_name');
                     if (!creditor.sender_email) reasons.push('missing sender_email');
-                    
+
                     console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} - Reasons: ${reasons.join(', ')}`);
                 });
             }
-            
+
             // Track creditors without emails for manual processing
-            const creditorsWithoutEmail = allCreditors.filter(creditor => 
-                creditor.status === 'confirmed' && 
-                creditor.sender_name && 
+            const creditorsWithoutEmail = allCreditors.filter(creditor =>
+                creditor.status === 'confirmed' &&
+                creditor.sender_name &&
                 !creditor.sender_email
             );
-            
+
             if (creditorsWithoutEmail.length > 0) {
                 console.log(`📮 ${creditorsWithoutEmail.length} creditors need manual contact (no email):`);
                 creditorsWithoutEmail.forEach((creditor, index) => {
@@ -275,11 +275,11 @@ class CreditorContactService {
 
             // Convert ALL creditors to contact records format (including those without emails)
             // We need to track all creditors, not just those we can email
-            const allConfirmedCreditors = allCreditors.filter(creditor => 
-                creditor.status === 'confirmed' && 
+            const allConfirmedCreditors = allCreditors.filter(creditor =>
+                creditor.status === 'confirmed' &&
                 creditor.sender_name
             );
-            
+
             const creditorContactRecords = allConfirmedCreditors.map(creditor => ({
                 id: uuidv4(),
                 client_reference: clientReference,
@@ -296,7 +296,7 @@ class CreditorContactService {
             }));
 
             return creditorContactRecords;
-            
+
         } catch (error) {
             console.error(`❌ Error getting confirmed creditors for client ${clientReference}:`, error.message);
             throw error;
@@ -308,13 +308,13 @@ class CreditorContactService {
      */
     async createCreditorContactRecord(creditorData, ticketId, zendeskUserId) {
         const contactId = uuidv4();
-        
+
         // Determine fallback amount logic
-        const fallbackAmount = creditorData.original_claim_amount > 0 
-            ? creditorData.original_claim_amount 
+        const fallbackAmount = creditorData.original_claim_amount > 0
+            ? creditorData.original_claim_amount
             : 100.00;
-        const amountSource = creditorData.original_claim_amount > 0 
-            ? 'original_document' 
+        const amountSource = creditorData.original_claim_amount > 0
+            ? 'original_document'
             : 'fallback';
 
         const contactRecord = {
@@ -326,26 +326,26 @@ class CreditorContactService {
             reference_number: creditorData.reference_number,
             original_claim_amount: creditorData.original_claim_amount,
             document_ids: creditorData.document_ids,
-            
+
             // Zendesk integration - NEW STRUCTURE
             main_zendesk_ticket_id: ticketId, // This is now the main ticket ID
             zendesk_user_id: zendeskUserId,
             side_conversation_id: null, // Will be set when Side Conversation is created
             ticket_status: 'main_ticket_created',
-            
+
             // Contact management
             contact_status: 'main_ticket_created',
             email_sent_at: null,
             response_received_at: null,
-            
+
             // Response data
             current_debt_amount: null,
             creditor_response_text: null,
-            
+
             // Final amount logic
             final_debt_amount: fallbackAmount,
             amount_source: amountSource,
-            
+
             // Timestamps
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -353,7 +353,7 @@ class CreditorContactService {
 
         // Store in memory (in production, save to database)
         this.creditorContacts.set(contactId, contactRecord);
-        
+
         console.log(`✅ Created creditor contact record: ${creditorData.creditor_name || creditorData.sender_name} (${contactId})`);
         return contactRecord;
     }
@@ -381,20 +381,20 @@ class CreditorContactService {
      */
     async sendCreditorEmailsViaSideConversations(mainTicketId, contactRecords, clientData) {
         const sideConversationResults = [];
-        
+
         // Filter only creditors with email addresses
         const emailableContacts = contactRecords.filter(contact => {
             const fullRecord = Array.from(this.creditorContacts.values())
                 .find(c => c.id === contact.contact_id);
             return fullRecord && fullRecord.creditor_email;
         });
-        
+
         const manualContacts = contactRecords.filter(contact => {
             const fullRecord = Array.from(this.creditorContacts.values())
                 .find(c => c.id === contact.contact_id);
             return fullRecord && !fullRecord.creditor_email;
         });
-        
+
         if (manualContacts.length > 0) {
             console.log(`📮 ${manualContacts.length} creditors need manual contact (no email):`);
             manualContacts.forEach((contact, index) => {
@@ -404,10 +404,10 @@ class CreditorContactService {
 
         for (let i = 0; i < emailableContacts.length; i++) {
             const contactInfo = emailableContacts[i];
-            
+
             try {
                 console.log(`📧 Creating Side Conversation ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name}...`);
-                
+
                 // Get the full contact record for this creditor
                 const contactRecord = Array.from(this.creditorContacts.values())
                     .find(c => c.id === contactInfo.contact_id);
@@ -448,7 +448,7 @@ class CreditorContactService {
 
             } catch (error) {
                 console.error(`❌ Failed to create Side Conversation for ${contactInfo.creditor_name}:`, error.message);
-                
+
                 sideConversationResults.push({
                     creditor_id: contactInfo.creditor_id,
                     creditor_name: contactInfo.creditor_name,
@@ -471,7 +471,7 @@ class CreditorContactService {
 
         for (let i = 0; i < ticketResults.length; i++) {
             const ticketInfo = ticketResults[i];
-            
+
             if (!ticketInfo.success) {
                 continue;
             }
@@ -505,7 +505,7 @@ class CreditorContactService {
                     ticket_id: ticketInfo.ticket_id,
                     contact_id: ticketInfo.contact_id,
                     success: true,
-                    sent_to: 'justlukax@gmail.com' // Test email
+                    sent_to: 'farhanfaqir29963@gmail.com' // Test email
                 });
 
                 // Wait 3 seconds between emails to avoid rate limits
@@ -516,7 +516,7 @@ class CreditorContactService {
 
             } catch (error) {
                 console.error(`❌ Failed to send email for ticket ${ticketInfo.ticket_id}:`, error.message);
-                
+
                 emailResults.push({
                     creditor_id: ticketInfo.creditor_id,
                     creditor_name: ticketInfo.creditor_name,
@@ -546,7 +546,7 @@ class CreditorContactService {
 
             // Extract debt amount from response
             const extractedAmount = this.extractDebtAmountFromResponse(commentData.body);
-            
+
             console.log(`📧 Processing creditor response for ${contactRecord.creditor_name}`);
             console.log(`💰 Extracted amount: ${extractedAmount} EUR`);
 
@@ -565,9 +565,9 @@ class CreditorContactService {
 
             console.log(`✅ Updated contact record for ${contactRecord.creditor_name} with amount: ${extractedAmount} EUR`);
 
-            return { 
-                success: true, 
-                contact_id: contactRecord.id, 
+            return {
+                success: true,
+                contact_id: contactRecord.id,
                 amount: extractedAmount,
                 creditor_name: contactRecord.creditor_name
             };
@@ -650,18 +650,18 @@ class CreditorContactService {
         const timeoutContacts = [];
 
         for (const contact of this.creditorContacts.values()) {
-            if (contact.contact_status === 'email_sent' && 
-                contact.email_sent_at && 
+            if (contact.contact_status === 'email_sent' &&
+                contact.email_sent_at &&
                 new Date(contact.email_sent_at) < timeoutDate) {
-                
+
                 // Update to timeout status with fallback amount
                 contact.contact_status = 'timeout';
                 contact.ticket_status = 'timeout';
-                contact.final_debt_amount = contact.original_claim_amount > 0 
-                    ? contact.original_claim_amount 
+                contact.final_debt_amount = contact.original_claim_amount > 0
+                    ? contact.original_claim_amount
                     : 100.00;
-                contact.amount_source = contact.original_claim_amount > 0 
-                    ? 'original_document' 
+                contact.amount_source = contact.original_claim_amount > 0
+                    ? 'original_document'
                     : 'fallback';
                 contact.updated_at = new Date().toISOString();
 
@@ -752,14 +752,41 @@ class CreditorContactService {
 
             if (!contactRecord) {
                 console.log(`❌ No contact record found for ticket ${ticketId}`);
-                return { 
-                    success: false, 
+                return {
+                    success: false,
                     message: 'Contact record not found',
                     ticket_id: ticketId
                 };
             }
 
             console.log(`📧 Processing response for ${contactRecord.creditor_name} (ticket: ${ticketId})`);
+
+            const responseText = commentData.body || commentData.comment || commentData;
+            const receivedAt = new Date(commentData.created_at || Date.now());
+            const sideConversationId = commentData.side_conversation_id || null;
+
+            // --- Update MongoDB ---
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: contactRecord.client_reference });
+            if (client) {
+                const creditor = client.final_creditor_list.find(c =>
+                    c.sender_email === contactRecord.creditor_email
+                );
+
+                if (creditor) {
+                    creditor.settlement_response_status = 'responded';
+                    creditor.settlement_response_text = responseText;
+                    creditor.settlement_response_received_at = receivedAt;
+                    if (sideConversationId) {
+                        creditor.settlement_side_conversation_id = sideConversationId;
+                    }
+
+                    client.markModified('final_creditor_list');
+                    await client.save();
+
+                    console.log(`✅ Updated creditor ${creditor.sender_name} in DB with response`);
+                }
+            }
 
             // Process the response using our response processor
             const result = await this.processCreditorResponse({
@@ -778,8 +805,8 @@ class CreditorContactService {
 
         } catch (error) {
             console.error(`❌ Error processing response for ticket ${ticketId}:`, error.message);
-            return { 
-                success: false, 
+            return {
+                success: false,
                 error: error.message,
                 ticket_id: ticketId
             };
@@ -792,7 +819,7 @@ class CreditorContactService {
     async sendSettlementPlanToCreditors(clientReference, settlementData, generatedDocuments = null) {
         try {
             console.log(`\n📄 Starting second round: Sending settlement plan to creditors for ${clientReference}`);
-            
+
             // Step 1: Test Zendesk connection
             const connectionOk = await this.zendesk.testConnection();
             if (!connectionOk) {
@@ -824,7 +851,7 @@ class CreditorContactService {
             // Step 4: Get all creditors for this client
             const creditors = settlementData.creditors || client.final_creditor_list || [];
             console.log(`📊 Sending settlement plan to ${creditors.length} creditors`);
-            
+
             if (creditors.length === 0) {
                 return {
                     success: true,
@@ -836,10 +863,10 @@ class CreditorContactService {
 
             // Step 5: Create a new Zendesk ticket for settlement plan distribution
             console.log(`🎫 Creating settlement plan distribution ticket...`);
-            
+
             const settlementTicket = await this.zendesk.createSettlementPlanTicket(
-                zendeskUser.id, 
-                clientData, 
+                zendeskUser.id,
+                clientData,
                 settlementData,
                 creditors
             );
@@ -881,8 +908,8 @@ class CreditorContactService {
                 creditor_email: result.recipient_email,
                 method: result.method || 'side_conversation_with_links',
                 download_links_count: result.download_links_count || 0,
-                status: result.success && result.email_sent ? 
-                    `Schuldenbereinigungsplan E-Mail versendet via Side Conversation (${result.download_links_count || 0} Download-Links)` : 
+                status: result.success && result.email_sent ?
+                    `Schuldenbereinigungsplan E-Mail versendet via Side Conversation (${result.download_links_count || 0} Download-Links)` :
                     `Fehler: ${result.error}`,
                 success: result.success && result.email_sent
             }));
@@ -890,22 +917,16 @@ class CreditorContactService {
             await this.zendesk.addSideConversationStatusUpdate(settlementTicket.id, statusUpdates);
 
             // Step 10: Update creditor records with Side Conversation IDs and start monitoring
-            const updateResult = await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
-            
-            if (!updateResult.success) {
-                console.error(`❌ Failed to update creditors with Side Conversation IDs: ${updateResult.error}`);
-                // Implement additional robust fallback
-                await this.robustUpdateCreditorsWithRetry(clientReference, emailResults);
-            }
-            
+            await this.updateCreditorsWithSideConversationIds(clientReference, emailResults);
+
             // Wait for database save to complete before starting monitoring
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          
             // Step 11: Start settlement response monitoring (1-minute intervals)
             const SettlementResponseMonitor = require('./settlementResponseMonitor');
             const settlementMonitor = new SettlementResponseMonitor();
             const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 1);
-            
+
             console.log(`✅ Settlement plan distribution completed via direct Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
             console.log(`   - Side Conversations created: ${emailResults.length}`);
@@ -944,18 +965,18 @@ class CreditorContactService {
     async uploadDocumentsToMainTicketWithUrls(ticketId, clientData, settlementData, generatedDocuments = null) {
         try {
             console.log(`📎 Uploading documents to main ticket ${ticketId} for download URLs...`);
-            
+
             let documentFiles = [];
-            
+
             // If generatedDocuments info is provided, use actual filenames
             if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
                 console.log(`📋 Using provided document info from generation`);
                 const settlementPath = generatedDocuments.settlementResult.document_info?.path;
                 const overviewPath = generatedDocuments.overviewResult.document_info?.path;
-                
+
                 if (settlementPath) documentFiles.push({ path: settlementPath, type: 'settlement_plan' });
                 if (overviewPath) documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
-                
+
             } else {
                 // Fallback: search for documents by pattern
                 console.log(`🔍 Searching for documents by pattern...`);
@@ -963,16 +984,16 @@ class CreditorContactService {
                 const documentDir = path.join(__dirname, '../documents');
                 const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
                 const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-                
+
                 documentFiles = [
                     { path: settlementPlanFile, type: 'settlement_plan' },
                     { path: creditorOverviewFile, type: 'creditor_overview' }
                 ];
             }
-            
+
             const fs = require('fs');
             const documentUrls = [];
-            
+
             // Upload each document file
             for (const docFile of documentFiles) {
                 if (fs.existsSync(docFile.path)) {
@@ -994,39 +1015,39 @@ class CreditorContactService {
                     console.log(`❌ Document file not found: ${docFile.path}`);
                 }
             }
-            
+
             // Add attachments to main ticket as internal note and get download URLs
             if (documentUrls.length > 0) {
                 const uploadTokens = documentUrls.map(doc => doc.token);
                 const attachmentList = documentUrls.map(doc => `• ${doc.filename} (${Math.round(doc.size / 1024)} KB)`).join('\n');
-                
+
                 const commentResult = await this.zendesk.addTicketComment(ticketId, {
                     body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen:\n\n${attachmentList}\n\nDiese Dokumente werden als Download-Links in Side Conversations mit den Gläubigern geteilt.`,
                     public: false,
                     uploads: uploadTokens
                 });
-                
+
                 if (commentResult.success) {
                     console.log(`✅ Documents attached to main ticket ${ticketId}`);
-                    
+
                     // Wait a moment for Zendesk to process the attachments
                     console.log(`⏰ Waiting 3 seconds for Zendesk attachment processing...`);
                     await new Promise(resolve => setTimeout(resolve, 3000));
-                    
+
                     // Get the download URLs from the ticket attachments
                     console.log(`🔗 Retrieving download URLs from ticket ${ticketId}...`);
                     const attachmentDetails = await this.zendesk.getTicketAttachmentUrls(ticketId);
-                    
+
                     if (attachmentDetails.length > 0) {
                         // Update document URLs array with download URLs
                         console.log(`🔗 Found ${attachmentDetails.length} download URLs from ticket:`);
                         attachmentDetails.forEach(att => {
                             console.log(`   - ${att.filename}: ${att.content_url}`);
                         });
-                        
+
                         // Match uploaded files with their download URLs
                         for (let i = 0; i < documentUrls.length; i++) {
-                            const matchingAttachment = attachmentDetails.find(att => 
+                            const matchingAttachment = attachmentDetails.find(att =>
                                 att.filename === documentUrls[i].filename
                             );
                             if (matchingAttachment) {
@@ -1038,7 +1059,7 @@ class CreditorContactService {
                     } else {
                         console.log(`⚠️ No download URLs found for ticket ${ticketId}`);
                         console.log(`📋 This means attachments may not have been processed yet or there was an upload issue`);
-                        
+
                         // Continue with empty URLs - Side Conversations will be created without download links
                         // This is better than failing completely
                     }
@@ -1046,10 +1067,10 @@ class CreditorContactService {
                     console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
                 }
             }
-            
+
             console.log(`🔗 Successfully prepared ${documentUrls.length} document download URLs`);
             return documentUrls;
-            
+
         } catch (error) {
             console.error(`❌ Error uploading documents to main ticket:`, error.message);
             return [];
@@ -1062,16 +1083,16 @@ class CreditorContactService {
     async uploadDocumentsToMainTicket(ticketId, clientData, settlementData) {
         try {
             console.log(`📎 Uploading documents to main ticket ${ticketId}...`);
-            
+
             // Get document paths
             const path = require('path');
             const documentDir = path.join(__dirname, '../documents');
             const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
             const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-            
+
             const fs = require('fs');
             const attachments = [];
-            
+
             // Upload settlement plan document
             if (fs.existsSync(settlementPlanFile)) {
                 const filename = require('path').basename(settlementPlanFile);
@@ -1090,7 +1111,7 @@ class CreditorContactService {
             } else {
                 console.log(`❌ Settlement plan file not found: ${settlementPlanFile}`);
             }
-            
+
             // Upload creditor overview document  
             if (fs.existsSync(creditorOverviewFile)) {
                 const filename = require('path').basename(creditorOverviewFile);
@@ -1098,7 +1119,7 @@ class CreditorContactService {
                 const uploadResult = await this.zendesk.uploadFileToZendesk(creditorOverviewFile, filename);
                 if (uploadResult.success) {
                     attachments.push({
-                        type: 'creditor_overview', 
+                        type: 'creditor_overview',
                         filename: filename,
                         token: uploadResult.token,
                         size: uploadResult.size,
@@ -1109,32 +1130,32 @@ class CreditorContactService {
             } else {
                 console.log(`❌ Creditor overview file not found: ${creditorOverviewFile}`);
             }
-            
+
             // Add attachments to main ticket via comment and get attachment IDs
             if (attachments.length > 0) {
                 const uploadTokens = attachments.map(att => att.token);
                 const attachmentList = attachments.map(att => `• ${att.filename} (${Math.round(att.size / 1024)} KB)`).join('\n');
-                
+
                 const commentResult = await this.zendesk.addTicketComment(ticketId, {
                     body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen:\n\n${attachmentList}\n\nDiese Dokumente werden für die Side Conversations mit den Gläubigern verwendet.`,
                     public: false,
                     uploads: uploadTokens
                 });
-                
+
                 if (commentResult.success) {
                     console.log(`✅ Documents attached to main ticket ${ticketId}`);
-                    
+
                     // Get the attachment IDs from the ticket
                     console.log(`🔍 Retrieving attachment IDs from ticket ${ticketId}...`);
                     const attachmentIds = await this.zendesk.getTicketAttachmentIds(ticketId);
-                    
+
                     if (attachmentIds.length > 0) {
                         // Update attachments array with attachment IDs
                         console.log(`🔍 Found ${attachmentIds.length} attachment IDs from ticket:`);
                         attachmentIds.forEach(att => {
                             console.log(`   - ID: ${att.id}, File: ${att.filename}, Size: ${att.size}`);
                         });
-                        
+
                         for (let i = 0; i < Math.min(attachments.length, attachmentIds.length); i++) {
                             attachments[i].attachment_id = attachmentIds[i].id;
                             attachments[i].content_url = attachmentIds[i].content_url;
@@ -1148,10 +1169,10 @@ class CreditorContactService {
                     console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
                 }
             }
-            
+
             console.log(`📎 Successfully prepared ${attachments.length} document attachments`);
             return attachments;
-            
+
         } catch (error) {
             console.error(`❌ Error uploading documents to main ticket:`, error.message);
             return [];
@@ -1163,16 +1184,16 @@ class CreditorContactService {
      */
     async createSideConversationsWithDownloadLinks(settlementTicketId, creditors, clientData, settlementData, downloadUrls = []) {
         const emailResults = [];
-        
+
         console.log(`💬 Creating ${creditors.length} Side Conversations with ${downloadUrls.length} download links`);
-        
+
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
             const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
-            
+
             try {
                 console.log(`💬 Creating Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
-                
+
                 // Create Side Conversation with download links
                 const result = await this.zendesk.createSideConversationWithDownloadLinks(
                     settlementTicketId,
@@ -1188,7 +1209,7 @@ class CreditorContactService {
                     main_ticket_id: settlementTicketId,
                     side_conversation_id: result.side_conversation_id,
                     success: result.success,
-                    recipient_email: result.creditor_email || 'justlukax@gmail.com',
+                    recipient_email: result.creditor_email || 'farhanfaqir29963@gmail.com',
                     subject: result.subject,
                     download_links_count: result.download_links_count || downloadUrls.length,
                     method: 'side_conversation_with_links',
@@ -1203,7 +1224,7 @@ class CreditorContactService {
 
             } catch (error) {
                 console.error(`❌ Failed to create Side Conversation for ${creditorName}:`, error.message);
-                
+
                 emailResults.push({
                     creditor_id: creditor.id,
                     creditor_name: creditorName,
@@ -1224,16 +1245,16 @@ class CreditorContactService {
      */
     async sendSettlementPlanEmailsViaMakeWebhook(settlementTicketId, creditors, clientData, settlementData, documentAttachments = []) {
         const emailResults = [];
-        
+
         console.log(`📎 Using ${documentAttachments.length} uploaded document attachments for settlement plan distribution`);
-        
+
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
             const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
-            
+
             try {
                 console.log(`📧 Sending settlement plan via Make.com webhook ${i + 1}/${creditors.length} for ${creditorName}...`);
-                
+
                 // Send via Make.com webhook with main ticket ID and attachment tokens for Side Conversation
                 const result = await this.zendesk.sendToMakeWebhook(
                     creditor,
@@ -1248,7 +1269,7 @@ class CreditorContactService {
                     creditor_name: creditorName,
                     main_ticket_id: settlementTicketId,
                     success: result.success,
-                    recipient_email: 'justlukax@gmail.com', // Test email
+                    recipient_email: 'farhanfaqir29963@gmail.com', // Test email
                     subject: `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`,
                     attachments_count: documentAttachments.length,
                     method: 'make_webhook',
@@ -1264,7 +1285,7 @@ class CreditorContactService {
 
             } catch (error) {
                 console.error(`❌ Failed to send via Make.com webhook for ${creditorName}:`, error.message);
-                
+
                 emailResults.push({
                     creditor_id: creditor.id,
                     creditor_name: creditorName,
@@ -1283,10 +1304,10 @@ class CreditorContactService {
     /**
      * Update creditor records with Side Conversation IDs for settlement response tracking
      */
-    async updateCreditorsWithSideConversationIds(clientReference, emailResults) {
+      async updateCreditorsWithSideConversationIds(clientReference, emailResults) {
         try {
             console.log(`📋 Updating creditor records with Side Conversation IDs for ${clientReference}`);
-            
+
             const Client = require('../models/Client');
             const client = await Client.findOne({ aktenzeichen: clientReference });
             if (!client) {
@@ -1294,14 +1315,14 @@ class CreditorContactService {
             }
 
             let updatedCount = 0;
-            
+
             console.log(`🔍 Email results to process:`, emailResults.map(r => ({
                 creditor_name: r.creditor_name,
                 creditor_id: r.creditor_id,
                 success: r.success,
                 side_conversation_id: r.side_conversation_id
             })));
-            
+
             console.log(`🔍 Available creditors in final_creditor_list:`, client.final_creditor_list.map(c => ({
                 id: c.id,
                 sender_name: c.sender_name
@@ -1317,19 +1338,19 @@ class CreditorContactService {
 
                 if (emailResult.success && emailResult.side_conversation_id) {
                     // Find matching creditor by ID first (most specific), then by name
-                    const creditor = client.final_creditor_list.find(c => 
+                    const creditor = client.final_creditor_list.find(c =>
                         c.id === emailResult.creditor_id
-                    ) || client.final_creditor_list.find(c => 
-                        c.sender_name === emailResult.creditor_name && 
+                    ) || client.final_creditor_list.find(c =>
+                        c.sender_name === emailResult.creditor_name &&
                         !c.settlement_side_conversation_id  // Only match if not already updated
                     );
-                    
+
                     console.log(`🔍 Creditor matching result:`, {
                         found: !!creditor,
                         searching_for: emailResult.creditor_name,
                         creditor_id: emailResult.creditor_id
                     });
-                    
+
                     if (creditor) {
                         console.log(`📝 Before update:`, {
                             settlement_side_conversation_id: creditor.settlement_side_conversation_id,
@@ -1340,12 +1361,12 @@ class CreditorContactService {
                         creditor.settlement_plan_sent_at = new Date();
                         creditor.settlement_response_status = 'pending';
                         updatedCount++;
-                        
+
                         console.log(`📝 After update:`, {
                             settlement_side_conversation_id: creditor.settlement_side_conversation_id,
                             settlement_plan_sent_at: creditor.settlement_plan_sent_at
                         });
-                        
+
                         console.log(`📎 Updated ${creditor.sender_name} with Side Conversation ID: ${emailResult.side_conversation_id}`);
                     } else {
                         console.warn(`⚠️ Could not find creditor for result: ${emailResult.creditor_name} (ID: ${emailResult.creditor_id})`);
@@ -1357,7 +1378,7 @@ class CreditorContactService {
 
             if (updatedCount > 0) {
                 console.log(`💾 Attempting to save client with ${updatedCount} settlement updates...`);
-                
+
                 // Log the changes before saving
                 console.log(`🔍 Client fields before save:`, client.final_creditor_list.map(c => ({
                     name: c.sender_name,
@@ -1365,14 +1386,14 @@ class CreditorContactService {
                     settlement_plan_sent_at: c.settlement_plan_sent_at,
                     settlement_response_status: c.settlement_response_status
                 })));
-                
+
                 try {
                     client.current_status = 'settlement_plan_sent_to_creditors';
                     client.settlement_plan_sent_at = new Date();
 
                     // Mark the final_creditor_list as modified to ensure Mongoose saves the changes
                     client.markModified('final_creditor_list');
-                    
+
                     const saveResult = await client.save();
                     console.log(`✅ Successfully saved client ${clientReference} with settlement updates`);
                     console.log(`💾 Save result ID: ${saveResult._id}, modified paths: ${saveResult.modifiedPaths ? saveResult.modifiedPaths() : 'N/A'}`);
@@ -1385,9 +1406,9 @@ class CreditorContactService {
                     });
                     throw saveError;
                 }
-                
+
                 console.log(`✅ Updated ${updatedCount} creditor records with Side Conversation IDs`);
-                
+
                 // Immediate verification of the save
                 const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
                 console.log(`🔍 Immediate verification - Settlement fields after save:`, verifyClient.final_creditor_list.map(c => ({
@@ -1396,25 +1417,23 @@ class CreditorContactService {
                     settlement_plan_sent_at: c.settlement_plan_sent_at,
                     settlement_response_status: c.settlement_response_status
                 })));
-                
+
                 // Check if save actually worked
                 const savedSettlementIds = verifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
                 if (savedSettlementIds.length !== updatedCount) {
                     console.error(`❌ Save verification failed! Expected ${updatedCount} settlement IDs, found ${savedSettlementIds.length}`);
-                    
+
                     // Retry with direct database updates for each creditor
                     console.log(`🔄 Attempting direct database update fallback for ${emailResults.length} creditors...`);
-                    
-                    let directUpdateCount = 0;
+
                     for (const emailResult of emailResults) {
                         if (emailResult.success && emailResult.side_conversation_id) {
-                            // Try updating by creditor ID first
-                            let updateResult = await Client.updateOne(
-                                { 
+                            const updateResult = await Client.updateOne(
+                                {
                                     aktenzeichen: clientReference,
                                     'final_creditor_list.id': emailResult.creditor_id
                                 },
-                                { 
+                                {
                                     $set: {
                                         'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
                                         'final_creditor_list.$.settlement_plan_sent_at': new Date(),
@@ -1422,41 +1441,9 @@ class CreditorContactService {
                                     }
                                 }
                             );
-                            
-                            // If creditor ID update failed, try by name
-                            if (updateResult.modifiedCount === 0) {
-                                console.log(`⚠️ Creditor ID update failed, trying by name: ${emailResult.creditor_name}`);
-                                updateResult = await Client.updateOne(
-                                    { 
-                                        aktenzeichen: clientReference,
-                                        'final_creditor_list.sender_name': emailResult.creditor_name,
-                                        'final_creditor_list.settlement_side_conversation_id': { $exists: false } // Only update if not already set
-                                    },
-                                    { 
-                                        $set: {
-                                            'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
-                                            'final_creditor_list.$.settlement_plan_sent_at': new Date(),
-                                            'final_creditor_list.$.settlement_response_status': 'pending'
-                                        }
-                                    }
-                                );
-                            }
-                            
-                            if (updateResult.modifiedCount > 0) {
-                                console.log(`🔄 Direct update for ${emailResult.creditor_name}: SUCCESS`);
-                                directUpdateCount++;
-                            } else {
-                                console.log(`🔄 Direct update for ${emailResult.creditor_name}: FAILED - no matching document or already updated`);
-                            }
+                            console.log(`🔄 Direct update for ${emailResult.creditor_name}:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED');
                         }
                     }
-                    
-                    console.log(`🔄 Direct update results: ${directUpdateCount}/${emailResults.filter(r => r.success && r.side_conversation_id).length} creditors updated`);
-                    
-                    // Final verification after direct updates
-                    const finalVerifyClient = await Client.findOne({ aktenzeichen: clientReference });
-                    const finalSettlementIds = finalVerifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
-                    console.log(`🔍 Final verification: ${finalSettlementIds.length} creditors have settlement_side_conversation_id`);
                 }
             }
 
@@ -1472,526 +1459,6 @@ class CreditorContactService {
                 error: error.message
             };
         }
-    }
-
-    /**
-     * Send Nullplan documents to creditors via Side Conversations with download links
-     * For clients with no garnishable income (pfändbar amount = 0)
-     */
-    async sendNullplanToCreditors(clientReference, nullplanData, generatedDocuments = null) {
-        try {
-            console.log(`📧 Starting Nullplan distribution for client ${clientReference}...`);
-
-            // Test Zendesk connection
-            const connectionTest = await this.zendesk.testConnection();
-            if (!connectionTest.success) {
-                console.error(`❌ Zendesk connection failed: ${connectionTest.error}`);
-                return {
-                    success: false,
-                    error: 'Zendesk connection failed',
-                    details: connectionTest.error
-                };
-            }
-
-            // Get client data
-            const Client = require('../models/Client');
-            const client = await Client.findOne({ aktenzeichen: clientReference });
-            if (!client) {
-                console.error(`❌ Client not found: ${clientReference}`);
-                return {
-                    success: false,
-                    error: 'Client not found'
-                };
-            }
-
-            // Find existing Zendesk user for client
-            const zendeskUser = await this.zendesk.findOrCreateUser(client.email, `${client.firstName} ${client.lastName}`);
-            if (!zendeskUser) {
-                console.error(`❌ Could not create Zendesk user for ${client.email}`);
-                return {
-                    success: false,
-                    error: 'Could not create Zendesk user'
-                };
-            }
-
-            // Get creditors
-            const creditors = nullplanData.creditors || client.final_creditor_list?.filter(c => c.status === 'confirmed') || [];
-            if (creditors.length === 0) {
-                console.warn(`⚠️ No creditors found for Nullplan distribution`);
-                return {
-                    success: false,
-                    error: 'No creditors found'
-                };
-            }
-
-            console.log(`📋 Found ${creditors.length} creditors for Nullplan distribution`);
-
-            // Create main ticket for Nullplan distribution
-            const nullplanTicket = await this.zendesk.createNullplanTicket(
-                zendeskUser.id,
-                client,
-                nullplanData,
-                creditors.length
-            );
-
-            console.log(`🎫 Created Nullplan ticket: ${nullplanTicket.id}`);
-
-            // Upload documents to main ticket and get download URLs
-            const uploadResult = await this.uploadNullplanDocumentsWithUrls(
-                nullplanTicket.id,
-                {
-                    name: `${client.firstName} ${client.lastName}`,
-                    reference: client.aktenzeichen,
-                    email: client.email
-                },
-                nullplanData,
-                generatedDocuments
-            );
-
-            if (!uploadResult.success) {
-                console.error(`❌ Document upload failed: ${uploadResult.error}`);
-                return {
-                    success: false,
-                    error: 'Document upload failed',
-                    details: uploadResult.error
-                };
-            }
-
-            console.log(`📎 Uploaded ${uploadResult.documents_uploaded} documents with URLs`);
-
-            // Create Side Conversations with download links for each creditor
-            const emailResults = await this.createNullplanSideConversationsWithLinks(
-                nullplanTicket.id,
-                {
-                    name: `${client.firstName} ${client.lastName}`,
-                    reference: client.aktenzeichen,
-                    email: client.email
-                },
-                creditors,
-                nullplanData,
-                uploadResult.download_urls
-            );
-
-            // Add status update to ticket
-            await this.zendesk.addInternalNote(
-                nullplanTicket.id,
-                `🎯 Nullplan-Distribution abgeschlossen\n\n` +
-                `✅ E-Mails versendet: ${emailResults.length}/${creditors.length}\n` +
-                `📄 Dokumente: Nullplan + Forderungsübersicht\n` +
-                `⏰ Timestamp: ${new Date().toISOString()}`
-            );
-
-            // Update creditor records with Side Conversation IDs for tracking
-            const updateResult = await this.updateCreditorsWithNullplanSideConversationIds(
-                clientReference, 
-                emailResults
-            );
-
-            // Count successful emails
-            const successfulEmails = emailResults.filter(result => result.success);
-
-            console.log(`✅ Nullplan distribution completed:`);
-            console.log(`   📧 Emails sent: ${successfulEmails.length}/${creditors.length}`);
-            console.log(`   🎫 Ticket ID: ${nullplanTicket.id}`);
-
-            return {
-                success: true,
-                client_reference: clientReference,
-                zendesk_user_id: zendeskUser.id,
-                nullplan_ticket_id: nullplanTicket.id,
-                nullplan_ticket_subject: nullplanTicket.subject,
-                emails_sent: successfulEmails.length,
-                total_creditors: creditors.length,
-                side_conversations_created: emailResults.length,
-                method: 'side_conversation_with_links',
-                email_results: emailResults,
-                processing_timestamp: new Date().toISOString()
-            };
-
-        } catch (error) {
-            console.error(`❌ Error in sendNullplanToCreditors: ${error.message}`);
-            return {
-                success: false,
-                error: error.message,
-                client_reference: clientReference,
-                processing_timestamp: new Date().toISOString()
-            };
-        }
-    }
-
-    /**
-     * Upload Nullplan documents to main ticket and get download URLs
-     */
-    async uploadNullplanDocumentsWithUrls(ticketId, clientData, nullplanData, generatedDocuments = null) {
-        try {
-            console.log(`📤 Uploading Nullplan documents to ticket ${ticketId}...`);
-
-            let documentPaths = [];
-            let buffers = [];
-
-            if (generatedDocuments && generatedDocuments.nullplan && generatedDocuments.forderungsuebersicht) {
-                // Use already generated documents
-                documentPaths = [
-                    {
-                        path: generatedDocuments.nullplan.document_info.path,
-                        type: 'nullplan',
-                        filename: generatedDocuments.nullplan.document_info.filename
-                    },
-                    {
-                        path: generatedDocuments.forderungsuebersicht.document_info.path,
-                        type: 'forderungsuebersicht',
-                        filename: generatedDocuments.forderungsuebersicht.document_info.filename
-                    }
-                ];
-                buffers = [
-                    generatedDocuments.nullplan.buffer,
-                    generatedDocuments.forderungsuebersicht.buffer
-                ];
-            } else {
-                // Generate documents on the fly
-                const DocumentGenerator = require('./documentGenerator');
-                const documentGenerator = new DocumentGenerator();
-                
-                const documentsResult = await documentGenerator.generateNullplanDocuments(clientData.reference);
-                
-                if (!documentsResult.success) {
-                    throw new Error(`Document generation failed: ${documentsResult.error}`);
-                }
-
-                documentPaths = [
-                    {
-                        path: documentsResult.nullplan.document_info.path,
-                        type: 'nullplan',
-                        filename: documentsResult.nullplan.document_info.filename
-                    },
-                    {
-                        path: documentsResult.forderungsuebersicht.document_info.path,
-                        type: 'forderungsuebersicht',
-                        filename: documentsResult.forderungsuebersicht.document_info.filename
-                    }
-                ];
-                buffers = [
-                    documentsResult.nullplan.buffer,
-                    documentsResult.forderungsuebersicht.buffer
-                ];
-            }
-
-            // Upload documents to Zendesk
-            const uploadResults = [];
-            for (let i = 0; i < documentPaths.length; i++) {
-                const docPath = documentPaths[i];
-                const buffer = buffers[i];
-                
-                console.log(`📄 Uploading ${docPath.type}: ${docPath.filename}`);
-                
-                const uploadResult = await this.zendesk.uploadFileToZendesk(
-                    docPath.filename,
-                    buffer
-                );
-                
-                if (uploadResult.success) {
-                    uploadResults.push({
-                        ...uploadResult,
-                        type: docPath.type,
-                        filename: docPath.filename
-                    });
-                } else {
-                    console.error(`❌ Upload failed for ${docPath.filename}: ${uploadResult.error}`);
-                }
-            }
-
-            if (uploadResults.length === 0) {
-                throw new Error('No documents were successfully uploaded');
-            }
-
-            // Attach uploaded files to the ticket
-            const comment = {
-                body: `📄 Nullplan-Dokumente für ${clientData.name} (${clientData.reference})\n\n` +
-                      `Datum: ${new Date().toLocaleDateString('de-DE')}\n` +
-                      `Pfändbares Einkommen: 0,00 EUR\n` +
-                      `Gesamtschulden: €${nullplanData.total_debt?.toFixed(2) || '0.00'}\n\n` +
-                      `Hochgeladene Dokumente:\n` +
-                      uploadResults.map(doc => `• ${doc.filename} (${doc.type})`).join('\n'),
-                uploads: uploadResults.map(result => result.upload.token),
-                public: false
-            };
-
-            await this.zendesk.addCommentToTicket(ticketId, comment);
-            console.log(`📎 Attached ${uploadResults.length} documents to ticket ${ticketId}`);
-
-            // Get download URLs from ticket attachments
-            const downloadUrls = await this.zendesk.getTicketAttachmentUrls(ticketId, uploadResults);
-
-            return {
-                success: true,
-                documents_uploaded: uploadResults.length,
-                upload_results: uploadResults,
-                download_urls: downloadUrls,
-                ticket_id: ticketId
-            };
-
-        } catch (error) {
-            console.error(`❌ Error uploading Nullplan documents: ${error.message}`);
-            return {
-                success: false,
-                error: error.message,
-                ticket_id: ticketId
-            };
-        }
-    }
-
-    /**
-     * Create Side Conversations with download links for Nullplan distribution
-     */
-    async createNullplanSideConversationsWithLinks(ticketId, clientData, creditors, nullplanData, downloadUrls) {
-        console.log(`📧 Creating Side Conversations for ${creditors.length} creditors with download links...`);
-
-        const emailResults = [];
-
-        for (const creditor of creditors) {
-            try {
-                console.log(`📤 Sending Nullplan to: ${creditor.sender_name || creditor.creditor_name} (${creditor.sender_email || creditor.creditor_email})`);
-
-                // Generate email content with download links
-                const emailBody = this.zendesk.generateNullplanEmailBodyWithLinks(
-                    creditor,
-                    clientData,
-                    nullplanData,
-                    downloadUrls
-                );
-
-                const subject = `Nullplan - ${creditor.sender_name || creditor.creditor_name} - Az: ${clientData.reference}`;
-
-                // Create Side Conversation
-                const sideConversationResult = await this.zendesk.createSideConversationWithDownloadLinks(
-                    ticketId,
-                    creditor.sender_email || creditor.creditor_email,
-                    subject,
-                    emailBody
-                );
-
-                if (sideConversationResult.success) {
-                    console.log(`✅ Side Conversation created: ${sideConversationResult.side_conversation_id}`);
-                    emailResults.push({
-                        success: true,
-                        creditor_name: creditor.sender_name || creditor.creditor_name,
-                        creditor_email: creditor.sender_email || creditor.creditor_email,
-                        creditor_id: creditor.id,
-                        side_conversation_id: sideConversationResult.side_conversation_id,
-                        method: 'side_conversation_with_links'
-                    });
-                } else {
-                    console.error(`❌ Side Conversation failed for ${creditor.sender_name}: ${sideConversationResult.error}`);
-                    emailResults.push({
-                        success: false,
-                        creditor_name: creditor.sender_name || creditor.creditor_name,
-                        creditor_email: creditor.sender_email || creditor.creditor_email,
-                        creditor_id: creditor.id,
-                        error: sideConversationResult.error,
-                        method: 'side_conversation_with_links'
-                    });
-                }
-
-            } catch (error) {
-                console.error(`❌ Error creating Side Conversation for ${creditor.sender_name}: ${error.message}`);
-                emailResults.push({
-                    success: false,
-                    creditor_name: creditor.sender_name || creditor.creditor_name,
-                    creditor_email: creditor.sender_email || creditor.creditor_email,
-                    creditor_id: creditor.id,
-                    error: error.message,
-                    method: 'side_conversation_with_links'
-                });
-            }
-        }
-
-        console.log(`📊 Side Conversation creation completed: ${emailResults.filter(r => r.success).length}/${emailResults.length} successful`);
-        return emailResults;
-    }
-
-    /**
-     * Update creditor records with Nullplan Side Conversation IDs for tracking
-     */
-    async updateCreditorsWithNullplanSideConversationIds(clientReference, emailResults) {
-        try {
-            console.log(`🔄 Updating creditor records with Nullplan Side Conversation IDs...`);
-
-            const Client = require('../models/Client');
-            const client = await Client.findOne({ aktenzeichen: clientReference });
-            
-            if (!client) {
-                throw new Error(`Client not found: ${clientReference}`);
-            }
-
-            let updatedCount = 0;
-
-            if (client.final_creditor_list) {
-                for (const emailResult of emailResults) {
-                    if (emailResult.success && emailResult.side_conversation_id) {
-                        // Find creditor by ID first, then by name if needed
-                        const creditor = client.final_creditor_list.find(c => 
-                            c.id === emailResult.creditor_id
-                        ) || client.final_creditor_list.find(c => 
-                            c.sender_name === emailResult.creditor_name && 
-                            !c.nullplan_side_conversation_id
-                        );
-
-                        if (creditor) {
-                            creditor.nullplan_side_conversation_id = emailResult.side_conversation_id;
-                            creditor.nullplan_sent_at = new Date();
-                            creditor.nullplan_response_status = 'pending';
-                            updatedCount++;
-                            console.log(`📧 Updated ${creditor.sender_name} with Nullplan Side Conversation ID: ${emailResult.side_conversation_id}`);
-                        } else {
-                            console.warn(`⚠️ Creditor not found in final_creditor_list: ${emailResult.creditor_name}`);
-                        }
-                    }
-                }
-
-                // Save client with updated Side Conversation IDs
-                client.markModified('final_creditor_list');
-                await client.save();
-                console.log(`💾 Client ${clientReference} saved with ${updatedCount} updated creditors`);
-
-                // Try direct MongoDB updates as fallback for any missed updates
-                for (const emailResult of emailResults) {
-                    if (emailResult.success && emailResult.side_conversation_id) {
-                        const updateResult = await Client.updateOne(
-                            { 
-                                aktenzeichen: clientReference,
-                                'final_creditor_list.id': emailResult.creditor_id
-                            },
-                            { 
-                                $set: {
-                                    'final_creditor_list.$.nullplan_side_conversation_id': emailResult.side_conversation_id,
-                                    'final_creditor_list.$.nullplan_sent_at': new Date(),
-                                    'final_creditor_list.$.nullplan_response_status': 'pending'
-                                }
-                            }
-                        );
-                        console.log(`🔄 Direct update for ${emailResult.creditor_name}:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED');
-                    }
-                }
-            }
-
-            return {
-                success: true,
-                updated_count: updatedCount
-            };
-
-        } catch (error) {
-            console.error(`❌ Error updating creditors with Nullplan Side Conversation IDs:`, error.message);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    /**
-     * Robust fallback method to update creditors with retry logic and multiple approaches
-     */
-    async robustUpdateCreditorsWithRetry(clientReference, emailResults, maxRetries = 3) {
-        console.log(`🔄 Starting robust creditor update fallback for ${clientReference} with ${maxRetries} retries`);
-        
-        const Client = require('../models/Client');
-        
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                console.log(`📝 Attempt ${attempt}/${maxRetries} - Updating creditors with Side Conversation IDs`);
-                
-                // Approach 1: Direct MongoDB update operations (most reliable)
-                let successCount = 0;
-                for (const emailResult of emailResults) {
-                    if (emailResult.success && emailResult.side_conversation_id) {
-                        console.log(`🔧 Direct update for creditor: ${emailResult.creditor_name} (ID: ${emailResult.creditor_id})`);
-                        
-                        // Try updating by creditor ID first
-                        let updateResult = await Client.updateOne(
-                            { 
-                                aktenzeichen: clientReference,
-                                'final_creditor_list.id': emailResult.creditor_id
-                            },
-                            { 
-                                $set: {
-                                    'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
-                                    'final_creditor_list.$.settlement_plan_sent_at': new Date(),
-                                    'final_creditor_list.$.settlement_response_status': 'pending'
-                                }
-                            }
-                        );
-                        
-                        // If creditor ID update failed, try by name
-                        if (updateResult.modifiedCount === 0) {
-                            console.log(`⚠️ Creditor ID update failed, trying by name: ${emailResult.creditor_name}`);
-                            updateResult = await Client.updateOne(
-                                { 
-                                    aktenzeichen: clientReference,
-                                    'final_creditor_list.sender_name': emailResult.creditor_name
-                                },
-                                { 
-                                    $set: {
-                                        'final_creditor_list.$.settlement_side_conversation_id': emailResult.side_conversation_id,
-                                        'final_creditor_list.$.settlement_plan_sent_at': new Date(),
-                                        'final_creditor_list.$.settlement_response_status': 'pending'
-                                    }
-                                }
-                            );
-                        }
-                        
-                        if (updateResult.modifiedCount > 0) {
-                            console.log(`✅ Successfully updated ${emailResult.creditor_name} with Side Conversation ID: ${emailResult.side_conversation_id}`);
-                            successCount++;
-                        } else {
-                            console.error(`❌ Failed to update ${emailResult.creditor_name} - no matching document found`);
-                        }
-                    }
-                }
-                
-                // Approach 2: Verify updates worked
-                const verifyClient = await Client.findOne({ aktenzeichen: clientReference });
-                const updatedCreditors = verifyClient.final_creditor_list.filter(c => c.settlement_side_conversation_id);
-                const expectedUpdates = emailResults.filter(r => r.success && r.side_conversation_id).length;
-                
-                console.log(`🔍 Verification: Found ${updatedCreditors.length} creditors with settlement_side_conversation_id, expected ${expectedUpdates}`);
-                
-                if (updatedCreditors.length >= expectedUpdates) {
-                    console.log(`✅ Verification successful: ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
-                    return {
-                        success: true,
-                        updated_count: updatedCreditors.length,
-                        attempt: attempt
-                    };
-                } else {
-                    console.warn(`⚠️ Verification failed: ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
-                    if (attempt === maxRetries) {
-                        throw new Error(`Final verification failed: only ${updatedCreditors.length}/${expectedUpdates} creditors updated`);
-                    }
-                    // Wait before next attempt
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    continue;
-                }
-                
-            } catch (error) {
-                console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
-                if (attempt === maxRetries) {
-                    console.error(`❌ All ${maxRetries} attempts failed for robust creditor update`);
-                    return {
-                        success: false,
-                        error: `Failed after ${maxRetries} attempts: ${error.message}`,
-                        attempts_made: attempt
-                    };
-                }
-                // Wait before next attempt
-                await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-        }
-        
-        return {
-            success: false,
-            error: 'Maximum retry attempts exceeded',
-            attempts_made: maxRetries
-        };
     }
 }
 
