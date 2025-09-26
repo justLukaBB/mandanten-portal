@@ -5383,17 +5383,17 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
       emailResult = { success: false, error: methodError.message };
     }
     
-    if (emailResult.success) {
-      console.log(`✅ Second round emails sent to ${emailResult.emails_sent} creditors`);
+    // if (emailResult.success) {
+    //   console.log(`✅ Second round emails sent to ${emailResult.emails_sent} creditors`);
       
-      // Update client status to reflect second contact phase
-      client.current_status = 'settlement_plan_sent_to_creditors';
-      client.settlement_plan_sent_at = new Date();
-      await saveClient(client);
+    //   // Update client status to reflect second contact phase
+    //   client.current_status = 'settlement_plan_sent_to_creditors';
+    //   client.settlement_plan_sent_at = new Date();
+    //   await saveClient(client);
       
-    } else {
-      console.error(`❌ Failed to send second round emails: ${emailResult.error}`);
-    }
+    // } else {
+    //   console.error(`❌ Failed to send second round emails: ${emailResult.error}`);
+    // }
     
   } catch (error) {
     console.error(`❌ triggerSecondRoundCreditorEmails failed for ${client.aktenzeichen}:`, error);

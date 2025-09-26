@@ -124,11 +124,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [savingFinancial, setSavingFinancial] = useState(false);
 
   // Check if client has settlement plans sent (to determine if we should show the table)
-  // const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
-  //   creditor.settlement_plan_sent_at
-  // );
-
-   const hasSettlementPlansSent = user?.settlement_plan_sent_at;
+  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
+    creditor.settlement_plan_sent_at
+  );
 
   // Check if client has nullplan sent (to determine if we should show the nullplan table)
   const hasNullplanSent = user?.final_creditor_list?.some(creditor => 
