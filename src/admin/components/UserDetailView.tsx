@@ -30,6 +30,8 @@ interface FinancialData {
   pfaendbar_amount: number;
   input_date: string;
   input_by: string;
+  recommended_plan_type?: 'nullplan' | 'quotenplan';
+  garnishable_amount?: number;
 }
 
 interface DetailedUser {
@@ -94,6 +96,10 @@ interface Creditor {
   settlement_side_conversation_id?: string;
   settlement_response_status?: string;
   settlement_response_received_at?: string;
+  nullplan_sent_at?: string;
+  nullplan_side_conversation_id?: string;
+  nullplan_response_status?: string;
+  nullplan_response_received_at?: string;
 }
 
 const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
@@ -104,6 +110,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [showSettlementPlan, setShowSettlementPlan] = useState(false);
   const [settlementSummary, setSettlementSummary] = useState<any>(null);
   const [loadingSettlement, setLoadingSettlement] = useState(false);
+  const [showNullplan, setShowNullplan] = useState(false);
+  const [nullplanSummary, setNullplanSummary] = useState<any>(null);
+  const [loadingNullplan, setLoadingNullplan] = useState(false);
   
   // Financial data form state
   const [financialForm, setFinancialForm] = useState({
@@ -118,6 +127,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
     creditor.settlement_plan_sent_at
   );
+
+  // Check if client has nullplan sent (to determine if we should show the nullplan table)
+  const hasNullplanSent = user?.final_creditor_list?.some(creditor => 
+    creditor.nullplan_sent_at
+  );
+
+  // Check if client is on nullplan based on financial data
+  const isNullplanClient = user?.financial_data?.recommended_plan_type === 'nullplan';
 
   useEffect(() => {
     fetchUserDetails();
@@ -145,6 +162,29 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       return () => clearInterval(checkInterval);
     }
   }, [hasSettlementPlansSent, userId]);
+
+  // Auto-fetch nullplan responses if nullplan has been sent
+  useEffect(() => {
+    if (isNullplanClient && hasNullplanSent) {
+      // Initial fetch
+      fetchNullplanResponses();
+      
+      // Set up 1-minute interval for auto-refresh
+      const interval = setInterval(() => {
+        fetchNullplanResponses();
+      }, 60000); // 1 minute = 60,000ms
+      
+      return () => clearInterval(interval);
+    } else if (isNullplanClient) {
+      // If nullplan client but no nullplan sent yet, periodically check if they've been sent
+      // This handles the case where nullplan emails are sent after the admin panel is open
+      const checkInterval = setInterval(async () => {
+        await fetchUserDetails(); // Refresh user data to check for new nullplan_sent_at fields
+      }, 30000); // Check every 30 seconds
+      
+      return () => clearInterval(checkInterval);
+    }
+  }, [isNullplanClient, hasNullplanSent, userId]);
 
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
@@ -320,7 +360,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const simulate30DayPeriod = async () => {
-    if (!window.confirm(`🕐 30-Day Period Simulation\n\nDies simuliert das Ende der 30-Tage-Periode für Client ${user?.firstName} ${user?.lastName} (${user?.aktenzeichen}).\n\nDer Gläubigerkontakt-Prozess wird gestartet.\n\nFortfahren?`)) {
+    if (!window.confirm(`🕐 30-Day Period Simulation\n\nDies simuliert das Ende der 30-Tage-Periode für Client ${user?.firstName} ${user?.lastName} (${user?.aktenzeichen}).\n\n✅ Erstellt Gläubiger-Berechnungstabelle\n✅ Aktiviert Finanzdaten-Formular im Client Portal\n\n⚠️ Settlement-E-Mails werden ERST nach Finanzdaten-Eingabe versendet!\n\nFortfahren?`)) {
       return;
     }
 
@@ -397,6 +437,38 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error fetching settlement responses:', error);
       setSettlementSummary(null);
+    }
+  };
+
+  const fetchNullplanResponses = async () => {
+    try {
+      const adminToken = localStorage.getItem('admin_token');
+      console.log('🔄 Fetching nullplan responses for userId:', userId);
+      console.log('🔑 Admin token available:', !!adminToken);
+      console.log('🔑 Token preview:', adminToken ? adminToken.substring(0, 20) + '...' : 'No token');
+      
+      // Fetch nullplan summary (silently, no loading state for auto-refresh)
+      const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/nullplan-responses`, {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`
+        }
+      });
+
+      console.log('📡 Nullplan API response status:', summaryResponse.status);
+
+      if (summaryResponse.ok) {
+        const result = await summaryResponse.json();
+        console.log('✅ Nullplan API result:', result);
+        setNullplanSummary(result.summary);
+      } else {
+        const errorText = await summaryResponse.text();
+        console.log('❌ Nullplan API error:', summaryResponse.status, errorText);
+        // If nullplan data doesn't exist yet, clear any existing data
+        setNullplanSummary(null);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching nullplan responses:', error);
+      setNullplanSummary(null);
     }
   };
 
@@ -944,6 +1016,139 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </div>
           </div>
         {/* )} */}
+
+        {/* Nullplan Response Tracking Section */}
+        {isNullplanClient && hasNullplanSent && (
+          <div className="mt-6 bg-green-50 rounded-lg p-6 border border-green-200">
+            <div className="flex items-center mb-4">
+              <ChartBarIcon className="w-6 h-6 mr-2 text-green-600" />
+              <h3 className="text-lg font-semibold text-green-800">Nullplan Response Tracking</h3>
+              <div className="ml-auto text-sm text-green-600">
+                Auto-refreshing every minute
+              </div>
+            </div>
+            
+            {/* Summary Statistics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-white rounded-lg p-3 text-center border border-green-200">
+                <p className="text-lg font-bold text-green-600">{nullplanSummary?.total_creditors || 0}</p>
+                <p className="text-xs text-green-800">Total</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center border border-blue-200">
+                <p className="text-lg font-bold text-blue-600">{nullplanSummary?.accepted || 0}</p>
+                <p className="text-xs text-blue-800">Accepted</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center border border-red-200">
+                <p className="text-lg font-bold text-red-600">{nullplanSummary?.declined || 0}</p>
+                <p className="text-xs text-red-800">Declined</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+                <p className="text-lg font-bold text-gray-600">{nullplanSummary?.no_responses || 0}</p>
+                <p className="text-xs text-gray-800">No Response</p>
+              </div>
+            </div>
+
+            {/* Legal Information */}
+            <div className="bg-white rounded-lg p-3 mb-4 border border-green-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-green-900">Nullplan Status</span>
+                <div className="text-right">
+                  <span className="text-sm font-medium text-green-600">§ 305 Abs. 1 Nr. 1 InsO</span>
+                  <span className="text-xs text-green-800 ml-2 block">
+                    Pfändbares Einkommen: 0,00 EUR
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Creditor Response Table */}
+            <div className="bg-white rounded-lg border border-green-200 overflow-hidden">
+              <div className="px-4 py-3 bg-green-100 border-b border-green-200">
+                <h4 className="text-sm font-medium text-green-900">Creditor Responses</h4>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Creditor
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Amount
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Response
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {user?.final_creditor_list?.filter(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at).map((creditor: Creditor, index: number) => {
+                      // Use nullplan status from database, fallback to 'pending'
+                      const status = creditor.nullplan_response_status || 'pending';
+                      
+                      const getStatusColor = (status: string) => {
+                        switch (status) {
+                          case 'accepted': return 'bg-blue-100 text-blue-800';
+                          case 'declined': return 'bg-red-100 text-red-800';
+                          case 'no_response': return 'bg-gray-100 text-gray-800';
+                          case 'pending': return 'bg-yellow-100 text-yellow-800';
+                          default: return 'bg-gray-100 text-gray-800';
+                        }
+                      };
+
+                      const getStatusIcon = (status: string) => {
+                        switch (status) {
+                          case 'accepted': return '✅';
+                          case 'declined': return '❌';
+                          case 'no_response': return '⏰';
+                          case 'pending': return '⏳';
+                          default: return '❓';
+                        }
+                      };
+
+                      return (
+                        <tr key={creditor.id || index} className="hover:bg-gray-50">
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{creditor.sender_name}</div>
+                            <div className="text-xs text-gray-500">{creditor.sender_email}</div>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {creditor.claim_amount ? `€${creditor.claim_amount.toFixed(2)}` : 'N/A'}
+                            </div>
+                            <div className="text-xs text-red-600 font-medium">Payment: €0.00</div>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                              {getStatusIcon(status)} {status === 'no_response' ? 'No Answer' : status.charAt(0).toUpperCase() + status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                            {creditor.nullplan_response_received_at 
+                              ? new Date(creditor.nullplan_response_received_at).toLocaleDateString('de-DE')
+                              : creditor.nullplan_sent_at 
+                              ? new Date(creditor.nullplan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
+                              : '-'
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {(!user?.final_creditor_list?.some(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at)) && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No nullplan documents have been sent yet.</p>
+                    <p className="text-xs mt-1">Nullplan will be automatically sent when financial data shows 0 garnishable income.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Financial Data Section */}
         {/* <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
