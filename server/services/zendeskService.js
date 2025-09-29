@@ -521,6 +521,104 @@ class ZendeskService {
       last_error: result.error
     };
   }
+
+  // Fetch events for a Side Conversation (emails, messages, status changes)
+  // Tries ticket-scoped endpoint first, then global fallback. Handles pagination.
+  async getSideConversationEvents(sideConversationId, ticketId = null) {
+    try {
+      if (!sideConversationId) {
+        throw new Error('sideConversationId is required');
+      }
+
+      console.log(`🧵 Fetching Side Conversation events for SC ${sideConversationId}${ticketId ? ` (ticket ${ticketId})` : ''}`);
+
+      const events = [];
+
+      // Helper to fetch a single page given a relative path like 
+      // `/tickets/{ticketId}/side_conversations/{sideConversationId}/events.json`
+      const fetchAllPages = async (initialPath) => {
+        let path = initialPath;
+        let safetyCounter = 0;
+
+        while (path && safetyCounter < 20) { // prevent endless loops
+          safetyCounter++;
+          const res = await this.api.get(path);
+          const data = res.data;
+          if (Array.isArray(data?.events)) {
+            events.push(...data.events);
+          }
+
+          // Zendesk returns absolute URL in next_page. Convert to relative for this.api
+          if (data?.next_page) {
+            const next = data.next_page.startsWith('http')
+              ? data.next_page.replace(this.baseURL, '')
+              : data.next_page;
+            path = next;
+          } else {
+            path = null;
+          }
+        }
+      };
+
+      let triedPaths = [];
+
+      // 1) Preferred: ticket-scoped endpoint
+      if (ticketId) {
+        const path = `/tickets/${ticketId}/side_conversations/${sideConversationId}/events.json`;
+        triedPaths.push(path);
+        try {
+          await fetchAllPages(path);
+        } catch (err) {
+          console.log(`ℹ️ Ticket-scoped events endpoint failed (${err.response?.status || err.message}). Will try fallback.`);
+        }
+      }
+
+      // 2) Fallback: global side_conversations endpoint
+      if (events.length === 0) {
+        const fallbackPath = `/side_conversations/${sideConversationId}/events.json`;
+        triedPaths.push(fallbackPath);
+        await fetchAllPages(fallbackPath);
+      }
+
+      // Normalize minimal structure consumed by SettlementResponseMonitor
+      let normalized = events.map(ev => ({
+        id: ev.id,
+        type: ev.type || ev.event_type || 'message',
+        created_at: ev.created_at || ev.timestamp || ev.date,
+        // For message events, Zendesk usually nests under message
+        message: ev.message ? {
+          from: (() => {
+            const f = ev.message.from || ev.from || {};
+            if (f && !f.email && f.address) { f.email = f.address; }
+            return f;
+          })(),
+          body: ev.message.body || ev.body || ''
+        } : (ev.body || ev.from ? {
+          from: (() => {
+            const f = ev.from || {};
+            if (f && !f.email && f.address) { f.email = f.address; }
+            return f;
+          })(),
+          body: ev.body || ''
+        } : null)
+      }));
+
+      // Keep only actual replies (not the initial create or other system events)
+      normalized = normalized.filter(ev => (ev.type || '').toLowerCase() === 'reply' && ev.message && ev.message.body);
+
+      console.log(`🧵 Retrieved ${normalized.length} reply events for Side Conversation ${sideConversationId}`);
+      console.log(`🧵 Events for Side Conversation ${sideConversationId}:`, normalized);
+      return normalized;
+
+    } catch (error) {
+      console.error('❌ Failed to fetch Side Conversation events:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      return [];
+    }
+  }
 }
 
 module.exports = ZendeskService;
