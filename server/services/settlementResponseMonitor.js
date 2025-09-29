@@ -15,10 +15,23 @@ class SettlementResponseMonitor {
         this.globalMonitorInterval = null;
     }
 
+    // Determine if an email address is external (not from our org/Zendesk)
+    isExternalEmail(email) {
+        if (!email) return false;
+        const lower = String(email).toLowerCase();
+        const internalDomains = [
+            'ra-scuric.de',
+            'scuric.zendesk.com', // attachment host; defensive
+            'zendesk.com',
+            'support.zendesk.com'
+        ];
+        return !internalDomains.some(dom => lower.includes(dom));
+    }
+
     /**
      * Start monitoring settlement plan responses for a specific client
      */
-    startMonitoringSettlementResponses(clientReference, intervalMinutes = 1) {
+    startMonitoringSettlementResponses(clientReference, intervalMinutes = 1, ticketId) {
         if (this.activeMonitoringSessions.has(clientReference)) {
             console.log(`⚠️ Settlement response monitor already running for client ${clientReference}`);
             return this.activeMonitoringSessions.get(clientReference);
@@ -35,7 +48,8 @@ class SettlementResponseMonitor {
             responsesFound: 0,
             isActive: true,
             timeoutDays: 30, // 30 days for settlement plan responses
-            autoProcessTimeouts: true
+            autoProcessTimeouts: true,
+            ticketId
         };
 
         this.activeMonitoringSessions.set(clientReference, session);
@@ -155,23 +169,20 @@ class SettlementResponseMonitor {
             console.log(`🔍 Checking Side Conversation ${sideConversationId} for ${creditorName}`);
 
             // Get events from Side Conversation
-            const events = await this.zendeskService.getSideConversationEvents(sideConversationId);
+            const events = await this.zendeskService.getSideConversationEvents(sideConversationId, session.ticketId);
             
             if (!events || events.length === 0) {
                 return;
             }
 
-            // Filter for new inbound messages (from creditors)
+            // Filter for new inbound messages (from creditors). Do not rely on event.type only.
             const newMessages = events.filter(event => {
                 const messageId = `${sideConversationId}_${event.id}`;
-                
-                return event.type === 'message' &&
-                       event.message &&
-                       event.message.from &&
-                       event.message.from.email &&
-                       !event.message.from.email.includes('ra-scuric.de') && // Not from our law firm
-                       !this.processedMessages.has(messageId) &&
-                       new Date(event.created_at) > session.lastCheck;
+                const hasMessage = !!(event && event.message && event.message.from && event.message.from.email);
+                const external = hasMessage ? this.isExternalEmail(event.message.from.email) : false;
+                const isNewer = event?.created_at ? new Date(event.created_at) > session.lastCheck : false;
+                const notCreate = (event?.type || '').toLowerCase() !== 'create';
+                return hasMessage && external && notCreate && isNewer && !this.processedMessages.has(messageId);
             });
 
             if (newMessages.length === 0) {

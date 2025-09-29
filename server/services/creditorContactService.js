@@ -925,7 +925,7 @@ class CreditorContactService {
             // Step 11: Start settlement response monitoring (1-minute intervals)
             const SettlementResponseMonitor = require('./settlementResponseMonitor');
             const settlementMonitor = new SettlementResponseMonitor();
-            const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 1);
+            const monitoringResult = settlementMonitor.startMonitoringSettlementResponses(clientReference, 1, settlementTicket.id);
 
             console.log(`✅ Settlement plan distribution completed via direct Side Conversations:`);
             console.log(`   - Main settlement ticket created: ${settlementTicket.id}`);
