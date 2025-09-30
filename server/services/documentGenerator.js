@@ -1248,8 +1248,39 @@ class DocumentGenerator {
      * Create Nullplan document structure
      */
     async createNullplanDocument(clientData, creditorData) {
-        // Format the date for the document title
+        // Use the new professional Nullplan template generator
+        const NullplanTemplateGenerator = require('./nullplanTemplateGenerator');
+        const nullplanGenerator = new NullplanTemplateGenerator();
+
+        console.log('📄 Using professional Nullplan template for document generation...');
+
+        try {
+            // Generate using the professional template
+            const doc = await nullplanGenerator.generateNullplanDocument(clientData, creditorData);
+            return doc;
+        } catch (error) {
+            console.error('❌ Error with professional Nullplan template, falling back to basic template:', error.message);
+
+            // Fallback to original basic Nullplan generation if needed
+            return this.createNullplanDocumentFallback(clientData, creditorData);
+        }
+    }
+
+    /**
+     * Fallback: Basic Nullplan document (old version)
+     */
+    async createNullplanDocumentFallback(clientData, creditorData) {
+        // Format the date for the document
         const currentDate = new Date().toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        // Calculate deadline (30 days from now)
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + 30);
+        const deadlineStr = deadline.toLocaleDateString('de-DE', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric'
@@ -1258,54 +1289,65 @@ class DocumentGenerator {
         // Calculate total debt amount
         const totalDebt = creditorData.reduce((sum, creditor) => sum + (creditor.debt_amount || 0), 0);
 
+        // Get first creditor for the letter header (this letter is sent to each creditor individually)
+        const creditor = creditorData[0] || { creditor_name: 'Gläubiger', creditor_address: '', debt_amount: 0 };
+        const creditorIndex = creditorData.indexOf(creditor) + 1;
+        const creditorQuote = totalDebt > 0 ? ((creditor.debt_amount / totalDebt) * 100).toFixed(2) : '0.00';
+
         const doc = new Document({
             ...this.documentOptions,
             title: "Außergerichtlicher Nullplan",
             sections: [{
-                properties: {},
+                properties: {
+                    page: {
+                        margin: {
+                            top: 1440, // 2.54cm
+                            right: 1440,
+                            bottom: 1440,
+                            left: 1440
+                        }
+                    }
+                },
                 children: [
-                    // Document Title
+                    // Law Firm Header
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Außergerichtlicher Nullplan vom ${currentDate}`,
+                                text: "Rechtsanwaltskanzlei Thomas Scuric",
                                 bold: true,
-                                size: 26
+                                size: 24
                             })
                         ],
                         alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 }
+                    }),
+
+                    // Return Address Line
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Rechtsanwaltskanzlei Scuric, Bongardstraße 33, 44787 Bochum",
+                                size: 16
+                            })
+                        ],
                         spacing: { after: 400 }
                     }),
 
-                    // Client Information Header
+                    // Creditor Address
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Schuldnerin/Schuldner: ${clientData.name}`,
-                                bold: true,
+                                text: creditor.creditor_name || 'Gläubiger',
                                 size: 20
                             })
                         ],
-                        spacing: { after: 300 }
+                        spacing: { after: 100 }
                     }),
-
-                    // Introduction Text
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: "Die Schuldnerin/Der Schuldner ist nicht in der Lage, Ratenzahlungen zu leisten, da das pfändbare Einkommen 0,00 EUR beträgt.",
-                                size: 18
-                            })
-                        ],
-                        spacing: { after: 300 }
-                    }),
-
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: "Gemäß § 305 Abs. 1 Nr. 1 InsO wird den Gläubigern folgender außergerichtlicher Nullplan vorgelegt:",
-                                size: 18,
-                                bold: true
+                                text: creditor.creditor_address || '',
+                                size: 20
                             })
                         ],
                         spacing: { after: 400 }
