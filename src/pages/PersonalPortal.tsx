@@ -259,22 +259,22 @@ export const PersonalPortal = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-3">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-5">
         <div className="flex items-center justify-between">
-          <div className="h-10 flex items-center justify-center">
+          <div className="h-14 flex items-center justify-center">
             <img
               src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
               alt="Logo"
-              className="h-auto w-auto max-h-full max-w-[100px] object-contain"
+              className="h-auto w-auto max-h-full max-w-[140px] object-contain"
             />
           </div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-xl font-bold" style={{ color: customColors.primary }}>
+            <h1 className="text-2xl font-bold" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
             <button
               onClick={handleLogout}
-              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded-full transition-colors"
+              className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded-full transition-colors"
             >
               Abmelden
             </button>
@@ -319,7 +319,7 @@ export const PersonalPortal = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Upload momentan gesperrt
+                    Upload momentan nicht möglich
                   </h3>
                   <p className="text-gray-600 mb-4">
                     Ihre Gläubigerliste wird gerade überprüft. Der Dokumentenupload ist während dieser Zeit gesperrt.
@@ -479,8 +479,10 @@ export const PersonalPortal = ({
               rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
               style={{
-                backgroundColor: customColors.primary,
+                backgroundColor: '#10b981',
               }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
             >
               Jetzt bewerten
             </a>
