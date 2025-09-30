@@ -224,13 +224,20 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
             return res.status(404).json({ error: 'Client not found' });
         }
 
-        // Check prerequisites
-        const prerequisiteCheck = await checkPrerequisites(client);
-        if (!prerequisiteCheck.isComplete) {
-            return res.status(400).json({
-                error: 'Prerequisites not met',
-                details: prerequisiteCheck.errors
-            });
+        // Override: Allow generation if settlement plan has been sent to creditors
+        const hasReachedSettlementStage = client.current_status === 'settlement_plan_sent_to_creditors';
+
+        // Check prerequisites (skip if already at settlement stage)
+        if (!hasReachedSettlementStage) {
+            const prerequisiteCheck = await checkPrerequisites(client);
+            if (!prerequisiteCheck.isComplete) {
+                return res.status(400).json({
+                    error: 'Prerequisites not met',
+                    details: prerequisiteCheck.errors
+                });
+            }
+        } else {
+            console.log(`✅ Client has reached settlement stage - skipping prerequisite checks`);
         }
 
         console.log(`Generating Insolvenzantrag for client: ${client.firstName} ${client.lastName}`);
@@ -367,13 +374,20 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
             return res.status(404).json({ error: 'Client not found' });
         }
 
-        // Check prerequisites
-        const prerequisiteCheck = await checkPrerequisites(client);
-        if (!prerequisiteCheck.isComplete) {
-            return res.status(400).json({
-                error: 'Prerequisites not met',
-                details: prerequisiteCheck.errors
-            });
+        // Override: Allow generation if settlement plan has been sent to creditors
+        const hasReachedSettlementStage = client.current_status === 'settlement_plan_sent_to_creditors';
+
+        // Check prerequisites (skip if already at settlement stage)
+        if (!hasReachedSettlementStage) {
+            const prerequisiteCheck = await checkPrerequisites(client);
+            if (!prerequisiteCheck.isComplete) {
+                return res.status(400).json({
+                    error: 'Prerequisites not met',
+                    details: prerequisiteCheck.errors
+                });
+            }
+        } else {
+            console.log(`✅ Client has reached settlement stage - skipping prerequisite checks`);
         }
 
         console.log(`Generating complete Insolvenzantrag with attachments for client: ${client.firstName} ${client.lastName}`);
