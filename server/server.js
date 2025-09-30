@@ -5486,7 +5486,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
             plan_type: 'Nullplan'
           };
           
-          const emailResult = await creditorContactService.sendNullplanToCreditors(
+          const emailResult = await creditorContactService.sendSettlementPlanToCreditors(
             client.aktenzeichen,
             nullplanData,
             settlementResult
