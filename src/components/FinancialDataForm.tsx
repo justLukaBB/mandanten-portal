@@ -349,7 +349,7 @@ const FinancialDataForm: React.FC<FinancialDataFormProps> = ({
           className={`w-full py-3.5 px-6 rounded-lg text-white font-semibold transition-colors duration-200 ${
             isSubmitting
               ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg'
+              : 'bg-green-700 hover:bg-green-800 shadow-md hover:shadow-lg'
           }`}
         >
           <span className="flex items-center justify-center space-x-2">

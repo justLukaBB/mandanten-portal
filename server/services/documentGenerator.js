@@ -597,9 +597,12 @@ class DocumentGenerator {
                 reference: clientReference
             };
 
-            // Get pfändbares Einkommen data
-            const pfaendbarAmount = client.debt_settlement_plan?.pfaendbar_amount || 
-                                   client.financial_data?.pfaendbar_amount || 0;
+            // Get pfändbares Einkommen data - check multiple sources
+            const pfaendbarAmount = settlementData?.garnishable_amount ||
+                                   settlementData?.monthly_payment ||
+                                   client.debt_settlement_plan?.pfaendbar_amount ||
+                                   client.financial_data?.pfaendbar_amount ||
+                                   client.calculated_settlement_plan?.garnishable_amount || 0;
 
             if (pfaendbarAmount <= 0) {
                 throw new Error('No pfändbares Einkommen available for Ratenplan generation');

@@ -323,7 +323,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         <button
           onClick={handleConfirmation}
           disabled={submitting || selectedCreditors.size === 0}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-10 py-3.5 rounded-lg text-base font-semibold transition-colors duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed"
+          className="bg-green-700 hover:bg-green-800 disabled:bg-gray-400 text-white px-10 py-3.5 rounded-lg text-base font-semibold transition-colors duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed"
         >
           <span className="flex items-center justify-center space-x-2">
             {submitting ? (
