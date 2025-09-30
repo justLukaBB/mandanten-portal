@@ -8,16 +8,20 @@ const { v4: uuidv4 } = require('uuid');
 class SettlementResponseProcessor {
     constructor(creditorContactService) {
         this.creditorContactService = creditorContactService;
-        
+
         // Enhanced keywords for detecting acceptance/rejection
         this.acceptanceKeywords = [
             'zustimmung', 'einverstanden', 'akzeptiert', 'genehmigt', 'angenommen',
-            'zusagen', 'bestätigt', 'ok', 'einverständnis', 'akzeptable', 
+            'zusagen', 'bestätigt', 'ok', 'einverständnis', 'akzeptable',
             'zustimmen', 'vereinbarung', 'abkommen', 'einigkeit', 'billigung',
             'ja', 'positiv', 'nehmen an', 'sind bereit', 'stimmen zu',
-            'können zustimmen', 'sind einverstanden', 'akzeptieren wir'
+            'können zustimmen', 'sind einverstanden', 'akzeptieren wir',
+
+            // English variants
+            "that's fine", "yes that's fine", "fine", "works for me",
+            "sounds good", "okay", "alright", "sure", "all good", "no problem"
         ];
-        
+
         this.rejectionKeywords = [
             'ablehnung', 'ablehnen', 'nicht einverstanden', 'zurückweisen', 'verwerfen',
             'nicht akzeptabel', 'unzureichend', 'inakzeptabel', 'nicht zufrieden',
@@ -25,7 +29,7 @@ class SettlementResponseProcessor {
             'nein', 'negativ', 'lehnen ab', 'können nicht', 'unmöglich',
             'nicht akzeptieren', 'nicht zustimmen', 'verweigern', 'absagen'
         ];
-        
+
         this.counterOfferKeywords = [
             'gegenangebot', 'alternativ', 'stattdessen', 'vorschlag', 'gegenvorschlag',
             'andere', 'modifikation', 'änderung', 'anpassung', 'alternative',
@@ -43,7 +47,7 @@ class SettlementResponseProcessor {
             console.log(`📋 Processing settlement response for client ${clientReference}`);
             console.log(`📧 From: ${fromEmail}`);
             console.log(`📅 Date: ${responseDate}`);
-            
+
             // Find matching creditor in the client's data
             const Client = require('../models/Client');
             const client = await Client.findOne({ aktenzeichen: clientReference });
@@ -52,7 +56,7 @@ class SettlementResponseProcessor {
             }
 
             // Find creditor by side conversation ID or email
-            const creditor = client.final_creditor_list.find(c => 
+            const creditor = client.final_creditor_list.find(c =>
                 c.settlement_side_conversation_id === sideConversationId ||
                 c.sender_email === fromEmail ||
                 c.creditor_email === fromEmail
@@ -68,7 +72,7 @@ class SettlementResponseProcessor {
 
             // Analyze response content
             const analysisResult = this.analyzeResponseContent(emailBody);
-            
+
             console.log(`🔍 Response analysis for ${creditor.sender_name}:`);
             console.log(`   Status: ${analysisResult.status}`);
             console.log(`   Confidence: ${analysisResult.confidence}`);
@@ -114,10 +118,10 @@ class SettlementResponseProcessor {
      */
     analyzeResponseContent(emailBody) {
         const normalizedBody = emailBody.toLowerCase();
-        
+
         // Remove common email signatures and footers
         const cleanBody = this.cleanEmailContent(normalizedBody);
-        
+
         // Count keyword matches with context analysis
         const acceptanceMatches = this.findKeywordsWithContext(cleanBody, this.acceptanceKeywords);
         const rejectionMatches = this.findKeywordsWithContext(cleanBody, this.rejectionKeywords);
@@ -130,7 +134,7 @@ class SettlementResponseProcessor {
         let analysis_notes = [];
 
         // Check for clear acceptance patterns
-        if (this.hasStrongAcceptancePattern(cleanBody) || 
+        if (this.hasStrongAcceptancePattern(cleanBody) ||
             (acceptanceMatches.length >= 2 && rejectionMatches.length === 0 && counterOfferMatches.length === 0)) {
             status = 'accepted';
             confidence = Math.min(0.95, 0.7 + (acceptanceMatches.length * 0.1));
@@ -138,8 +142,8 @@ class SettlementResponseProcessor {
             analysis_notes.push('Strong acceptance pattern detected');
         }
         // Check for clear rejection patterns
-        else if (this.hasStrongRejectionPattern(cleanBody) || 
-                 (rejectionMatches.length >= 2 && acceptanceMatches.length === 0)) {
+        else if (this.hasStrongRejectionPattern(cleanBody) ||
+            (rejectionMatches.length >= 2 && acceptanceMatches.length === 0)) {
             status = 'declined';
             confidence = Math.min(0.9, 0.6 + (rejectionMatches.length * 0.1));
             keywords_found = rejectionMatches.map(m => m.keyword);
@@ -201,7 +205,7 @@ class SettlementResponseProcessor {
      */
     cleanEmailContent(emailBody) {
         let cleaned = emailBody;
-        
+
         // Remove common German email signatures
         const signaturePatterns = [
             /mit freundlichen grüßen[\s\S]*$/gi,
@@ -213,11 +217,11 @@ class SettlementResponseProcessor {
             /diese e-mail[\s\S]*$/gi,
             /confidential[\s\S]*$/gi
         ];
-        
+
         signaturePatterns.forEach(pattern => {
             cleaned = cleaned.replace(pattern, '');
         });
-        
+
         return cleaned.trim();
     }
 
@@ -226,7 +230,7 @@ class SettlementResponseProcessor {
      */
     findKeywordsWithContext(text, keywords) {
         const matches = [];
-        
+
         keywords.forEach(keyword => {
             const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'gi');
             let match;
@@ -239,7 +243,7 @@ class SettlementResponseProcessor {
                 });
             }
         });
-        
+
         return matches;
     }
 
@@ -263,7 +267,7 @@ class SettlementResponseProcessor {
             /nehmen\s+an/gi,
             /bestätigen\s+hiermit/gi
         ];
-        
+
         return strongPatterns.some(pattern => pattern.test(text));
     }
 
@@ -278,7 +282,7 @@ class SettlementResponseProcessor {
             /widersprechen\s+dem/gi,
             /verweigern/gi
         ];
-        
+
         return strongPatterns.some(pattern => pattern.test(text));
     }
 
@@ -294,7 +298,7 @@ class SettlementResponseProcessor {
             /wenn.*dann/gi, // Conditional statements
             /unter.*bedingung/gi // Conditions
         ];
-        
+
         return counterPatterns.some(pattern => pattern.test(text));
     }
 
@@ -304,7 +308,7 @@ class SettlementResponseProcessor {
     async processSettlementTimeouts(clientReference, timeoutDays = 30) {
         try {
             console.log(`⏰ Processing settlement plan timeouts for client ${clientReference} (${timeoutDays} days)`);
-            
+
             const Client = require('../models/Client');
             const client = await Client.findOne({ aktenzeichen: clientReference });
             if (!client) {
@@ -315,20 +319,20 @@ class SettlementResponseProcessor {
             timeoutDate.setDate(timeoutDate.getDate() - timeoutDays);
 
             let timeoutCount = 0;
-            
+
             for (const creditor of client.final_creditor_list) {
                 // Check if settlement plan was sent and no response received within timeout period
-                if (creditor.settlement_plan_sent_at && 
+                if (creditor.settlement_plan_sent_at &&
                     new Date(creditor.settlement_plan_sent_at) < timeoutDate &&
                     creditor.settlement_response_status === 'pending') {
-                    
+
                     creditor.settlement_response_status = 'no_response';
                     creditor.settlement_response_metadata = {
                         timeout_processed_at: new Date().toISOString(),
                         timeout_days: timeoutDays,
                         analysis_method: 'timeout'
                     };
-                    
+
                     timeoutCount++;
                     console.log(`⏰ Creditor ${creditor.sender_name} marked as no_response (timeout)`);
                 }
@@ -379,7 +383,7 @@ class SettlementResponseProcessor {
             for (const creditor of client.final_creditor_list) {
                 const status = creditor.settlement_response_status || 'pending';
                 summary[status]++;
-                
+
                 summary.creditors.push({
                     name: creditor.sender_name,
                     email: creditor.sender_email,
@@ -389,7 +393,7 @@ class SettlementResponseProcessor {
                 });
             }
 
-            summary.acceptance_rate = summary.total_creditors > 0 ? 
+            summary.acceptance_rate = summary.total_creditors > 0 ?
                 Math.round((summary.accepted / summary.total_creditors) * 100) : 0;
 
             console.log(`📊 Settlement summary for ${clientReference}:`);
