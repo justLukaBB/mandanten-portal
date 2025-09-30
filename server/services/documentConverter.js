@@ -13,24 +13,48 @@ async function convertDocxToPdf(docxPath) {
         // Method 1: Try using LibreOffice if available (best quality)
         try {
             const pdfPath = docxPath.replace(/\.docx?$/i, '.pdf');
-            const libreOfficePath = '/opt/homebrew/bin/soffice';
-            const command = `"${libreOfficePath}" --headless --convert-to pdf --outdir "${path.dirname(docxPath)}" "${docxPath}"`;
-            
-            console.log(`Converting with LibreOffice: ${command}`);
-            await execAsync(command);
-            
+
+            // Try multiple LibreOffice paths (macOS, Linux/Render, system PATH)
+            const libreOfficePaths = [
+                '/opt/homebrew/bin/soffice',      // macOS Homebrew
+                '/usr/bin/soffice',                // Linux/Render standard
+                '/usr/bin/libreoffice',            // Alternative Linux path
+                'soffice'                          // System PATH
+            ];
+
+            let libreOfficeCommand = null;
+            for (const sofficePath of libreOfficePaths) {
+                try {
+                    // Check if this path works
+                    await execAsync(`${sofficePath} --version`);
+                    libreOfficeCommand = `"${sofficePath}" --headless --convert-to pdf --outdir "${path.dirname(docxPath)}" "${docxPath}"`;
+                    console.log(`📄 Found LibreOffice at: ${sofficePath}`);
+                    break;
+                } catch (e) {
+                    // Path doesn't work, try next one
+                    continue;
+                }
+            }
+
+            if (!libreOfficeCommand) {
+                throw new Error('LibreOffice not found in any standard location');
+            }
+
+            console.log(`🔄 Converting with LibreOffice: ${path.basename(docxPath)}`);
+            await execAsync(libreOfficeCommand);
+
             // Check if PDF was created
             await fs.access(pdfPath);
             const pdfBytes = await fs.readFile(pdfPath);
-            
+
             // Clean up temporary PDF file
             await fs.unlink(pdfPath);
-            
+
             console.log(`✅ Successfully converted ${path.basename(docxPath)} to PDF using LibreOffice`);
             return pdfBytes;
         } catch (libreOfficeError) {
             console.log(`⚠️  LibreOffice conversion failed: ${libreOfficeError.message}`);
-            console.log('Falling back to mammoth conversion');
+            console.log('⚠️  WARNING: Falling back to mammoth conversion - formatting will be lost!');
         }
         
         // Method 2: Fallback to mammoth + pdf-lib conversion
