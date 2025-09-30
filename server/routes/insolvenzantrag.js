@@ -34,6 +34,7 @@ function calculateCreditorResponseStats(client) {
 
     if (creditors.length === 0) {
         return {
+            anzahl_glaeubiger: '0',
             anzahl_glaeubiger_zugestimmt: '0',
             anzahl_ablehnungen: '0',
             anzahl_ohne_antwort: '0',
@@ -70,6 +71,7 @@ function calculateCreditorResponseStats(client) {
     console.log(`💰 Sum: ${acceptedSum} EUR accepted out of ${totalSum} EUR total`);
 
     return {
+        anzahl_glaeubiger: String(creditors.length),  // Total number of creditors
         anzahl_glaeubiger_zugestimmt: String(acceptedCount),
         anzahl_ablehnungen: String(declinedCount),
         anzahl_ohne_antwort: String(noResponseCount),
@@ -170,9 +172,8 @@ function mapClientDataToPDF(client) {
 
         // Debt information
         gesamtschuldensumme: String(client.total_debt || client.debt_settlement_plan?.total_debt || 0),
-        anzahl_glaeubiger: String(client.final_creditor_list?.length || client.debt_settlement_plan?.creditors?.length || 0),
 
-        // Calculate creditor response statistics from second email round
+        // Calculate creditor response statistics from second email round (includes anzahl_glaeubiger)
         ...calculateCreditorResponseStats(client),
 
         // Court
