@@ -5503,11 +5503,17 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
         console.log(`✅ Generated Nullplan documents:`);
         console.log(`   - Nullplan: ${settlementResult.nullplan.document_info.filename}`);
         console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
-        console.log(`   - Ratenplan (Nullplan): ${settlementResult.ratenplan_nullplan.document_info.filename}`);
-        // Store all three documents in client for creditor emails
+        if (settlementResult.ratenplan_nullplan) {
+          console.log(`   - Ratenplan (Nullplan): ${settlementResult.ratenplan_nullplan.document_info.filename}`);
+        } else {
+          console.warn(`   ⚠️ Ratenplan (Nullplan) generation failed - continuing with 2 documents`);
+        }
+        // Store all documents in client for creditor emails
         client.nullplan_document = settlementResult.nullplan;
         client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
-        client.ratenplan_nullplan_document = settlementResult.ratenplan_nullplan;
+        if (settlementResult.ratenplan_nullplan) {
+          client.ratenplan_nullplan_document = settlementResult.ratenplan_nullplan;
+        }
         
         // Automatically send Nullplan to creditors
         console.log(`📧 Automatically sending Nullplan to creditors...`);
