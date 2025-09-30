@@ -183,7 +183,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         </p>
       </div>
 
-      {/* Action Bar */}
+      {/* Selection Bar */}
       <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
         <div className="flex items-center space-x-4">
           <button
@@ -196,14 +196,6 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
             {selectedCreditors.size} von {confirmationData.creditors.length} ausgewählt
           </span>
         </div>
-
-        <button
-          onClick={handleConfirmation}
-          disabled={submitting || selectedCreditors.size === 0}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          {submitting ? 'Bestätige...' : `${selectedCreditors.size} Gläubiger bestätigen`}
-        </button>
       </div>
 
       {/* Creditor List */}
@@ -324,6 +316,17 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Confirmation Button - Bottom */}
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={handleConfirmation}
+          disabled={submitting || selectedCreditors.size === 0}
+          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:hover:scale-100"
+        >
+          {submitting ? 'Bestätige...' : `${selectedCreditors.size} Gläubiger bestätigen`}
+        </button>
       </div>
     </div>
   );
