@@ -5471,11 +5471,12 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       financial_data: client.financial_data,
       creditors: client.final_creditor_list || [],
       // Add creditor_payments for document generation
+      // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
       creditor_payments: (client.final_creditor_list || []).map(creditor => ({
         creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
         debt_amount: creditor.claim_amount || 0,
-        payment_percentage: garnishmentResult.garnishableAmount > 0 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
-        monthly_payment: garnishmentResult.garnishableAmount > 0 ? 
+        payment_percentage: garnishmentResult.garnishableAmount >= 1 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
+        monthly_payment: garnishmentResult.garnishableAmount >= 1 ?
           (garnishmentResult.garnishableAmount * ((creditor.claim_amount || 0) / totalDebt)) : 0
       })),
       generated_at: new Date().toISOString()
@@ -5809,7 +5810,11 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
     );
     
     // Determine recommended plan type based on garnishable amount
-    const recommendedPlanType = garnishmentResult.garnishableAmount > 0 ? 'quotenplan' : 'nullplan';
+    // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
+    const recommendedPlanType = garnishmentResult.garnishableAmount >= 1 ? 'quotenplan' : 'nullplan';
+
+    console.log(`💰 Garnishment calculation result: €${garnishmentResult.garnishableAmount.toFixed(2)}`);
+    console.log(`📊 Recommended plan type: ${recommendedPlanType} (threshold: €1.00)`);
     
     // Find and update client using the safe helper
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
