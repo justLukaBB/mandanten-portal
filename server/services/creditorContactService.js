@@ -774,7 +774,7 @@ class CreditorContactService {
                 );
 
                 if (creditor) {
-                    creditor.settlement_response_status = 'responded';
+                    // Store response metadata (status will be set by response processor)
                     creditor.settlement_response_text = responseText;
                     creditor.settlement_response_received_at = receivedAt;
                     if (sideConversationId) {
@@ -784,7 +784,7 @@ class CreditorContactService {
                     client.markModified('final_creditor_list');
                     await client.save();
 
-                    console.log(`✅ Updated creditor ${creditor.sender_name} in DB with response`);
+                    console.log(`✅ Updated creditor ${creditor.sender_name} in DB with response metadata (status will be set by processor)`);
                 }
             }
 
