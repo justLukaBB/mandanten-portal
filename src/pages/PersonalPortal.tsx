@@ -479,10 +479,10 @@ export const PersonalPortal = ({
               rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
               style={{
-                backgroundColor: '#10b981',
+                backgroundColor: '#047857',
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#065f46'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#047857'}
             >
               Jetzt bewerten
             </a>
