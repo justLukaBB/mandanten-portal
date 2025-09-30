@@ -1,0 +1,39 @@
+services:
+  # Backend Server
+  - type: web
+    name: mandanten-portal-backend
+    env: node
+    buildCommand: |
+      cd server && npm install
+      # Install LibreOffice for DOCX to PDF conversion
+      apt-get update
+      apt-get install -y libreoffice libreoffice-writer libreoffice-calc
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ZENDESK_SUBDOMAIN
+        sync: false
+      - key: ZENDESK_EMAIL
+        sync: false
+      - key: ZENDESK_API_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+
+  # Frontend
+  - type: web
+    name: mandanten-portal-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
