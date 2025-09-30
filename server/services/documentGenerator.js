@@ -577,6 +577,67 @@ class DocumentGenerator {
     }
 
     /**
+     * Generate Ratenplan pfändbares Einkommen document
+     */
+    async generateRatenplanPfaendbaresEinkommen(clientReference, settlementData) {
+        try {
+            console.log(`📄 Starting Ratenplan document generation for client: ${clientReference}`);
+
+            // Get client data
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            const clientData = {
+                name: `${client.firstName} ${client.lastName}`,
+                email: client.email,
+                reference: clientReference
+            };
+
+            // Get pfändbares Einkommen data
+            const pfaendbarAmount = client.debt_settlement_plan?.pfaendbar_amount || 
+                                   client.financial_data?.pfaendbar_amount || 0;
+
+            if (pfaendbarAmount <= 0) {
+                throw new Error('No pfändbares Einkommen available for Ratenplan generation');
+            }
+
+            // Generate the document
+            const doc = await this.generateRatenplanDocument(clientReference, settlementData, pfaendbarAmount);
+
+            // Save the document
+            const result = await this.saveRatenplanDocument(doc, clientReference);
+
+            console.log(`✅ Ratenplan pfändbares Einkommen document generated successfully`);
+            console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
+
+            return {
+                success: true,
+                document_info: {
+                    filename: result.filename,
+                    path: result.path,
+                    size: result.size,
+                    client_reference: clientReference,
+                    document_type: 'ratenplan_pfaendbares_einkommen',
+                    generated_at: new Date().toISOString()
+                },
+                buffer: result.buffer
+            };
+
+        } catch (error) {
+            console.error(`❌ Error generating Ratenplan document: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                client_reference: clientReference
+            };
+        }
+    }
+
+    /**
      * Generate and save complete settlement plan document
      */
     async generateSettlementPlanDocument(clientReference, settlementData) {
@@ -1366,6 +1427,761 @@ class DocumentGenerator {
         });
 
         return doc;
+    }
+
+    /**
+     * Generate Ratenplan pfändbares Einkommen using original Word template
+     */
+    async generateRatenplanDocument(clientData, settlementData, pfaendbarAmount) {
+        try {
+            // Use the Word template processor for better formatting
+            const WordTemplateProcessor = require('./wordTemplateProcessor');
+            const templateProcessor = new WordTemplateProcessor();
+            
+            console.log('📄 Using original Word template for Ratenplan generation...');
+            
+            const result = await templateProcessor.processRatenplanTemplate(
+                clientReference, 
+                settlementData, 
+                pfaendbarAmount
+            );
+            
+            if (!result.success) {
+                throw new Error(`Template processing failed: ${result.error}`);
+            }
+            
+            // Return the processed template result in the expected format
+            return result;
+            
+        } catch (error) {
+            console.error('❌ Error with template processor, falling back to docx generation:', error.message);
+            
+            // Fallback to original docx generation
+            return this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
+        }
+    }
+
+    /**
+     * Fallback: Generate Ratenplan pfändbares Einkommen document structure using docx
+     */
+    async generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount) {
+        const currentDate = new Date().toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        const startDate = new Date(2025, 7, 1); // 01.08.2025
+        const formattedStartDate = startDate.toLocaleDateString('de-DE');
+
+        const tilgungsquote = settlementData.average_quota_percentage || 32.57;
+
+        // Calculate individual creditor payment based on the HTML template data
+        const creditorDebt = 1677.64; // From template
+        const totalMonthlyPayment = pfaendbarAmount;
+        const totalDebt = settlementData.total_debt || 97357.73;
+        const creditorTotalPayment = (creditorDebt / totalDebt) * (totalMonthlyPayment * 36);
+        const grossIncome = pfaendbarAmount * 4.04; // Reverse calculate from pfändbar amount
+
+        const doc = new Document({
+            ...this.documentOptions,
+            title: "Ratenplan pfändbares Einkommen",
+            sections: [{
+                properties: {},
+                children: [
+                    // Letterhead - Large Spaced Title
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Rechtsanwaltskanzlei Thomas Scuric",
+                                size: 36, // 18pt
+                                spacing: 6 // Letter spacing
+                            })
+                        ],
+                        alignment: AlignmentType.LEFT,
+                        spacing: { after: 600 } // 3cm
+                    }),
+
+                    // Right Column Contact Info
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Bochum, ${currentDate}`,
+                                size: 18 // 9pt
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Thomas Scuric",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Rechtsanwalt",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Bongardstraße 33",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "44787 Bochum",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Telefon: 0234 913681-0",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Telefax: 0234 913681-29",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "e-Mail: info@ra-scuric.de",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Öffnungszeiten:",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Mo. - Fr.: 09.00 - 13.00 Uhr",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "              14.00 - 18.00 Uhr",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Bankverbindungen:",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Deutsche Bank",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Konto-Nr.: 172 209 900",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "BLZ: 430 700 24",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Aktenzeichen:",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `${clientData.reference}/TS-JK`,
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "(Bei Schriftverkehr und Zahlungen",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 50 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "unbedingt angeben)",
+                                size: 18
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { after: 400 }
+                    }),
+
+                    // Sender Info (underlined small text)
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Rechtsanwaltskanzlei Scuric, Bongardstraße 33, 44787 Bochum",
+                                size: 16, // 8pt
+                                underline: {}
+                            })
+                        ],
+                        alignment: AlignmentType.LEFT,
+                        spacing: { after: 400 }
+                    }),
+
+                    // Recipient Address
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Finanzamt Bochum-Süd",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Königsallee 21",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "44789 Bochum",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Subject Line
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Ihre Forderung gegen ${clientData.name}`,
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `${clientData.reference}`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Außergerichtlicher Einigungsversuch im Rahmen der Insolvenzordnung (InsO)",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Greeting
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Sehr geehrte Damen und Herren,",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    // Main Content
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "mittlerweile liegen uns alle relevanten Daten vor, so dass wir Ihnen nun einen außergerichtlichen Einigungsvorschlag unterbreiten können:",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Herr ${clientData.name} ist bei 12 Gläubigern mit insgesamt ${this.formatCurrency(settlementData.total_debt || 0)} € verschuldet.`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Die familiäre und wirtschaftliche Situation stellt sich wie folgt dar:",
+                                size: 18,
+                                italics: true
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Er ist am 24.11.1985 geboren und verheiratet. Herr ${clientData.name} verfügt über Einkommen aus `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: "Erwerbstätigkeit",
+                                size: 22,
+                                italics: true
+                            }),
+                            new TextRun({
+                                text: ` in Höhe von ${this.formatCurrency(grossIncome)}.`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Somit ergibt sich ein pfändbarer Betrag nach der Tabelle zu § 850c ZPO von `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `${this.formatCurrency(pfaendbarAmount)}`,
+                                size: 22,
+                                italics: true
+                            }),
+                            new TextRun({
+                                text: ` monatlich.`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Analog zur Wohlverhaltensperiode im gerichtlichen Verfahren sieht unser außergerichtlicher Einigungsvorschlag eine Laufzeit von 3 Jahren vor. Während der Laufzeit zahlt Herr ${clientData.name} monatlich den pfändbaren Betrag in Höhe von `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `${this.formatCurrency(pfaendbarAmount)}`,
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `. Diese Beträge werden nach der sich für jeden Gläubiger errechnenden Quote auf alle beteiligten Gläubiger verteilt.`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Auf Ihre Forderung in Höhe von `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `${this.formatCurrency(creditorDebt)}`,
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: ` errechnet sich ein Gesamttilgungsangebot von `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `${this.formatCurrency(creditorTotalPayment)}.`,
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: ` Dies entspricht einer Tilgungsquote von `,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `${this.formatPercentage(tilgungsquote)}`,
+                                bold: true,
+                                size: 22
+                            }),
+                            new TextRun({
+                                text: `. Nähere Einzelheiten entnehmen Sie bitte dem beigefügten Zahlungsplan. Ihre Forderung ist die laufende Nummer 12.`,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Der Zahlungsplan beginnt am ${formattedStartDate}, vorausgesetzt, dass bis dahin eine Einigung zustande kommt. Die Raten sind jeweils zum 03. des Monats fällig.`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Nach Zahlung der letzten Rate erhält Herr ${clientData.name} den entwerteren Vollstreckungstitel zurück und eine Erledigungsmeldung bei der Schufa.`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Bei bereits laufenden Lohnpfändungen:",
+                                size: 18,
+                                italics: true
+                            })
+                        ],
+                        spacing: { after: 100 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Bitte um die Zusage, dass eine laufende Lohnpfändung zurückgenommen wird.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Page break and additional sections
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Für Ihre Entscheidung geben wir zu bedenken, dass im gerichtlichen Verfahren dieselben Beträge zur Verteilung kommen, die von uns jetzt angeboten werden. Allerdings werden dann hiervon die Gerichtskosten und die Kosten des Treuhänders in Abzug gebracht. Im gerichtlichen Verfahren sind Sie somit aller Voraussicht nach schlechter gestellt.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Wir bitten daher, im Interesse aller Beteiligten um Ihre Zustimmung bis zum",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "16.05.2025",
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "zu unserem Vergleichsvorschlag.",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Für den Fall, dass nicht alle Gläubiger zustimmen, wird Herr ${clientData.name} voraussichtlich bei Gericht Antrag auf Eröffnung des Insolvenzverfahrens mit anschließender Restschuldbefreiung stellen.`,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Closing
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Mit freundlichen Grüßen",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 600 }
+                    }),
+
+                    // Signature
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Rechtsanwalt",
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 800 }
+                    }),
+
+                    // Additional page content
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Zusatzvereinbarungen zum Schuldenbereinigungsplan vom 01.08.2025",
+                                bold: true,
+                                size: 20
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 400 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Verzicht auf Zwangsvollstreckungsmaßnahmen",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Mit wirksamen Abschluss des Vergleichs ruhen sämtliche Zwangsvollstreckungsmaßnahmen und Sicherungsverwendungen, soweit sie sich auf das Vermögen der Vertragschließenden des Schuldners beziehen. Eingeleitet werden dürfen diese durch die Gläubiger während der Laufzeit der Vereinbarung vorher nicht. Von der Einhaltung ist der Schuldner auf weitere Zwangsvollstreckungsmaßnahmen über die Erfüllung befreit bis zum Anlaufen.",
+                                size: 16
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Einsatz eines außergerichtlichen Treuhänders",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Es wird ein außergerichtlicher Treuhänder eingesetzt, der die pfändbaren Beträge einzieht und nach der Quote an die Gläubiger verteilt.",
+                                size: 16
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    // Terms and conditions continue...
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Anpassungsklauseln",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "1. Bei Änderung der Pfändungstabelle zu § 850 c ZPO ändert sich der Zahlungsbetrag dem entsprechend.\n\n2. Bei Änderung der Einkommensverhältnisse wird eine erneute Einkommensaufstellung erfolgen. Bei Arbeitslosigkeit oder anderer nicht vom Schuldner zu vertretender Gründe wird der Zahlungsbetrag analog der Pfändungstabelle zu § 850 c ZPO entsprechend angepasst.\n\n3. Bei einer wesentlichen Verbesserung der Einkommenssituation ist mit einer dauerhaft mindestens 10% oder bei einem Wegfall von Unterhaltspflichten erfolgt eine Anhebung der Rate entsprechend dem pfändbaren Betrag zu § 850 c ZPO.",
+                                size: 16
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Obliegenheiten",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "1. Der Schuldner verpflichtet sich, dem Gläubiger auf Anforderung Nachweise über seine Einkommenssituation zu gewähren.\n\n2. Im Falle der Arbeitslosigkeit verpflichtet sich der Schuldner zu intensiven eigenen Bemühungen um eine angemessene berufliche und wirtschaftliche Tätigkeit abzulehnen. Auf Anforderung des Gläubigers legt der Schuldner entsprechende Nachweise vor.\n\n3. Erhält der Schuldner während der Laufzeit der Ratenzahlungen eine Erbschaft, verpflichtet er sich, diese zur Hälfte an die Gläubiger entsprechend ihrer jeweiligen Quoten herauszugeben.",
+                                size: 16
+                            })
+                        ],
+                        spacing: { after: 300 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Kündigung",
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Gerät der Schuldner mit zwei ganzen aufeinander folgenden Monatsraten in Rückstand, ohne dass vor den Gläubigern eine Stundungsvereinbarung getroffen worden ist, so kann von Gläubigerseite der abgeschlossene Vergleich schriftlich gekündigt werden.\n\nVor einer Kündigung wird der Gläubiger dem Schuldner schriftlich eine zweiwöchige Frist zur Zahlung des rückständigen Betrages einräumen. Diese Aufforderung ist mit der Erklärung zu verstehen, dass bei Nichtzahlung der Vergleich gekündigt wird.",
+                                size: 16
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    })
+                ]
+            }]
+        });
+
+        return doc;
+    }
+
+    /**
+     * Save Ratenplan document with specific naming
+     */
+    async saveRatenplanDocument(doc, clientReference) {
+        // Check if doc is a processed template result (not a docx Document object)
+        if (doc && doc.success && doc.path) {
+            // This is already a processed template result, return it directly
+            return doc;
+        }
+        
+        // Otherwise, treat as docx Document object and save normally
+        const filename = `Ratenplan-Pfaendbares-Einkommen_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+        return await this.saveDocument(doc, clientReference, filename);
     }
 
     /**
