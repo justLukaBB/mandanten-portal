@@ -5347,11 +5347,15 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
     // Check if creditor contact service is available
     const CreditorContactService = require('./services/creditorContactService');
     const creditorService = new CreditorContactService();
-    
+
+    // Initialize document generator for Ratenplan generation
+    const DocumentGenerator = require('./services/documentGenerator');
+    const documentGenerator = new DocumentGenerator();
+
     // Prepare second round email content
     const planType = settlementPlan.plan_type;
     const garnishableAmount = settlementPlan.monthly_payment || 0;
-    
+
     // Generate Ratenplan pfändbares Einkommen document BEFORE sending emails
     let ratenplanResult;
     if (planType !== 'nullplan') {
