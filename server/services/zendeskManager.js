@@ -1395,7 +1395,15 @@ Status updates will be posted to this ticket as emails are sent.
 
         // Generate download links section with hyperlinks
         const downloadLinksSection = downloadUrls.map(doc => {
-            const documentName = doc.type === 'settlement_plan' ? 'Schuldenbereinigungsplan' : 'Forderungsübersicht';
+            let documentName = 'Dokument';
+            if (doc.type === 'settlement_plan') {
+                documentName = 'Schuldenbereinigungsplan';
+            } else if (doc.type === 'creditor_overview' || doc.type === 'forderungsuebersicht') {
+                documentName = 'Forderungsübersicht';
+            } else if (doc.type === 'ratenplan' || doc.type === 'ratenplan_pfaendbares_einkommen' || doc.type === 'payment_plan') {
+                documentName = 'Ratenplan (Pfändbares Einkommen)';
+            }
+
             if (doc.download_url) {
                 return `📄 [${documentName}](${doc.download_url})`;
             } else {
