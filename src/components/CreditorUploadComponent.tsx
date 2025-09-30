@@ -242,10 +242,19 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {/* Success Message */}
       {successMessage && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg">
-          <div className="flex items-center">
-            <CheckCircleIcon className="w-5 h-5 mr-2" />
-            {successMessage}
+        <div className="mb-6 p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl shadow-sm">
+          <div className="flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mr-4">
+              <CheckCircleIcon className="w-7 h-7 text-white" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-lg font-semibold text-green-900 mb-1">
+                Erfolgreich hochgeladen
+              </h4>
+              <p className="text-sm text-green-700">
+                Ihre Dokumente wurden erfolgreich verarbeitet und gespeichert.
+              </p>
+            </div>
           </div>
         </div>
       )}

@@ -774,27 +774,24 @@ ${finalCreditorsList}
         // Send Side Conversation to client (AFTER agent approval) - IMPROVED
         if (zendeskService && zendeskService.isConfigured() && ticketId) {
           try {
-            const clientMessage = `**Gläubigerliste zur Überprüfung bereit**
+            const clientMessage = `Sehr geehrte/r Frau/Herr ${client.lastName},
 
-Sehr geehrte/r ${client.firstName} ${client.lastName},
-
-unsere Mitarbeiter haben die Überprüfung Ihrer Dokumente abgeschlossen. Folgende Gläubiger wurden identifiziert:
+wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
 
 **📋 GLÄUBIGERLISTE:**
 ${creditorsList}
 
 **Gesamtschulden:** €${totalDebt.toFixed(2)}
 
-**🔍 WICHTIG: Ihre Bestätigung erforderlich**
-Bitte überprüfen Sie diese Liste sorgfältig und bestätigen Sie, dass alle Gläubiger korrekt erfasst wurden.
+👉 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
-**➡️ Zur Bestätigung:**
-${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
+Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
 
-Nach Ihrer Bestätigung werden wir automatisch Kontakt mit Ihren Gläubigern aufnehmen.
+Den Zugang zum Portal finden Sie hier: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
 
 Mit freundlichen Grüßen
-Ihr Beratungsteam`;
+Rechtsanwalt Thomas Scuric
+— Kanzlei für Insolvenzrecht`;
 
             console.log(`📧 Sending client notification to ${client.email}...`);
             console.log(`📧 Using ticket ID: ${ticketId} (created: ${ticketCreated})`);

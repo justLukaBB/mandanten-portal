@@ -268,7 +268,6 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
 
                     <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                       <span>Quelle: {creditor.source_document}</span>
-                      <span>KI-Sicherheit: {Math.round(creditor.ai_confidence * 100)}%</span>
                     </div>
                   </div>
                 </div>
