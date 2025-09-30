@@ -598,14 +598,23 @@ class DocumentGenerator {
             };
 
             // Get pfändbares Einkommen data - check multiple sources
-            const pfaendbarAmount = settlementData?.garnishable_amount ||
-                                   settlementData?.monthly_payment ||
-                                   client.debt_settlement_plan?.pfaendbar_amount ||
-                                   client.financial_data?.pfaendbar_amount ||
-                                   client.calculated_settlement_plan?.garnishable_amount || 0;
+            const pfaendbarAmount = settlementData?.garnishable_amount !== undefined ? settlementData.garnishable_amount :
+                                   settlementData?.monthly_payment !== undefined ? settlementData.monthly_payment :
+                                   client.debt_settlement_plan?.pfaendbar_amount !== undefined ? client.debt_settlement_plan.pfaendbar_amount :
+                                   client.financial_data?.pfaendbar_amount !== undefined ? client.financial_data.pfaendbar_amount :
+                                   client.calculated_settlement_plan?.garnishable_amount !== undefined ? client.calculated_settlement_plan.garnishable_amount : 0;
 
-            if (pfaendbarAmount <= 0) {
-                throw new Error('No pfändbares Einkommen available for Ratenplan generation');
+            // Allow 0 EUR for Nullplan cases
+            const isNullplan = settlementData?.plan_type === 'nullplan' || pfaendbarAmount === 0;
+
+            if (pfaendbarAmount < 0) {
+                throw new Error('Invalid pfändbares Einkommen amount (negative value)');
+            }
+
+            console.log(`💰 Ratenplan generation: pfändbar amount = €${pfaendbarAmount} (${isNullplan ? 'Nullplan' : 'Regular plan'})`);
+
+            if (!isNullplan && pfaendbarAmount === 0) {
+                throw new Error('No pfändbares Einkommen available for regular Ratenplan generation');
             }
 
             // Generate the document
