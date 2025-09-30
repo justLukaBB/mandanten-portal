@@ -346,19 +346,13 @@ const FinancialDataForm: React.FC<FinancialDataFormProps> = ({
         <button
           type="submit"
           disabled={isSubmitting}
-          className={`group relative overflow-hidden w-full py-4 px-6 rounded-xl text-white font-bold transition-all duration-300 ${
+          className={`w-full py-3.5 px-6 rounded-lg text-white font-semibold transition-colors duration-200 ${
             isSubmitting
               ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-green-500/50 transform hover:scale-[1.02]'
+              : 'bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg'
           }`}
         >
-          {/* Animated background effect */}
-          {!isSubmitting && (
-            <span className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"></span>
-          )}
-
-          {/* Content */}
-          <span className="relative flex items-center justify-center space-x-2">
+          <span className="flex items-center justify-center space-x-2">
             {isSubmitting ? (
               <>
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -369,11 +363,10 @@ const FinancialDataForm: React.FC<FinancialDataFormProps> = ({
               </>
             ) : (
               <>
-                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Finanzdaten speichern</span>
-                <span className="text-lg group-hover:translate-x-1 transition-transform duration-300">→</span>
               </>
             )}
           </span>
