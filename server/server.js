@@ -5543,9 +5543,16 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
           
           if (emailResult.success) {
             console.log(`✅ Nullplan emails sent to ${emailResult.emails_sent}/${emailResult.total_creditors} creditors`);
-            console.log(`🎫 Nullplan ticket ID: ${emailResult.nullplan_ticket_id}`);
+            console.log(`🎫 Nullplan ticket ID: ${emailResult.settlement_ticket_id}`);
+
             // Store email results in client
             client.nullplan_email_results = emailResult;
+
+            // Update client status to enable Insolvenzantrag download
+            console.log(`📌 Updating client status to 'settlement_plan_sent_to_creditors' for ${client.aktenzeichen}`);
+            client.current_status = 'settlement_plan_sent_to_creditors';
+            client.settlement_plan_sent_at = new Date();
+            console.log(`✅ Client status updated - Insolvenzantrag download now enabled`);
           } else {
             console.error(`❌ Nullplan email sending failed: ${emailResult.error}`);
           }
@@ -5640,11 +5647,17 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     console.log(`🎯 Automatic document generation completed for ${client.aktenzeichen}`);
 
     // Trigger automatic second round creditor emails
-    try {
-      await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult);
-    } catch (emailError) {
-      console.error(`❌ Error sending second round creditor emails for ${client.aktenzeichen}:`, emailError);
-      // Continue without failing - emails can be sent manually if needed
+    // ONLY for Quotenplan - Nullplan emails are already sent directly in this function
+    if (planType !== 'nullplan') {
+      try {
+        console.log(`📧 Triggering second round creditor emails for Quotenplan...`);
+        await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult);
+      } catch (emailError) {
+        console.error(`❌ Error sending second round creditor emails for ${client.aktenzeichen}:`, emailError);
+        // Continue without failing - emails can be sent manually if needed
+      }
+    } else {
+      console.log(`✅ Nullplan emails already sent directly - skipping triggerSecondRoundCreditorEmails`);
     }
     
   } catch (error) {
