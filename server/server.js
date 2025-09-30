@@ -5352,15 +5352,45 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
     const planType = settlementPlan.plan_type;
     const garnishableAmount = settlementPlan.monthly_payment || 0;
     
+    // Generate Ratenplan pfändbares Einkommen document BEFORE sending emails
+    let ratenplanResult;
+    if (planType !== 'nullplan') {
+      console.log(`📄 Generating Ratenplan pfändbares Einkommen for ${client.aktenzeichen}...`);
+
+      try {
+        ratenplanResult = await documentGenerator.generateRatenplanPfaendbaresEinkommen(
+          client.aktenzeichen,
+          settlementPlan
+        );
+
+        if (ratenplanResult.success) {
+          console.log(`✅ Generated Ratenplan pfändbares Einkommen: ${ratenplanResult.document_info.filename}`);
+        } else {
+          console.error(`❌ Ratenplan pfändbares Einkommen generation failed: ${ratenplanResult.error}`);
+        }
+      } catch (error) {
+        console.error(`❌ Ratenplan pfändbares Einkommen generation error: ${error.message}`);
+        ratenplanResult = {
+          success: false,
+          error: error.message,
+          client_reference: client.aktenzeichen
+        };
+      }
+    } else {
+      // For Nullplan cases, use the ratenplan from Nullplan generation
+      ratenplanResult = client.ratenplan_nullplan_document;
+      console.log(`✅ Using Nullplan-generated Ratenplan document`);
+    }
+
     console.log(`📋 Sending settlement plan to ${client.final_creditor_list.length} creditors`);
     console.log(`   Plan Type: ${planType}`);
     console.log(`   Monthly Payment: €${garnishableAmount}`);
-    
+
     // Send to all creditors via existing creditor contact infrastructure
     // NOTE: sendSettlementPlanToCreditors method needs to be implemented in CreditorContactService
     // For now, we'll handle this gracefully with a fallback
     let emailResult = { success: false, error: 'Method not yet implemented' };
-    
+
     try {
       // Try to use existing creditor contact infrastructure
       if (typeof creditorService.sendSettlementPlanToCreditors === 'function') {
@@ -5577,35 +5607,6 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       console.log(`✅ Using Nullplan-generated Forderungsübersicht document`);
     }
 
-    // Generate Ratenplan pfändbares Einkommen document
-    let ratenplanResult;
-    if (planType !== 'nullplan') {
-      console.log(`📄 Generating Ratenplan pfändbares Einkommen for ${client.aktenzeichen}...`);
-      
-      try {
-        ratenplanResult = await documentGenerator.generateRatenplanPfaendbaresEinkommen(
-          client.aktenzeichen,
-          settlementPlan
-        );
-        
-        if (ratenplanResult.success) {
-          console.log(`✅ Generated Ratenplan pfändbares Einkommen: ${ratenplanResult.document_info.filename}`);
-        } else {
-          console.error(`❌ Ratenplan pfändbares Einkommen generation failed: ${ratenplanResult.error}`);
-        }
-      } catch (error) {
-        console.error(`❌ Ratenplan pfändbares Einkommen generation error: ${error.message}`);
-        ratenplanResult = {
-          success: false,
-          error: error.message,
-          client_reference: client.aktenzeichen
-        };
-      }
-    } else {
-      // For Nullplan cases, this document is not needed
-      ratenplanResult = null;
-    }
-    
     // Save client with updated data
     await saveClient(client);
     
