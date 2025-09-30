@@ -389,15 +389,45 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
             });
         }
 
+        // Determine if this is a Nullplan or regular plan
+        const pfaendbarAmount = client.calculated_settlement_plan?.garnishable_amount ||
+                               client.debt_settlement_plan?.pfaendbar_amount ||
+                               client.financial_data?.garnishable_amount ||
+                               client.financial_data?.pfaendbar_amount || 0;
+
+        const isNullplan = pfaendbarAmount === 0 ||
+                          client.financial_data?.recommended_plan_type === 'nullplan' ||
+                          client.calculated_settlement_plan?.plan_type === 'nullplan';
+
+        const planType = isNullplan ? 'nullplan' : 'quotenplan';
+
+        console.log(`📊 Plan type for creditor package: ${planType} (pfändbar: €${pfaendbarAmount})`);
+
         // Prepare settlement data
+        const creditors = client.final_creditor_list || client.debt_settlement_plan?.creditors || [];
+        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || client.total_debt || 0;
+
         const settlementData = {
-            creditors: client.final_creditor_list || client.debt_settlement_plan?.creditors || [],
-            total_debt: client.total_debt || client.debt_settlement_plan?.total_debt || 0,
-            pfaendbar_amount: client.debt_settlement_plan?.pfaendbar_amount || client.financial_data?.pfaendbar_amount || 0,
-            average_quota_percentage: client.debt_settlement_plan?.average_quota_percentage || 32.57,
+            plan_type: planType,
+            creditors: creditors,
+            total_debt: totalDebt,
+            pfaendbar_amount: pfaendbarAmount,
+            garnishable_amount: pfaendbarAmount,
+            monthly_payment: pfaendbarAmount,
+            average_quota_percentage: isNullplan ? 0 : (client.debt_settlement_plan?.average_quota_percentage || 32.57),
             start_date: '01.08.2025',
             duration_months: 36
         };
+
+        // Add creditor_payments only for non-Nullplan
+        if (!isNullplan) {
+            settlementData.creditor_payments = creditors.map(creditor => ({
+                creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown',
+                debt_amount: creditor.claim_amount || 0,
+                payment_percentage: totalDebt > 0 ? ((creditor.claim_amount || 0) / totalDebt * 100) : 0,
+                monthly_payment: totalDebt > 0 ? (pfaendbarAmount * ((creditor.claim_amount || 0) / totalDebt)) : 0
+            }));
+        }
 
         // Generate complete creditor package
         const packageGenerator = new CreditorDocumentPackageGenerator();
@@ -463,14 +493,45 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         let creditorPackageBytes = null;
         if (client.debt_settlement_plan || client.final_creditor_list) {
             try {
+                // Determine if this is a Nullplan or regular plan
+                const pfaendbarAmount = client.calculated_settlement_plan?.garnishable_amount ||
+                                       client.debt_settlement_plan?.pfaendbar_amount ||
+                                       client.financial_data?.garnishable_amount ||
+                                       client.financial_data?.pfaendbar_amount || 0;
+
+                const isNullplan = pfaendbarAmount === 0 ||
+                                  client.financial_data?.recommended_plan_type === 'nullplan' ||
+                                  client.calculated_settlement_plan?.plan_type === 'nullplan';
+
+                const planType = isNullplan ? 'nullplan' : 'quotenplan';
+
+                console.log(`📊 Plan type for complete package: ${planType} (pfändbar: €${pfaendbarAmount})`);
+
+                // Prepare settlement data
+                const creditors = client.final_creditor_list || client.debt_settlement_plan?.creditors || [];
+                const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0) || client.total_debt || 0;
+
                 const settlementData = {
-                    creditors: client.final_creditor_list || client.debt_settlement_plan?.creditors || [],
-                    total_debt: client.total_debt || client.debt_settlement_plan?.total_debt || 0,
-                    pfaendbar_amount: client.debt_settlement_plan?.pfaendbar_amount || client.financial_data?.pfaendbar_amount || 0,
-                    average_quota_percentage: client.debt_settlement_plan?.average_quota_percentage || 32.57,
+                    plan_type: planType,
+                    creditors: creditors,
+                    total_debt: totalDebt,
+                    pfaendbar_amount: pfaendbarAmount,
+                    garnishable_amount: pfaendbarAmount,
+                    monthly_payment: pfaendbarAmount,
+                    average_quota_percentage: isNullplan ? 0 : (client.debt_settlement_plan?.average_quota_percentage || 32.57),
                     start_date: '01.08.2025',
                     duration_months: 36
                 };
+
+                // Add creditor_payments only for non-Nullplan
+                if (!isNullplan) {
+                    settlementData.creditor_payments = creditors.map(creditor => ({
+                        creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown',
+                        debt_amount: creditor.claim_amount || 0,
+                        payment_percentage: totalDebt > 0 ? ((creditor.claim_amount || 0) / totalDebt * 100) : 0,
+                        monthly_payment: totalDebt > 0 ? (pfaendbarAmount * ((creditor.claim_amount || 0) / totalDebt)) : 0
+                    }));
+                }
 
                 const packageGenerator = new CreditorDocumentPackageGenerator();
                 const packageResult = await packageGenerator.generateCompleteCreditorPackage(client, settlementData);
