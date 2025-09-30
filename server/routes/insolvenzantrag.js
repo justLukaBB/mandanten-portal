@@ -184,8 +184,15 @@ async function checkPrerequisites(client) {
         errors.push('Client name is missing');
     }
 
-    if (!client.address && !(client.strasse && client.plz && client.ort)) {
-        errors.push('Client address is missing');
+    // Check address - make it optional but warn if missing
+    const hasAddress = client.address || (client.strasse && client.plz && client.ort);
+    const hasAddressComponents = client.strasse || client.plz || client.ort;
+
+    if (!hasAddress && !hasAddressComponents) {
+        console.warn(`⚠️ Client ${client.aktenzeichen} has no address data - PDF will be generated with empty address fields`);
+        // Don't block generation - address can be filled in manually if needed
+    } else if (!hasAddress && hasAddressComponents) {
+        console.warn(`⚠️ Client ${client.aktenzeichen} has partial address data`);
     }
 
     // Check financial data - accept if completed, client_form_filled, OR calculated_settlement_plan exists
@@ -197,7 +204,7 @@ async function checkPrerequisites(client) {
     }
 
     // Check debt settlement plan
-    if ((!client.debt_settlement_plan?.creditors || client.debt_settlement_plan.creditors.length === 0) && 
+    if ((!client.debt_settlement_plan?.creditors || client.debt_settlement_plan.creditors.length === 0) &&
         (!client.final_creditor_list || client.final_creditor_list.length === 0)) {
         errors.push('Debt settlement plan not created');
     }
