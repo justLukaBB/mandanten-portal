@@ -20,7 +20,7 @@ export const PersonalPortal = ({
   onLogout,
   customProgressPhases,
   customLogo,
-  customTitle = 'Kundenportal',
+  customTitle = 'Mandantenportal',
   customColors = {
     primary: '#9f1a1d',
     primaryHover: '#7d1517'
