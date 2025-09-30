@@ -2,13 +2,9 @@ services:
   # Backend Server
   - type: web
     name: mandanten-portal-backend
-    env: node
-    buildCommand: |
-      cd server && npm install
-      # Install LibreOffice for DOCX to PDF conversion
-      apt-get update
-      apt-get install -y libreoffice libreoffice-writer libreoffice-calc
-    startCommand: cd server && npm start
+    env: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
     envVars:
       - key: NODE_ENV
         value: production
