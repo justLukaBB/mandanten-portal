@@ -323,16 +323,9 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         <button
           onClick={handleConfirmation}
           disabled={submitting || selectedCreditors.size === 0}
-          className="group relative overflow-hidden bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-10 py-4 rounded-2xl text-lg font-bold transition-all duration-300 shadow-2xl hover:shadow-green-500/50 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 disabled:cursor-not-allowed"
-          style={{
-            boxShadow: selectedCreditors.size > 0 ? '0 20px 40px -12px rgba(16, 185, 129, 0.5)' : 'none'
-          }}
+          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-10 py-3.5 rounded-lg text-base font-semibold transition-colors duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed"
         >
-          {/* Animated background effect */}
-          <span className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"></span>
-
-          {/* Icon */}
-          <span className="relative flex items-center justify-center space-x-3">
+          <span className="flex items-center justify-center space-x-2">
             {submitting ? (
               <>
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -343,17 +336,11 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
               </>
             ) : (
               <>
-                <CheckCircleIcon className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
+                <CheckCircleIcon className="w-5 h-5" />
                 <span>{selectedCreditors.size} Gläubiger bestätigen</span>
-                <span className="ml-2 text-xl group-hover:translate-x-1 transition-transform duration-300">→</span>
               </>
             )}
           </span>
-
-          {/* Pulse effect when enabled */}
-          {selectedCreditors.size > 0 && !submitting && (
-            <span className="absolute inset-0 rounded-2xl animate-ping opacity-20 bg-green-400"></span>
-          )}
         </button>
       </div>
     </div>
