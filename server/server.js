@@ -5607,11 +5607,19 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       console.log(`✅ Using Nullplan-generated Forderungsübersicht document`);
     }
 
+    // Initialize ratenplanResult - will be generated in triggerSecondRoundCreditorEmails
+    let ratenplanResult = null;
+
+    // For Nullplan, use the ratenplan from Nullplan generation
+    if (planType === 'nullplan' && settlementResult.success) {
+      ratenplanResult = settlementResult.ratenplan_nullplan;
+    }
+
     // Save client with updated data
     await saveClient(client);
-    
+
     console.log(`🎯 Automatic document generation completed for ${client.aktenzeichen}`);
-    
+
     // Trigger automatic second round creditor emails
     try {
       await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult);
