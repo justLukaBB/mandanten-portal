@@ -5521,10 +5521,17 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
             plan_type: 'Nullplan'
           };
           
+          // Convert Nullplan document structure to expected format
+          const nullplanDocuments = {
+            settlementResult: settlementResult.nullplan,
+            overviewResult: settlementResult.forderungsuebersicht,
+            ratenplanResult: settlementResult.ratenplan_nullplan
+          };
+
           const emailResult = await creditorContactService.sendSettlementPlanToCreditors(
             client.aktenzeichen,
             nullplanData,
-            settlementResult
+            nullplanDocuments
           );
           
           if (emailResult.success) {
