@@ -400,13 +400,14 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
                                client.financial_data?.garnishable_amount ||
                                client.financial_data?.pfaendbar_amount || 0;
 
-        const isNullplan = pfaendbarAmount === 0 ||
+        // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
+        const isNullplan = pfaendbarAmount < 1 ||
                           client.financial_data?.recommended_plan_type === 'nullplan' ||
                           client.calculated_settlement_plan?.plan_type === 'nullplan';
 
         const planType = isNullplan ? 'nullplan' : 'quotenplan';
 
-        console.log(`📊 Plan type for creditor package: ${planType} (pfändbar: €${pfaendbarAmount})`);
+        console.log(`📊 Plan type for creditor package: ${planType} (pfändbar: €${pfaendbarAmount.toFixed(2)}, threshold: €1.00)`);
 
         // Prepare settlement data
         const creditors = client.final_creditor_list || client.debt_settlement_plan?.creditors || [];
@@ -504,13 +505,14 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
                                        client.financial_data?.garnishable_amount ||
                                        client.financial_data?.pfaendbar_amount || 0;
 
-                const isNullplan = pfaendbarAmount === 0 ||
+                // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
+                const isNullplan = pfaendbarAmount < 1 ||
                                   client.financial_data?.recommended_plan_type === 'nullplan' ||
                                   client.calculated_settlement_plan?.plan_type === 'nullplan';
 
                 const planType = isNullplan ? 'nullplan' : 'quotenplan';
 
-                console.log(`📊 Plan type for complete package: ${planType} (pfändbar: €${pfaendbarAmount})`);
+                console.log(`📊 Plan type for complete package: ${planType} (pfändbar: €${pfaendbarAmount.toFixed(2)}, threshold: €1.00)`);
 
                 // Prepare settlement data
                 const creditors = client.final_creditor_list || client.debt_settlement_plan?.creditors || [];

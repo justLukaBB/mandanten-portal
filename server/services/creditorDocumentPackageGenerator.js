@@ -80,10 +80,12 @@ class CreditorDocumentPackageGenerator {
         try {
             console.log('  📋 Generating Schuldenbereinigungsplan...');
 
-            // Check if this is a Nullplan (no creditor_payments)
+            // Check if this is a Nullplan (no creditor_payments or all payments are 0 or garnishable amount < 1 EUR)
             const isNullplan = !settlementData.creditor_payments ||
                               settlementData.creditor_payments.length === 0 ||
-                              settlementData.plan_type === 'nullplan';
+                              settlementData.plan_type === 'nullplan' ||
+                              settlementData.garnishable_amount < 1 ||
+                              (settlementData.creditor_payments.every(cp => cp.monthly_payment === 0));
 
             let schuldenplan;
             if (isNullplan) {

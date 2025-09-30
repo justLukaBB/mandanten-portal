@@ -604,17 +604,17 @@ class DocumentGenerator {
                                    client.financial_data?.pfaendbar_amount !== undefined ? client.financial_data.pfaendbar_amount :
                                    client.calculated_settlement_plan?.garnishable_amount !== undefined ? client.calculated_settlement_plan.garnishable_amount : 0;
 
-            // Allow 0 EUR for Nullplan cases
-            const isNullplan = settlementData?.plan_type === 'nullplan' || pfaendbarAmount === 0;
+            // Allow < 1 EUR for Nullplan cases (use threshold to handle rounding)
+            const isNullplan = settlementData?.plan_type === 'nullplan' || pfaendbarAmount < 1;
 
             if (pfaendbarAmount < 0) {
                 throw new Error('Invalid pfändbares Einkommen amount (negative value)');
             }
 
-            console.log(`💰 Ratenplan generation: pfändbar amount = €${pfaendbarAmount} (${isNullplan ? 'Nullplan' : 'Regular plan'})`);
+            console.log(`💰 Ratenplan generation: pfändbar amount = €${pfaendbarAmount.toFixed(2)} (${isNullplan ? 'Nullplan' : 'Regular plan'}, threshold: €1.00)`);
 
-            if (!isNullplan && pfaendbarAmount === 0) {
-                throw new Error('No pfändbares Einkommen available for regular Ratenplan generation');
+            if (!isNullplan && pfaendbarAmount < 1) {
+                throw new Error('No pfändbares Einkommen available for regular Ratenplan generation (< €1.00)');
             }
 
             // Generate the document
