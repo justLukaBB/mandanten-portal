@@ -505,7 +505,7 @@ class CreditorContactService {
                     ticket_id: ticketInfo.ticket_id,
                     contact_id: ticketInfo.contact_id,
                     success: true,
-                    sent_to: 'farhanfaqir29963@gmail.com' // Test email
+                    sent_to: 'justlukax@gmail.com' // Test email
                 });
 
                 // Wait 3 seconds between emails to avoid rate limits
@@ -1209,7 +1209,7 @@ class CreditorContactService {
                     main_ticket_id: settlementTicketId,
                     side_conversation_id: result.side_conversation_id,
                     success: result.success,
-                    recipient_email: result.creditor_email || 'farhanfaqir29963@gmail.com',
+                    recipient_email: result.creditor_email || 'justlukax@gmail.com',
                     subject: result.subject,
                     download_links_count: result.download_links_count || downloadUrls.length,
                     method: 'side_conversation_with_links',
@@ -1269,7 +1269,7 @@ class CreditorContactService {
                     creditor_name: creditorName,
                     main_ticket_id: settlementTicketId,
                     success: result.success,
-                    recipient_email: 'farhanfaqir29963@gmail.com', // Test email
+                    recipient_email: 'justlukax@gmail.com', // Test email
                     subject: `Schuldenbereinigungsplan - ${creditorName} - Az: ${clientData.reference || 'N/A'}`,
                     attachments_count: documentAttachments.length,
                     method: 'make_webhook',
