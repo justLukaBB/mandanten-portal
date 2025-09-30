@@ -189,8 +189,8 @@ class QuickFieldMapper {
                 completeData.schuldenbereinigungsplan_datum = formData.schuldenbereinigungsplan_datum;  // Textfeld 642
             }
             
-            // Creditor statistics if available
-            if (formData.anzahl_glaeubiger) {
+            // Creditor statistics if available (use !== undefined to allow '0' values)
+            if (formData.anzahl_glaeubiger !== undefined) {
                 completeData.anzahl_glaeubiger = String(formData.anzahl_glaeubiger);  // Textfeld 86
                 completeData.anzahl_glaeubiger_zugestimmt = String(formData.anzahl_glaeubiger_zugestimmt || 0);  // Textfeld 85
                 completeData.anzahl_ablehnungen = String(formData.anzahl_ablehnungen || 0);  // Textfeld 90
