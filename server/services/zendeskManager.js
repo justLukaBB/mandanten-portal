@@ -1531,7 +1531,15 @@ Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schul
 
         // Generate download links section with hyperlinks
         const downloadLinksSection = downloadUrls.map(doc => {
-            const documentName = doc.type === 'nullplan' ? 'Nullplan' : 'Forderungsübersicht';
+            let documentName = 'Dokument';
+            if (doc.type === 'nullplan') {
+                documentName = 'Nullplan';
+            } else if (doc.type === 'creditor_overview' || doc.type === 'forderungsuebersicht') {
+                documentName = 'Forderungsübersicht';
+            } else if (doc.type === 'ratenplan_nullplan' || doc.type === 'ratenplan' || doc.type === 'ratenplan_pfaendbares_einkommen') {
+                documentName = 'Ratenplan (0 EUR - Nullplan)';
+            }
+
             if (doc.download_url) {
                 return `📄 [${documentName}](${doc.download_url})`;
             } else {
