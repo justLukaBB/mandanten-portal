@@ -323,7 +323,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
         <button
           onClick={handleConfirmation}
           disabled={submitting || selectedCreditors.size === 0}
-          className="group relative overflow-hidden bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-12 py-5 rounded-2xl text-xl font-bold transition-all duration-300 shadow-2xl hover:shadow-green-500/50 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 disabled:cursor-not-allowed"
+          className="group relative overflow-hidden bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-10 py-4 rounded-2xl text-lg font-bold transition-all duration-300 shadow-2xl hover:shadow-green-500/50 transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 disabled:cursor-not-allowed"
           style={{
             boxShadow: selectedCreditors.size > 0 ? '0 20px 40px -12px rgba(16, 185, 129, 0.5)' : 'none'
           }}
@@ -335,7 +335,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
           <span className="relative flex items-center justify-center space-x-3">
             {submitting ? (
               <>
-                <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -343,9 +343,9 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
               </>
             ) : (
               <>
-                <CheckCircleIcon className="w-7 h-7 group-hover:rotate-12 transition-transform duration-300" />
+                <CheckCircleIcon className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
                 <span>{selectedCreditors.size} Gläubiger bestätigen</span>
-                <span className="ml-2 text-2xl group-hover:translate-x-1 transition-transform duration-300">→</span>
+                <span className="ml-2 text-xl group-hover:translate-x-1 transition-transform duration-300">→</span>
               </>
             )}
           </span>
