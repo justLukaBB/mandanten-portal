@@ -5423,9 +5423,11 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
       console.log(`✅ Second round emails sent to ${emailResult.emails_sent} creditors`);
 
       // Update client status to reflect second contact phase
+      console.log(`📌 Updating client status to 'settlement_plan_sent_to_creditors' for ${client.aktenzeichen}`);
       client.status = 'settlement_plan_sent_to_creditors';
       client.settlement_plan_sent_at = new Date();
       await client.save();
+      console.log(`✅ Client status updated successfully - Insolvenzantrag download now enabled`);
 
     } else {
       console.error(`❌ Failed to send second round emails: ${emailResult.error}`);
