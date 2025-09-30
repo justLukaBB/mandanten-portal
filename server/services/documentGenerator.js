@@ -618,7 +618,7 @@ class DocumentGenerator {
             }
 
             // Generate the document
-            const doc = await this.generateRatenplanDocument(clientReference, settlementData, pfaendbarAmount);
+            const doc = await this.generateRatenplanDocument(clientData, settlementData, pfaendbarAmount);
 
             // Save the document
             const result = await this.saveRatenplanDocument(doc, clientReference);
