@@ -1387,21 +1387,27 @@ Status updates will be posted to this ticket as emails are sent.
         const totalDebt = settlementData.total_debt || 0;
         const creditorDebt = creditorData.claim_amount || 0;
         const duration = settlementData.duration_months || 36;
-        
+
         // Calculate creditor's share
         const creditorShare = totalDebt > 0 ? (creditorDebt / totalDebt) * 100 : 0;
         const creditorMonthlyPayment = totalDebt > 0 ? (monthlyPayment * (creditorDebt / totalDebt)) : 0;
         const creditorTotalPayment = creditorMonthlyPayment * duration;
+
+        // Check if this is a Nullplan (no garnishable income)
+        const isNullplan = planType === 'Nullplan' || planType === 'nullplan' || monthlyPayment === 0;
 
         // Generate download links section with hyperlinks
         const downloadLinksSection = downloadUrls.map(doc => {
             let documentName = 'Dokument';
             if (doc.type === 'settlement_plan') {
                 documentName = 'Schuldenbereinigungsplan';
+            } else if (doc.type === 'nullplan') {
+                documentName = 'Nullplan';
             } else if (doc.type === 'creditor_overview' || doc.type === 'forderungsuebersicht') {
                 documentName = 'Forderungsübersicht';
-            } else if (doc.type === 'ratenplan' || doc.type === 'ratenplan_pfaendbares_einkommen' || doc.type === 'payment_plan') {
-                documentName = 'Ratenplan (Pfändbares Einkommen)';
+            } else if (doc.type === 'ratenplan' || doc.type === 'ratenplan_pfaendbares_einkommen' || doc.type === 'ratenplan_nullplan' || doc.type === 'payment_plan') {
+                // Choose Ratenplan name based on whether client has garnishable income
+                documentName = isNullplan ? 'Ratenplan (0 EUR - Nullplan)' : 'Ratenplan (Pfändbares Einkommen)';
             }
 
             if (doc.download_url) {
