@@ -277,7 +277,7 @@ router.get('/check-prerequisites/:clientId', authenticateAdmin, async (req, res)
         const prerequisiteCheck = await checkPrerequisites(client);
 
         // Override: Allow download if settlement plan has been sent to creditors
-        const hasReachedSettlementStage = client.status === 'settlement_plan_sent_to_creditors';
+        const hasReachedSettlementStage = client.current_status === 'settlement_plan_sent_to_creditors';
         const canGenerate = prerequisiteCheck.isComplete || hasReachedSettlementStage;
 
         res.json({

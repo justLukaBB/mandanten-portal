@@ -87,25 +87,34 @@ ZENDESK_FIELD_AKTENZEICHEN=custom_field_12345  # Replace with your actual field 
 **Actions**:
 - Comment/Description:
 ```
-Sehr geehrte/r {{ticket.requester.name}},
+Betreff: Zugang zu Ihrem Mandantenportal – Rechtsanwalt Thomas Scuric
 
-willkommen bei unserem Insolvenzservice. Für Ihr Verfahren wurden folgende Zugangsdaten erstellt:
+Sehr geehrte/r Frau/Herr {{ticket.requester.last_name}},
 
-🔗 Portal-Link: https://portal.kanzlei.de/login
-📧 Login-E-Mail: {{ticket.requester.email}}
-📁 Ihr Aktenzeichen: {{ticket.custom_field_aktenzeichen}}
+ab sofort können Sie Ihr persönliches Mandantenportal nutzen. Dort stellen wir Ihnen alle wichtigen Dokumente und Informationen zu Ihrem Verfahren zur Verfügung.
 
-📋 NÄCHSTE SCHRITTE:
-1. Klicken Sie auf den Portal-Link
-2. Loggen Sie sich mit Ihrer E-Mail-Adresse und Ihrem Aktenzeichen ein
-3. Laden Sie alle Ihre Gläubigerdokumente hoch
+👉 Bitte laden Sie dort unbedingt auch Ihre Unterlagen hoch.
+Dazu gehören insbesondere:
+• Mahnungen und Mahnbescheide
+• Schreiben von Inkassobüros
+• unbezahlte Rechnungen
+• anwaltliche Zahlungsaufforderungen
+• gerichtliche Schreiben
 
 ⚠️ WICHTIG: Bitte laden Sie ALLE Dokumente hoch, in denen Geld von Ihnen gefordert wird.
 
-Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+Falls Sie keine Unterlagen vorliegen haben, können Sie uns alternativ eine einfache Gläubigerliste zur Verfügung stellen (z. B. auf einem Zettel oder in einer Datei). Bitte geben Sie jeweils Name und Anschrift des Gläubigers an. Haben Sie kein Aktenzeichen, notieren Sie bitte Ihr Geburtsdatum zur Zuordnung.
+
+👉 So geht's:
+1. Klicken Sie auf folgenden Link: https://portal.kanzlei.de/login [Jetzt Zugang aktivieren]
+2. Legen Sie Ihr persönliches Passwort fest.
+3. Laden Sie anschließend Ihre Unterlagen direkt im Portal hoch.
+
+Der Link ist 14 Tage gültig. Sollten Sie ihn in dieser Zeit nicht nutzen, können Sie jederzeit über die Funktion „Passwort vergessen" einen neuen Link anfordern.
 
 Mit freundlichen Grüßen
-{{current_user.name}}
+Rechtsanwalt Thomas Scuric
+— Kanzlei für Insolvenzrecht
 ```
 
 - Set ticket status: Pending

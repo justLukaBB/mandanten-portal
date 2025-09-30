@@ -1,0 +1,63 @@
+
+> mandanten-portal-server@1.0.0 start
+> node server.js
+
+Failed to initialize Google Document AI REST client: Error: No Google Cloud credentials provided. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS
+    at new GoogleDocumentAI_REST (/Users/luka/Documents/Development/Mandanten-Portal/server/services/googleDocumentAI_REST.js:39:15)
+    at Object.<anonymous> (/Users/luka/Documents/Development/Mandanten-Portal/server/services/documentProcessor.js:8:17)
+    at Module._compile (node:internal/modules/cjs/loader:1734:14)
+    at Object..js (node:internal/modules/cjs/loader:1899:10)
+    at Module.load (node:internal/modules/cjs/loader:1469:32)
+    at Function._load (node:internal/modules/cjs/loader:1286:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.require (node:internal/modules/cjs/loader:1491:12)
+    at require (node:internal/modules/helpers:135:16)
+    at Object.<anonymous> (/Users/luka/Documents/Development/Mandanten-Portal/server/server.js:28:27)
+    at Module._compile (node:internal/modules/cjs/loader:1734:14)
+    at Object..js (node:internal/modules/cjs/loader:1899:10)
+    at Module.load (node:internal/modules/cjs/loader:1469:32)
+    at Function._load (node:internal/modules/cjs/loader:1286:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+❌ Failed to initialize Google Document AI REST client: No Google Cloud credentials provided. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS
+📝 Document processing will continue with mock data for development
+⚠️ CLAUDE_API_KEY not found in environment variables
+🇩🇪 Initializing German Garnishment Calculator...
+✅ German Garnishment Calculator ready (with 2025-2026 table)
+🧪 Initializing Test Data Service...
+📊 Loaded 11 financial test profiles
+🏛️ Loaded 8 creditor response templates
+🔗 Loaded 6 complete workflow tests
+✅ Test Data Service ready
+🔌 Connecting to MongoDB...
+📍 MongoDB URI: mongodb://localhost:27017/mandanten-portal-test
+(node:22856) [MONGOOSE] Warning: Duplicate schema index on {"aktenzeichen":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22856) [MONGOOSE] Warning: Duplicate schema index on {"username":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:22856) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:22856) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(node:22856) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+✅ Connected to MongoDB successfully
+🚀 Server running on http://localhost:3001
+📁 Uploads directory: /Users/luka/Documents/Development/Mandanten-Portal/server/uploads
+💾 Database: MongoDB Connected
+📅 Scheduled tasks started:
+  • Document reminders: every hour
+  • Delayed processing webhooks: every 30 minutes
+  • Login reminders: every 6 hours (7-day cycle)
+🔌 MongoDB disconnected
+🔄 MongoDB reconnected
+
+⏰ Running initial document reminder check...
+🔄 Starting document reminder check...
+📋 Found 0 clients waiting for documents
+✅ Document reminder check complete. Sent: 0, Errors: 0
+✅ Initial document reminder check complete: 0 reminders sent
+
+
+⏰ Running initial delayed webhook check...
+🔍 Checking for pending processing-complete webhooks...
+📋 Found 0 clients with pending webhooks
+✅ Delayed webhook check complete. Triggered: 0, Errors: 0
+✅ Initial delayed webhook check complete: 0 webhooks triggered
+
