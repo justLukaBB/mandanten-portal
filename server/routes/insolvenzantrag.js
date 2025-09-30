@@ -27,6 +27,57 @@ const { convertDocxToPdf, generateSchuldenbereinigungsplanPdf, generateGlaeubige
 const documentGenerator = require('../services/documentGenerator');
 const CreditorDocumentPackageGenerator = require('../services/creditorDocumentPackageGenerator');
 
+// Helper function to calculate creditor response statistics from second email round
+function calculateCreditorResponseStats(client) {
+    // Get creditor list from final_creditor_list or debt_settlement_plan
+    const creditors = client.final_creditor_list || client.debt_settlement_plan?.creditors || [];
+
+    if (creditors.length === 0) {
+        return {
+            anzahl_glaeubiger_zugestimmt: '0',
+            anzahl_ablehnungen: '0',
+            anzahl_ohne_antwort: '0',
+            summe_zugestimmt: '0',
+            summe_gesamt: String(client.total_debt || 0)
+        };
+    }
+
+    // Count creditors by response status
+    let acceptedCount = 0;
+    let declinedCount = 0;
+    let noResponseCount = 0;
+    let acceptedSum = 0;
+    let totalSum = 0;
+
+    creditors.forEach(creditor => {
+        const amount = creditor.claim_amount || creditor.current_debt_amount || creditor.creditor_response_amount || 0;
+        totalSum += amount;
+
+        const responseStatus = creditor.settlement_response_status || 'no_response';
+
+        if (responseStatus === 'accepted') {
+            acceptedCount++;
+            acceptedSum += amount;
+        } else if (responseStatus === 'declined' || responseStatus === 'counter_offer') {
+            declinedCount++;
+        } else {
+            // 'pending' or 'no_response'
+            noResponseCount++;
+        }
+    });
+
+    console.log(`📊 Creditor response stats: ${acceptedCount} accepted, ${declinedCount} declined, ${noResponseCount} no response out of ${creditors.length} total`);
+    console.log(`💰 Sum: ${acceptedSum} EUR accepted out of ${totalSum} EUR total`);
+
+    return {
+        anzahl_glaeubiger_zugestimmt: String(acceptedCount),
+        anzahl_ablehnungen: String(declinedCount),
+        anzahl_ohne_antwort: String(noResponseCount),
+        summe_zugestimmt: String(acceptedSum),
+        summe_gesamt: String(totalSum)
+    };
+}
+
 // Helper function to determine court based on ZIP code
 function determineCourtByZipCode(zipCode) {
     if (!zipCode) return '';
@@ -120,6 +171,9 @@ function mapClientDataToPDF(client) {
         // Debt information
         gesamtschuldensumme: String(client.total_debt || client.debt_settlement_plan?.total_debt || 0),
         anzahl_glaeubiger: String(client.final_creditor_list?.length || client.debt_settlement_plan?.creditors?.length || 0),
+
+        // Calculate creditor response statistics from second email round
+        ...calculateCreditorResponseStats(client),
 
         // Court
         amtsgericht: determineCourtByZipCode(zipCode),
