@@ -617,13 +617,23 @@ class DocumentGenerator {
                 throw new Error('No pfändbares Einkommen available for regular Ratenplan generation (< €1.00)');
             }
 
-            // Generate the document
-            const doc = await this.generateRatenplanDocument(clientData, settlementData, pfaendbarAmount);
+            // Generate the document based on plan type
+            let doc, result;
 
-            // Save the document
-            const result = await this.saveRatenplanDocument(doc, clientReference);
+            if (isNullplan) {
+                // For Nullplan: Generate special Nullplan-Ratenplan document
+                console.log(`📝 Generating Nullplan-Ratenplan (no monthly payments)`);
+                doc = await this.generateNullplanRatenplanDocument(clientData, settlementData);
+                result = await this.saveNullplanRatenplanDocument(doc, clientReference);
+            } else {
+                // For regular plan: Generate pfändbares Einkommen Ratenplan
+                console.log(`📝 Generating regular Ratenplan with monthly payments`);
+                doc = await this.generateRatenplanDocument(clientData, settlementData, pfaendbarAmount);
+                result = await this.saveRatenplanDocument(doc, clientReference);
+            }
 
-            console.log(`✅ Ratenplan pfändbares Einkommen document generated successfully`);
+            const documentType = isNullplan ? 'Nullplan-Ratenplan' : 'Ratenplan pfändbares Einkommen';
+            console.log(`✅ ${documentType} document generated successfully`);
             console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
 
             return {
@@ -633,7 +643,7 @@ class DocumentGenerator {
                     path: result.path,
                     size: result.size,
                     client_reference: clientReference,
-                    document_type: 'ratenplan_pfaendbares_einkommen',
+                    document_type: isNullplan ? 'ratenplan_nullplan' : 'ratenplan_pfaendbares_einkommen',
                     generated_at: new Date().toISOString()
                 },
                 buffer: result.buffer
@@ -2232,9 +2242,172 @@ class DocumentGenerator {
             // This is already a processed template result, return it directly
             return doc;
         }
-        
+
         // Otherwise, treat as docx Document object and save normally
         const filename = `Ratenplan-Pfaendbares-Einkommen_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+        return await this.saveDocument(doc, clientReference, filename);
+    }
+
+    /**
+     * Generate Nullplan-specific Ratenplan document (no monthly payments)
+     */
+    async generateNullplanRatenplanDocument(clientData, settlementData) {
+        const currentDate = new Date().toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        const doc = new Document({
+            ...this.documentOptions,
+            title: "Nullplan-Ratenplan",
+            sections: [{
+                properties: {
+                    page: {
+                        margin: {
+                            top: 1440,
+                            right: 1440,
+                            bottom: 1440,
+                            left: 1440
+                        }
+                    }
+                },
+                children: [
+                    // Header
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Ratenplan für Nullplan",
+                                bold: true,
+                                size: 28
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 400 }
+                    }),
+
+                    // Client info
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Mandant: ${clientData.name}`,
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Aktenzeichen: ${clientData.reference}`,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Datum: ${currentDate}`,
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Nullplan explanation
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Zahlungsplan",
+                                bold: true,
+                                size: 24
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Pfändbares Einkommen: 0,00 EUR",
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Monatliche Zahlung: 0,00 EUR",
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Explanation text
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Erläuterung:",
+                                bold: true,
+                                size: 22
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Aufgrund der derzeitigen wirtschaftlichen Verhältnisse der Schuldnerin/des Schuldners ist kein pfändbares Einkommen vorhanden. Eine regelmäßige Ratenzahlung ist daher nicht möglich.",
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Die Schuldnerin/Der Schuldner verpflichtet sich, bei Verbesserung der wirtschaftlichen Verhältnisse unverzüglich eine angemessene Regelung mit den Gläubigern anzustreben.",
+                                size: 20
+                            })
+                        ],
+                        spacing: { after: 400 }
+                    }),
+
+                    // Footer
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "Thomas Scuric Rechtsanwälte",
+                                size: 18,
+                                italics: true
+                            })
+                        ],
+                        alignment: AlignmentType.RIGHT,
+                        spacing: { before: 600 }
+                    })
+                ]
+            }]
+        });
+
+        return doc;
+    }
+
+    /**
+     * Save Nullplan-Ratenplan document with correct filename
+     */
+    async saveNullplanRatenplanDocument(doc, clientReference) {
+        const filename = `Ratenplan-Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
         return await this.saveDocument(doc, clientReference, filename);
     }
 
