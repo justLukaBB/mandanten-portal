@@ -188,8 +188,11 @@ async function checkPrerequisites(client) {
         errors.push('Client address is missing');
     }
 
-    // Check financial data
-    if (!client.financial_data?.completed && !client.financial_data?.client_form_filled) {
+    // Check financial data - accept if completed, client_form_filled, OR calculated_settlement_plan exists
+    const hasFinancialData = client.financial_data?.completed ||
+                             client.financial_data?.client_form_filled ||
+                             client.calculated_settlement_plan;
+    if (!hasFinancialData) {
         errors.push('Financial information form not completed');
     }
 
@@ -282,8 +285,8 @@ router.get('/check-prerequisites/:clientId', authenticateAdmin, async (req, res)
             canGenerateInsolvenzantrag: canGenerate,
             prerequisites: {
                 hasPersonalInfo: !!(client.firstName && client.lastName && (client.address || (client.strasse && client.plz && client.ort))),
-                hasFinancialData: !!(client.financial_data?.completed || client.financial_data?.client_form_filled),
-                hasDebtSettlementPlan: !!(client.debt_settlement_plan?.creditors?.length > 0 || client.final_creditor_list?.length > 0),
+                hasFinancialData: !!(client.financial_data?.completed || client.financial_data?.client_form_filled || client.calculated_settlement_plan),
+                hasDebtSettlementPlan: !!(client.debt_settlement_plan?.creditors?.length > 0 || client.final_creditor_list?.length > 0 || client.calculated_settlement_plan),
                 hasCreditorList: !!(client.final_creditor_list?.length > 0)
             },
             errors: hasReachedSettlementStage ? [] : prerequisiteCheck.errors,
