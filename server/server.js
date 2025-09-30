@@ -19,6 +19,7 @@ const agentReviewRoutes = require('./routes/agent-review');
 const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
+const insolvenzantragRoutes = require('./routes/insolvenzantrag');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -56,6 +57,7 @@ app.use('/api/agent-review', agentReviewRoutes);
 app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
+app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -5332,7 +5334,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 // ============================================================================
 
 // Helper function for triggering second round of creditor emails with documents
-async function triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult) {
+async function triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult) {
   try {
     console.log(`📧 Starting second round creditor emails for ${client.aktenzeichen}`);
     
@@ -5365,7 +5367,7 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
         emailResult = await creditorService.sendSettlementPlanToCreditors(
           client.aktenzeichen,
           settlementPlan,
-          { settlementResult, overviewResult }
+          { settlementResult, overviewResult, ratenplanResult }
         );
       } else {
         console.warn(`⚠️ sendSettlementPlanToCreditors method not yet implemented in CreditorContactService`);
@@ -5572,6 +5574,35 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       overviewResult = client.forderungsuebersicht_document;
       console.log(`✅ Using Nullplan-generated Forderungsübersicht document`);
     }
+
+    // Generate Ratenplan pfändbares Einkommen document
+    let ratenplanResult;
+    if (planType !== 'nullplan') {
+      console.log(`📄 Generating Ratenplan pfändbares Einkommen for ${client.aktenzeichen}...`);
+      
+      try {
+        ratenplanResult = await documentGenerator.generateRatenplanPfaendbaresEinkommen(
+          client.aktenzeichen,
+          settlementPlan
+        );
+        
+        if (ratenplanResult.success) {
+          console.log(`✅ Generated Ratenplan pfändbares Einkommen: ${ratenplanResult.document_info.filename}`);
+        } else {
+          console.error(`❌ Ratenplan pfändbares Einkommen generation failed: ${ratenplanResult.error}`);
+        }
+      } catch (error) {
+        console.error(`❌ Ratenplan pfändbares Einkommen generation error: ${error.message}`);
+        ratenplanResult = {
+          success: false,
+          error: error.message,
+          client_reference: client.aktenzeichen
+        };
+      }
+    } else {
+      // For Nullplan cases, this document is not needed
+      ratenplanResult = null;
+    }
     
     // Save client with updated data
     await saveClient(client);
@@ -5580,7 +5611,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     // Trigger automatic second round creditor emails
     try {
-      await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult);
+      await triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult);
     } catch (emailError) {
       console.error(`❌ Error sending second round creditor emails for ${client.aktenzeichen}:`, emailError);
       // Continue without failing - emails can be sent manually if needed

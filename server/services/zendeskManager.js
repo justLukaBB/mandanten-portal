@@ -994,33 +994,65 @@ Status updates will be posted to this ticket as emails are sent.
         
         try {
             console.log(`📧 Creating ticket with immediate email for creditor: ${creditorName}`);
-            
-            // Step 1: Get file paths and upload files
+
+            // Step 1: Get file paths - FIXED: Try date-based patterns if specific path not found
             const path = require('path');
+            const fs = require('fs');
             const documentDir = path.join(__dirname, '../documents');
-            
-            const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-            const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-            
-            console.log(`📎 Looking for documents:`);
-            console.log(`   Settlement Plan: ${settlementPlanFile}`);
-            console.log(`   Creditor Overview: ${creditorOverviewFile}`);
-            
+
+            // Try multiple date patterns (today and yesterday) to find documents
+            const datePattern = new Date().toISOString().split('T')[0];
+            const yesterdayPattern = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            const possibleDates = [datePattern, yesterdayPattern];
+
+            console.log(`📎 Looking for documents with date patterns: ${possibleDates.join(', ')}`);
+
             // Check if files exist and upload them
             const attachmentPaths = [];
-            const fs = require('fs');
-            if (fs.existsSync(settlementPlanFile)) {
-                attachmentPaths.push(settlementPlanFile);
-                console.log(`✅ Found Schuldenbereinigungsplan: ${settlementPlanFile}`);
-            } else {
-                console.warn(`⚠️ Schuldenbereinigungsplan not found: ${settlementPlanFile}`);
+
+            // Find Settlement Plan
+            let settlementPlanFile = null;
+            for (const dateStr of possibleDates) {
+                const filePath = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${dateStr}.docx`);
+                if (fs.existsSync(filePath)) {
+                    settlementPlanFile = filePath;
+                    attachmentPaths.push(filePath);
+                    console.log(`✅ Found Schuldenbereinigungsplan (${dateStr}): ${path.basename(filePath)}`);
+                    break;
+                }
             }
-            
-            if (fs.existsSync(creditorOverviewFile)) {
-                attachmentPaths.push(creditorOverviewFile);
-                console.log(`✅ Found Forderungsübersicht: ${creditorOverviewFile}`);
-            } else {
-                console.warn(`⚠️ Forderungsübersicht not found: ${creditorOverviewFile}`);
+            if (!settlementPlanFile) {
+                console.warn(`⚠️ Schuldenbereinigungsplan not found for dates: ${possibleDates.join(', ')}`);
+            }
+
+            // Find Creditor Overview
+            let creditorOverviewFile = null;
+            for (const dateStr of possibleDates) {
+                const filePath = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${dateStr}.docx`);
+                if (fs.existsSync(filePath)) {
+                    creditorOverviewFile = filePath;
+                    attachmentPaths.push(filePath);
+                    console.log(`✅ Found Forderungsübersicht (${dateStr}): ${path.basename(filePath)}`);
+                    break;
+                }
+            }
+            if (!creditorOverviewFile) {
+                console.warn(`⚠️ Forderungsübersicht not found for dates: ${possibleDates.join(', ')}`);
+            }
+
+            // Find Ratenplan
+            let ratenplanFile = null;
+            for (const dateStr of possibleDates) {
+                const filePath = path.join(documentDir, `Ratenplan-Pfaendbares-Einkommen_${clientData.reference}_${dateStr}.docx`);
+                if (fs.existsSync(filePath)) {
+                    ratenplanFile = filePath;
+                    attachmentPaths.push(filePath);
+                    console.log(`✅ Found Ratenplan pfändbares Einkommen (${dateStr}): ${path.basename(filePath)}`);
+                    break;
+                }
+            }
+            if (!ratenplanFile) {
+                console.warn(`⚠️ Ratenplan pfändbares Einkommen not found for dates: ${possibleDates.join(', ')}`);
             }
 
             // Step 2: Upload files to get tokens
@@ -1451,6 +1483,7 @@ Ihre Gesamtzahlung über ${duration} Monate: €${creditorTotalPayment.toFixed(2
 
 1. Schuldenbereinigungsplan (detaillierte Aufstellung)
 2. Forderungsübersicht (vollständige Gläubigerliste)
+3. Ratenplan pfändbares Einkommen (Zahlungsvereinbarung)
 
 **NÄCHSTE SCHRITTE:**
 

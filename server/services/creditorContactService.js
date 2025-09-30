@@ -961,118 +961,190 @@ class CreditorContactService {
 
     /**
      * Upload settlement plan documents to main ticket and get download URLs
+     * FIXED: Improved retry logic and better document path handling
      */
     async uploadDocumentsToMainTicketWithUrls(ticketId, clientData, settlementData, generatedDocuments = null) {
         try {
             console.log(`📎 Uploading documents to main ticket ${ticketId} for download URLs...`);
 
             let documentFiles = [];
+            const fs = require('fs');
+            const path = require('path');
 
-            // If generatedDocuments info is provided, use actual filenames
+            // PRIORITY 1: Use provided document paths from generation (most reliable)
             if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
-                console.log(`📋 Using provided document info from generation`);
+                console.log(`✅ Using provided document info from generation`);
                 const settlementPath = generatedDocuments.settlementResult.document_info?.path;
                 const overviewPath = generatedDocuments.overviewResult.document_info?.path;
+                const ratenplanPath = generatedDocuments.ratenplanResult?.document_info?.path;
 
-                if (settlementPath) documentFiles.push({ path: settlementPath, type: 'settlement_plan' });
-                if (overviewPath) documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
+                if (settlementPath && fs.existsSync(settlementPath)) {
+                    documentFiles.push({ path: settlementPath, type: 'settlement_plan' });
+                    console.log(`  ✓ Settlement plan: ${path.basename(settlementPath)}`);
+                } else {
+                    console.warn(`  ⚠️ Settlement plan not found at: ${settlementPath}`);
+                }
 
-            } else {
-                // Fallback: search for documents by pattern
-                console.log(`🔍 Searching for documents by pattern...`);
-                const path = require('path');
-                const documentDir = path.join(__dirname, '../documents');
-                const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
-                const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${new Date().toISOString().split('T')[0]}.docx`);
+                if (overviewPath && fs.existsSync(overviewPath)) {
+                    documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
+                    console.log(`  ✓ Creditor overview: ${path.basename(overviewPath)}`);
+                } else {
+                    console.warn(`  ⚠️ Creditor overview not found at: ${overviewPath}`);
+                }
 
-                documentFiles = [
-                    { path: settlementPlanFile, type: 'settlement_plan' },
-                    { path: creditorOverviewFile, type: 'creditor_overview' }
-                ];
+                if (ratenplanPath && fs.existsSync(ratenplanPath)) {
+                    documentFiles.push({ path: ratenplanPath, type: 'ratenplan_pfaendbares_einkommen' });
+                    console.log(`  ✓ Ratenplan: ${path.basename(ratenplanPath)}`);
+                } else if (ratenplanPath) {
+                    console.warn(`  ⚠️ Ratenplan not found at: ${ratenplanPath}`);
+                }
             }
 
-            const fs = require('fs');
+            // FALLBACK: Search documents folder by pattern (less reliable)
+            if (documentFiles.length === 0) {
+                console.warn(`⚠️ No documents found from provided paths, searching by pattern...`);
+                const documentDir = path.join(__dirname, '../documents');
+
+                // Try to find latest documents by pattern (glob-like search)
+                const datePattern = new Date().toISOString().split('T')[0];
+                const possibleDates = [
+                    datePattern,
+                    new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
+                ];
+
+                for (const dateStr of possibleDates) {
+                    const settlementPlanFile = path.join(documentDir, `Schuldenbereinigungsplan_${clientData.reference}_${dateStr}.docx`);
+                    const creditorOverviewFile = path.join(documentDir, `Forderungsübersicht_${clientData.reference}_${dateStr}.docx`);
+                    const ratenplanFile = path.join(documentDir, `Ratenplan-Pfaendbares-Einkommen_${clientData.reference}_${dateStr}.docx`);
+
+                    if (fs.existsSync(settlementPlanFile)) {
+                        documentFiles.push({ path: settlementPlanFile, type: 'settlement_plan' });
+                        console.log(`  ✓ Found settlement plan (${dateStr}): ${path.basename(settlementPlanFile)}`);
+                    }
+                    if (fs.existsSync(creditorOverviewFile)) {
+                        documentFiles.push({ path: creditorOverviewFile, type: 'creditor_overview' });
+                        console.log(`  ✓ Found creditor overview (${dateStr}): ${path.basename(creditorOverviewFile)}`);
+                    }
+                    if (fs.existsSync(ratenplanFile)) {
+                        documentFiles.push({ path: ratenplanFile, type: 'ratenplan_pfaendbares_einkommen' });
+                        console.log(`  ✓ Found ratenplan (${dateStr}): ${path.basename(ratenplanFile)}`);
+                    }
+
+                    // Break if we found all documents
+                    if (documentFiles.length >= 3) break;
+                }
+
+                if (documentFiles.length === 0) {
+                    throw new Error(`No documents found for client ${clientData.reference}. Please ensure documents are generated before sending to creditors.`);
+                }
+            }
+
+            console.log(`📋 Found ${documentFiles.length} document(s) to upload`);
+
             const documentUrls = [];
 
             // Upload each document file
             for (const docFile of documentFiles) {
-                if (fs.existsSync(docFile.path)) {
-                    const filename = require('path').basename(docFile.path);
-                    console.log(`📤 Uploading ${docFile.type}: ${filename}`);
-                    const uploadResult = await this.zendesk.uploadFileToZendesk(docFile.path, filename);
-                    if (uploadResult.success) {
-                        documentUrls.push({
-                            type: docFile.type,
-                            filename: filename,
-                            token: uploadResult.token,
-                            size: uploadResult.size
-                        });
-                        console.log(`✅ ${docFile.type} uploaded: ${uploadResult.token}`);
-                    } else {
-                        console.log(`❌ Failed to upload ${docFile.type}: ${uploadResult.error}`);
-                    }
+                const filename = path.basename(docFile.path);
+                console.log(`📤 Uploading ${docFile.type}: ${filename}`);
+                const uploadResult = await this.zendesk.uploadFileToZendesk(docFile.path, filename);
+                if (uploadResult.success) {
+                    documentUrls.push({
+                        type: docFile.type,
+                        filename: filename,
+                        token: uploadResult.token,
+                        size: uploadResult.size
+                    });
+                    console.log(`✅ ${docFile.type} uploaded: ${uploadResult.token}`);
                 } else {
-                    console.log(`❌ Document file not found: ${docFile.path}`);
+                    console.error(`❌ Failed to upload ${docFile.type}: ${uploadResult.error}`);
                 }
+            }
+
+            if (documentUrls.length === 0) {
+                throw new Error('All document uploads failed. Cannot proceed with Side Conversations.');
             }
 
             // Add attachments to main ticket as internal note and get download URLs
-            if (documentUrls.length > 0) {
-                const uploadTokens = documentUrls.map(doc => doc.token);
-                const attachmentList = documentUrls.map(doc => `• ${doc.filename} (${Math.round(doc.size / 1024)} KB)`).join('\n');
+            const uploadTokens = documentUrls.map(doc => doc.token);
+            const attachmentList = documentUrls.map(doc => `• ${doc.filename} (${Math.round(doc.size / 1024)} KB)`).join('\n');
 
-                const commentResult = await this.zendesk.addTicketComment(ticketId, {
-                    body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen:\n\n${attachmentList}\n\nDiese Dokumente werden als Download-Links in Side Conversations mit den Gläubigern geteilt.`,
-                    public: false,
-                    uploads: uploadTokens
-                });
+            const commentResult = await this.zendesk.addTicketComment(ticketId, {
+                body: `📎 Schuldenbereinigungsplan Dokumente hochgeladen (${documentUrls.length} Dokumente):\n\n${attachmentList}\n\nDiese Dokumente werden als Download-Links in Side Conversations mit den Gläubigern geteilt.`,
+                public: false,
+                uploads: uploadTokens
+            });
 
-                if (commentResult.success) {
-                    console.log(`✅ Documents attached to main ticket ${ticketId}`);
+            if (!commentResult.success) {
+                throw new Error(`Failed to attach documents to main ticket: ${commentResult.error}`);
+            }
 
-                    // Wait a moment for Zendesk to process the attachments
-                    console.log(`⏰ Waiting 3 seconds for Zendesk attachment processing...`);
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log(`✅ Documents attached to main ticket ${ticketId}`);
 
-                    // Get the download URLs from the ticket attachments
-                    console.log(`🔗 Retrieving download URLs from ticket ${ticketId}...`);
-                    const attachmentDetails = await this.zendesk.getTicketAttachmentUrls(ticketId);
+            // FIXED: Retry logic for attachment URL retrieval
+            const maxRetries = 5;
+            const retryDelay = 3000; // 3 seconds
+            let attachmentDetails = [];
 
-                    if (attachmentDetails.length > 0) {
-                        // Update document URLs array with download URLs
-                        console.log(`🔗 Found ${attachmentDetails.length} download URLs from ticket:`);
-                        attachmentDetails.forEach(att => {
-                            console.log(`   - ${att.filename}: ${att.content_url}`);
-                        });
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                console.log(`⏰ Waiting ${retryDelay / 1000} seconds for Zendesk attachment processing (attempt ${attempt}/${maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
 
-                        // Match uploaded files with their download URLs
-                        for (let i = 0; i < documentUrls.length; i++) {
-                            const matchingAttachment = attachmentDetails.find(att =>
-                                att.filename === documentUrls[i].filename
-                            );
-                            if (matchingAttachment) {
-                                documentUrls[i].download_url = matchingAttachment.content_url;
-                                documentUrls[i].attachment_id = matchingAttachment.id;
-                                console.log(`🔗 ${documentUrls[i].filename} → ${matchingAttachment.content_url}`);
-                            }
-                        }
-                    } else {
-                        console.log(`⚠️ No download URLs found for ticket ${ticketId}`);
-                        console.log(`📋 This means attachments may not have been processed yet or there was an upload issue`);
+                console.log(`🔗 Retrieving download URLs from ticket ${ticketId}...`);
+                attachmentDetails = await this.zendesk.getTicketAttachmentUrls(ticketId);
 
-                        // Continue with empty URLs - Side Conversations will be created without download links
-                        // This is better than failing completely
-                    }
+                if (attachmentDetails.length >= documentUrls.length) {
+                    console.log(`✅ Found all ${attachmentDetails.length} download URLs from ticket`);
+                    break;
+                } else if (attachmentDetails.length > 0) {
+                    console.log(`⚠️ Found ${attachmentDetails.length}/${documentUrls.length} download URLs, retrying...`);
                 } else {
-                    console.log(`❌ Failed to attach documents to main ticket: ${commentResult.error}`);
+                    console.log(`⚠️ No download URLs found yet, retrying...`);
+                }
+
+                // Don't wait after last attempt
+                if (attempt === maxRetries) {
+                    console.error(`❌ Failed to retrieve all download URLs after ${maxRetries} attempts`);
                 }
             }
 
-            console.log(`🔗 Successfully prepared ${documentUrls.length} document download URLs`);
+            // Match uploaded files with their download URLs
+            if (attachmentDetails.length > 0) {
+                console.log(`🔗 Matching ${documentUrls.length} uploaded files with ${attachmentDetails.length} attachment URLs:`);
+                attachmentDetails.forEach(att => {
+                    console.log(`   - ${att.filename}: ${att.content_url}`);
+                });
+
+                for (let i = 0; i < documentUrls.length; i++) {
+                    const matchingAttachment = attachmentDetails.find(att =>
+                        att.filename === documentUrls[i].filename
+                    );
+                    if (matchingAttachment) {
+                        documentUrls[i].download_url = matchingAttachment.content_url;
+                        documentUrls[i].attachment_id = matchingAttachment.id;
+                        console.log(`✅ ${documentUrls[i].filename} → URL matched`);
+                    } else {
+                        console.error(`❌ No URL match found for ${documentUrls[i].filename}`);
+                    }
+                }
+            } else {
+                console.error(`❌ CRITICAL: No download URLs available after ${maxRetries} attempts`);
+                console.error(`📧 Side Conversations will be sent WITHOUT document links!`);
+                console.error(`🔧 Manual intervention required: Add documents to ticket ${ticketId} manually`);
+            }
+
+            const urlsWithLinks = documentUrls.filter(doc => doc.download_url).length;
+            console.log(`🔗 Successfully prepared ${urlsWithLinks}/${documentUrls.length} document download URLs`);
+
+            if (urlsWithLinks === 0) {
+                console.error(`❌ WARNING: No download URLs available. Creditors will receive emails without document links!`);
+            }
+
             return documentUrls;
 
         } catch (error) {
             console.error(`❌ Error uploading documents to main ticket:`, error.message);
+            console.error(`📋 Stack trace:`, error.stack);
             return [];
         }
     }

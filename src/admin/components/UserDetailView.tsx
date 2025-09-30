@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
+import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 
 interface UserDetailProps {
   userId: string;
@@ -606,6 +607,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             📄 User Details: {user.firstName} {user.lastName}
           </h2>
           <div className="flex items-center space-x-3">
+            <InsolvenzantragDownloadButton 
+              userId={userId}
+              className=""
+            />
             <button
               onClick={() => setShowSettlementPlan(true)}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"
