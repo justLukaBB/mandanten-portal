@@ -195,7 +195,12 @@ function mapClientDataToPDF(client) {
         court: mappedData.amtsgericht,
         birthDate: mappedData.geburtsdatum,
         familyStatus: mappedData.familienstand,
-        creditors: mappedData.anzahl_glaeubiger,
+        anzahl_glaeubiger: mappedData.anzahl_glaeubiger,
+        anzahl_glaeubiger_zugestimmt: mappedData.anzahl_glaeubiger_zugestimmt,
+        anzahl_ablehnungen: mappedData.anzahl_ablehnungen,
+        anzahl_ohne_antwort: mappedData.anzahl_ohne_antwort,
+        summe_zugestimmt: mappedData.summe_zugestimmt,
+        summe_gesamt: mappedData.summe_gesamt,
         totalDebt: mappedData.gesamtschuldensumme
     });
 
