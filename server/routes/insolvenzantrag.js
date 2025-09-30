@@ -273,16 +273,21 @@ router.get('/check-prerequisites/:clientId', authenticateAdmin, async (req, res)
 
         const prerequisiteCheck = await checkPrerequisites(client);
 
+        // Override: Allow download if settlement plan has been sent to creditors
+        const hasReachedSettlementStage = client.status === 'settlement_plan_sent_to_creditors';
+        const canGenerate = prerequisiteCheck.isComplete || hasReachedSettlementStage;
+
         res.json({
             clientId,
-            canGenerateInsolvenzantrag: prerequisiteCheck.isComplete,
+            canGenerateInsolvenzantrag: canGenerate,
             prerequisites: {
                 hasPersonalInfo: !!(client.firstName && client.lastName && (client.address || (client.strasse && client.plz && client.ort))),
                 hasFinancialData: !!(client.financial_data?.completed || client.financial_data?.client_form_filled),
                 hasDebtSettlementPlan: !!(client.debt_settlement_plan?.creditors?.length > 0 || client.final_creditor_list?.length > 0),
                 hasCreditorList: !!(client.final_creditor_list?.length > 0)
             },
-            errors: prerequisiteCheck.errors
+            errors: hasReachedSettlementStage ? [] : prerequisiteCheck.errors,
+            statusOverride: hasReachedSettlementStage ? 'Settlement plan sent - download enabled' : null
         });
 
     } catch (error) {
