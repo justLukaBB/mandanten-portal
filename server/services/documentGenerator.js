@@ -2457,10 +2457,17 @@ class DocumentGenerator {
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
             // Generate Ratenplan-Nullplan (with 0 EUR payment)
-            const ratenplanNullplanResult = await this.generateRatenplanPfaendbaresEinkommenDocument(
+            // Use a Nullplan-specific settlement data structure
+            const nullplanSettlementData = {
+                plan_type: 'nullplan',
+                monthly_payment: 0,
+                garnishable_amount: 0,
+                total_debt: creditorData.reduce((sum, c) => sum + (c.debt_amount || 0), 0),
+                creditors: creditorData
+            };
+            const ratenplanNullplanResult = await this.generateRatenplanPfaendbaresEinkommen(
                 clientReference,
-                0, // pfaendbar_amount = 0 for Nullplan
-                { is_nullplan: true }
+                nullplanSettlementData
             );
 
             return {
