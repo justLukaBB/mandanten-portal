@@ -10,6 +10,9 @@ RUN apt-get update && \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify LibreOffice installation
+RUN which soffice && soffice --version
+
 # Set working directory
 WORKDIR /app
 
