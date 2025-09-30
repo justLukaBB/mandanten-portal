@@ -2449,14 +2449,22 @@ class DocumentGenerator {
 
             console.log(`📊 Processing ${creditorData.length} creditors for Nullplan`);
 
-            // Generate both documents
+            // Generate all three documents
             const nullplanResult = await this.generateNullplan(clientData, creditorData);
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
+
+            // Generate Ratenplan-Nullplan (with 0 EUR payment)
+            const ratenplanNullplanResult = await this.generateRatenplanPfaendbaresEinkommenDocument(
+                clientReference,
+                0, // pfaendbar_amount = 0 for Nullplan
+                { is_nullplan: true }
+            );
 
             return {
                 success: true,
                 nullplan: nullplanResult,
                 forderungsuebersicht: forderungsuebersichtResult,
+                ratenplan_nullplan: ratenplanNullplanResult,
                 client_reference: clientReference,
                 generated_at: new Date().toISOString()
             };
