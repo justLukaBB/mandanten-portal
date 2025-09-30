@@ -249,15 +249,15 @@ const ConfirmCreditors: React.FC = () => {
               <button
                 onClick={handleConfirm}
                 disabled={confirming}
-                className="flex-1 px-4 py-2 text-white font-medium rounded-md hover:opacity-90 disabled:opacity-50"
+                className="flex-1 px-6 py-3 text-white font-semibold rounded-xl shadow-md transition-all duration-200 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-md"
                 style={{backgroundColor: '#9f1a1d'}}
               >
                 {confirming ? 'Wird bestätigt...' : 'Gläubigerliste bestätigen'}
               </button>
-              
+
               <button
                 onClick={() => navigate('/portal')}
-                className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50"
+                className="px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
               >
                 Zurück zum Portal
               </button>
