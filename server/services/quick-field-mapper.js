@@ -196,9 +196,10 @@ class QuickFieldMapper {
                 completeData.anzahl_ablehnungen = String(formData.anzahl_ablehnungen || 0);  // Textfeld 90
                 completeData.anzahl_ohne_antwort = String(formData.anzahl_ohne_antwort || 0);  // Textfeld 89
             }
-            if (formData.gesamtschuldensumme) {
-                completeData.summe_gesamt = String(formData.gesamtschuldensumme);  // Textfeld 88
-                completeData.summe_zugestimmt = String(formData.summe_zugestimmt || formData.gesamtschuldensumme);  // Textfeld 87
+            // Sum statistics - use summe_gesamt from creditor stats or fall back to gesamtschuldensumme
+            if (formData.summe_gesamt || formData.gesamtschuldensumme) {
+                completeData.summe_gesamt = String(formData.summe_gesamt || formData.gesamtschuldensumme);  // Textfeld 88
+                completeData.summe_zugestimmt = String(formData.summe_zugestimmt || '0');  // Textfeld 87
             }
             
             // Personal information fields - PROVIDE DEFAULT VALUES so they don't get skipped
