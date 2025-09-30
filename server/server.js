@@ -5483,7 +5483,6 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     // Update client with settlement plan
     client.calculated_settlement_plan = settlementPlan;
-    client.current_status = 'settlement_documents_generated';
     
     // Generate document based on plan type
     console.log(`📄 Generating ${planType === 'nullplan' ? 'Nullplan' : 'Schuldenbereinigungsplan'} for ${client.aktenzeichen}...`);
