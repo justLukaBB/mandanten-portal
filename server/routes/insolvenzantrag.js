@@ -21,7 +21,7 @@ async function getClient(clientId) {
     throw error;
   }
 }
-const QuickFieldMapper = require('../../pdf-form-test/quick-field-mapper');
+const QuickFieldMapper = require('../services/quick-field-mapper');
 const INSOLVENZANTRAG_CONFIG = require('../insolvenzantrag-checkbox-config');
 const { convertDocxToPdf, generateSchuldenbereinigungsplanPdf, generateGlaeubigerlistePdf } = require('../services/documentConverter');
 const documentGenerator = require('../services/documentGenerator');
