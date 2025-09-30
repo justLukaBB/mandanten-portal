@@ -5545,14 +5545,28 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
             console.log(`✅ Nullplan emails sent to ${emailResult.emails_sent}/${emailResult.total_creditors} creditors`);
             console.log(`🎫 Nullplan ticket ID: ${emailResult.settlement_ticket_id}`);
 
-            // Store email results in client
-            client.nullplan_email_results = emailResult;
+            // Wait for creditor updates to complete (they are saved by updateCreditorsWithSideConversationIds)
+            console.log(`⏳ Waiting for creditor Side Conversation updates to complete...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Update client status to enable Insolvenzantrag download
-            console.log(`📌 Updating client status to 'settlement_plan_sent_to_creditors' for ${client.aktenzeichen}`);
-            client.current_status = 'settlement_plan_sent_to_creditors';
-            client.settlement_plan_sent_at = new Date();
-            console.log(`✅ Client status updated - Insolvenzantrag download now enabled`);
+            // Reload client to get the updated creditor list with Side Conversation IDs
+            const Client = require('./models/Client');
+            const reloadedClient = await Client.findOne({ aktenzeichen: client.aktenzeichen });
+            if (reloadedClient) {
+              // Store email results in client
+              reloadedClient.nullplan_email_results = emailResult;
+
+              // Update client status to enable Insolvenzantrag download
+              console.log(`📌 Updating client status to 'settlement_plan_sent_to_creditors' for ${reloadedClient.aktenzeichen}`);
+              reloadedClient.current_status = 'settlement_plan_sent_to_creditors';
+              reloadedClient.settlement_plan_sent_at = new Date();
+
+              await saveClient(reloadedClient);
+              console.log(`✅ Client status updated and saved - Insolvenzantrag download now enabled`);
+
+              // Update local reference
+              client = reloadedClient;
+            }
           } else {
             console.error(`❌ Nullplan email sending failed: ${emailResult.error}`);
           }
@@ -5641,8 +5655,12 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       ratenplanResult = settlementResult.ratenplan_nullplan;
     }
 
-    // Save client with updated data
-    await saveClient(client);
+    // Save client with updated data (skip for Nullplan - already saved after email sending)
+    if (planType !== 'nullplan') {
+      await saveClient(client);
+    } else {
+      console.log(`⏭️ Skipping saveClient for Nullplan - already saved with creditor updates`);
+    }
 
     console.log(`🎯 Automatic document generation completed for ${client.aktenzeichen}`);
 
