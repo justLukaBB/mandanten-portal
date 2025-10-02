@@ -4,20 +4,25 @@
 
 const INSOLVENZANTRAG_CONFIG = {
   // These checkboxes are pre-checked in the new template - UPDATED FROM ULTRA DEEP ANALYSIS
-  DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN: [
-    "Kontrollkästchen 1",
-    "Kontrollkästchen 2",
-    "Kontrollkästchen 15",    // ✨ NEWLY FOUND
-    "Kontrollkästchen 17",
-    "Kontrollkästchen 21",
-    "Kontrollkästchen 25",
-    "Kontrollkästchen 26",
-    "Kontrollkästchen 27",
-    "Kontrollkästchen 32a",
-    "Kontrollkästchen 36",
-    "Kontrollkästchen 62",    // ✨ EMPLOYEE CHECKBOX - "Angestellter"
-    "Kontrollkästchen 333"
-  ],
+  // DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN: [
+  //   "Kontrollkästchen 1",
+  //   "Kontrollkästchen 2",
+  //   "Kontrollkästchen 15",    // ✨ NEWLY FOUND
+  //   "Kontrollkästchen 17",
+  //   "Kontrollkästchen 21",
+  //   "Kontrollkästchen 25",
+  //   "Kontrollkästchen 26",
+  //   "Kontrollkästchen 27",
+  //   "Kontrollkästchen 32a",
+  //   "Kontrollkästchen 36",
+  //   "Kontrollkästchen 62",    // ✨ EMPLOYEE CHECKBOX - "Angestellter"
+  //   "Kontrollkästchen 333"
+  // ],
+
+  DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN: Array.from(
+    { length: 387 },
+    (_, i) => `Kontrollkästchen ${i + 1}`
+  ),
 
   // Sample text field data from the template
   SAMPLE_TEXT_FIELDS: {

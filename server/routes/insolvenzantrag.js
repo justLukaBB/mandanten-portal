@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts } = require('pdf-lib');
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
@@ -235,6 +235,80 @@ async function fillInsolvenzantragWithCheckboxes(formData, originalPdfPath) {
     }
 }
 
+async function injectCreditorsIntoAnlage6(pdfBytes, client, options = {}) {
+    try {
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+
+        const targetIndex = Number(options.targetIndex ?? 23); // 0-based
+        const startFieldNumber = Number(options.startFieldNumber ?? 423); // first row's first field
+        const fieldsPerRow = Number(options.fieldsPerRow ?? 8); // 8 fields per row
+        const maxRowsPerPage = Number(options.maxRowsPerPage ?? 20); // adjust according to template
+
+        const creditors = client.final_creditor_list || [];
+        if (!Array.isArray(creditors) || creditors.length === 0) return pdfBytes;
+
+        const form = pdfDoc.getForm();
+        let pageOffset = 0;
+
+        for (let i = 0; i < creditors.length; i++) {
+            const rowInPage = i % maxRowsPerPage;
+
+            // Duplicate page if needed
+            if (i > 0 && rowInPage === 0) {
+                const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+                pdfDoc.addPage(dup);
+                pageOffset++;
+            }
+
+            const creditor = creditors[i];
+
+            // Fill all 8 text fields for this row
+            for (let f = 0; f < fieldsPerRow; f++) {
+                const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
+                const fieldName = `Textfeld ${fieldNumber}`;
+                let text = '';
+                const principal = Number(creditor.claim_amount ?? creditor.current_debt_amount ?? creditor.amount ?? 0);
+                switch (f) {
+                    case 0: 
+                        text = `${i + 1}.`; // Serial No.
+                        break;
+                    case 1: 
+                        text = creditor.sender_name || creditor.name || 'Unbekannt'; // Name
+                        break;
+                    case 2: 
+                        text = `${principal.toFixed(2)} €`; // Principal Claim
+                        break;
+                    case 3: 
+                        text = '0'
+                        break;
+                    case 4: 
+                        text = '0'
+                        break;
+                    case 5: 
+                        text = `${principal.toFixed(2)} €`; // Principal Claim
+                        break;
+                    case 6: 
+                        text = creditor.actual_creditor || ''; // Claim Reason / Basis
+                        break;
+                    case 7: 
+                        text = `${principal.toFixed(2)} €`; // Principal Claim
+                        break;
+                }
+
+                try { form.getTextField(fieldName).setText(text); } catch {}
+            }
+        }
+
+        return await pdfDoc.save();
+
+    } catch (e) {
+        console.warn('⚠️ Failed to inject creditors into Anlage 6:', e.message);
+        return pdfBytes;
+    }
+}
+
+
+
 // Check if all prerequisites are completed
 async function checkPrerequisites(client) {
     const errors = [];
@@ -322,8 +396,8 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
         // Attachment generation will be added later
         console.log('📝 Generating main Insolvenzantrag form only (attachments disabled for testing)');
         
-        // Simply use the filled form without attachments
-        const mergedPdfBytes = insolvenzantragBytes;
+        // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
+        const mergedPdfBytes = await injectCreditorsIntoAnlage6(insolvenzantragBytes, client, req.query);
 
         // Send the PDF as download
         res.setHeader('Content-Type', 'application/pdf');
