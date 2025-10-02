@@ -62,6 +62,9 @@ app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
 
+// Serve docs folder for visual flowcharts
+app.use('/docs', express.static(path.join(__dirname, '..', 'docs')));
+
 // Test endpoint to list available documents (for debugging)
 app.get('/api/documents-list', (req, res) => {
     try {
