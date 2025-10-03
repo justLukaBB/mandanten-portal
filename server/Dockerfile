@@ -1,20 +1,29 @@
-# Use official Node.js LTS slim image
+# Use official Node.js LTS image
 FROM node:18-slim
 
-# Install LibreOffice + common fonts + locales
+# Avoid interactive prompts during apt installs
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install LibreOffice + required fonts (MS Core + Liberation + Noto + DejaVu)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libreoffice \
     libreoffice-writer \
     libreoffice-calc \
+    libreoffice-impress \
+    libreoffice-java-common \
     fonts-dejavu \
     fonts-liberation \
     fonts-noto \
     fonts-noto-cjk \
     fonts-freefont-ttf \
+    ttf-mscorefonts-installer \
     locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify LibreOffice install
+RUN which soffice && soffice --version
 
 # Setup locales
 RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
