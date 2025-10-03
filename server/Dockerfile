@@ -1,12 +1,6 @@
-# Use official Node.js LTS image
 FROM node:18-slim
-
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Enable contrib + non-free repos (needed for some fonts)
-RUN sed -i 's/main/main contrib non-free non-free-firmware/' /etc/apt/sources.list
-
-# Install LibreOffice and fonts
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libreoffice \
@@ -20,18 +14,9 @@ RUN apt-get update && \
     fonts-noto-cjk \
     fonts-freefont-ttf \
     locales \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Verify LibreOffice install
-RUN which soffice && soffice --version
-
-# Setup locales
-RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
-    locale-gen
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+RUN soffice --version
 
 # Verify LibreOffice installation
 RUN which soffice && soffice --version
