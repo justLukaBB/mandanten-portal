@@ -12,7 +12,6 @@ RUN apt-get update && \
     fonts-noto \
     fonts-noto-cjk \
     fonts-freefont-ttf \
-    ttf-mscorefonts-installer \
     locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
