@@ -1,10 +1,12 @@
 # Use official Node.js LTS image
 FROM node:18-slim
 
-# Avoid interactive prompts during apt installs
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install LibreOffice + required fonts (MS Core + Liberation + Noto + DejaVu)
+# Enable contrib + non-free repos (needed for some fonts)
+RUN sed -i 's/main/main contrib non-free non-free-firmware/' /etc/apt/sources.list
+
+# Install LibreOffice and fonts
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libreoffice \
@@ -17,7 +19,6 @@ RUN apt-get update && \
     fonts-noto \
     fonts-noto-cjk \
     fonts-freefont-ttf \
-    ttf-mscorefonts-installer \
     locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
