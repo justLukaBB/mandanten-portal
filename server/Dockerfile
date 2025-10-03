@@ -41,7 +41,6 @@ COPY . .
 
 # Expose port (Render usually uses $PORT, so let’s respect that)
 EXPOSE 10000
-ENV PORT=10000
 
 # Start the application
 CMD ["node", "server.js"]
