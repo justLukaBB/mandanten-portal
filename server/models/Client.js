@@ -261,6 +261,13 @@ const clientSchema = new mongoose.Schema({
   processing_complete_webhook_triggered: { type: Boolean, default: false },
   processing_complete_webhook_triggered_at: Date,
   
+  // 7-day delay tracking for payment + document upload
+  both_conditions_met_at: Date, // When both payment and documents are uploaded
+  seven_day_review_scheduled: { type: Boolean, default: false },
+  seven_day_review_scheduled_at: Date,
+  seven_day_review_triggered: { type: Boolean, default: false },
+  seven_day_review_triggered_at: Date,
+  
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },

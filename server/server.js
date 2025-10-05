@@ -4280,6 +4280,21 @@ function startScheduledTasks() {
     }
   }, LOGIN_REMINDER_CHECK_INTERVAL);
   
+  // Run 7-day review check every hour
+  const SEVEN_DAY_REVIEW_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running scheduled 7-day review check...');
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+      const result = await delayedService.checkAndTriggerSevenDayReviews();
+      console.log(`✅ 7-day review check complete: ${result.reviewsTriggered} reviews triggered\n`);
+    } catch (error) {
+      console.error('❌ Error in scheduled 7-day review check:', error);
+    }
+  }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
+  
   // Run initial checks after 1 minute
   setTimeout(async () => {
     try {
@@ -6289,6 +6304,390 @@ app.post('/api/test/create-agent', async (_req, res) => {
     console.error('❌ Error creating test agent:', error);
     res.status(500).json({
       error: 'Failed to create test agent',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Add manual creditor to any client (unrestricted)
+app.post('/api/admin/clients/:clientId/add-creditor', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const {
+      sender_name,
+      sender_email,
+      sender_address,
+      reference_number,
+      claim_amount,
+      notes,
+      is_representative,
+      actual_creditor
+    } = req.body;
+
+    console.log(`👤 Admin adding manual creditor to client ${clientId}`);
+
+    // Validate required fields
+    if (!sender_name) {
+      return res.status(400).json({
+        error: 'sender_name is required'
+      });
+    }
+
+    // Find client (any client, no workflow restrictions)
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId },
+        { _id: clientId }
+      ]
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    console.log(`📋 Adding creditor to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+    // Create new creditor
+    const newCreditor = {
+      id: uuidv4(),
+      sender_name: sender_name.trim(),
+      sender_email: sender_email?.trim() || '',
+      sender_address: sender_address?.trim() || '',
+      reference_number: reference_number?.trim() || '',
+      claim_amount: claim_amount ? parseFloat(claim_amount) : 0,
+      is_representative: is_representative === true,
+      actual_creditor: actual_creditor?.trim() || '',
+      
+      // Manual creation metadata
+      status: 'confirmed',
+      confidence: 1.0, // Manual entry = 100% confidence
+      ai_confidence: 1.0,
+      manually_reviewed: true,
+      reviewed_by: req.adminId || req.agentId || 'admin',
+      reviewed_at: new Date(),
+      confirmed_at: new Date(),
+      created_at: new Date(),
+      created_via: 'admin_manual_entry',
+      correction_notes: notes?.trim() || 'Manually created by admin',
+      review_action: 'manually_created',
+      
+      // Document association (optional)
+      document_id: null,
+      source_document: 'Manual Entry',
+      source_document_id: null
+    };
+
+    // Initialize final_creditor_list if it doesn't exist
+    if (!client.final_creditor_list) {
+      client.final_creditor_list = [];
+    }
+
+    // Add creditor to the list
+    client.final_creditor_list.push(newCreditor);
+
+    // Add to status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'manual_creditor_added',
+      changed_by: 'admin',
+      metadata: {
+        creditor_name: sender_name,
+        creditor_amount: claim_amount || 0,
+        added_by: req.adminId || req.agentId || 'admin',
+        admin_action: 'manual_creditor_creation',
+        total_creditors: client.final_creditor_list.length
+      }
+    });
+
+    // Save client
+    await client.save();
+
+    console.log(`✅ Successfully added creditor "${sender_name}" to client ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: `Creditor "${sender_name}" added successfully`,
+      creditor: {
+        id: newCreditor.id,
+        sender_name: newCreditor.sender_name,
+        sender_email: newCreditor.sender_email,
+        claim_amount: newCreditor.claim_amount,
+        status: newCreditor.status
+      },
+      client: {
+        id: client.id,
+        name: `${client.firstName} ${client.lastName}`,
+        aktenzeichen: client.aktenzeichen,
+        total_creditors: client.final_creditor_list.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error adding manual creditor:', error);
+    res.status(500).json({
+      error: 'Failed to add creditor',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Get all creditors for a specific client
+app.get('/api/admin/clients/:clientId/creditors', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    console.log(`📋 Admin requesting creditors for client ${clientId}`);
+
+    // Find client (any client, no workflow restrictions)
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId },
+        { _id: clientId }
+      ]
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    const creditors = client.final_creditor_list || [];
+
+    res.json({
+      success: true,
+      client: {
+        id: client.id,
+        name: `${client.firstName} ${client.lastName}`,
+        aktenzeichen: client.aktenzeichen,
+        current_status: client.current_status,
+        workflow_status: client.workflow_status
+      },
+      creditors: creditors.map(creditor => ({
+        id: creditor.id,
+        sender_name: creditor.sender_name,
+        sender_email: creditor.sender_email,
+        sender_address: creditor.sender_address,
+        reference_number: creditor.reference_number,
+        claim_amount: creditor.claim_amount,
+        status: creditor.status,
+        confidence: creditor.confidence || creditor.ai_confidence,
+        manually_reviewed: creditor.manually_reviewed,
+        created_via: creditor.created_via,
+        created_at: creditor.created_at,
+        reviewed_by: creditor.reviewed_by,
+        correction_notes: creditor.correction_notes
+      })),
+      total_creditors: creditors.length,
+      manual_creditors: creditors.filter(c => c.created_via === 'admin_manual_entry').length,
+      ai_creditors: creditors.filter(c => c.created_via !== 'admin_manual_entry').length
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting client creditors:', error);
+    res.status(500).json({
+      error: 'Failed to get creditors',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Update/Edit existing creditor
+app.put('/api/admin/clients/:clientId/creditors/:creditorId', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const { clientId, creditorId } = req.params;
+    const {
+      sender_name,
+      sender_email,
+      sender_address,
+      reference_number,
+      claim_amount,
+      notes,
+      is_representative,
+      actual_creditor
+    } = req.body;
+
+    console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
+
+    // Find client
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId },
+        { _id: clientId }
+      ]
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    // Find creditor
+    const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
+    if (creditorIndex === -1 || creditorIndex === undefined) {
+      return res.status(404).json({
+        error: 'Creditor not found',
+        creditor_id: creditorId
+      });
+    }
+
+    const originalCreditor = { ...client.final_creditor_list[creditorIndex] };
+
+    // Update creditor fields
+    Object.assign(client.final_creditor_list[creditorIndex], {
+      sender_name: sender_name?.trim() || originalCreditor.sender_name,
+      sender_email: sender_email?.trim() || originalCreditor.sender_email || '',
+      sender_address: sender_address?.trim() || originalCreditor.sender_address || '',
+      reference_number: reference_number?.trim() || originalCreditor.reference_number || '',
+      claim_amount: claim_amount !== undefined ? parseFloat(claim_amount) : originalCreditor.claim_amount,
+      is_representative: is_representative !== undefined ? is_representative : originalCreditor.is_representative,
+      actual_creditor: actual_creditor?.trim() || originalCreditor.actual_creditor || '',
+      
+      // Update metadata
+      manually_reviewed: true,
+      reviewed_by: req.adminId || req.agentId || 'admin',
+      reviewed_at: new Date(),
+      correction_notes: notes?.trim() || originalCreditor.correction_notes || 'Updated by admin',
+      review_action: 'manually_updated'
+    });
+
+    // Add to status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'creditor_updated',
+      changed_by: 'admin',
+      metadata: {
+        creditor_id: creditorId,
+        creditor_name: sender_name || originalCreditor.sender_name,
+        updated_by: req.adminId || req.agentId || 'admin',
+        admin_action: 'creditor_update',
+        changes: {
+          name_changed: sender_name && sender_name !== originalCreditor.sender_name,
+          amount_changed: claim_amount !== undefined && claim_amount !== originalCreditor.claim_amount,
+          email_changed: sender_email && sender_email !== originalCreditor.sender_email
+        }
+      }
+    });
+
+    // Save client
+    await client.save();
+
+    console.log(`✅ Successfully updated creditor "${client.final_creditor_list[creditorIndex].sender_name}" for client ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: `Creditor "${client.final_creditor_list[creditorIndex].sender_name}" updated successfully`,
+      creditor: {
+        id: client.final_creditor_list[creditorIndex].id,
+        sender_name: client.final_creditor_list[creditorIndex].sender_name,
+        sender_email: client.final_creditor_list[creditorIndex].sender_email,
+        claim_amount: client.final_creditor_list[creditorIndex].claim_amount,
+        status: client.final_creditor_list[creditorIndex].status
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating creditor:', error);
+    res.status(500).json({
+      error: 'Failed to update creditor',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Delete creditor
+app.delete('/api/admin/clients/:clientId/creditors/:creditorId', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const { clientId, creditorId } = req.params;
+
+    console.log(`🗑️ Admin deleting creditor ${creditorId} for client ${clientId}`);
+
+    // Find client
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId },
+        { _id: clientId }
+      ]
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    // Find creditor
+    const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
+    if (creditorIndex === -1 || creditorIndex === undefined) {
+      return res.status(404).json({
+        error: 'Creditor not found',
+        creditor_id: creditorId
+      });
+    }
+
+    const deletedCreditor = client.final_creditor_list[creditorIndex];
+
+    // Remove creditor from list
+    client.final_creditor_list.splice(creditorIndex, 1);
+
+    // Add to status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'creditor_deleted',
+      changed_by: 'admin',
+      metadata: {
+        creditor_id: creditorId,
+        creditor_name: deletedCreditor.sender_name,
+        creditor_amount: deletedCreditor.claim_amount,
+        deleted_by: req.adminId || req.agentId || 'admin',
+        admin_action: 'creditor_deletion',
+        remaining_creditors: client.final_creditor_list.length
+      }
+    });
+
+    // Save client
+    await client.save();
+
+    console.log(`✅ Successfully deleted creditor "${deletedCreditor.sender_name}" for client ${client.aktenzeichen}`);
+
+    res.json({
+      success: true,
+      message: `Creditor "${deletedCreditor.sender_name}" deleted successfully`,
+      deleted_creditor: {
+        id: deletedCreditor.id,
+        sender_name: deletedCreditor.sender_name,
+        claim_amount: deletedCreditor.claim_amount
+      },
+      remaining_creditors: client.final_creditor_list.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting creditor:', error);
+    res.status(500).json({
+      error: 'Failed to delete creditor',
       details: error.message
     });
   }

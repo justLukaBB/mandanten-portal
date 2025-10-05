@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 class DelayedProcessingService {
   constructor() {
     this.delayHours = 24; // Default 24 hour delay
+    this.sevenDayDelayHours = 168; // 7 days delay for payment + documents
     this.checkIntervalMinutes = 30; // Check every 30 minutes for pending webhooks
   }
 
@@ -200,6 +201,158 @@ class DelayedProcessingService {
       
     } catch (error) {
       console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Schedule a 7-day review after both payment and documents are uploaded
+   * @param {string} clientId - The client ID
+   */
+  async scheduleSevenDayReview(clientId) {
+    try {
+      const scheduledTime = new Date();
+      scheduledTime.setHours(scheduledTime.getHours() + this.sevenDayDelayHours);
+
+      const client = await Client.findOne({ id: clientId });
+      if (!client) {
+        throw new Error(`Client ${clientId} not found`);
+      }
+
+      // Store the scheduled review information
+      client.both_conditions_met_at = new Date();
+      client.seven_day_review_scheduled = true;
+      client.seven_day_review_scheduled_at = scheduledTime;
+      client.seven_day_review_triggered = false;
+      
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'seven_day_review_scheduled',
+        changed_by: 'system',
+        metadata: {
+          scheduled_for: scheduledTime,
+          delay_days: 7,
+          reason: 'Giving client 7 days to upload additional documents after payment and initial upload',
+          payment_received: client.first_payment_received,
+          documents_count: (client.documents || []).length
+        }
+      });
+
+      await client.save();
+
+      console.log(`⏰ Scheduled 7-day review for client ${clientId} at ${scheduledTime.toISOString()}`);
+      
+      return {
+        success: true,
+        scheduledFor: scheduledTime,
+        delayDays: 7
+      };
+
+    } catch (error) {
+      console.error(`❌ Error scheduling 7-day review:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check for and trigger pending 7-day reviews
+   */
+  async checkAndTriggerSevenDayReviews() {
+    try {
+      console.log('🔍 Checking for pending 7-day reviews...');
+
+      // Find all clients with scheduled reviews that haven't been triggered yet
+      const pendingClients = await Client.find({
+        seven_day_review_scheduled: true,
+        seven_day_review_triggered: { $ne: true },
+        seven_day_review_scheduled_at: { $lte: new Date() }
+      });
+
+      console.log(`📋 Found ${pendingClients.length} clients with pending 7-day reviews`);
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const client of pendingClients) {
+        try {
+          console.log(`🚀 Triggering 7-day review for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+          
+          // Mark as triggered
+          client.seven_day_review_triggered = true;
+          client.seven_day_review_triggered_at = new Date();
+          
+          // Add to status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'seven_day_review_triggered',
+            changed_by: 'system',
+            metadata: {
+              scheduled_at: client.seven_day_review_scheduled_at,
+              triggered_at: new Date(),
+              documents_at_trigger: (client.documents || []).length,
+              delay_days: 7
+            }
+          });
+
+          // Update status to creditor_review
+          client.current_status = 'creditor_review';
+
+          await client.save();
+
+          // Trigger the review process
+          await this.triggerCreditorReviewProcess(client.id);
+          
+          successCount++;
+
+        } catch (error) {
+          console.error(`❌ Error processing 7-day review for ${client.aktenzeichen}:`, error.message);
+          errorCount++;
+        }
+      }
+
+      console.log(`✅ 7-day review check complete. Triggered: ${successCount}, Errors: ${errorCount}`);
+      
+      return {
+        totalChecked: pendingClients.length,
+        reviewsTriggered: successCount,
+        errors: errorCount
+      };
+
+    } catch (error) {
+      console.error('❌ Error in 7-day review service:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger the creditor review process (create ticket for agents)
+   */
+  async triggerCreditorReviewProcess(clientId) {
+    try {
+      const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+      const webhookUrl = `${baseUrl}/api/zendesk-webhooks/creditor-review-ready`;
+      
+      console.log(`🔗 Triggering creditor review for client ${clientId}`);
+      
+      const response = await axios.post(webhookUrl, {
+        client_id: clientId,
+        timestamp: new Date().toISOString(),
+        triggered_by: 'seven_day_review_service',
+        review_type: 'scheduled_7_day'
+      }, {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'MandarenPortal-SevenDayReview/1.0'
+        }
+      });
+      
+      console.log(`✅ Creditor review triggered successfully for client ${clientId}`);
+      return { success: true, data: response.data };
+      
+    } catch (error) {
+      console.error(`❌ Failed to trigger creditor review for client ${clientId}:`, error.message);
       return { success: false, error: error.message };
     }
   }
