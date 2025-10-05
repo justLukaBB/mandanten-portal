@@ -1,10 +1,12 @@
 FROM node:18-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Add contrib + non-free repositories (for msttcorefonts)
-RUN sed -i 's/main/main contrib non-free/' /etc/apt/sources.list
+# Ensure apt sources exist (node:slim may lack /etc/apt/sources.list)
+RUN echo "deb http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list && \
+    echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list
 
-# Install LibreOffice, Java, fonts, and locales
+# Install LibreOffice, fonts, and locale packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libreoffice \
@@ -21,7 +23,7 @@ RUN apt-get update && \
     locales && \
     rm -rf /var/lib/apt/lists/*
 
-# Generate and set UTF-8 locale
+# Generate UTF-8 locale
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen
 ENV LANG=en_US.UTF-8 \
@@ -31,16 +33,13 @@ ENV LANG=en_US.UTF-8 \
 # Rebuild font cache
 RUN fc-cache -fv
 
-# Verify LibreOffice
+# Verify LibreOffice install
 RUN soffice --version
 
 WORKDIR /app
 
-# Copy dependency files and install production deps
 COPY package*.json ./
 RUN npm ci --omit=dev
-
-# Copy the rest of the app
 COPY . .
 
 EXPOSE 10000
