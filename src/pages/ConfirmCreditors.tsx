@@ -239,11 +239,22 @@ const ConfirmCreditors: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-4">
               Bestätigung erforderlich
             </h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-600 mb-4">
               Bitte überprüfen Sie die oben aufgeführte Gläubigerliste sorgfältig. 
               Mit Ihrer Bestätigung autorisieren Sie uns, in Ihrem Namen Kontakt 
               mit den genannten Gläubigern aufzunehmen.
             </p>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <h4 className="text-sm font-medium text-yellow-800 mb-2">
+                Wichtiger Hinweis
+              </h4>
+              <p className="text-sm text-yellow-700">
+                Falls Sie weitere Gläubiger haben, die nicht in dieser Liste aufgeführt sind, 
+                kontaktieren Sie bitte nach der Bestätigung unser Support-Team per E-Mail, 
+                um diese zusätzlichen Gläubiger hinzuzufügen.
+              </p>
+            </div>
             
             <div className="flex gap-4">
               <button

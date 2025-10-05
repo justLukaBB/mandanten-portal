@@ -18,6 +18,7 @@ import {
 import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
+import ManualCreditorManager from './ManualCreditorManager';
 
 interface UserDetailProps {
   userId: string;
@@ -1262,6 +1263,16 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </div>
           )}
         </div> */}
+        
+        {/* Manual Creditor Management Section */}
+        <div className="mt-6">
+          <ManualCreditorManager 
+            clientId={userId}
+            onCreditorAdded={fetchUserDetails}
+            onCreditorUpdated={fetchUserDetails}
+            onCreditorDeleted={fetchUserDetails}
+          />
+        </div>
         
         <div className="mt-6 flex justify-end">
           <button

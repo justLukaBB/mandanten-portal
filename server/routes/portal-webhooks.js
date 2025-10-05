@@ -3,8 +3,12 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
+const ConditionCheckService = require('../services/conditionCheckService');
 
 const router = express.Router();
+
+// Initialize Condition Check Service
+const conditionCheckService = new ConditionCheckService();
 
 // Helper function to trigger processing-complete webhook
 async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
@@ -108,6 +112,10 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
 
     await client.save();
 
+    // Check if both conditions (payment + documents) are met for 7-day review
+    const conditionCheckResult = await conditionCheckService.handleDocumentUploaded(client.id);
+    console.log(`🔍 Condition check result:`, conditionCheckResult);
+
     console.log(`✅ Document upload processed for ${client.aktenzeichen}. Total documents: ${documentsCount}`);
 
     res.json({
@@ -115,7 +123,9 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
       message: 'Document upload processed',
       client_status: client.current_status,
       documents_count: documentsCount,
-      next_step: 'Documents are being processed by AI'
+      next_step: 'Documents are being processed by AI',
+      seven_day_review_scheduled: conditionCheckResult.scheduled || false,
+      seven_day_review_date: conditionCheckResult.scheduledFor || null
     });
 
   } catch (error) {

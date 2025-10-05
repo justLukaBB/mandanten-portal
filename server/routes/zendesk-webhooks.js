@@ -5,6 +5,7 @@ const { rateLimits } = require('../middleware/security');
 const ZendeskService = require('../services/zendeskService');
 const CreditorContactService = require('../services/creditorContactService');
 const SideConversationMonitor = require('../services/sideConversationMonitor');
+const ConditionCheckService = require('../services/conditionCheckService');
 
 const router = express.Router();
 
@@ -13,6 +14,9 @@ const zendeskService = new ZendeskService();
 
 // Initialize Side Conversation Monitor
 const sideConversationMonitor = new SideConversationMonitor();
+
+// Initialize Condition Check Service
+const conditionCheckService = new ConditionCheckService();
 
 // Middleware to handle Zendesk's specific JSON format
 const parseZendeskPayload = (req, res, next) => {
@@ -383,6 +387,10 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
         { runValidators: false }
       );
     }
+    
+    // Check if both conditions (payment + documents) are met for 7-day review
+    const conditionCheckResult = await conditionCheckService.handlePaymentConfirmed(client.id);
+    console.log(`🔍 Condition check result:`, conditionCheckResult);
     
     // Check which creditors need manual review (confidence < 80%)
     const needsReview = creditors.filter(c => (c.ai_confidence || c.confidence || 0) < 0.8);
@@ -2301,6 +2309,167 @@ router.post('/monitor/check-all', rateLimits.general, async (req, res) => {
     console.error(`❌ Error in manual check: ${error.message}`);
     res.status(500).json({
       error: 'Failed to perform manual check',
+      details: error.message
+    });
+  }
+});
+
+// Zendesk Webhook: Creditor Review Ready
+// Triggered after 7-day delay when both payment and documents are uploaded
+router.post('/creditor-review-ready', parseZendeskPayload, rateLimits.general, async (req, res) => {
+  try {
+    console.log('📋 Zendesk Webhook: Creditor-Review-Ready received', req.body);
+    
+    const {
+      client_id,
+      review_type,
+      triggered_by
+    } = req.body;
+
+    if (!client_id) {
+      return res.status(400).json({
+        error: 'Missing required field: client_id'
+      });
+    }
+
+    // Find client
+    const client = await Client.findOne({ id: client_id });
+    
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: client_id
+      });
+    }
+
+    console.log(`📋 Processing creditor review for: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+    // Get documents and creditors
+    const documents = client.documents || [];
+    const creditors = client.final_creditor_list || [];
+    const creditorDocs = documents.filter(d => d.is_creditor_document === true);
+    
+    // Check which creditors need manual review (confidence < 80%)
+    const needsReview = creditors.filter(c => (c.ai_confidence || c.confidence || 0) < 0.8);
+    const confidenceOk = creditors.filter(c => (c.ai_confidence || c.confidence || 0) >= 0.8);
+    
+    // Generate review ticket content
+    const ticketSubject = `7-Day Review: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
+    const ticketBody = `## 7-Tage Überprüfung abgeschlossen
+
+**Client:** ${client.firstName} ${client.lastName}
+**Aktenzeichen:** ${client.aktenzeichen}
+**E-Mail:** ${client.email}
+
+### Status:
+- **Zahlung erhalten:** ✅ ${client.both_conditions_met_at ? new Date(client.both_conditions_met_at).toLocaleDateString('de-DE') : 'N/A'}
+- **Dokumente hochgeladen:** ${documents.length}
+- **Gläubiger-Dokumente:** ${creditorDocs.length}
+- **Extrahierte Gläubiger:** ${creditors.length}
+
+### Gläubiger-Überprüfung:
+- **Gläubiger mit hoher Konfidenz (≥80%):** ${confidenceOk.length}
+- **Gläubiger benötigen manuelle Überprüfung (<80%):** ${needsReview.length}
+
+${needsReview.length > 0 ? `### ⚠️ Manuelle Überprüfung erforderlich für:
+${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confidence || c.confidence || 0) * 100)}%)`).join('\n')}
+
+**Dashboard-Link:** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}` : '✅ Alle Gläubiger haben ausreichende Konfidenz. Keine manuelle Überprüfung erforderlich.'}
+
+### Nächste Schritte:
+1. Gläubigerliste überprüfen
+2. Ggf. manuelle Korrekturen vornehmen
+3. Client-Bestätigung anfordern
+4. Gläubiger-Kontakt initialisieren
+`;
+
+    // Create or update Zendesk ticket
+    try {
+      let ticketId = client.zendesk_ticket_id;
+      let ticketResult;
+
+      if (ticketId) {
+        // Update existing ticket
+        ticketResult = await zendeskService.updateTicket(ticketId, {
+          comment: {
+            body: ticketBody,
+            public: false
+          },
+          tags: ['7-day-review', 'creditor-review-ready', review_type === 'scheduled_7_day' ? 'automated-review' : 'manual-review'],
+          priority: needsReview.length > 0 ? 'normal' : 'low',
+          status: 'open'
+        });
+        console.log(`✅ Updated existing ticket ${ticketId} with creditor review information`);
+      } else {
+        // Create new ticket
+        ticketResult = await zendeskService.createTicket({
+          subject: ticketSubject,
+          requester_email: client.email,
+          tags: ['7-day-review', 'creditor-review-ready', review_type === 'scheduled_7_day' ? 'automated-review' : 'manual-review'],
+          priority: needsReview.length > 0 ? 'normal' : 'low',
+          type: 'task',
+          comment: {
+            body: ticketBody,
+            public: false
+          }
+        });
+        ticketId = ticketResult.id;
+        
+        // Update client with ticket ID
+        client.zendesk_ticket_id = ticketId;
+        client.zendesk_tickets.push({
+          ticket_id: ticketId,
+          ticket_type: 'glaeubieger_process',
+          ticket_scenario: '7_day_review',
+          status: 'open',
+          created_at: new Date()
+        });
+        
+        console.log(`✅ Created new ticket ${ticketId} for creditor review`);
+      }
+      
+      // Update client status
+      client.current_status = 'creditor_review';
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'creditor_review_ticket_created',
+        changed_by: 'system',
+        zendesk_ticket_id: ticketId,
+        metadata: {
+          review_type: review_type,
+          triggered_by: triggered_by,
+          needs_manual_review: needsReview.length > 0,
+          creditors_count: creditors.length,
+          documents_count: documents.length
+        }
+      });
+      
+      await client.save();
+
+    } catch (zendeskError) {
+      console.error('❌ Error creating/updating Zendesk ticket:', zendeskError);
+      // Continue anyway - ticket creation failure shouldn't break the process
+    }
+
+    res.json({
+      success: true,
+      message: 'Creditor review process initiated',
+      client_status: 'creditor_review',
+      documents_count: documents.length,
+      creditor_documents: creditorDocs.length,
+      extracted_creditors: creditors.length,
+      creditors_need_review: needsReview.length,
+      creditors_confidence_ok: confidenceOk.length,
+      manual_review_required: needsReview.length > 0,
+      review_dashboard_url: needsReview.length > 0 
+        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
+        : null
+    });
+
+  } catch (error) {
+    console.error('❌ Error in creditor-review-ready webhook:', error);
+    res.status(500).json({
+      error: 'Failed to process creditor review webhook',
       details: error.message
     });
   }
