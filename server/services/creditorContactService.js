@@ -133,11 +133,45 @@ class CreditorContactService {
             // Step 5: Record sync status
             await this.recordZendeskSync(clientReference, zendeskUser.id, 1); // Only 1 main ticket
 
-            // Step 6: Send Side Conversation emails from the main ticket
-            const sideConversationResults = await this.sendCreditorEmailsViaSideConversations(
+            // Step 6: Generate individual DOCX documents for each creditor
+            console.log(`📄 Generating individual DOCX documents for first round...`);
+            const FirstRoundDocumentGenerator = require('./firstRoundDocumentGenerator');
+            const documentGenerator = new FirstRoundDocumentGenerator();
+            
+            const documentResults = await documentGenerator.generateCreditorDocuments(
+                {
+                    name: clientData.name,
+                    reference: clientReference,
+                    address: clientData.address,
+                    birthdate: clientData.birthdate || clientData.dateOfBirth
+                },
+                creditors
+            );
+
+            if (!documentResults.success) {
+                throw new Error(`Document generation failed: ${documentResults.error}`);
+            }
+
+            console.log(`✅ Generated ${documentResults.total_generated} documents`);
+
+            // Step 7: Upload all documents to main Zendesk ticket and get download URLs
+            const uploadResults = await this.zendesk.uploadFirstRoundDocumentsToMainTicket(
+                mainTicket.id,
+                documentResults.documents
+            );
+
+            if (!uploadResults.success) {
+                throw new Error(`Document upload failed: ${uploadResults.error}`);
+            }
+
+            console.log(`✅ Uploaded ${uploadResults.uploaded_count} documents to main ticket`);
+
+            // Step 8: Send Side Conversation emails with individual document links
+            const sideConversationResults = await this.sendFirstRoundEmailsWithDocuments(
                 mainTicket.id,
                 contactRecords.filter(r => r.success),
-                clientData
+                clientData,
+                uploadResults.document_urls
             );
 
             const successfulContacts = contactRecords.filter(r => r.success);
@@ -460,6 +494,114 @@ class CreditorContactService {
             }
         }
 
+        return sideConversationResults;
+    }
+
+    /**
+     * Send first round emails with individual document links
+     */
+    async sendFirstRoundEmailsWithDocuments(mainTicketId, contactRecords, clientData, documentUrls) {
+        const sideConversationResults = [];
+
+        // Filter only creditors with email addresses
+        const emailableContacts = contactRecords.filter(contact => {
+            const fullRecord = Array.from(this.creditorContacts.values())
+                .find(c => c.id === contact.contact_id);
+            return fullRecord && fullRecord.creditor_email;
+        });
+
+        const manualContacts = contactRecords.filter(contact => {
+            const fullRecord = Array.from(this.creditorContacts.values())
+                .find(c => c.id === contact.contact_id);
+            return fullRecord && !fullRecord.creditor_email;
+        });
+
+        if (manualContacts.length > 0) {
+            console.log(`📮 ${manualContacts.length} creditors need manual contact (no email):`);
+            manualContacts.forEach((contact, index) => {
+                console.log(`   ${index + 1}. ${contact.creditor_name}`);
+            });
+        }
+
+        for (let i = 0; i < emailableContacts.length; i++) {
+            const contactInfo = emailableContacts[i];
+
+            try {
+                console.log(`📧 Creating Side Conversation ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with document...`);
+
+                // Get the full contact record for this creditor
+                const contactRecord = Array.from(this.creditorContacts.values())
+                    .find(c => c.id === contactInfo.contact_id);
+
+                if (!contactRecord) {
+                    throw new Error('Contact record not found');
+                }
+
+                // Find the document URL for this creditor
+                const documentUrl = documentUrls.find(doc => 
+                    doc.creditor_id === contactInfo.creditor_id && doc.success
+                );
+
+                if (!documentUrl) {
+                    throw new Error(`Document URL not found for creditor ${contactInfo.creditor_name}`);
+                }
+
+                // Create creditor data for the email
+                const creditorData = {
+                    creditor_name: contactRecord.creditor_name || contactRecord.sender_name,
+                    creditor_email: contactRecord.creditor_email,
+                    creditor_address: contactRecord.creditor_address || contactRecord.address,
+                    creditor_reference: contactRecord.creditor_reference || contactRecord.reference
+                };
+
+                // Send Side Conversation email with document link
+                const result = await this.zendesk.createFirstRoundSideConversationWithDocument(
+                    mainTicketId,
+                    creditorData,
+                    clientData,
+                    documentUrl.download_url
+                );
+
+                // Update contact record
+                contactRecord.contact_status = result.success ? 'email_sent_with_document' : 'failed';
+                contactRecord.email_sent_at = result.success ? new Date().toISOString() : null;
+                contactRecord.side_conversation_id = result.side_conversation_id;
+                contactRecord.document_url = result.success ? documentUrl.download_url : null;
+                contactRecord.updated_at = new Date().toISOString();
+
+                sideConversationResults.push({
+                    contact_id: contactInfo.contact_id,
+                    creditor_name: contactInfo.creditor_name,
+                    creditor_email: contactRecord.creditor_email,
+                    recipient_email: result.recipient_email,
+                    side_conversation_id: result.side_conversation_id,
+                    main_ticket_id: mainTicketId,
+                    document_filename: documentUrl.filename,
+                    document_url: documentUrl.download_url,
+                    success: result.success,
+                    error: result.error || null,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Add small delay between emails to avoid rate limiting
+                if (i < emailableContacts.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+            } catch (error) {
+                console.error(`❌ Failed to send first round email to ${contactInfo.creditor_name}:`, error.message);
+                
+                sideConversationResults.push({
+                    contact_id: contactInfo.contact_id,
+                    creditor_name: contactInfo.creditor_name,
+                    main_ticket_id: mainTicketId,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        console.log(`✅ First round emails: ${sideConversationResults.filter(r => r.success).length}/${emailableContacts.length} sent successfully`);
         return sideConversationResults;
     }
 

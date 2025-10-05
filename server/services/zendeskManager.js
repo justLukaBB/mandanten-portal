@@ -1669,6 +1669,265 @@ Datum: ${new Date().toLocaleDateString('de-DE')}
 Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schuldenbereinigungsverfahrens.
         `.trim();
     }
+    /**
+     * Upload multiple first round DOCX files to main ticket and get download URLs
+     */
+    async uploadFirstRoundDocumentsToMainTicket(ticketId, documentResults) {
+        try {
+            console.log(`📎 Uploading ${documentResults.length} first round documents to main ticket ${ticketId}...`);
+
+            const uploadResults = [];
+            const uploadTokens = [];
+
+            // Step 1: Upload all files to Zendesk
+            for (let i = 0; i < documentResults.length; i++) {
+                const doc = documentResults[i];
+                console.log(`   Uploading ${i + 1}/${documentResults.length}: ${doc.filename}`);
+
+                const uploadResult = await this.uploadFileToZendesk(doc.path, doc.filename);
+                uploadResults.push({
+                    ...uploadResult,
+                    creditor_name: doc.creditor_name,
+                    creditor_id: doc.creditor_id
+                });
+
+                if (uploadResult.success) {
+                    uploadTokens.push(uploadResult.token);
+                }
+            }
+
+            const successfulUploads = uploadResults.filter(r => r.success);
+            console.log(`✅ Successfully uploaded ${successfulUploads.length}/${documentResults.length} files`);
+
+            if (uploadTokens.length === 0) {
+                throw new Error('No files were uploaded successfully');
+            }
+
+            // Step 2: Attach files to main ticket via comment
+            const commentText = `📄 Erstschreiben für alle Gläubiger wurden generiert und hochgeladen.\n\n` +
+                `Anzahl Dokumente: ${successfulUploads.length}\n` +
+                `Zeitstempel: ${new Date().toISOString()}\n\n` +
+                `Details:\n` +
+                successfulUploads.map(upload => 
+                    `• ${upload.creditor_name}: ${upload.filename} (${Math.round(upload.size / 1024)} KB)`
+                ).join('\n');
+
+            const commentData = {
+                body: commentText,
+                uploads: uploadTokens
+            };
+
+            await this.addTicketComment(ticketId, commentData);
+            console.log(`✅ Files attached to main ticket with comment`);
+
+            // Step 3: Get download URLs with retry logic
+            const urlResults = await this.getFirstRoundDocumentUrls(ticketId, successfulUploads);
+
+            return {
+                success: true,
+                uploaded_count: successfulUploads.length,
+                failed_count: uploadResults.length - successfulUploads.length,
+                upload_results: uploadResults,
+                document_urls: urlResults
+            };
+
+        } catch (error) {
+            console.error(`❌ Error uploading first round documents: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                uploaded_count: 0,
+                document_urls: []
+            };
+        }
+    }
+
+    /**
+     * Get download URLs for first round documents with retry logic
+     */
+    async getFirstRoundDocumentUrls(ticketId, uploadResults, maxRetries = 5) {
+        console.log(`🔗 Retrieving download URLs for ${uploadResults.length} documents...`);
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`   Attempt ${attempt}/${maxRetries} to get download URLs...`);
+
+                // Get ticket comments to find attachment URLs
+                const url = `${this.apiUrl}tickets/${ticketId}/comments.json`;
+                const response = await axios.get(url, {
+                    auth: this.auth,
+                    headers: this.headers
+                });
+
+                // Find the most recent comment with attachments
+                const comments = response.data.comments;
+                const latestCommentWithAttachments = comments
+                    .reverse()
+                    .find(comment => comment.attachments && comment.attachments.length > 0);
+
+                if (!latestCommentWithAttachments) {
+                    if (attempt < maxRetries) {
+                        console.log(`   No attachments found, waiting 5 seconds before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        continue;
+                    }
+                    throw new Error('No attachments found in ticket comments');
+                }
+
+                // Map attachments to creditors
+                const documentUrls = [];
+                const attachments = latestCommentWithAttachments.attachments;
+
+                for (const upload of uploadResults) {
+                    const attachment = attachments.find(att => 
+                        att.file_name === upload.filename
+                    );
+
+                    if (attachment) {
+                        documentUrls.push({
+                            creditor_name: upload.creditor_name,
+                            creditor_id: upload.creditor_id,
+                            filename: upload.filename,
+                            download_url: attachment.content_url,
+                            file_size: attachment.size,
+                            success: true
+                        });
+                    } else {
+                        documentUrls.push({
+                            creditor_name: upload.creditor_name,
+                            creditor_id: upload.creditor_id,
+                            filename: upload.filename,
+                            success: false,
+                            error: 'Attachment not found in ticket'
+                        });
+                    }
+                }
+
+                const successfulUrls = documentUrls.filter(doc => doc.success);
+                console.log(`✅ Successfully retrieved ${successfulUrls.length}/${uploadResults.length} download URLs`);
+
+                return documentUrls;
+
+            } catch (error) {
+                console.error(`❌ Attempt ${attempt} failed: ${error.message}`);
+                if (attempt < maxRetries) {
+                    console.log(`   Waiting 5 seconds before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                } else {
+                    console.error(`❌ Failed to get download URLs after ${maxRetries} attempts`);
+                    // Return empty results for all uploads
+                    return uploadResults.map(upload => ({
+                        creditor_name: upload.creditor_name,
+                        creditor_id: upload.creditor_id,
+                        filename: upload.filename,
+                        success: false,
+                        error: `Failed to get download URL after ${maxRetries} attempts`
+                    }));
+                }
+            }
+        }
+    }
+
+    /**
+     * Create Side Conversation with first round document download link
+     */
+    async createFirstRoundSideConversationWithDocument(ticketId, creditorData, clientData, documentUrl) {
+        try {
+            const emailBody = this.generateFirstRoundEmailBody(creditorData, clientData, documentUrl);
+            const emailSubject = `Außergerichtlicher Einigungsversuch - ${creditorData.creditor_name} - Az: ${clientData.reference}`;
+            
+            // Use test email for development
+            const testEmail = 'justlukax@gmail.com';
+            
+            console.log(`📧 Creating Side Conversation for ${creditorData.creditor_name} with document...`);
+            
+            const sideConversationData = {
+                message: {
+                    to: [
+                        {
+                            email: testEmail,
+                            name: creditorData.creditor_name
+                        }
+                    ],
+                    subject: emailSubject,
+                    body: emailBody
+                }
+            };
+
+            const url = `${this.apiUrl}tickets/${ticketId}/side_conversations.json`;
+            const response = await axios.post(url, sideConversationData, {
+                auth: this.auth,
+                headers: this.headers
+            });
+
+            console.log(`✅ Side Conversation created for ${creditorData.creditor_name}`);
+            
+            return {
+                success: true,
+                side_conversation_id: response.data.side_conversation.id,
+                creditor_name: creditorData.creditor_name,
+                recipient_email: testEmail,
+                subject: emailSubject,
+                document_included: true
+            };
+
+        } catch (error) {
+            console.error(`❌ Error creating first round side conversation: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                creditor_name: creditorData.creditor_name,
+                document_included: false
+            };
+        }
+    }
+
+    /**
+     * Generate email body for first round with document download link
+     */
+    generateFirstRoundEmailBody(creditorData, clientData, documentUrl) {
+        return `
+Sehr geehrte Damen und Herren,
+
+im Auftrag unseres Mandanten ${clientData.name} führen wir einen außergerichtlichen Einigungsversuch im Rahmen der Insolvenzordnung durch.
+
+**BEIGEFÜGTES DOKUMENT:**
+
+Anbei erhalten Sie das offizielle Erstschreiben für die Forderungsabfrage.
+
+📄 [Erstschreiben herunterladen](${documentUrl})
+
+**WICHTIGE INFORMATIONEN:**
+
+• Bitte laden Sie das beigefügte Dokument herunter und lesen Sie es vollständig durch
+• Das Dokument enthält alle erforderlichen Informationen zur Forderungsabfrage
+• Antwortfrist: 14 Tage ab heute
+• Bei Fragen stehen wir Ihnen gerne zur Verfügung
+
+**NÄCHSTE SCHRITTE:**
+
+1. Dokument herunterladen und prüfen
+2. Aktuelle Forderungshöhe mitteilen (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)
+3. Kopie eventuell vorliegender Titel übersenden
+4. Sicherheiten mitteilen (falls vorhanden)
+
+Mit freundlichen Grüßen
+
+Thomas Scuric Rechtsanwälte
+Bongardstraße 33
+44787 Bochum
+
+Telefon: 0234 913681-0
+E-Mail: info@ra-scuric.de
+
+---
+Aktenzeichen: ${clientData.reference}
+Gläubiger: ${creditorData.creditor_name}
+Datum: ${new Date().toLocaleDateString('de-DE')}
+
+Diese E-Mail wurde automatisch im Rahmen des außergerichtlichen Schuldenbereinigungsverfahrens generiert.
+        `.trim();
+    }
 }
 
 module.exports = ZendeskManager;
