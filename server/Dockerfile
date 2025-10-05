@@ -19,8 +19,9 @@ RUN apt-get update && \
     fonts-noto \
     fonts-noto-cjk \
     fonts-freefont-ttf \
-    ttf-mscorefonts-installer \
-    locales && \
+    cabextract \
+    xfonts-utils \
+    default-jre && \
     rm -rf /var/lib/apt/lists/*
 
 # Generate UTF-8 locale
