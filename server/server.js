@@ -6337,13 +6337,24 @@ app.post('/api/admin/clients/:clientId/add-creditor',
     }
 
     // Find client (any client, no workflow restrictions)
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6449,13 +6460,24 @@ app.get('/api/admin/clients/:clientId/creditors',
     console.log(`📋 Admin requesting creditors for client ${clientId}`);
 
     // Find client (any client, no workflow restrictions)
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6525,13 +6547,24 @@ app.put('/api/admin/clients/:clientId/creditors/:creditorId',
     console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6624,13 +6657,24 @@ app.post('/api/admin/clients/:clientId/skip-seven-day-delay',
     console.log(`⚡ Admin skipping 7-day delay for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6730,13 +6774,24 @@ app.delete('/api/admin/clients/:clientId/creditors/:creditorId',
     console.log(`🗑️ Admin deleting creditor ${creditorId} for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
