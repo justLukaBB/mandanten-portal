@@ -22,7 +22,7 @@ When an agent checks the "erste_rate_bezahlt" checkbox on a ticket, it triggers 
 
 **Create new webhook:**
 - Name: `Mandanten Portal - Payment Confirmed`
-- Endpoint URL: `https://mandanten-portal-backend.onrender.com/api/zendesk-webhook/payment-confirmed`
+- Endpoint URL: `https://mandanten-portal-docker.onrender.com/api/zendesk-webhook/payment-confirmed`
 - Request method: `POST`
 - Request format: `JSON`
 - Authentication: `None` (handled via rate limiting)
