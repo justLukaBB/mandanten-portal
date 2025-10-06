@@ -4,7 +4,7 @@ async function restartMonitoring() {
     try {
         console.log('🔄 Attempting to restart monitoring...');
         
-        const response = await axios.post('https://mandanten-portal-backend.onrender.com/api/zendesk-webhooks/monitor/restart', {}, {
+        const response = await axios.post('https://mandanten-portal-docker.onrender.com/api/zendesk-webhooks/monitor/restart', {}, {
             timeout: 10000
         });
         

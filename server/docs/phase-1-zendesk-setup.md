@@ -24,7 +24,7 @@ When an agent uses the "Portal-Link senden" macro, it automatically creates a us
 
 **Create new webhook:**
 - Name: `Mandanten Portal - Portal Link Sent`
-- Endpoint URL: `https://mandanten-portal-backend.onrender.com/api/zendesk-webhook/portal-link-sent`
+- Endpoint URL: `https://mandanten-portal-docker.onrender.com/api/zendesk-webhook/portal-link-sent`
 - Request method: `POST`
 - Request format: `JSON`
 - Authentication: `None` (handled via rate limiting)

@@ -6,7 +6,7 @@ async function startClientMonitoring() {
     try {
         console.log(`🔄 Starting monitoring for client ${clientReference}...`);
         
-        const response = await axios.post(`https://mandanten-portal-backend.onrender.com/api/zendesk-webhooks/monitor/start-client/${clientReference}`, {
+        const response = await axios.post(`https://mandanten-portal-docker.onrender.com/api/zendesk-webhooks/monitor/start-client/${clientReference}`, {
             interval_minutes: 1
         }, {
             timeout: 10000
@@ -16,7 +16,7 @@ async function startClientMonitoring() {
         
         // Check status afterwards
         console.log('\n🔍 Checking monitoring status...');
-        const statusResponse = await axios.get('https://mandanten-portal-backend.onrender.com/api/zendesk-webhooks/monitor/status');
+        const statusResponse = await axios.get('https://mandanten-portal-docker.onrender.com/api/zendesk-webhooks/monitor/status');
         console.log('Status:', JSON.stringify(statusResponse.data, null, 2));
         
     } catch (error) {

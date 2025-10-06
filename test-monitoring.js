@@ -2,7 +2,7 @@ const axios = require('axios');
 
 // Test the monitoring system by simulating client confirmation
 async function testMonitoring() {
-    const baseUrl = 'https://mandanten-portal-backend.onrender.com';
+    const baseUrl = 'https://mandanten-portal-docker.onrender.com';
     
     try {
         console.log('🧪 Testing creditor monitoring system...');
