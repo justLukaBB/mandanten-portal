@@ -342,7 +342,37 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       
       // Send side conversation reminder instead of creating new ticket
       try {
-        if (client.zendesk_ticket_id && !client.document_reminder_sent_via_side_conversation) {
+        if (!client.document_reminder_sent_via_side_conversation) {
+          // If no ticket exists yet, create one first
+          if (!client.zendesk_ticket_id) {
+            console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
+            
+            const ticketResult = await zendeskService.createTicket({
+              subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+              requester_email: client.email,
+              tags: ['payment-confirmed', 'document-upload-needed', 'automated'],
+              priority: 'normal',
+              type: 'task',
+              comment: {
+                body: `Client has paid but needs to upload documents. Automated reminder will be sent via side conversation.`,
+                public: false
+              }
+            });
+            
+            if (ticketResult && ticketResult.id) {
+              client.zendesk_ticket_id = ticketResult.id;
+              client.zendesk_tickets = client.zendesk_tickets || [];
+              client.zendesk_tickets.push({
+                ticket_id: ticketResult.id,
+                ticket_type: 'payment_first_workflow',
+                ticket_scenario: 'document_upload_reminder',
+                status: 'open',
+                created_at: new Date()
+              });
+              
+              console.log(`✅ Created initial ticket ${ticketResult.id} for ${client.aktenzeichen}`);
+            }
+          }
           const reminderText = `Hallo ${client.firstName} ${client.lastName},
 
 vielen Dank für Ihre Zahlung! 💰
@@ -365,27 +395,45 @@ Bei Fragen stehen wir Ihnen gerne zur Verfügung.
 
 Ihr Mandanten-Portal Team`;
 
-          const sideConversationResult = await zendeskService.createSideConversation(
-            client.zendesk_ticket_id,
-            reminderText,
-            client.email,
-            `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
-          );
+          // Now send the side conversation if we have a ticket
+          if (client.zendesk_ticket_id) {
+            const sideConversationResult = await zendeskService.createSideConversation(
+              client.zendesk_ticket_id,
+              reminderText,
+              client.email,
+              `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
+            );
           
-          if (sideConversationResult && sideConversationResult.id) {
-            client.document_reminder_sent_via_side_conversation = true;
-            client.document_reminder_side_conversation_at = new Date();
-            client.document_reminder_side_conversation_id = sideConversationResult.id;
-            
-            console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+            if (sideConversationResult && sideConversationResult.id) {
+              client.document_reminder_sent_via_side_conversation = true;
+              client.document_reminder_side_conversation_at = new Date();
+              client.document_reminder_side_conversation_id = sideConversationResult.id;
+              
+              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+            } else {
+              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`);
+              throw new Error('Side conversation creation failed');
+            }
+          } else {
+            console.error(`❌ No Zendesk ticket ID available for ${client.aktenzeichen}`);
+            throw new Error('No Zendesk ticket available for side conversation');
           }
         }
       } catch (sideConversationError) {
         console.error('❌ Error sending side conversation reminder:', sideConversationError);
-        // Fall back to original behavior if side conversation fails
-        ticketType = 'document_request';
-        nextAction = 'send_document_upload_request';
+        
+        // Try to schedule automatic reminder via DocumentReminderService instead
+        console.log(`🔄 Scheduling automatic reminder for ${client.aktenzeichen} via DocumentReminderService...`);
+        
+        // Mark for automatic reminders - the DocumentReminderService will pick this up
         client.payment_ticket_type = 'document_request';
+        client.document_request_sent_at = new Date();
+        
+        // Do NOT create manual ticket - let automated system handle it
+        ticketType = 'automated_reminder_scheduled';
+        nextAction = 'automated_reminder_system_will_handle';
+        
+        console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system`);
       }
       
       client.document_request_sent_at = new Date();
