@@ -15,6 +15,7 @@ dist/
 server/.env
 server/.env.local
 server/.env.production
+server/mandanten-portal-backend-2.env
 
 # Logs
 npm-debug.log*
