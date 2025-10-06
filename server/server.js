@@ -6613,6 +6613,112 @@ app.put('/api/admin/clients/:clientId/creditors/:creditorId',
   }
 });
 
+// Admin: Skip 7-day delay and trigger immediate review (for testing)
+app.post('/api/admin/clients/:clientId/skip-seven-day-delay', 
+  rateLimits.admin,
+  authenticateAdmin,
+  async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    console.log(`⚡ Admin skipping 7-day delay for client ${clientId}`);
+
+    // Find client
+    const client = await Client.findOne({ 
+      $or: [
+        { id: clientId },
+        { aktenzeichen: clientId },
+        { _id: clientId }
+      ]
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    // Check if client has both conditions met
+    const hasPayment = client.first_payment_received === true;
+    const hasDocuments = client.documents && client.documents.length > 0;
+
+    if (!hasPayment || !hasDocuments) {
+      return res.status(400).json({
+        error: 'Cannot skip delay - both payment and documents are required',
+        has_payment: hasPayment,
+        has_documents: hasDocuments,
+        documents_count: client.documents?.length || 0
+      });
+    }
+
+    // Cancel any existing 7-day schedule
+    if (client.seven_day_review_scheduled && !client.seven_day_review_triggered) {
+      client.seven_day_review_scheduled = false;
+      client.seven_day_review_triggered = true;
+      client.seven_day_review_triggered_at = new Date();
+    }
+
+    // Mark both conditions as met
+    if (!client.both_conditions_met_at) {
+      client.both_conditions_met_at = new Date();
+    }
+
+    // Add to status history
+    client.status_history.push({
+      id: uuidv4(),
+      status: 'seven_day_delay_skipped_by_admin',
+      changed_by: 'admin',
+      metadata: {
+        admin_action: 'skip_seven_day_delay',
+        skipped_by: req.adminId || req.agentId || 'admin',
+        original_scheduled_at: client.seven_day_review_scheduled_at,
+        immediate_trigger: true,
+        reason: 'Admin testing override'
+      }
+    });
+
+    // Update status to creditor_review
+    client.current_status = 'creditor_review';
+
+    await client.save();
+
+    // Trigger immediate review process
+    const DelayedProcessingService = require('./services/delayedProcessingService');
+    const delayedService = new DelayedProcessingService();
+    
+    try {
+      await delayedService.triggerCreditorReviewProcess(client.id);
+      console.log(`✅ Immediate creditor review triggered for ${client.aktenzeichen}`);
+    } catch (reviewError) {
+      console.error('❌ Error triggering immediate review:', reviewError);
+      // Continue anyway - the status is updated
+    }
+
+    res.json({
+      success: true,
+      message: `7-day delay skipped for ${client.firstName} ${client.lastName}`,
+      client: {
+        id: client.id,
+        name: `${client.firstName} ${client.lastName}`,
+        aktenzeichen: client.aktenzeichen,
+        current_status: client.current_status,
+        both_conditions_met_at: client.both_conditions_met_at,
+        seven_day_review_triggered: client.seven_day_review_triggered
+      },
+      immediate_review_triggered: true,
+      skipped_at: new Date()
+    });
+
+  } catch (error) {
+    console.error('❌ Error skipping 7-day delay:', error);
+    res.status(500).json({
+      error: 'Failed to skip 7-day delay',
+      details: error.message
+    });
+  }
+});
+
 // Admin: Delete creditor
 app.delete('/api/admin/clients/:clientId/creditors/:creditorId', 
   rateLimits.admin,

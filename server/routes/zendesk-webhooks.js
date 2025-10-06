@@ -335,10 +335,59 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
     let ticketType, nextAction;
 
     if (!state.hasDocuments) {
-      // No documents uploaded yet
-      ticketType = 'document_request';
-      nextAction = 'send_document_upload_request';
-      client.payment_ticket_type = 'document_request';
+      // No documents uploaded yet - send side conversation reminder
+      ticketType = 'document_reminder_side_conversation';
+      nextAction = 'send_side_conversation_reminder';
+      client.payment_ticket_type = 'document_reminder_side_conversation';
+      
+      // Send side conversation reminder instead of creating new ticket
+      try {
+        if (client.zendesk_ticket_id && !client.document_reminder_sent_via_side_conversation) {
+          const reminderText = `Hallo ${client.firstName} ${client.lastName},
+
+vielen Dank für Ihre Zahlung! 💰
+
+Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
+
+📎 **Bitte laden Sie Ihre Dokumente hoch:**
+${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
+
+**Was Sie hochladen sollten:**
+- Mahnungen, Forderungsschreiben
+- Inkassobriefe  
+- Gerichtsbeschlüsse
+- Vollstreckungsbescheide
+- Sonstige Gläubigerdokumente
+
+Nach dem Upload werden Ihre Dokumente automatisch analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Ihr Mandanten-Portal Team`;
+
+          const sideConversationResult = await zendeskService.createSideConversation(
+            client.zendesk_ticket_id,
+            reminderText,
+            client.email,
+            `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
+          );
+          
+          if (sideConversationResult && sideConversationResult.id) {
+            client.document_reminder_sent_via_side_conversation = true;
+            client.document_reminder_side_conversation_at = new Date();
+            client.document_reminder_side_conversation_id = sideConversationResult.id;
+            
+            console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+          }
+        }
+      } catch (sideConversationError) {
+        console.error('❌ Error sending side conversation reminder:', sideConversationError);
+        // Fall back to original behavior if side conversation fails
+        ticketType = 'document_request';
+        nextAction = 'send_document_upload_request';
+        client.payment_ticket_type = 'document_request';
+      }
+      
       client.document_request_sent_at = new Date();
       
     } else if (!state.allProcessed) {

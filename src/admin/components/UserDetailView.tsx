@@ -115,6 +115,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [showNullplan, setShowNullplan] = useState(false);
   const [nullplanSummary, setNullplanSummary] = useState<any>(null);
   const [loadingNullplan, setLoadingNullplan] = useState(false);
+  const [skippingDelay, setSkippingDelay] = useState(false);
   
   // Financial data form state
   const [financialForm, setFinancialForm] = useState({
@@ -217,6 +218,45 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    }
+  };
+
+  const skipSevenDayDelay = async () => {
+    if (!user) return;
+    
+    if (!confirm(`⚡ 7-Day Delay Skip\n\nDies überspringt die 7-Tage-Wartezeit für ${user.firstName} ${user.lastName} (${user.aktenzeichen}) und startet sofort die Gläubiger-Überprüfung.\n\n⚠️ Nur für Testing verwenden!\n\nFortfahren?`)) {
+      return;
+    }
+    
+    setSkippingDelay(true);
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/skip-seven-day-delay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to skip delay');
+      }
+      
+      const result = await response.json();
+      console.log('✅ 7-day delay skipped:', result);
+      
+      // Refresh user data to show updated status
+      await fetchUserDetails();
+      
+      alert(`✅ 7-Tage-Wartezeit übersprungen!\n\nGläubiger-Überprüfung wurde sofort gestartet für ${user.firstName} ${user.lastName}.`);
+      
+    } catch (error: any) {
+      console.error('❌ Error skipping delay:', error);
+      alert(`Fehler beim Überspringen der Wartezeit: ${error.message}`);
+    } finally {
+      setSkippingDelay(false);
     }
   };
 
@@ -612,6 +652,28 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               userId={userId}
               className=""
             />
+            
+            {/* Skip 7-Day Delay Button (for testing) */}
+            {user.first_payment_received && user.documents?.length > 0 && (
+              <button
+                onClick={skipSevenDayDelay}
+                disabled={skippingDelay}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                title="Skip 7-day delay and trigger immediate review (Testing only)"
+              >
+                {skippingDelay ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Skipping...
+                  </>
+                ) : (
+                  <>
+                    ⚡ Skip 7-Day Delay
+                  </>
+                )}
+              </button>
+            )}
+            
             <button
               onClick={() => setShowSettlementPlan(true)}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"

@@ -268,6 +268,11 @@ const clientSchema = new mongoose.Schema({
   seven_day_review_triggered: { type: Boolean, default: false },
   seven_day_review_triggered_at: Date,
   
+  // Document reminder via side conversation
+  document_reminder_sent_via_side_conversation: { type: Boolean, default: false },
+  document_reminder_side_conversation_at: Date,
+  document_reminder_side_conversation_id: String,
+  
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },

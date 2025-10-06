@@ -92,6 +92,35 @@ class ConditionCheckService {
    */
   async handleDocumentUploaded(clientId) {
     console.log(`📄 Document uploaded for client ${clientId}, checking if both conditions are met...`);
+    
+    const client = await Client.findOne({ id: clientId });
+    if (!client) {
+      throw new Error(`Client ${clientId} not found`);
+    }
+
+    // Special case: If payment was received first and documents uploaded after reminder
+    if (client.first_payment_received && client.document_reminder_sent_via_side_conversation) {
+      console.log(`🎯 Documents uploaded after payment + reminder for ${client.aktenzeichen}. Starting 7-day delay...`);
+      
+      // Add status history for this specific scenario
+      client.status_history.push({
+        id: require('uuid').v4(),
+        status: 'documents_uploaded_after_payment_reminder',
+        changed_by: 'system',
+        metadata: {
+          payment_received_first: true,
+          reminder_sent_at: client.document_reminder_side_conversation_at,
+          documents_uploaded_at: new Date(),
+          side_conversation_id: client.document_reminder_side_conversation_id
+        }
+      });
+      
+      await client.save();
+      
+      // Now check if both conditions are met (they should be)
+      return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document_after_reminder');
+    }
+    
     return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document');
   }
 }
