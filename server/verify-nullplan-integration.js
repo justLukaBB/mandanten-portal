@@ -1,5 +1,4 @@
 
-
 const DocumentGenerator = require('./services/documentGenerator');
 
 console.log('\n🔍 Verifying Professional Nullplan Template Integration\n');

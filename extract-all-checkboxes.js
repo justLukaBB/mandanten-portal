@@ -62,7 +62,11 @@ const allCheckboxSettings = {
         outputCode += `};
 
 // VERWENDUNG:
+<<<<<<< HEAD
 // const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
+=======
+// const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+>>>>>>> origin
 // 
 // // In der fillWithRealFields Funktion:
 // Object.entries(allCheckboxSettings).forEach(([checkboxName, shouldCheck]) => {

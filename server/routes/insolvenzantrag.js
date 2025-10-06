@@ -313,7 +313,11 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
         const formData = mapClientDataToPDF(client);
 
         // 2. Generate the main Insolvenzantrag PDF with checkboxes
+<<<<<<< HEAD
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
+=======
+        const originalPdfPath = path.join(__dirname, '../../pdf-form-test/original_form.pdf');
+>>>>>>> origin
         
         // Fill form fields and apply checkboxes
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
@@ -492,7 +496,11 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
 
         // 1. Generate main Insolvenzantrag PDF
         const formData = mapClientDataToPDF(client);
+<<<<<<< HEAD
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
+=======
+        const originalPdfPath = path.join(__dirname, '../../pdf-form-test/original_form.pdf');
+>>>>>>> origin
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
 
         // 2. Generate creditor document package
