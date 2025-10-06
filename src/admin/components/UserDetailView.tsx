@@ -655,7 +655,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             />
             
             {/* Skip 7-Day Delay Button (for testing) */}
-            {user?.first_payment_received && user.documents?.length > 0 && (
+            {/* {user?.first_payment_received && user.documents?.length > 0 && (
               <button
                 onClick={skipSevenDayDelay}
                 disabled={skippingDelay}
@@ -673,7 +673,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   </>
                 )}
               </button>
-            )}
+            )} */}
             
             <button
               onClick={() => setShowSettlementPlan(true)}
