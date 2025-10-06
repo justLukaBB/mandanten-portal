@@ -138,7 +138,7 @@ async function testRealDocumentGeneration() {
         try {
             const { PDFDocument } = require('pdf-lib');
             const { convertDocxToPdf } = require('./server/services/documentConverter');
-            const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+            const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
             
             // Generate Insolvenzantrag PDF
             const formData = {
@@ -158,7 +158,7 @@ async function testRealDocumentGeneration() {
                 amtsgericht: 'Berlin'
             };
             
-            const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+            const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
             if (fs.existsSync(originalPdfPath)) {
                 const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
                 

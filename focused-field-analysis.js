@@ -10,7 +10,7 @@ async function focusedFieldAnalysis() {
     console.log('═════════════════════════════════════════════════');
     
     try {
-        const pdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const pdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const existingPdfBytes = await fs.promises.readFile(pdfPath);
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
         const form = pdfDoc.getForm();
@@ -21,7 +21,7 @@ async function focusedFieldAnalysis() {
         console.log('🔍 CHECKING CURRENT MAPPINGS AGAINST ACTUAL PDF:');
         console.log('─────────────────────────────────────────────────');
         
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         const currentMapping = QuickFieldMapper.getUpdatedFieldMapping();
         
         const workingMappings = [];

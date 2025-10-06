@@ -10,7 +10,7 @@ async function extractAllCheckboxes() {
     console.log('═══════════════════════════════════════════════════════════');
     
     try {
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const existingPdfBytes = await fs.promises.readFile(originalPdfPath);
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
         const form = pdfDoc.getForm();
@@ -62,7 +62,7 @@ const allCheckboxSettings = {
         outputCode += `};
 
 // VERWENDUNG:
-// const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+// const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
 // 
 // // In der fillWithRealFields Funktion:
 // Object.entries(allCheckboxSettings).forEach(([checkboxName, shouldCheck]) => {

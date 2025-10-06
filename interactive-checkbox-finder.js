@@ -5,7 +5,7 @@ async function interactiveCheckboxFinder() {
     try {
         console.log('🔍 Interaktive Checkbox-Suche für Familienstand...\n');
 
-        const pdfPath = './pdf-form-test/original_form.pdf';
+        const pdfPath = './server/pdf-form-test/original_form.pdf';
         const pdfBytes = await fs.readFile(pdfPath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();
@@ -73,7 +73,7 @@ async function interactiveCheckboxFinder() {
         // Also create a clean reference to manually check
         console.log('📖 MANUELLE ANLEITUNG:');
         console.log('='.repeat(80));
-        console.log('1. Öffne die Original-PDF: pdf-form-test/original_form.pdf');
+        console.log('1. Öffne die Original-PDF: server/pdf-form-test/original_form.pdf');
         console.log('2. Suche nach "Familienstand" oder "10. " (Section 10)');
         console.log('3. Schau dir die Checkbox-Optionen an:');
         console.log('   - ledig');

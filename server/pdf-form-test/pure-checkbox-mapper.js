@@ -14,7 +14,7 @@ class PureCheckboxMapper {
             const path = require('path');
             const configPath = path.resolve('./checkbox-config.js');
             delete require.cache[configPath];
-            const checkboxConfig = require('../checkbox-config');
+            const checkboxConfig = require('../../checkbox-config');
             
             const existingPdfBytes = await fs.readFile(originalPdfPath);
             const pdfDoc = await PDFDocument.load(existingPdfBytes);

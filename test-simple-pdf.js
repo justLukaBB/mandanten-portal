@@ -112,10 +112,10 @@ async function testPDFGeneration() {
         // Test 3: Test form field mapping (if original form exists)
         console.log('\n🗺️  Test 3: Form Field Mapping...');
         
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         if (fs.existsSync(originalPdfPath)) {
             try {
-                const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+                const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
                 
                 const formData = {
                     nachname: 'Mustermann',

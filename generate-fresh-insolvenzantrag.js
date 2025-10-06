@@ -12,7 +12,7 @@ async function generateFreshInsolvenzantrag() {
     
     try {
         // Import the required modules
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         const { convertDocxToPdf } = require('./server/services/documentConverter');
         
         // Step 1: Clean client data (no weird characters or numbers)
@@ -156,7 +156,7 @@ async function generateFreshInsolvenzantrag() {
         
         // Step 3: Fill PDF form
         console.log('\n📝 Step 3: Filling PDF form with clean data...');
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         console.log('✅ PDF form filled successfully');
         

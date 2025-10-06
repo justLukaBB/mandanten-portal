@@ -12,7 +12,7 @@ async function testPureConfig() {
     console.log('🎯 NUR checkbox-config.js - KEINE automatischen Überschreibungen!');
     
     try {
-        const PureCheckboxMapper = require('./pdf-form-test/pure-checkbox-mapper');
+        const PureCheckboxMapper = require('./server/pdf-form-test/pure-checkbox-mapper');
         
         // Test data
         const mockClient = {
@@ -65,7 +65,7 @@ async function testPureConfig() {
         console.log('   ✅ Was du auf false setzt = wird NICHT gecheckt');
         
         // Fill PDF
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await PureCheckboxMapper.fillWithPureConfig(formData, originalPdfPath);
         
         // Save with clear filename

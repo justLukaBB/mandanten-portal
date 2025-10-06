@@ -13,7 +13,7 @@ async function testSingleCheckbox(checkboxNumber) {
     try {
         console.log(`🔍 Testing Kontrollkästchen ${checkboxNumber}...`);
         
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const existingPdfBytes = await fs.readFileSync(originalPdfPath);
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
         const form = pdfDoc.getForm();

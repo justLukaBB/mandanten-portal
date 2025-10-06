@@ -11,7 +11,7 @@ async function testFixedIssues() {
     console.log('═══════════════════════════════════════════════════');
     
     try {
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         const { convertDocxToPdf } = require('./server/services/documentConverter');
         
         // Test data
@@ -77,7 +77,7 @@ async function testFixedIssues() {
         console.log(`   Last name: "${formData.nachname}"`);
         
         // Fill PDF
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         
         // Convert Word documents

@@ -11,7 +11,7 @@ async function testAttachmentFix() {
     console.log('════════════════════════════════════════════════════');
     
     try {
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         
         // Test data
         const mockClient = {
@@ -66,7 +66,7 @@ async function testAttachmentFix() {
         console.log('   ✗ No "Mustermann" should appear in Sonstige field');
         
         // Fill PDF
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         
         // Save with clear filename

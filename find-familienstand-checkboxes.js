@@ -3,7 +3,7 @@ const fs = require('fs').promises;
 
 async function findFamilienstandCheckboxes() {
     try {
-        const pdfPath = './pdf-form-test/original_form.pdf';
+        const pdfPath = './server/pdf-form-test/original_form.pdf';
         const pdfBytes = await fs.readFile(pdfPath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();

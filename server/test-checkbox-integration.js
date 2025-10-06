@@ -7,7 +7,7 @@ async function testCheckboxIntegration() {
     
     try {
         // Load the template PDF
-        const templatePath = '/Users/luka/Documents/Development/Mandanten-Portal/pdf-form-test/template-with-checkboxes.pdf';
+        const templatePath = '/Users/luka/Documents/Development/Mandanten-Portal/server/pdf-form-test/template-with-checkboxes.pdf';
         const pdfBytes = await fs.readFile(templatePath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();

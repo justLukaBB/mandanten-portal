@@ -7,7 +7,7 @@ async function analyzeTemplatePDF() {
     
     try {
         // Read the template PDF
-        const templatePath = '/Users/luka/Documents/Development/Mandanten-Portal/pdf-form-test/template-with-checkboxes.pdf';
+        const templatePath = path.join(__dirname, 'pdf-form-test/template-with-checkboxes.pdf');
         const pdfBytes = await fs.readFile(templatePath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();

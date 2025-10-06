@@ -5,7 +5,7 @@ async function findMaritalStatusCheckboxes() {
     try {
         console.log('🔍 Analyzing PDF for marital status checkboxes...\n');
 
-        const pdfPath = './pdf-form-test/original_form.pdf';
+        const pdfPath = './server/pdf-form-test/original_form.pdf';
         const pdfBytes = await fs.readFile(pdfPath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();

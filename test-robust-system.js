@@ -51,7 +51,7 @@ async function testRobustSystem() {
         console.log();
         
         // PDF füllen
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await RobustInsolvenzMapper.fillInsolvenzantrag(mockClient, originalPdfPath);
         
         // Speichern
