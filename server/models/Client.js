@@ -146,7 +146,7 @@ const statusHistorySchema = new mongoose.Schema({
   status: { type: String, required: true },
   changed_by: {
     type: String,
-    enum: ['system', 'agent', 'client'],
+    enum: ['system', 'agent', 'client', 'admin'],
     required: true
   },
   zendesk_ticket_id: String,
