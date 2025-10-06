@@ -15,7 +15,7 @@ async function createFinalInsolvenzantrag() {
         // Step 1: Generate the official Insolvenzantrag form
         console.log('📄 Step 1: Generating Official Insolvenzantrag Form...');
         
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         
         const formData = {
             nachname: 'Mustermann',
@@ -34,7 +34,7 @@ async function createFinalInsolvenzantrag() {
             amtsgericht: 'Berlin'
         };
         
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         console.log('✅ Official Insolvenzantrag form generated (45 pages)');
 

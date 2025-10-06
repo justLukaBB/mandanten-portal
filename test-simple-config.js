@@ -11,7 +11,7 @@ async function testSimpleConfig() {
     console.log('═══════════════════════════════════════════════════════════');
     
     try {
-        const SimpleCheckboxMapper = require('./pdf-form-test/simple-checkbox-mapper');
+        const SimpleCheckboxMapper = require('./server/pdf-form-test/simple-checkbox-mapper');
         
         // Test data
         const mockClient = {
@@ -63,7 +63,7 @@ async function testSimpleConfig() {
         console.log('   ✓ Automatische Werte für Geschlecht, Familienstand, etc.');
         
         // Fill PDF
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await SimpleCheckboxMapper.fillWithSimpleConfig(formData, originalPdfPath);
         
         // Save with clear filename

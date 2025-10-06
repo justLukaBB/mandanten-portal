@@ -3,7 +3,7 @@ const Client = require('./models/Client');
 
 async function listClients() {
     try {
-        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mandanten-portal');
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice');
 
         const clients = await Client.find({}).select('aktenzeichen firstName lastName email financial_data.completed financial_data.recommended_plan_type final_creditor_list').limit(10);
 

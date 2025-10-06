@@ -1,4 +1,4 @@
-const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
 
 async function testEmploymentFix() {
     console.log('🧪 TESTING EMPLOYMENT CHECKBOX FIX');

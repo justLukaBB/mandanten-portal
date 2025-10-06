@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // Import the field mapper to test the complete integration
 const path = require('path');
-const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
 
 async function verifyCompleteIntegration() {
     try {

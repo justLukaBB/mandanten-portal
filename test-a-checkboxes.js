@@ -4,7 +4,7 @@ const { PDFDocument } = require('pdf-lib');
 async function testACheckboxes() {
   try {
     console.log('📄 Loading PDF form...');
-    const pdfPath = './pdf-form-test/original_form.pdf';
+    const pdfPath = './server/pdf-form-test/original_form.pdf';
     const pdfBytes = fs.readFileSync(pdfPath);
 
     console.log('\n🔧 Creating test PDF with "a" suffix checkboxes (40a-60a)...');
@@ -24,9 +24,9 @@ async function testACheckboxes() {
     }
 
     const testPdfBytes = await testPdfDoc.save();
-    fs.writeFileSync('./pdf-form-test/A-SUFFIX-CHECKBOXES-40a-60a.pdf', testPdfBytes);
+    fs.writeFileSync('./server/pdf-form-test/A-SUFFIX-CHECKBOXES-40a-60a.pdf', testPdfBytes);
     console.log(`\n✅ Created test PDF with ${checkedCount} "a" suffix checkboxes marked`);
-    console.log('📂 File: ./pdf-form-test/A-SUFFIX-CHECKBOXES-40a-60a.pdf');
+    console.log('📂 File: ./server/pdf-form-test/A-SUFFIX-CHECKBOXES-40a-60a.pdf');
     console.log('\n📝 Please open this file and check Section 10 (Familienstand)!');
 
   } catch (error) {

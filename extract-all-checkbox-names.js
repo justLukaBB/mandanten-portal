@@ -4,7 +4,7 @@ const { PDFDocument } = require('pdf-lib');
 async function extractAllCheckboxNames() {
   try {
     console.log('📄 Loading PDF form...');
-    const pdfPath = './pdf-form-test/original_form.pdf';
+    const pdfPath = './server/pdf-form-test/original_form.pdf';
     const pdfBytes = fs.readFileSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes);
     const form = pdfDoc.getForm();
@@ -59,8 +59,8 @@ async function extractAllCheckboxNames() {
     }
 
     const testPdfBytes = await testPdfDoc.save();
-    fs.writeFileSync('./pdf-form-test/ALL-CHECKBOXES-40-70-MARKED.pdf', testPdfBytes);
-    console.log(`\n✅ Created test PDF with ${checkedCount} checkboxes marked: ./pdf-form-test/ALL-CHECKBOXES-40-70-MARKED.pdf`);
+    fs.writeFileSync('./server/pdf-form-test/ALL-CHECKBOXES-40-70-MARKED.pdf', testPdfBytes);
+    console.log(`\n✅ Created test PDF with ${checkedCount} checkboxes marked: ./server/pdf-form-test/ALL-CHECKBOXES-40-70-MARKED.pdf`);
     console.log('\n📝 Please open this file and look at Section 10 (Familienstand) to see which checkboxes appear!');
 
   } catch (error) {

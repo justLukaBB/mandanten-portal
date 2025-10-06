@@ -55,7 +55,7 @@ async function testInsolvenzantragGeneration() {
     
     try {
         // Import the required modules
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         const { convertDocxToPdf } = require('./server/services/documentConverter');
         const { PDFDocument } = require('pdf-lib');
         const fs = require('fs');
@@ -138,7 +138,7 @@ async function testInsolvenzantragGeneration() {
         console.log('   💳 Total Debt:', formData.gesamtschuldensumme, '€');
         
         console.log('\n📄 Step 2: Filling PDF form with client data...');
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         console.log('✅ PDF form filled successfully');
         

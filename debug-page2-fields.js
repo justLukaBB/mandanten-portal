@@ -10,7 +10,7 @@ async function debugPage2Fields() {
     console.log('════════════════════════════════════════════════════════');
     
     try {
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         
         // Test data
         const testFormData = {
@@ -52,7 +52,7 @@ async function debugPage2Fields() {
         console.log('\n📝 Let me fill a test form and show what we\'re setting:');
         
         // Create a simple test to see what values we're actually setting
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const existingPdfBytes = await fs.promises.readFile(originalPdfPath);
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
         const form = pdfDoc.getForm();

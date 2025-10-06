@@ -11,7 +11,7 @@ async function testCheckboxFix() {
     console.log('════════════════════════════════════════════');
     
     try {
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         
         // Simple test data
         const mockClient = {
@@ -66,7 +66,7 @@ async function testCheckboxFix() {
         console.log(`   City: "${formData.ort}"`);
         
         // Fill PDF - focus on just the main form
-        const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+        const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
         
         // Save just the main form for testing

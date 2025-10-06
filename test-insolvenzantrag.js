@@ -134,10 +134,10 @@ async function testInsolvenzantragGeneration() {
         // Step 4: Test the field mapping
         console.log('\n🗺️  Step 4: Testing field mapping...');
         
-        const QuickFieldMapper = require('./pdf-form-test/quick-field-mapper');
+        const QuickFieldMapper = require('./server/pdf-form-test/quick-field-mapper');
         
         try {
-            const originalPdfPath = path.join(__dirname, 'pdf-form-test/original_form.pdf');
+            const originalPdfPath = path.join(__dirname, 'server/pdf-form-test/original_form.pdf');
             if (fs.existsSync(originalPdfPath)) {
                 console.log('📋 Testing QuickFieldMapper with original form...');
                 const filledPdfBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);

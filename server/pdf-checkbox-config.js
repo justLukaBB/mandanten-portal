@@ -1,5 +1,5 @@
 // Auto-generated PDF checkbox configuration
-// Generated from: /Users/luka/Documents/Development/Mandanten-Portal/pdf-form-test/template-with-checkboxes.pdf
+// Generated from: server/pdf-form-test/template-with-checkboxes.pdf
 // Generated on: 2025-09-29T15:16:39.273Z
 
 module.exports = {
