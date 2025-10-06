@@ -191,6 +191,7 @@ const ManualCreditorManager: React.FC<Props> = ({
   };
 
   const handleDelete = async (creditorId: string, creditorName: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm(`Möchten Sie den Gläubiger "${creditorName}" wirklich löschen?`)) {
       return;
     }

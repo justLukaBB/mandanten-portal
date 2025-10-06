@@ -224,6 +224,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const skipSevenDayDelay = async () => {
     if (!user) return;
     
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm(`⚡ 7-Day Delay Skip\n\nDies überspringt die 7-Tage-Wartezeit für ${user.firstName} ${user.lastName} (${user.aktenzeichen}) und startet sofort die Gläubiger-Überprüfung.\n\n⚠️ Nur für Testing verwenden!\n\nFortfahren?`)) {
       return;
     }
