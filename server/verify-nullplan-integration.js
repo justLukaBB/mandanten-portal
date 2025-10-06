@@ -1,6 +1,4 @@
-/**
- * Verify Professional Nullplan Template Integration
- */
+
 
 const DocumentGenerator = require('./services/documentGenerator');
 
