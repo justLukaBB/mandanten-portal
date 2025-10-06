@@ -655,7 +655,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             />
             
             {/* Skip 7-Day Delay Button (for testing) */}
-            {user.first_payment_received && user.documents?.length > 0 && (
+            {user?.first_payment_received && user.documents?.length > 0 && (
               <button
                 onClick={skipSevenDayDelay}
                 disabled={skippingDelay}
@@ -786,7 +786,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   <p className="text-gray-900">{new Date(user.last_login).toLocaleDateString('de-DE')}</p>
                 </div>
               )}
-              {user.zendesk_ticket_id && (
+              {user?.zendesk_ticket_id && (
                 <div>
                   <label className="text-sm font-medium text-gray-600">Zendesk Ticket</label>
                   <p className="text-gray-900 font-mono">{user.zendesk_ticket_id}</p>
@@ -802,8 +802,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {user.documents && user.documents.length > 0 ? (
-                user.documents.map((doc) => {
+              {user?.documents && user?.documents?.length > 0 ? (
+                user?.documents?.map((doc) => {
                   const statusInfo = getDocumentStatusInfo(doc);
                   return (
                     <div key={doc.id} className="border border-gray-200 rounded-lg p-3">
@@ -826,7 +826,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             )}
 
                             {/* Creditor Information - only show for creditor documents or manual review */}
-                            {statusInfo.showCreditorInfo && doc.extracted_data?.creditor_data && (
+                            {statusInfo?.showCreditorInfo && doc.extracted_data?.creditor_data && (
                               <div className="mt-2 p-2 bg-red-50 rounded text-xs border border-red-200">
                                 <div className="space-y-1">
                                   {doc.extracted_data.creditor_data.sender_name && (
