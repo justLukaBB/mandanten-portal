@@ -606,6 +606,12 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     }
 
     console.log(`📋 Processing payment confirmation for: ${client.firstName} ${client.lastName}`);
+    
+    // Ensure client has email address - use from webhook if missing
+    if (!client.email && requester_email) {
+      console.log(`📧 Updating client email from webhook: ${requester_email}`);
+      client.email = requester_email;
+    }
 
     // Check if payment was already confirmed to prevent duplicate processing
     if (client.first_payment_received && client.payment_processed_at) {
@@ -790,7 +796,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
             
             const ticketResult = await zendeskService.createTicket({
               subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-              requester_email: client.email,
+              requester_email: client.email || requester_email,
               tags: ['payment-confirmed', 'document-upload-needed', 'automated'],
               priority: 'normal',
               type: 'task',
@@ -840,11 +846,22 @@ Ihr Mandanten-Portal Team`;
 
           // Now send the side conversation if we have a ticket
           if (ticketIdForSideConversation) {
+            const clientEmail = client.email || requester_email;
+            if (!clientEmail) {
+              throw new Error(`No email address available for client ${client.aktenzeichen}`);
+            }
+            
+            console.log(`📧 Creating Side Conversation on ticket ${ticketIdForSideConversation} to send email to ${clientEmail}...`);
+            
             const sideConversationResult = await zendeskService.createSideConversation(
               ticketIdForSideConversation,
-              reminderText,
-              client.email,
-              `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
+              {
+                recipientEmail: clientEmail,
+                recipientName: `${client.firstName} ${client.lastName}`,
+                subject: `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`,
+                body: reminderText,
+                internalNote: false
+              }
             );
           
             if (sideConversationResult && sideConversationResult.id) {
