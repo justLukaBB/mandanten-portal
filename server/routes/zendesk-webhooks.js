@@ -774,14 +774,111 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     let ticketType, ticketContent, nextAction, tags;
 
     if (!state.hasDocuments) {
-      // SCENARIO 2: No documents uploaded yet
-      ticketType = 'document_request';
-      ticketContent = generateDocumentRequestTicket(client);
-      nextAction = 'send_document_upload_request';
-      tags = ['payment-confirmed', 'document-request', 'awaiting-documents'];
+      // SCENARIO 2: No documents uploaded yet - send automatic side conversation reminder
+      ticketType = 'document_reminder_side_conversation';
+      nextAction = 'send_side_conversation_reminder';
+      client.payment_ticket_type = 'document_reminder_side_conversation';
       
-      // Track document request
-      client.payment_ticket_type = 'document_request';
+      // Send side conversation reminder instead of creating manual ticket
+      try {
+        if (!client.document_reminder_sent_via_side_conversation) {
+          // If no ticket exists yet, use the current one or create connection
+          let ticketIdForSideConversation = zendesk_ticket_id || client.zendesk_ticket_id;
+          
+          if (!ticketIdForSideConversation) {
+            console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
+            
+            const ticketResult = await zendeskService.createTicket({
+              subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+              requester_email: client.email,
+              tags: ['payment-confirmed', 'document-upload-needed', 'automated'],
+              priority: 'normal',
+              type: 'task',
+              comment: {
+                body: `Client has paid but needs to upload documents. Automated reminder will be sent via side conversation.`,
+                public: false
+              }
+            });
+            
+            if (ticketResult && ticketResult.id) {
+              client.zendesk_ticket_id = ticketResult.id;
+              client.zendesk_tickets = client.zendesk_tickets || [];
+              client.zendesk_tickets.push({
+                ticket_id: ticketResult.id,
+                ticket_type: 'payment_first_workflow',
+                ticket_scenario: 'document_upload_reminder',
+                status: 'open',
+                created_at: new Date()
+              });
+              
+              ticketIdForSideConversation = ticketResult.id;
+              console.log(`✅ Created initial ticket ${ticketResult.id} for ${client.aktenzeichen}`);
+            }
+          }
+
+          const reminderText = `Hallo ${client.firstName} ${client.lastName},
+
+vielen Dank für Ihre Zahlung! 💰
+
+Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
+
+📎 **Bitte laden Sie Ihre Dokumente hoch:**
+${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
+
+**Was Sie hochladen sollten:**
+- Mahnungen, Forderungsschreiben
+- Inkassobriefe  
+- Gerichtsbeschlüsse
+- Vollstreckungsbescheide
+- Sonstige Gläubigerdokumente
+
+Nach dem Upload werden Ihre Dokumente automatisch analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Ihr Mandanten-Portal Team`;
+
+          // Now send the side conversation if we have a ticket
+          if (ticketIdForSideConversation) {
+            const sideConversationResult = await zendeskService.createSideConversation(
+              ticketIdForSideConversation,
+              reminderText,
+              client.email,
+              `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
+            );
+          
+            if (sideConversationResult && sideConversationResult.id) {
+              client.document_reminder_sent_via_side_conversation = true;
+              client.document_reminder_side_conversation_at = new Date();
+              client.document_reminder_side_conversation_id = sideConversationResult.id;
+              
+              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+            } else {
+              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`);
+              throw new Error('Side conversation creation failed');
+            }
+          } else {
+            console.error(`❌ No Zendesk ticket ID available for ${client.aktenzeichen}`);
+            throw new Error('No Zendesk ticket available for side conversation');
+          }
+        }
+      } catch (sideConversationError) {
+        console.error('❌ Error sending side conversation reminder:', sideConversationError);
+        
+        // Try to schedule automatic reminder via DocumentReminderService instead
+        console.log(`🔄 Scheduling automatic reminder for ${client.aktenzeichen} via DocumentReminderService...`);
+        
+        // Mark for automatic reminders - the DocumentReminderService will pick this up
+        client.payment_ticket_type = 'document_request';
+        client.document_request_sent_at = new Date();
+        
+        // Do NOT create manual ticket - let automated system handle it
+        ticketType = 'automated_reminder_scheduled';
+        nextAction = 'automated_reminder_system_will_handle';
+        
+        console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system`);
+      }
+      
       client.document_request_sent_at = new Date();
       
     } else if (!state.allProcessed) {
@@ -841,13 +938,17 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       );
     }
 
-    // AUTOMATICALLY CREATE ZENDESK TICKET
+    // CONDITIONALLY CREATE ZENDESK TICKET (not for document reminder scenarios)
     let zendeskTicket = null;
     let ticketCreationError = null;
 
-    if (zendeskService.isConfigured()) {
+    // Skip automatic ticket creation for automated reminder scenarios
+    const skipTicketCreation = ticketType === 'document_reminder_side_conversation' || 
+                               ticketType === 'automated_reminder_scheduled';
+
+    if (zendeskService.isConfigured() && !skipTicketCreation) {
       try {
-        console.log('🎫 Creating automatic Zendesk ticket...');
+        console.log(`🎫 Creating automatic Zendesk ticket for scenario: ${ticketType}...`);
         
         zendeskTicket = await zendeskService.createTicket({
           subject: generateTicketSubject(client, ticketType),
@@ -917,28 +1018,9 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           
           console.log(`✅ Zendesk ticket created: ${zendeskTicket.ticket_id}`);
           
-          // DO NOT AUTO-SEND CLIENT EMAILS - Agent must approve first
-          if (ticketType === 'document_request') {
-            console.log(`ℹ️ Document request payment confirmed for ${client.aktenzeichen} - waiting for agent to approve document request email`);
-            
-            // Add note to ticket that agent action is required
-            try {
-              await zendeskService.addInternalComment(zendeskTicket.ticket_id, {
-                content: `💰 **PAYMENT CONFIRMED - AGENT ACTION REQUIRED**
-
-✅ First payment received for document request
-📧 **NEXT STEP:** Agent must review and send document request email
-
-🔗 **Agent Action Required:** Send document request email to client after review
-📋 **Client:** ${client.firstName} ${client.lastName} (${client.email})
-💼 **Aktenzeichen:** ${client.aktenzeichen}
-
-**Manual Action:** Use "Dokumentenanfrage senden" button to send document request email after review.`,
-                status: 'open'
-              });
-            } catch (commentError) {
-              console.error('❌ Failed to add agent action note:', commentError.message);
-            }
+          // Only manual actions for non-document scenarios
+          if (ticketType === 'manual_review' || ticketType === 'no_creditors_found') {
+            console.log(`ℹ️ ${ticketType} payment confirmed for ${client.aktenzeichen} - agent review required`);
           }
           
           // MARK AS READY FOR AGENT REVIEW (even for auto-approved scenarios)
