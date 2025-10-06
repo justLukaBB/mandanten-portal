@@ -77,6 +77,10 @@ class FirstRoundDocumentGenerator {
             const doc = new Docxtemplater(zip, {
                 paragraphLoop: true,
                 linebreaks: true,
+                delimiters: {
+                    start: '"',
+                    end: '"'
+                }
             });
 
             // Prepare the data for replacement
