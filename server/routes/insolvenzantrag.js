@@ -568,6 +568,8 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         const formData = mapClientDataToPDF(client);
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
+        // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
+        let mergedPdfBytes = await injectCreditorsIntoAnlage6(insolvenzantragBytes, client, req.query);
 
         // 2. Generate creditor document package
         let creditorPackageBytes = null;
@@ -630,7 +632,7 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         const finalPdf = await PDFDocument.create();
         
         // Add main Insolvenzantrag
-        const mainDoc = await PDFDocument.load(insolvenzantragBytes);
+        const mainDoc = await PDFDocument.load(mergedPdfBytes);
         const mainPages = await finalPdf.copyPages(mainDoc, mainDoc.getPageIndices());
         mainPages.forEach(page => finalPdf.addPage(page));
         
