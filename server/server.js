@@ -1636,8 +1636,8 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
     client.seven_day_review_triggered_at = new Date();
     client.current_status = 'creditor_review';
     
-    // Add to status history
-    client.status_history.push({
+    // Prepare status history entry
+    const statusHistoryEntry = {
       id: require('uuid').v4(),
       status: 'seven_day_review_manually_triggered',
       changed_by: 'admin',
@@ -1649,9 +1649,22 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
           ? Math.ceil((new Date(client.seven_day_review_scheduled_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
           : 0
       }
-    });
+    };
 
-    await client.save();
+    // Use direct update to avoid document validation issues
+    await Client.updateOne(
+      { _id: client._id },
+      {
+        $set: {
+          seven_day_review_triggered: true,
+          seven_day_review_triggered_at: new Date(),
+          current_status: 'creditor_review'
+        },
+        $push: {
+          status_history: statusHistoryEntry
+        }
+      }
+    );
     
     // Trigger the creditor review process
     const result = await delayedService.triggerCreditorReviewProcess(client.id);
