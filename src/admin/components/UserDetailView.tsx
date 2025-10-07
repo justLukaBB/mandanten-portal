@@ -19,6 +19,7 @@ import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 import ManualCreditorManager from './ManualCreditorManager';
+import SevenDayReviewTrigger from './SevenDayReviewTrigger';
 
 interface UserDetailProps {
   userId: string;
@@ -1334,6 +1335,18 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             onCreditorAdded={fetchUserDetails}
             onCreditorUpdated={fetchUserDetails}
             onCreditorDeleted={fetchUserDetails}
+          />
+        </div>
+
+        {/* Seven Day Review Trigger Section */}
+        <div className="mt-6">
+          <SevenDayReviewTrigger
+            clientId={userId}
+            clientName={`${user.firstName} ${user.lastName}`}
+            sevenDayReviewScheduled={user.seven_day_review_scheduled || false}
+            sevenDayReviewTriggered={user.seven_day_review_triggered || false}
+            scheduledAt={user.seven_day_review_scheduled_at}
+            onTriggerSuccess={fetchUserDetails}
           />
         </div>
         

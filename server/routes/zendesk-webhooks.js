@@ -383,20 +383,24 @@ vielen Dank für Ihre Zahlung! 💰
 Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
 
 📎 **Bitte laden Sie Ihre Dokumente hoch:**
+
 ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
 
 **Was Sie hochladen sollten:**
+
 - Mahnungen, Forderungsschreiben
-- Inkassobriefe  
+- Inkassobriefe
 - Gerichtsbeschlüsse
 - Vollstreckungsbescheide
 - Sonstige Gläubigerdokumente
 
-Nach dem Upload werden Ihre Dokumente automatisch analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
+Nach dem Upload werden Ihre Dokumente analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
 
 Bei Fragen stehen wir Ihnen gerne zur Verfügung.
 
-Ihr Mandanten-Portal Team`;
+Ihr Team von der Rechtsanwaltskanzlei 
+
+Thomas Scuric`;
 
           // Now send the side conversation if we have a ticket
           if (client.zendesk_ticket_id) {
@@ -832,20 +836,24 @@ vielen Dank für Ihre Zahlung! 💰
 Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
 
 📎 **Bitte laden Sie Ihre Dokumente hoch:**
+
 ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
 
 **Was Sie hochladen sollten:**
+
 - Mahnungen, Forderungsschreiben
-- Inkassobriefe  
+- Inkassobriefe
 - Gerichtsbeschlüsse
 - Vollstreckungsbescheide
 - Sonstige Gläubigerdokumente
 
-Nach dem Upload werden Ihre Dokumente automatisch analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
+Nach dem Upload werden Ihre Dokumente analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
 
 Bei Fragen stehen wir Ihnen gerne zur Verfügung.
 
-Ihr Mandanten-Portal Team`;
+Ihr Team von der Rechtsanwaltskanzlei 
+
+Thomas Scuric`;
 
           // Now send the side conversation if we have a ticket
           if (ticketIdForSideConversation) {
