@@ -2602,10 +2602,45 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
 4. Gläubiger-Kontakt initialisieren
 `;
 
-    // Create or update Zendesk ticket
-    try {
-      let ticketId = client.zendesk_ticket_id;
-      let ticketResult;
+    // Check Zendesk configuration before creating ticket
+    const zendeskDomain = process.env.ZENDESK_DOMAIN || process.env.ZENDESK_SUBDOMAIN;
+    const zendeskEmail = process.env.ZENDESK_API_EMAIL || process.env.ZENDESK_EMAIL;
+    const zendeskToken = process.env.ZENDESK_API_TOKEN || process.env.ZENDESK_TOKEN;
+    
+    if (!zendeskDomain || !zendeskEmail || !zendeskToken) {
+      console.warn('⚠️ Zendesk service not configured - skipping ticket creation', {
+        hasDomain: !!zendeskDomain,
+        hasEmail: !!zendeskEmail,
+        hasToken: !!zendeskToken
+      });
+      
+      // Still update client status without ticket
+      await Client.updateOne(
+        { _id: client._id },
+        {
+          $set: { current_status: 'creditor_review' },
+          $push: {
+            status_history: {
+              id: uuidv4(),
+              status: 'creditor_review_initiated_no_zendesk',
+              changed_by: 'system',
+              metadata: {
+                review_type: review_type,
+                triggered_by: triggered_by,
+                needs_manual_review: needsReview.length > 0,
+                creditors_count: creditors.length,
+                documents_count: documents.length,
+                zendesk_error: 'Configuration missing'
+              }
+            }
+          }
+        }
+      );
+    } else {
+      // Create or update Zendesk ticket
+      try {
+        let ticketId = client.zendesk_ticket_id;
+        let ticketResult;
 
       if (ticketId) {
         // Update existing ticket
@@ -2623,14 +2658,11 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
         // Create new ticket
         ticketResult = await zendeskService.createTicket({
           subject: ticketSubject,
-          requester_email: client.email,
+          content: ticketBody,
+          requesterEmail: client.email,
           tags: ['7-day-review', 'creditor-review-ready', review_type === 'scheduled_7_day' ? 'automated-review' : 'manual-review'],
           priority: needsReview.length > 0 ? 'normal' : 'low',
-          type: 'task',
-          comment: {
-            body: ticketBody,
-            public: false
-          }
+          type: 'task'
         });
         ticketId = ticketResult.id;
         console.log(`✅ Created new ticket ${ticketId} for creditor review`);
@@ -2672,9 +2704,19 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
         }
       );
 
-    } catch (zendeskError) {
-      console.error('❌ Error creating/updating Zendesk ticket:', zendeskError);
-      // Continue anyway - ticket creation failure shouldn't break the process
+      } catch (zendeskError) {
+        console.error('❌ Error creating/updating Zendesk ticket:', {
+          message: zendeskError.message,
+          response: zendeskError.response?.data,
+          status: zendeskError.response?.status,
+          config: {
+            domain: process.env.ZENDESK_DOMAIN || process.env.ZENDESK_SUBDOMAIN,
+            email: process.env.ZENDESK_API_EMAIL || process.env.ZENDESK_EMAIL,
+            hasToken: !!(process.env.ZENDESK_API_TOKEN || process.env.ZENDESK_TOKEN)
+          }
+        });
+        // Continue anyway - ticket creation failure shouldn't break the process
+      }
     }
 
     res.json({
