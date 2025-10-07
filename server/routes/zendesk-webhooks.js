@@ -72,7 +72,7 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
       lastName = nameParts.slice(1).join(' ') || '';
       
       console.log('📋 Parsed Zendesk webhook data:', {
-        email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id
+        email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id, address, geburtstag
       });
     } else {
       // Direct format (for backward compatibility)
@@ -118,6 +118,10 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
           updated_at: new Date()
         };
         
+        // Update address and geburtstag if provided
+        if (address) updateData.address = address;
+        if (geburtstag) updateData.geburtstag = geburtstag;
+        
         // Update with $push and $set to avoid document array validation
         const updatedClient = await Client.findOneAndUpdate(
         { _id: client._id },
@@ -162,6 +166,8 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
         client.portal_link_sent_at = new Date();
         client.current_status = 'portal_access_sent';
         client.updated_at = new Date();
+        if (address) client.address = address;
+        if (geburtstag) client.geburtstag = geburtstag;
         
         // Save without validation for documents
         await client.save({ validateModifiedOnly: true });
@@ -241,6 +247,8 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
       lastName: client.lastName,
       email: client.email,
       aktenzeichen: client.aktenzeichen,
+      address: client.address,
+      geburtstag: client.geburtstag,
       current_status: client.current_status,
       created_at: client.created_at,
       updated_at: client.updated_at
