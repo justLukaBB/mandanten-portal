@@ -346,114 +346,52 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
     let ticketType, nextAction;
 
     if (!state.hasDocuments) {
-      // No documents uploaded yet - send side conversation reminder
-      ticketType = 'document_reminder_side_conversation';
-      nextAction = 'send_side_conversation_reminder';
-      client.payment_ticket_type = 'document_reminder_side_conversation';
+      // No documents uploaded yet - mark for reminder service to handle
+      ticketType = 'document_request';
+      nextAction = 'wait_for_document_upload';
+      client.payment_ticket_type = 'document_request';
+      client.document_request_sent_at = new Date();
       
-      // Send side conversation reminder instead of creating new ticket
-      try {
-        if (!client.document_reminder_sent_via_side_conversation) {
-          // If no ticket exists yet, create one first
-          if (!client.zendesk_ticket_id) {
-            console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
-            
-            const ticketResult = await zendeskService.createTicket({
-              subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-              requester_email: client.email,
-              tags: ['payment-confirmed', 'document-upload-needed', 'automated'],
-              priority: 'normal',
-              type: 'task',
-              comment: {
-                body: `Client has paid but needs to upload documents. Automated reminder will be sent via side conversation.`,
-                public: false
-              }
-            });
-            
-            if (ticketResult && ticketResult.id) {
-              client.zendesk_ticket_id = ticketResult.id;
-              client.zendesk_tickets = client.zendesk_tickets || [];
-              client.zendesk_tickets.push({
-                ticket_id: ticketResult.id,
-                ticket_type: 'payment_first_workflow',
-                ticket_scenario: 'document_upload_reminder',
-                status: 'open',
-                created_at: new Date()
-              });
-              
-              console.log(`✅ Created initial ticket ${ticketResult.id} for ${client.aktenzeichen}`);
-            }
-          }
-          const reminderText = `Hallo ${client.firstName} ${client.lastName},
-
-vielen Dank für Ihre Zahlung! 💰
-
-Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
-
-📎 **Bitte laden Sie Ihre Dokumente hoch:**
-
-${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
-
-**Was Sie hochladen sollten:**
-
-- Mahnungen, Forderungsschreiben
-- Inkassobriefe
-- Gerichtsbeschlüsse
-- Vollstreckungsbescheide
-- Sonstige Gläubigerdokumente
-
-Nach dem Upload werden Ihre Dokumente analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
-
-Bei Fragen stehen wir Ihnen gerne zur Verfügung.
-
-Ihr Team von der Rechtsanwaltskanzlei 
-
-Thomas Scuric`;
-
-          // Now send the side conversation if we have a ticket
-          if (client.zendesk_ticket_id) {
-            const sideConversationResult = await zendeskService.createSideConversation(
-              client.zendesk_ticket_id,
-              {
-                recipientEmail: client.email,
-                recipientName: `${client.firstName} ${client.lastName}`,
-                subject: `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`,
-                body: reminderText,
-                internalNote: false
-              }
-            );
+      // Create ticket to track but DO NOT send immediate reminder for user-payment-confirmed
+      // The user-payment-confirmed should use DocumentReminderService, not immediate reminders
+      console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
+      
+      if (!client.zendesk_ticket_id) {
+        const ticketResult = await zendeskService.createTicket({
+          subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+          content: `Client has paid but needs to upload documents. DocumentReminderService will handle automated reminders after 2 days.`,
+          requesterEmail: client.email,
+          tags: ['payment-confirmed', 'document-upload-needed', 'automated-reminders'],
+          priority: 'normal',
+          type: 'task'
+        });
+        
+        if (ticketResult && ticketResult.success && ticketResult.ticket_id) {
+          client.zendesk_ticket_id = ticketResult.ticket_id;
+          client.zendesk_tickets = client.zendesk_tickets || [];
+          client.zendesk_tickets.push({
+            ticket_id: ticketResult.ticket_id,
+            ticket_type: 'payment_first_workflow',
+            ticket_scenario: 'document_upload_reminder',
+            status: 'open',
+            created_at: new Date()
+          });
           
-            if (sideConversationResult && sideConversationResult.success && sideConversationResult.side_conversation_id) {
-              client.document_reminder_sent_via_side_conversation = true;
-              client.document_reminder_side_conversation_at = new Date();
-              client.document_reminder_side_conversation_id = sideConversationResult.side_conversation_id;
-              
-              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.side_conversation_id} for ${client.aktenzeichen}`);
-            } else {
-              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`, sideConversationResult);
-              throw new Error('Side conversation creation failed');
-            }
-          } else {
-            console.error(`❌ No Zendesk ticket ID available for ${client.aktenzeichen}`);
-            throw new Error('No Zendesk ticket available for side conversation');
-          }
+          console.log(`✅ Created initial ticket ${ticketResult.ticket_id} for ${client.aktenzeichen}`);
         }
-      } catch (sideConversationError) {
-        console.error('❌ Error sending side conversation reminder:', sideConversationError);
-        
-        // Try to schedule automatic reminder via DocumentReminderService instead
-        console.log(`🔄 Scheduling automatic reminder for ${client.aktenzeichen} via DocumentReminderService...`);
-        
-        // Mark for automatic reminders - the DocumentReminderService will pick this up
-        client.payment_ticket_type = 'document_request';
-        client.document_request_sent_at = new Date();
-        
-        // Do NOT create manual ticket - let automated system handle it
-        ticketType = 'automated_reminder_scheduled';
-        nextAction = 'automated_reminder_system_will_handle';
-        
-        console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system`);
       }
+      
+      // Schedule for automated reminders - DocumentReminderService will handle
+      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
+      
+      // Mark for automatic reminders - the DocumentReminderService will pick this up
+      client.payment_ticket_type = 'document_request';
+      client.document_request_sent_at = new Date();
+      
+      ticketType = 'automated_reminder_scheduled';
+      nextAction = 'automated_reminder_system_will_handle';
+      
+      console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system - no immediate reminder sent`);
       
       client.document_request_sent_at = new Date();
       
@@ -2664,8 +2602,13 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
           priority: needsReview.length > 0 ? 'normal' : 'low',
           type: 'task'
         });
-        ticketId = ticketResult.id;
-        console.log(`✅ Created new ticket ${ticketId} for creditor review`);
+        
+        if (ticketResult.success && ticketResult.ticket_id) {
+          ticketId = ticketResult.ticket_id;
+          console.log(`✅ Created new ticket ${ticketId} for creditor review`);
+        } else {
+          throw new Error(`Failed to create creditor review ticket: ${ticketResult.error || 'Unknown error'}`);
+        }
       }
       
       // Prepare status history entry
