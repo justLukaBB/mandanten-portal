@@ -152,7 +152,8 @@ class FirstRoundDocumentGenerator {
                 creditor.sender_name || 
                 "Unbekannter Gläubiger",
             
-            "Aktenzeichen des Credtiors": creditor.creditor_reference || 
+            "Aktenzeichen des Credtiors": creditor.reference_number ||
+                creditor.creditor_reference || 
                 creditor.reference || 
                 creditor.aktenzeichen || 
                 "Nicht verfügbar",
