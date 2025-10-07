@@ -48,7 +48,9 @@ class CreditorContactService {
                     name: `${client.firstName} ${client.lastName}`,
                     email: client.email,
                     phone: client.phone || '',
-                    address: client.address || ''
+                    address: client.address || '',
+                    birthdate: client.geburtstag || '',
+                    dateOfBirth: client.geburtstag || ''
                 };
             }
 

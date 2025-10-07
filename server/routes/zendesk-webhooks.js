@@ -51,7 +51,7 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
     console.log('🔗 Zendesk Webhook: Portal-Link-Sent received', req.body);
     
     // Handle both direct format and Zendesk webhook format
-    let email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id, phone, address;
+    let email, aktenzeichen, firstName, lastName, zendesk_ticket_id, zendesk_user_id, phone, address, geburtstag;
     
     if (req.body.ticket && req.body.ticket.requester) {
       // Zendesk webhook format
@@ -63,7 +63,8 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
       zendesk_ticket_id = ticket.id;
       zendesk_user_id = requester.id;
       phone = requester.phone || '';
-      address = '';
+      address = requester.adresse || '';
+      geburtstag = requester.geburtstag || '';
       
       // Parse name - assume "FirstName LastName" format
       const nameParts = (requester.name || '').split(' ');
@@ -83,7 +84,8 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
         zendesk_ticket_id,
         zendesk_user_id,
         phone,
-        address
+        address,
+        geburtstag
       } = req.body);
     }
 
@@ -176,6 +178,7 @@ router.post('/portal-link-sent', parseZendeskPayload, rateLimits.general, async 
         email: email,
         phone: phone || '',
         address: address || '',
+        geburtstag: geburtstag || '',
         
         // Zendesk integration
         zendesk_user_id: zendesk_user_id,
