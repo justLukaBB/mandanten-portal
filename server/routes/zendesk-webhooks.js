@@ -2483,6 +2483,8 @@ router.post('/creditor-review-ready', parseZendeskPayload, rateLimits.general, a
       triggered_by
     } = req.body;
 
+    console.log(`🔍 Looking for client with ID: ${client_id}`);
+
     if (!client_id) {
       return res.status(400).json({
         error: 'Missing required field: client_id'
@@ -2493,11 +2495,19 @@ router.post('/creditor-review-ready', parseZendeskPayload, rateLimits.general, a
     const client = await Client.findOne({ id: client_id });
     
     if (!client) {
+      console.error(`❌ Client not found with ID: ${client_id}`);
+      // Try to find any clients to debug
+      const allClients = await Client.find({}, { id: 1, aktenzeichen: 1, firstName: 1, lastName: 1 }).limit(5);
+      console.log(`📋 Available clients:`, allClients.map(c => `${c.id} (${c.aktenzeichen})`));
+      
       return res.status(404).json({
         error: 'Client not found',
-        client_id: client_id
+        client_id: client_id,
+        debug_available_clients: allClients.map(c => ({ id: c.id, aktenzeichen: c.aktenzeichen }))
       });
     }
+
+    console.log(`✅ Found client: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
 
     console.log(`📋 Processing creditor review for: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
 

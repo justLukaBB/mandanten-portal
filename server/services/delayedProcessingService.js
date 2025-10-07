@@ -334,6 +334,8 @@ class DelayedProcessingService {
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/creditor-review-ready`;
       
       console.log(`🔗 Triggering creditor review for client ${clientId}`);
+      console.log(`📡 Webhook URL: ${webhookUrl}`);
+      console.log(`📋 Payload: { client_id: "${clientId}", triggered_by: "seven_day_review_service", review_type: "scheduled_7_day" }`);
       
       const response = await axios.post(webhookUrl, {
         client_id: clientId,
