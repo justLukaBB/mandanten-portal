@@ -51,8 +51,8 @@ const SevenDayReviewTrigger: React.FC<SevenDayReviewTriggerProps> = ({
     }
   };
 
-  // Don't show if not scheduled or already triggered
-  if (!sevenDayReviewScheduled || sevenDayReviewTriggered) {
+  // Don't show if already triggered
+  if (sevenDayReviewTriggered) {
     return null;
   }
 
@@ -68,22 +68,38 @@ const SevenDayReviewTrigger: React.FC<SevenDayReviewTriggerProps> = ({
         <h3 className="text-lg font-semibold text-blue-800">7-Tage Review Trigger</h3>
       </div>
       
-      <div className="bg-blue-100 rounded-lg p-4 mb-4 border border-blue-300">
-        <div className="flex items-start space-x-3">
-          <ClockIcon className="w-5 h-5 text-blue-600 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-blue-900">
-              <strong>7-Tage Review geplant</strong>
-            </p>
-            <p className="text-sm text-blue-800 mt-1">
-              Automatische Gläubiger-Review ist geplant für: {scheduledDate?.toLocaleDateString('de-DE')}
-            </p>
-            <p className="text-sm text-blue-700">
-              ({daysRemaining > 0 ? `In ${daysRemaining} Tagen` : 'Heute'})
-            </p>
+      {sevenDayReviewScheduled ? (
+        <div className="bg-blue-100 rounded-lg p-4 mb-4 border border-blue-300">
+          <div className="flex items-start space-x-3">
+            <ClockIcon className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">
+                <strong>7-Tage Review geplant</strong>
+              </p>
+              <p className="text-sm text-blue-800 mt-1">
+                Automatische Gläubiger-Review ist geplant für: {scheduledDate?.toLocaleDateString('de-DE')}
+              </p>
+              <p className="text-sm text-blue-700">
+                ({daysRemaining > 0 ? `In ${daysRemaining} Tagen` : 'Heute'})
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-yellow-100 rounded-lg p-4 mb-4 border border-yellow-300">
+          <div className="flex items-start space-x-3">
+            <ClockIcon className="w-5 h-5 text-yellow-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-900">
+                <strong>7-Tage Review nicht geplant</strong>
+              </p>
+              <p className="text-sm text-yellow-800 mt-1">
+                Klicken Sie den Button um den 7-Tage Review-Prozess zu starten und sofort zu triggern.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={handleTrigger}
@@ -98,7 +114,7 @@ const SevenDayReviewTrigger: React.FC<SevenDayReviewTriggerProps> = ({
         ) : (
           <>
             <PlayIcon className="w-5 h-5 mr-2" />
-            Review jetzt starten (7-Tage überspringen)
+            {sevenDayReviewScheduled ? 'Review jetzt starten (7-Tage überspringen)' : '7-Tage Review sofort starten'}
           </>
         )}
       </button>
