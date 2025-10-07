@@ -54,6 +54,9 @@ interface DetailedUser {
   workflow_status?: string;
   has_financial_data?: boolean;
   financial_data?: FinancialData;
+  seven_day_review_scheduled?: boolean;
+  seven_day_review_triggered?: boolean;
+  seven_day_review_scheduled_at?: string;
 }
 
 interface Document {
