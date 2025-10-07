@@ -1584,6 +1584,103 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
   }
 });
 
+// Admin: Trigger 7-day review manually (skip waiting period)
+app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    // Find client by ID or Aktenzeichen
+    let client = await Client.findOne({ id: clientId });
+    if (!client) {
+      client = await Client.findOne({ aktenzeichen: clientId });
+    }
+    
+    if (!client) {
+      return res.status(404).json({ 
+        error: 'Client not found',
+        client_id: clientId 
+      });
+    }
+
+    console.log(`🔄 Manual trigger of 7-day review for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+    // Check if both conditions are met (payment + documents)
+    const hasPayment = client.first_payment_received;
+    const hasDocuments = (client.documents || []).length > 0;
+
+    if (!hasPayment || !hasDocuments) {
+      return res.status(400).json({
+        error: 'Prerequisites not met for 7-day review',
+        missing: {
+          payment: !hasPayment,
+          documents: !hasDocuments
+        },
+        current_status: client.current_status
+      });
+    }
+
+    // Check if already triggered
+    if (client.seven_day_review_triggered) {
+      return res.status(400).json({
+        error: '7-day review already triggered',
+        triggered_at: client.seven_day_review_triggered_at
+      });
+    }
+
+    // Trigger the review immediately
+    const DelayedProcessingService = require('./services/delayedProcessingService');
+    const delayedService = new DelayedProcessingService();
+    
+    // Mark as triggered
+    client.seven_day_review_triggered = true;
+    client.seven_day_review_triggered_at = new Date();
+    client.current_status = 'creditor_review';
+    
+    // Add to status history
+    client.status_history.push({
+      id: require('uuid').v4(),
+      status: 'seven_day_review_manually_triggered',
+      changed_by: 'admin',
+      metadata: {
+        admin_action: 'Manual trigger via admin panel',
+        originally_scheduled_at: client.seven_day_review_scheduled_at,
+        triggered_at: new Date(),
+        days_skipped: client.seven_day_review_scheduled_at 
+          ? Math.ceil((new Date(client.seven_day_review_scheduled_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          : 0
+      }
+    });
+
+    await client.save();
+    
+    // Trigger the creditor review process
+    const result = await delayedService.triggerCreditorReviewProcess(client.id);
+    
+    res.json({
+      success: true,
+      message: '7-day review manually triggered',
+      client: {
+        id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        name: `${client.firstName} ${client.lastName}`,
+        status: client.current_status
+      },
+      review_trigger: {
+        triggered_at: client.seven_day_review_triggered_at,
+        originally_scheduled: client.seven_day_review_scheduled_at,
+        zendesk_result: result
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error triggering 7-day review:', error);
+    res.status(500).json({
+      error: 'Failed to trigger 7-day review',
+      details: error.message
+    });
+  }
+});
+
 // Admin: Generate and approve creditor list
 app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res) => {
   try {
