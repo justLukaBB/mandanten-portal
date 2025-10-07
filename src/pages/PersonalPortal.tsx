@@ -93,14 +93,17 @@ export const PersonalPortal = ({
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
 
-        // Show creditor confirmation if workflow is ready and not completed
+        // Show creditor confirmation only after 7-day review is triggered or explicitly in review status
+        // Do NOT show during the 7-day waiting period after payment + documents
         const shouldShowCreditorConfirmation =
           creditorResponse.data &&
           (
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
             creditorResponse.data.workflow_status === 'creditor_review' ||
-            clientData.first_payment_received
+            (clientData.first_payment_received && 
+             clientData.seven_day_review_triggered === true && 
+             clientData.current_status === 'creditor_review')
           ) &&
           !creditorResponse.data.client_confirmed;
 
