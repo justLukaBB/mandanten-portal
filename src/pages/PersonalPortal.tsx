@@ -302,8 +302,8 @@ export const PersonalPortal = ({
         {/* Previously uploaded documents viewer */}
         {/* <ClientDocumentsViewer client={client} /> */}
 
-        {/* Creditor upload component - conditional display based on workflow status */}
-        {client?.workflow_status !== 'completed' ? (
+        {/* Creditor upload component - conditional display based on workflow status and creditor confirmation */}
+        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors ? (
           <div className={`relative ${showingCreditorConfirmation ? 'pointer-events-none' : ''}`}>
             <div className={showingCreditorConfirmation ? 'filter blur-sm' : ''}>
               <CreditorUploadComponent
@@ -345,10 +345,14 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Dokumentensammlung abgeschlossen
+                {client?.client_confirmed_creditors 
+                  ? 'Gläubigerliste bestätigt' 
+                  : 'Dokumentensammlung abgeschlossen'}
               </h3>
               <p className="text-gray-600 mb-4">
-                Sie haben Ihre Gläubigerliste bestätigt. Die Dokumentensammlung ist damit abgeschlossen.
+                {client?.client_confirmed_creditors 
+                  ? 'Sie haben Ihre Gläubigerliste bestätigt. Weitere Dokumenten-Uploads sind nicht mehr möglich.'
+                  : 'Der Workflow ist abgeschlossen. Die Dokumentensammlung ist beendet.'}
               </p>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start">
