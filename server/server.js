@@ -1667,6 +1667,7 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
     );
     
     // Trigger the creditor review process
+    console.log(`🔄 Triggering creditor review process for client.id: "${client.id}" (${client.aktenzeichen})`);
     const result = await delayedService.triggerCreditorReviewProcess(client.id);
     
     res.json({
