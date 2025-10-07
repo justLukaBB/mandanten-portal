@@ -165,6 +165,7 @@ const clientSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: String,
   address: String,
+  geburtstag: String,
   
   // Portal access
   portal_link_sent: { type: Boolean, default: false },

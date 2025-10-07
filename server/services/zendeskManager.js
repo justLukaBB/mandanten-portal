@@ -406,6 +406,8 @@ wir vertreten ${clientName} in einem Privatinsolvenzverfahren und bitten Sie um 
 
 📋 MANDANTENDATEN:
 • Name: ${clientName}
+• Geburtsdatum: ${clientData.birthdate || clientData.dateOfBirth || '[NICHT ANGEGEBEN]'}
+• Adresse: ${clientData.address || '[NICHT ANGEGEBEN]'}
 • Ihr Aktenzeichen: ${creditorData.reference_number}
 
 📊 BENÖTIGTE INFORMATIONEN:
