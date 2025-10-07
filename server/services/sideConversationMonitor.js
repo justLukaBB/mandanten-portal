@@ -30,10 +30,18 @@ class SideConversationMonitor {
         const clientSideConversations = this.getClientSideConversations(clientReference);
         
         if (clientSideConversations.length === 0) {
-            console.log(`⚠️ No Side Conversations found for client ${clientReference}`);
+            console.log(`❌ No Side Conversations found for client ${clientReference}`);
+            console.log(`🔍 Debugging: CreditorContactService configured: ${!!this.creditorContactService}`);
+            if (this.creditorContactService) {
+                console.log(`🔍 Total contacts in service: ${this.creditorContactService.creditorContacts.size}`);
+            }
             return {
                 success: false,
-                message: 'No Side Conversations found for this client'
+                message: 'No Side Conversations found for this client',
+                debug: {
+                    creditorContactService_available: !!this.creditorContactService,
+                    total_contacts: this.creditorContactService ? this.creditorContactService.creditorContacts.size : 0
+                }
             };
         }
 
@@ -69,15 +77,36 @@ class SideConversationMonitor {
      * Get Side Conversations for a specific client's creditor contacts
      */
     getClientSideConversations(clientReference) {
-        const clientContacts = Array.from(this.creditorContactService.creditorContacts.values())
-            .filter(contact => 
-                contact.client_reference === clientReference &&
-                contact.contact_status === 'email_sent' && 
-                contact.side_conversation_id &&
-                contact.main_zendesk_ticket_id
-            );
-
-        return clientContacts.map(contact => ({
+        console.log(`🔍 Looking for side conversations for client: ${clientReference}`);
+        
+        if (!this.creditorContactService) {
+            console.error(`❌ CreditorContactService not set in SideConversationMonitor`);
+            return [];
+        }
+        
+        const allContacts = Array.from(this.creditorContactService.creditorContacts.values());
+        console.log(`📋 Total contacts in creditorContactService: ${allContacts.length}`);
+        
+        // Debug: Show all contacts for this client
+        const clientContacts = allContacts.filter(contact => contact.client_reference === clientReference);
+        console.log(`📋 Contacts for client ${clientReference}:`, clientContacts.map(c => ({
+            id: c.id,
+            creditor_name: c.creditor_name,
+            contact_status: c.contact_status,
+            has_side_conversation_id: !!c.side_conversation_id,
+            has_main_ticket_id: !!c.main_zendesk_ticket_id,
+            side_conversation_id: c.side_conversation_id
+        })));
+        
+        const validContacts = clientContacts.filter(contact => 
+            contact.contact_status === 'email_sent' && 
+            contact.side_conversation_id &&
+            contact.main_zendesk_ticket_id
+        );
+        
+        console.log(`✅ Valid side conversations for ${clientReference}: ${validContacts.length}`);
+        
+        return validContacts.map(contact => ({
             side_conversation_id: contact.side_conversation_id,
             main_ticket_id: contact.main_zendesk_ticket_id,
             creditor_name: contact.creditor_name,
