@@ -13,6 +13,48 @@ const PortalLogin: React.FC = () => {
   const [showAktenzeichen, setShowAktenzeichen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isPasswordSet, setIsPasswordSet] = useState<boolean | null>(null);
+  const [checkingPasswordStatus, setCheckingPasswordStatus] = useState(false);
+
+  // Check password status when email is entered
+  const checkPasswordStatus = async (email: string) => {
+    if (!email || !email.includes('@')) return;
+    
+    setCheckingPasswordStatus(true);
+    try {
+      // Try to login with just email to check password status
+      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, {
+        email: email,
+        aktenzeichen: 'dummy_check' // This will fail but we can check the response
+      });
+      
+      // If we get here, it means login succeeded (unlikely with dummy aktenzeichen)
+      setIsPasswordSet(false);
+    } catch (error: any) {
+      // Check if the error indicates password is required
+      if (error.response?.data?.error?.includes('Passwort') || 
+          error.response?.data?.error?.includes('password')) {
+        setIsPasswordSet(true);
+      } else if (error.response?.data?.error?.includes('Aktenzeichen')) {
+        setIsPasswordSet(false);
+      } else {
+        // If it's a different error, we can't determine the status
+        setIsPasswordSet(null);
+      }
+    } finally {
+      setCheckingPasswordStatus(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCredentials(prev => ({ ...prev, [name]: value }));
+    
+    // Check password status when email changes
+    if (name === 'email') {
+      checkPasswordStatus(value);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,11 +129,6 @@ const PortalLogin: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCredentials(prev => ({ ...prev, [name]: value }));
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -130,16 +167,26 @@ const PortalLogin: React.FC = () => {
 
             <div>
               <label htmlFor="aktenzeichen" className="block text-sm font-medium text-gray-700">
-                Aktenzeichen
+                {isPasswordSet === true ? 'Passwort' : 'Aktenzeichen'}
+                {checkingPasswordStatus && (
+                  <span className="ml-2 text-xs text-gray-500">(wird geprüft...)</span>
+                )}
               </label>
               <div className="mt-1 relative">
                 <input
                   id="aktenzeichen"
                   name="aktenzeichen"
-                  type={showAktenzeichen ? 'text' : 'password'}
+                  type={isPasswordSet
+                    ? showAktenzeichen
+                      ? 'text'
+                      : 'password'
+                    : showAktenzeichen
+                    ? 'password'
+                    : 'text'}
+                  
                   required
                   className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-800 focus:border-red-800 focus:z-10 sm:text-sm"
-                  placeholder="MAND_2024_001"
+                  placeholder={isPasswordSet === true ? 'Ihr Passwort' : 'MAND_2024_001'}
                   value={credentials.aktenzeichen}
                   onChange={handleInputChange}
                 />
@@ -156,7 +203,10 @@ const PortalLogin: React.FC = () => {
                 </button>
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                Ihr Aktenzeichen finden Sie in der E-Mail, die Sie von uns erhalten haben
+                {isPasswordSet === true 
+                  ? 'Geben Sie Ihr Passwort ein, das Sie zuvor festgelegt haben'
+                  : 'Ihr Aktenzeichen finden Sie in der E-Mail, die Sie von uns erhalten haben'
+                }
               </p>
             </div>
           </div>

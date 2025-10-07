@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const documentSchema = new mongoose.Schema({
   id: { type: String, required: true },
@@ -173,6 +174,10 @@ const clientSchema = new mongoose.Schema({
   portal_link: String,
   session_token: String,
   last_login: Date,
+
+  // Client credentials
+  password_hash: { type: String },
+  isPasswordSet: { type: Boolean, default: false },
   
   // Zendesk integration
   zendesk_user_id: String,
@@ -375,6 +380,24 @@ const clientSchema = new mongoose.Schema({
 clientSchema.pre('save', function(next) {
   this.updated_at = new Date();
   next();
+});
+
+// Compare a plain password with the stored hash
+clientSchema.methods.comparePassword = async function(password) {
+  if (!this.password_hash) return false;
+  return await bcrypt.compare(password, this.password_hash);
+};
+
+// Hash password before saving if it was modified via password_hash
+clientSchema.pre('save', async function(next) {
+  if (!this.isModified('password_hash')) return next();
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password_hash = await bcrypt.hash(this.password_hash, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Indexes for faster queries

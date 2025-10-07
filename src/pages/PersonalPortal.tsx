@@ -7,7 +7,7 @@ import ClientDocumentsViewer from '../components/ClientDocumentsViewer';
 import ClientInvoicesViewer from '../components/ClientInvoicesViewer';
 import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, EllipsisVerticalIcon, XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import api from '../config/api';
 
 /**
@@ -48,6 +48,21 @@ export const PersonalPortal = ({
   const [showingCreditorConfirmation, setShowingCreditorConfirmation] = useState(false);
   const [showingFinancialForm, setShowingFinancialForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
+  
+  // Password change modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    fileNumber: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
 
   // Default progress phases
@@ -229,6 +244,86 @@ export const PersonalPortal = ({
     }
   };
 
+  // Password change functions
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordLoading(true);
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    // Validation
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Passwörter stimmen nicht überein');
+      setPasswordLoading(false);
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('Passwort muss mindestens 6 Zeichen lang sein');
+      setPasswordLoading(false);
+      return;
+    }
+
+    try {
+      const { data } = await api.post('/api/client/make-new-password', {
+        file_number: passwordForm.fileNumber,
+        new_password: passwordForm.newPassword
+      });
+      if (data?.success) {
+        setPasswordSuccess(true);
+        setPasswordForm({ fileNumber: '', newPassword: '', confirmPassword: '' });
+        setTimeout(() => {
+          setShowPasswordModal(false);
+          setPasswordSuccess(false);
+          setForcePasswordChange(false);
+          // refresh client data to update isPasswordSet
+          fetchClientData();
+        }, 2000);
+      } else {
+        setPasswordError(data?.error || 'Fehler beim Ändern des Passworts');
+      }
+    } catch (error: any) {
+      const apiError = error?.response?.data?.error || error?.message || 'Netzwerkfehler';
+      setPasswordError(apiError);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const openPasswordModal = () => {
+    setShowPasswordModal(true);
+    setShowDropdown(false);
+    setPasswordForm({ fileNumber: client?.aktenzeichen || '', newPassword: '', confirmPassword: '' });
+    setPasswordError(null);
+    setPasswordSuccess(false);
+  };
+
+  // Force password change on first login (if backend indicates no password yet)
+  useEffect(() => {
+    if (client && client.isPasswordSet === false) {
+      setForcePasswordChange(true);
+      setShowPasswordModal(true);
+      setPasswordForm({ fileNumber: client?.aktenzeichen || '', newPassword: '', confirmPassword: '' });
+    } else {
+      setForcePasswordChange(false);
+    }
+  }, [client]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showDropdown && !target.closest('.dropdown-container')) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center justify-center">
@@ -272,12 +367,45 @@ export const PersonalPortal = ({
             <h1 className="text-2xl font-bold" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
-            <button
-              onClick={handleLogout}
-              className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded-full transition-colors"
-            >
-              Abmelden
-            </button>
+            
+            {/* Three-dot dropdown menu */}
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <EllipsisVerticalIcon className="h-6 w-6 text-gray-600" />
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                  <div className="py-1">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Kennwort ändern clicked');
+                        openPasswordModal();
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Kennwort ändern
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Abmelden clicked');
+                        handleLogout();
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Abmelden
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -504,6 +632,141 @@ export const PersonalPortal = ({
           <p className="mt-1">Bei Fragen nutzen Sie bitte die Support-Funktion</p>
         </div>
       </main>
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Kennwort ändern</h2>
+              {!forcePasswordChange && (
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              )}
+            </div>
+
+            {passwordSuccess ? (
+              <div className="text-center py-4">
+                <div className="text-green-600 text-lg font-medium mb-2">✓ Passwort erfolgreich geändert!</div>
+                <p className="text-gray-600">Das Modal schließt sich automatisch...</p>
+              </div>
+            ) : (
+              <form onSubmit={handlePasswordChange} className="space-y-4">
+                {forcePasswordChange && (
+                  <div className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 p-3 rounded">
+                    Aus Sicherheitsgründen müssen Sie jetzt ein Kennwort festlegen, bevor Sie fortfahren können.
+                  </div>
+                )}
+                <div>
+                  <label htmlFor="fileNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                    Aktenzeichen
+                  </label>
+                  <input
+                    type="text"
+                    id="fileNumber"
+                    value={passwordForm.fileNumber}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, fileNumber: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Neues Passwort
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      id="newPassword"
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                    >
+                      {showNewPassword ? (
+                        <EyeSlashIcon className="h-5 w-5" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Passwort bestätigen
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      id="confirmPassword"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeSlashIcon className="h-5 w-5" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
+                    {passwordError}
+                  </div>
+                )}
+
+                <div className="flex space-x-3 pt-4">
+                  {!forcePasswordChange && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordModal(false)}
+                      className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                      disabled={passwordLoading}
+                    >
+                      Abbrechen
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 text-white rounded-md transition-colors"
+                    style={{ 
+                      backgroundColor: customColors.primary,
+                      opacity: passwordLoading ? 0.6 : 1
+                    }}
+                    disabled={passwordLoading}
+                  >
+                    {passwordLoading ? 'Wird geändert...' : 'Passwort ändern'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
