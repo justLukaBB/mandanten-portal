@@ -2633,23 +2633,11 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
           }
         });
         ticketId = ticketResult.id;
-        
-        // Update client with ticket ID
-        client.zendesk_ticket_id = ticketId;
-        client.zendesk_tickets.push({
-          ticket_id: ticketId,
-          ticket_type: 'glaeubieger_process',
-          ticket_scenario: '7_day_review',
-          status: 'open',
-          created_at: new Date()
-        });
-        
         console.log(`✅ Created new ticket ${ticketId} for creditor review`);
       }
       
-      // Update client status
-      client.current_status = 'creditor_review';
-      client.status_history.push({
+      // Prepare status history entry
+      const statusHistoryEntry = {
         id: uuidv4(),
         status: 'creditor_review_ticket_created',
         changed_by: 'system',
@@ -2661,9 +2649,28 @@ ${needsReview.map(c => `- ${c.sender_name} (Konfidenz: ${Math.round((c.ai_confid
           creditors_count: creditors.length,
           documents_count: documents.length
         }
-      });
-      
-      await client.save();
+      };
+
+      // Use direct update to avoid document validation issues
+      await Client.updateOne(
+        { _id: client._id },
+        {
+          $set: {
+            current_status: 'creditor_review',
+            zendesk_ticket_id: ticketId
+          },
+          $push: {
+            status_history: statusHistoryEntry,
+            zendesk_tickets: {
+              ticket_id: ticketId,
+              ticket_type: 'glaeubieger_process',
+              ticket_scenario: '7_day_review',
+              status: 'open',
+              created_at: new Date()
+            }
+          }
+        }
+      );
 
     } catch (zendeskError) {
       console.error('❌ Error creating/updating Zendesk ticket:', zendeskError);
