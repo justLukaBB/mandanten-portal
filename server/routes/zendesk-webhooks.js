@@ -414,19 +414,23 @@ Thomas Scuric`;
           if (client.zendesk_ticket_id) {
             const sideConversationResult = await zendeskService.createSideConversation(
               client.zendesk_ticket_id,
-              reminderText,
-              client.email,
-              `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`
+              {
+                recipientEmail: client.email,
+                recipientName: `${client.firstName} ${client.lastName}`,
+                subject: `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`,
+                body: reminderText,
+                internalNote: false
+              }
             );
           
-            if (sideConversationResult && sideConversationResult.id) {
+            if (sideConversationResult && sideConversationResult.success && sideConversationResult.side_conversation_id) {
               client.document_reminder_sent_via_side_conversation = true;
               client.document_reminder_side_conversation_at = new Date();
-              client.document_reminder_side_conversation_id = sideConversationResult.id;
+              client.document_reminder_side_conversation_id = sideConversationResult.side_conversation_id;
               
-              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.side_conversation_id} for ${client.aktenzeichen}`);
             } else {
-              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`);
+              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`, sideConversationResult);
               throw new Error('Side conversation creation failed');
             }
           } else {
@@ -883,14 +887,14 @@ Thomas Scuric`;
               }
             );
           
-            if (sideConversationResult && sideConversationResult.id) {
+            if (sideConversationResult && sideConversationResult.success && sideConversationResult.side_conversation_id) {
               client.document_reminder_sent_via_side_conversation = true;
               client.document_reminder_side_conversation_at = new Date();
-              client.document_reminder_side_conversation_id = sideConversationResult.id;
+              client.document_reminder_side_conversation_id = sideConversationResult.side_conversation_id;
               
-              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.id} for ${client.aktenzeichen}`);
+              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.side_conversation_id} for ${client.aktenzeichen}`);
             } else {
-              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`);
+              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`, sideConversationResult);
               throw new Error('Side conversation creation failed');
             }
           } else {
