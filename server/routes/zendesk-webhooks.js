@@ -398,7 +398,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
     }
 
     // CHECK: If client has no Zendesk ticket (no documents uploaded), create "Payment received - awaiting documents" ticket
-    if (!client.zendesk_ticket_id && !state.hasDocuments) {
+    if (!state.hasDocuments) {
       console.log(`🎫 Creating "Payment received - awaiting documents" ticket for ${client.aktenzeichen}...`);
       
       const paymentReceivedTicket = await zendeskService.createTicket({
