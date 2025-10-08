@@ -342,58 +342,19 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       needsManualReview: creditors.some(c => (c.ai_confidence || c.confidence || 0) < 0.8)
     };
 
-    // DETERMINE PAYMENT TICKET TYPE BASED ON SCENARIO
-    let ticketType, nextAction;
+    // ALWAYS CREATE TICKET WHEN PAYMENT IS CONFIRMED - regardless of document status
+    let ticketType, nextAction, ticketContent, ticketSubject, tags;
 
     if (!state.hasDocuments) {
-      // No documents uploaded yet - mark for reminder service to handle
+      // No documents uploaded yet - create document request ticket
       ticketType = 'document_request';
-      nextAction = 'wait_for_document_upload';
+      nextAction = 'send_document_upload_request';
       client.payment_ticket_type = 'document_request';
       client.document_request_sent_at = new Date();
       
-      // Create ticket to track but DO NOT send immediate reminder for user-payment-confirmed
-      // The user-payment-confirmed should use DocumentReminderService, not immediate reminders
-      console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
-      
-      if (!client.zendesk_ticket_id) {
-        const ticketResult = await zendeskService.createTicket({
-          subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-          content: `Client has paid but needs to upload documents. DocumentReminderService will handle automated reminders after 2 days.`,
-          requesterEmail: client.email,
-          tags: ['payment-confirmed', 'document-upload-needed', 'automated-reminders'],
-          priority: 'normal',
-          type: 'task'
-        });
-        
-        if (ticketResult && ticketResult.success && ticketResult.ticket_id) {
-          client.zendesk_ticket_id = ticketResult.ticket_id;
-          client.zendesk_tickets = client.zendesk_tickets || [];
-          client.zendesk_tickets.push({
-            ticket_id: ticketResult.ticket_id,
-            ticket_type: 'payment_first_workflow',
-            ticket_scenario: 'document_upload_reminder',
-            status: 'open',
-            created_at: new Date()
-          });
-          
-          console.log(`✅ Created initial ticket ${ticketResult.ticket_id} for ${client.aktenzeichen}`);
-        }
-      }
-      
-      // Schedule for automated reminders - DocumentReminderService will handle
-      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
-      
-      // Mark for automatic reminders - the DocumentReminderService will pick this up
-      client.payment_ticket_type = 'document_request';
-      client.document_request_sent_at = new Date();
-      
-      ticketType = 'automated_reminder_scheduled';
-      nextAction = 'automated_reminder_system_will_handle';
-      
-      console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system - no immediate reminder sent`);
-      
-      client.document_request_sent_at = new Date();
+      ticketContent = generateDocumentRequestTicket(client);
+      ticketSubject = generateTicketSubject(client, ticketType);
+      tags = ['payment-confirmed', 'document-upload-needed', 'payment-first-workflow'];
       
     } else if (!state.allProcessed) {
       // Documents uploaded but still processing
@@ -401,11 +362,19 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       nextAction = 'wait_for_processing_complete';
       client.payment_ticket_type = 'processing_wait';
       
+      ticketContent = generateProcessingWaitTicket(client, documents, completedDocs);
+      ticketSubject = generateTicketSubject(client, ticketType);
+      tags = ['payment-confirmed', 'processing-wait', 'ai-processing'];
+      
     } else if (!state.hasCreditors) {
       // Documents processed but no creditors found
       ticketType = 'no_creditors_found';
       nextAction = 'manual_document_check';
       client.payment_ticket_type = 'no_creditors_found';
+      
+      ticketContent = generateNoCreditorsTicket(client, documents);
+      ticketSubject = generateTicketSubject(client, ticketType);
+      tags = ['payment-confirmed', 'no-creditors', 'manual-check-needed'];
       
     } else {
       // Documents processed, creditors found - ready for review
@@ -413,11 +382,53 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
         ticketType = 'manual_review';
         nextAction = 'start_manual_review';
         client.payment_ticket_type = 'manual_review';
+        
+        ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, true);
+        ticketSubject = generateTicketSubject(client, ticketType);
+        tags = ['payment-confirmed', 'manual-review-needed', 'creditors-found'];
       } else {
         ticketType = 'auto_approved';
         nextAction = 'send_confirmation_to_client';
         client.payment_ticket_type = 'auto_approved';
+        
+        ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, false);
+        ticketSubject = generateTicketSubject(client, ticketType);
+        tags = ['payment-confirmed', 'auto-approved', 'ready-for-confirmation'];
       }
+    }
+
+    // ALWAYS CREATE TICKET - regardless of scenario
+    console.log(`📋 Creating payment confirmation ticket for ${client.aktenzeichen} (${ticketType})...`);
+    
+    if (!client.zendesk_ticket_id) {
+      const ticketResult = await zendeskService.createTicket({
+        subject: ticketSubject,
+        content: ticketContent,
+        requesterEmail: client.email,
+        tags: tags,
+        priority: ticketType === 'manual_review' ? 'normal' : 'low',
+        type: 'task'
+      });
+      
+      if (ticketResult && ticketResult.success && ticketResult.ticket_id) {
+        client.zendesk_ticket_id = ticketResult.ticket_id;
+        client.zendesk_tickets = client.zendesk_tickets || [];
+        client.zendesk_tickets.push({
+          ticket_id: ticketResult.ticket_id,
+          ticket_type: 'payment_confirmation',
+          ticket_scenario: ticketType,
+          status: 'open',
+          created_at: new Date()
+        });
+        
+        console.log(`✅ Created payment confirmation ticket ${ticketResult.ticket_id} for ${client.aktenzeichen}`);
+      }
+    }
+
+    // Schedule automated reminders if no documents
+    if (!state.hasDocuments) {
+      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
+      client.document_request_sent_at = new Date();
     }
 
     // Update client with payment processing info
@@ -471,7 +482,8 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
 
     console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Ticket Type: ${ticketType}, Documents: ${documents.length}, Creditors: ${creditors.length}, Need Review: ${needsReview.length}`);
 
-    res.json({
+    // Prepare response data based on scenario
+    let responseData = {
       success: true,
       message: `User payment confirmation processed - ${ticketType}`,
       client_status: 'payment_confirmed',
@@ -483,17 +495,42 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       creditors_need_review: needsReview.length,
       creditors_confidence_ok: confidenceOk.length,
       manual_review_required: needsReview.length > 0,
-      zendesk_ticket_data: ticketData,
-      review_dashboard_url: needsReview.length > 0 
-        ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
-        : null,
       scenario_analysis: {
         hasDocuments: state.hasDocuments,
         allProcessed: state.allProcessed,
         hasCreditors: state.hasCreditors,
         needsManualReview: state.needsManualReview
       }
-    });
+    };
+
+    // ALWAYS include ticket data - regardless of scenario
+    responseData.ticket_data = {
+      subject: ticketSubject,
+      content: ticketContent,
+      tags: tags,
+      priority: ticketType === 'manual_review' ? 'normal' : 'low'
+    };
+    
+    responseData.zendesk_ticket = client.zendesk_ticket_id ? {
+      created: true,
+      ticket_id: client.zendesk_ticket_id,
+      scenario: ticketType
+    } : {
+      created: false,
+      error: 'Ticket creation failed'
+    };
+    
+    // Add portal access URL for document request scenarios
+    if (ticketType === 'document_request') {
+      responseData.portal_access_url = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}`;
+    }
+    
+    // Add review dashboard URL for review scenarios
+    if (ticketType === 'manual_review') {
+      responseData.review_dashboard_url = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`;
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('❌ Error in user-payment-confirmed webhook:', error);
