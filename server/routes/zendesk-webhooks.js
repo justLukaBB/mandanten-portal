@@ -397,7 +397,60 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       }
     }
 
-    // ALWAYS CREATE TICKET - regardless of scenario
+    // CHECK: If client has no Zendesk ticket (no documents uploaded), create "Payment received - awaiting documents" ticket
+    if (!client.zendesk_ticket_id && !state.hasDocuments) {
+      console.log(`🎫 Creating "Payment received - awaiting documents" ticket for ${client.aktenzeichen}...`);
+      
+      const paymentReceivedTicket = await zendeskService.createTicket({
+        subject: `Payment received - awaiting documents: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+        content: `💰 PAYMENT RECEIVED - AWAITING DOCUMENTS
+
+👤 CLIENT: ${client.firstName} ${client.lastName}
+📧 EMAIL: ${client.email}
+📁 AKTENZEICHEN: ${client.aktenzeichen}
+✅ PAYMENT STATUS: First installment received
+📅 PAYMENT DATE: ${new Date().toLocaleDateString('de-DE')}
+
+⚠️ STATUS: No documents uploaded yet
+
+🔧 NEXT STEPS:
+1. Send document upload request to client
+2. Monitor for document upload
+3. Follow up if no documents received within 2 days
+
+📝 CLIENT PORTAL ACCESS:
+🔗 ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
+
+📋 REQUIRED DOCUMENTS:
+• Mahnungen und Zahlungsaufforderungen
+• Rechnungen und Verträge  
+• Inkasso-Schreiben
+• Kreditverträge
+• Sonstige Gläubigerschreiben
+
+This ticket will be updated once documents are uploaded and processed.`,
+        requesterEmail: client.email,
+        tags: ['payment-received', 'awaiting-documents', 'payment-first-workflow'],
+        priority: 'normal',
+        type: 'task'
+      });
+      
+      if (paymentReceivedTicket && paymentReceivedTicket.success && paymentReceivedTicket.ticket_id) {
+        client.zendesk_ticket_id = paymentReceivedTicket.ticket_id;
+        client.zendesk_tickets = client.zendesk_tickets || [];
+        client.zendesk_tickets.push({
+          ticket_id: paymentReceivedTicket.ticket_id,
+          ticket_type: 'payment_received_awaiting_documents',
+          ticket_scenario: 'payment_first_no_documents',
+          status: 'open',
+          created_at: new Date()
+        });
+        
+        console.log(`✅ Created "Payment received - awaiting documents" ticket ${paymentReceivedTicket.ticket_id} for ${client.aktenzeichen}`);
+      }
+    }
+    
+    // ALWAYS CREATE TICKET - regardless of scenario (fallback for other cases)
     console.log(`📋 Creating payment confirmation ticket for ${client.aktenzeichen} (${ticketType})...`);
     
     if (!client.zendesk_ticket_id) {
