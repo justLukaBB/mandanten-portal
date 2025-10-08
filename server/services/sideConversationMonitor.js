@@ -99,7 +99,7 @@ class SideConversationMonitor {
         })));
         
         const validContacts = clientContacts.filter(contact => 
-            contact.contact_status === 'email_sent' && 
+            contact.contact_status === 'email_sent_with_document' && 
             contact.side_conversation_id &&
             contact.main_zendesk_ticket_id
         );
