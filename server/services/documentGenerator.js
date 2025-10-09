@@ -1497,31 +1497,66 @@ class DocumentGenerator {
      * Generate Ratenplan pfändbares Einkommen using original Word template
      */
     async generateRatenplanDocument(clientData, settlementData, pfaendbarAmount) {
+        console.log('🎯 NEW generateRatenplanDocument called with:', {
+            clientReference: clientData?.reference,
+            pfaendbarAmount,
+            hasSettlementData: !!settlementData
+        });
+        
         try {
-            // Use the Word template processor for better formatting
-            const WordTemplateProcessor = require('./wordTemplateProcessor');
-            const templateProcessor = new WordTemplateProcessor();
+            // Use the NEW Word template processor for "Template Word Pfändbares Einkommen"
+            const NewWordTemplateProcessor = require('./newWordTemplateProcessor');
+            const templateProcessor = new NewWordTemplateProcessor();
             
-            console.log('📄 Using original Word template for Ratenplan generation...');
+            console.log('📄 Using NEW Word template processor (Template Word Pfändbares Einkommen)...');
             
-            const result = await templateProcessor.processRatenplanTemplate(
-                clientData.reference, 
-                settlementData, 
-                pfaendbarAmount
+            // Get full client data for template processing
+            const Client = require('../models/Client');
+            let fullClientData;
+            
+            try {
+                fullClientData = await Client.findOne({ aktenzeichen: clientData.reference });
+            } catch (dbError) {
+                console.error('❌ Database error, using provided client data:', dbError.message);
+                fullClientData = clientData;
+            }
+            
+            if (!fullClientData) {
+                console.error('❌ Client not found, creating mock data for template');
+                fullClientData = {
+                    firstName: 'Max',
+                    lastName: 'Mustermann',
+                    aktenzeichen: clientData.reference,
+                    financial_data: {
+                        monthly_net_income: pfaendbarAmount + 1500, // Estimate
+                        number_of_children: 0,
+                        marital_status: 'single'
+                    },
+                    geburtstag: '01.01.1980'
+                };
+            }
+            
+            const result = await templateProcessor.processTemplate(
+                fullClientData, 
+                settlementData,
+                null // No specific creditor data - this generates the general letter
             );
             
             if (!result.success) {
-                throw new Error(`Template processing failed: ${result.error}`);
+                console.error('❌ NEW template processing failed:', result.error);
+                throw new Error(`NEW template processing failed: ${result.error}`);
             }
             
-            // Return the processed template result in the expected format
+            console.log('✅ NEW Word template processing successful!');
+            console.log('📊 Replacements made:', result.replacements_made);
+            
             return result;
             
         } catch (error) {
-            console.error('❌ Error with template processor, falling back to docx generation:');
+            console.error('❌ Error with NEW template processor, falling back to old method:');
             console.error('   Error message:', error.message);
             console.error('   Error stack:', error.stack);
-            console.log('🔄 Using fallback docx generation instead of Word template');
+            console.log('🔄 Using fallback docx generation instead of NEW Word template');
             
             // Fallback to original docx generation
             return this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
