@@ -9,6 +9,7 @@ const JSZip = require('jszip');
 class WordTemplateProcessor {
     constructor() {
         this.templatePath = path.join(__dirname, '../documents/Ratenplan-Template-Original.docx');
+        this.nullplanTemplatePath = path.join(__dirname, '../documents/Nullplan-Template-Original.docx');
     }
 
     /**
@@ -49,14 +50,26 @@ class WordTemplateProcessor {
             
             console.log('🔄 Applying dynamic replacements:', Object.keys(replacements).length, 'replacements');
 
-            console.log('🔄 Applying replacements:', replacements);
+            // Log some key replacements for debugging
+            console.log('🔄 Sample replacements:');
+            console.log('   - "Name Mandant": ', replacements['"Name Mandant"'] || 'NOT FOUND');
+            console.log('   - "pfändbarer Betrag": ', replacements['"pfändbarer Betrag"'] || 'NOT FOUND');
+            console.log('   - "Gesamtschulden": ', replacements['"Gesamtschulden"'] || 'NOT FOUND');
+            console.log('   - Total replacements: ', Object.keys(replacements).length);
 
             // Apply replacements to the document XML
             let processedXml = documentXml;
+            let replacementCount = 0;
             Object.entries(replacements).forEach(([search, replace]) => {
                 const regex = new RegExp(this.escapeRegex(search), 'g');
-                processedXml = processedXml.replace(regex, replace);
+                const before = processedXml.length;
+                processedXml = processedXml.replace(regex, (match) => {
+                    replacementCount++;
+                    return replace;
+                });
             });
+            
+            console.log(`✅ Applied ${replacementCount} replacements in document`);
 
             // Update the document in the zip
             zip.file('word/document.xml', processedXml);
@@ -441,6 +454,169 @@ class WordTemplateProcessor {
             postalCode: postalMatch ? postalMatch[1] : '44787',
             city: postalMatch ? postalMatch[2] : 'Bochum'
         };
+    }
+
+    /**
+     * Process the Nullplan template with client and creditor data
+     */
+    async processNullplanTemplate(clientReference, settlementData, creditorData) {
+        try {
+            console.log('📄 Processing Nullplan template with full client data...');
+
+            // Get full client data from database
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            // Read the Nullplan template file
+            const templateBuffer = fs.readFileSync(this.nullplanTemplatePath);
+            const zip = await JSZip.loadAsync(templateBuffer);
+
+            // Get the document XML
+            const documentXml = await zip.file('word/document.xml').async('string');
+
+            // Extract comprehensive client data for Nullplan
+            const clientData = this.extractNullplanClientData(client, settlementData, creditorData);
+            console.log('📊 Extracted Nullplan client data:', {
+                name: clientData.fullName,
+                totalDebt: clientData.totalDebt,
+                creditorCount: clientData.creditorCount,
+                planType: 'Nullplan'
+            });
+
+            // Build replacements for Nullplan
+            const replacements = this.buildNullplanReplacements(clientData);
+            
+            console.log('🔄 Applying Nullplan replacements:', Object.keys(replacements).length, 'replacements');
+
+            // Apply replacements to the document XML
+            let processedXml = documentXml;
+            let replacementCount = 0;
+            Object.entries(replacements).forEach(([search, replace]) => {
+                const regex = new RegExp(this.escapeRegex(search), 'g');
+                const before = processedXml.length;
+                processedXml = processedXml.replace(regex, (match) => {
+                    replacementCount++;
+                    return replace;
+                });
+            });
+            
+            console.log(`✅ Applied ${replacementCount} replacements in document`);
+
+            // Update the document in the zip
+            zip.file('word/document.xml', processedXml);
+
+            // Generate the new document
+            const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+            // Save to documents folder
+            const outputFilename = `Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+            const outputPath = path.join(__dirname, '../documents', outputFilename);
+            
+            fs.writeFileSync(outputPath, outputBuffer);
+
+            console.log('✅ Nullplan template processed successfully');
+            console.log(`📁 Output: ${outputFilename}`);
+
+            return {
+                success: true,
+                filename: outputFilename,
+                path: outputPath,
+                size: outputBuffer.length
+            };
+
+        } catch (error) {
+            console.error('❌ Error processing Nullplan template:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Extract client data specific to Nullplan documents
+     */
+    extractNullplanClientData(client, settlementData, creditorData) {
+        const clientData = this.extractClientData(client, settlementData, 0); // 0 for pfändbar amount
+        
+        // Additional Nullplan-specific data
+        const planStartDate = new Date();
+        planStartDate.setMonth(planStartDate.getMonth() + 3); // 3 months from now
+        
+        return {
+            ...clientData,
+            // Override pfändbar amount for Nullplan
+            pfaendbarAmount: 0,
+            monthlyPayment: 0,
+            
+            // Nullplan specific
+            planType: 'Nullplan',
+            planDuration: '3 Jahre',
+            planStartDate: planStartDate.toLocaleDateString('de-DE'),
+            
+            // Creditor for current letter (if generating individual letters)
+            currentCreditor: creditorData && creditorData[0] ? {
+                name: creditorData[0].name || creditorData[0].creditor_name,
+                address: creditorData[0].address || `${creditorData[0].creditor_street || ''}, ${creditorData[0].creditor_postal_code || ''} ${creditorData[0].creditor_city || ''}`.trim(),
+                reference: creditorData[0].reference_number || '',
+                amount: creditorData[0].amount || creditorData[0].debt_amount || 0
+            } : null
+        };
+    }
+
+    /**
+     * Build replacements for Nullplan template
+     */
+    buildNullplanReplacements(clientData) {
+        const replacements = {
+            // Common replacements from regular template
+            ...this.buildReplacements(clientData),
+            
+            // Nullplan specific replacements
+            '"Nullplan"': 'Nullplan',
+            '"0,00 EUR"': '0,00 EUR',
+            '"0,00 €"': '0,00 €',
+            '"keine monatlichen Zahlungen"': 'keine monatlichen Zahlungen',
+            '"3 Jahre"': clientData.planDuration,
+            '"36 Monate"': '36 Monate',
+            '"Laufzeit"': clientData.planDuration,
+            
+            // Zero amounts - various formats
+            '"monatliche Rate"': '0,00 EUR',
+            '"Monatsrate"': '0,00 EUR',
+            '"pfändbar"': '0,00 EUR',
+            '"pfändbares Einkommen"': '0,00 EUR',
+            '"Tilgung"': '0,00 EUR',
+            '"Zahlbetrag"': '0,00 EUR',
+            '"monatlicher Betrag"': '0,00 EUR',
+            '"Rate pro Monat"': '0,00 EUR',
+            
+            // Current creditor (for individual letters)
+            '"Name aktueller Gläubiger"': clientData.currentCreditor?.name || 'Gläubiger',
+            '"Adresse aktueller Gläubiger"': clientData.currentCreditor?.address || '',
+            '"Referenz aktueller Gläubiger"': clientData.currentCreditor?.reference || '',
+            '"Forderung aktueller Gläubiger"': this.formatGermanCurrency(clientData.currentCreditor?.amount || 0),
+            
+            // Legal text variations
+            '"kein pfändbares Einkommen"': 'kein pfändbares Einkommen vorhanden',
+            '"kein pfändbares Einkommen vorhanden"': 'kein pfändbares Einkommen vorhanden',
+            '"Verbesserung der Verhältnisse"': 'Bei Verbesserung der wirtschaftlichen Verhältnisse',
+            '"bei Verbesserung"': 'bei Verbesserung der wirtschaftlichen Verhältnisse',
+            
+            // Nullplan explanation text
+            '"Nullplan Erklärung"': 'Da kein pfändbares Einkommen vorhanden ist, erfolgen keine regelmäßigen Zahlungen während der Laufzeit von 3 Jahren.',
+            '"Überwachungsphase"': 'dreijährige Überwachungsphase',
+            
+            // Additional legal clauses
+            '"Änderung der Verhältnisse"': 'Bei einer wesentlichen Verbesserung der Einkommenssituation wird der Zahlungsbetrag entsprechend angepasst.',
+            '"Verpflichtung zur Mitteilung"': 'Der Schuldner verpflichtet sich, Änderungen seiner wirtschaftlichen Verhältnisse unverzüglich mitzuteilen.'
+        };
+        
+        return replacements;
     }
 }
 

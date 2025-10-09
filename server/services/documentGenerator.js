@@ -2239,8 +2239,13 @@ class DocumentGenerator {
     async saveRatenplanDocument(doc, clientReference) {
         // Check if doc is a processed template result (not a docx Document object)
         if (doc && doc.success && doc.path) {
-            // This is already a processed template result, return it directly
-            return doc;
+            // This is already a processed template result, return it with buffer
+            const fs = require('fs');
+            const buffer = fs.readFileSync(doc.path);
+            return {
+                ...doc,
+                buffer
+            };
         }
 
         // Otherwise, treat as docx Document object and save normally
@@ -2252,6 +2257,41 @@ class DocumentGenerator {
      * Generate Nullplan-specific Ratenplan document (no monthly payments)
      */
     async generateNullplanRatenplanDocument(clientData, settlementData) {
+        try {
+            // Use the Word template processor for Nullplan
+            const WordTemplateProcessor = require('./wordTemplateProcessor');
+            const templateProcessor = new WordTemplateProcessor();
+            
+            console.log('📄 Using Word template for Nullplan generation...');
+            
+            // Get creditor data for the template
+            const creditorData = settlementData.creditor_payments || [];
+            
+            const result = await templateProcessor.processNullplanTemplate(
+                clientData.reference, 
+                settlementData,
+                creditorData
+            );
+            
+            if (!result.success) {
+                throw new Error(`Nullplan template processing failed: ${result.error}`);
+            }
+            
+            // Return the processed template result in the expected format
+            return result;
+            
+        } catch (error) {
+            console.error('❌ Error with Nullplan template processor, falling back to docx generation:', error.message);
+            
+            // Fallback to original docx generation
+            return this.generateNullplanRatenplanDocumentFallback(clientData, settlementData);
+        }
+    }
+    
+    /**
+     * Fallback: Generate Nullplan-specific Ratenplan document (no monthly payments)
+     */
+    async generateNullplanRatenplanDocumentFallback(clientData, settlementData) {
         const currentDate = new Date().toLocaleDateString('de-DE', {
             day: '2-digit',
             month: '2-digit',
@@ -2407,6 +2447,18 @@ class DocumentGenerator {
      * Save Nullplan-Ratenplan document with correct filename
      */
     async saveNullplanRatenplanDocument(doc, clientReference) {
+        // Check if doc is a processed template result (not a docx Document object)
+        if (doc && doc.success && doc.path) {
+            // This is already a processed template result, return it with buffer
+            const fs = require('fs');
+            const buffer = fs.readFileSync(doc.path);
+            return {
+                ...doc,
+                buffer
+            };
+        }
+        
+        // Otherwise, treat as docx Document object and save normally
         const filename = `Ratenplan-Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
         return await this.saveDocument(doc, clientReference, filename);
     }
