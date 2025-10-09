@@ -6,10 +6,10 @@ async function getPage24Fields(filePath) {
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const form = pdfDoc.getForm();
   const pages = pdfDoc.getPages();
-  const page24 = pages[23]; // Page 24 (0-indexed)
+  const page24 = pages[25]; // Page 24 (0-indexed)
   
   console.log(`Total pages: ${pages.length}`);
-  console.log('Page 24 fields:\n');
+  console.log('Page 26 fields:\n');
   
   const fields = form.getFields();
   let count = 0;
