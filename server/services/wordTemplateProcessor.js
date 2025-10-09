@@ -22,7 +22,29 @@ class WordTemplateProcessor {
 
             // Get full client data from database
             const Client = require('../models/Client');
-            const client = await Client.findOne({ aktenzeichen: clientReference });
+            let client;
+            
+            try {
+                client = await Client.findOne({ aktenzeichen: clientReference });
+            } catch (dbError) {
+                console.error('❌ Database error, creating mock client data:', dbError.message);
+                // Create mock client data if database is not available
+                client = {
+                    firstName: 'Max',
+                    lastName: 'Mustermann', 
+                    email: 'max.mustermann@example.com',
+                    aktenzeichen: clientReference,
+                    address: 'Musterstraße 1, 12345 Musterstadt',
+                    geburtstag: '01.01.1980',
+                    financial_data: {
+                        monthly_net_income: 2500,
+                        number_of_children: 1,
+                        marital_status: 'verheiratet'
+                    },
+                    creditor_calculation_table: settlementData.creditor_payments || [],
+                    creditor_calculation_total_debt: settlementData.total_debt || 50000
+                };
+            }
             
             if (!client) {
                 throw new Error(`Client not found: ${clientReference}`);

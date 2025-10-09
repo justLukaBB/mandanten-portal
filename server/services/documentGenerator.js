@@ -1497,12 +1497,18 @@ class DocumentGenerator {
      * Generate Ratenplan pfändbares Einkommen using original Word template
      */
     async generateRatenplanDocument(clientData, settlementData, pfaendbarAmount) {
+        console.log('🎯 generateRatenplanDocument called with:', {
+            clientReference: clientData?.reference,
+            pfaendbarAmount,
+            hasSettlementData: !!settlementData
+        });
+        
         try {
             // Use the Word template processor for better formatting
             const WordTemplateProcessor = require('./wordTemplateProcessor');
             const templateProcessor = new WordTemplateProcessor();
             
-            console.log('📄 Using original Word template for Ratenplan generation...');
+            console.log('📄 Using Word template for Ratenplan generation (not fallback)...');
             
             const result = await templateProcessor.processRatenplanTemplate(
                 clientData.reference, 
@@ -1511,9 +1517,11 @@ class DocumentGenerator {
             );
             
             if (!result.success) {
+                console.error('❌ Template processing returned failure:', result.error);
                 throw new Error(`Template processing failed: ${result.error}`);
             }
             
+            console.log('✅ Word template processing successful, returning result');
             // Return the processed template result in the expected format
             return result;
             
