@@ -329,118 +329,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       }
     });
 
-    // ANALYZE CURRENT STATE AND DETERMINE SCENARIO (same logic as payment-confirmed webhook)
-    const documents = client.documents || [];
-    const creditors = client.final_creditor_list || [];
-    const completedDocs = documents.filter(d => d.processing_status === 'completed');
-    const creditorDocs = documents.filter(d => d.is_creditor_document === true);
-    
-    const state = {
-      hasDocuments: documents.length > 0,
-      allProcessed: documents.length > 0 && completedDocs.length === documents.length,
-      hasCreditors: creditors.length > 0,
-      needsManualReview: creditors.some(c => (c.ai_confidence || c.confidence || 0) < 0.8)
-    };
-
-    // DETERMINE PAYMENT TICKET TYPE BASED ON SCENARIO
-    let ticketType, nextAction;
-
-    if (!state.hasDocuments) {
-      // No documents uploaded yet - mark for reminder service to handle
-      ticketType = 'document_request';
-      nextAction = 'wait_for_document_upload';
-      client.payment_ticket_type = 'document_request';
-      client.document_request_sent_at = new Date();
-      
-      // Create ticket to track but DO NOT send immediate reminder for user-payment-confirmed
-      // The user-payment-confirmed should use DocumentReminderService, not immediate reminders
-      console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
-      
-      if (!client.zendesk_ticket_id) {
-        const ticketResult = await zendeskService.createTicket({
-          subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-          content: `Client has paid but needs to upload documents. DocumentReminderService will handle automated reminders after 2 days.`,
-          requesterEmail: client.email,
-          tags: ['payment-confirmed', 'document-upload-needed', 'automated-reminders'],
-          priority: 'normal',
-          type: 'task'
-        });
-        
-        if (ticketResult && ticketResult.success && ticketResult.ticket_id) {
-          client.zendesk_ticket_id = ticketResult.ticket_id;
-          client.zendesk_tickets = client.zendesk_tickets || [];
-          client.zendesk_tickets.push({
-            ticket_id: ticketResult.ticket_id,
-            ticket_type: 'payment_first_workflow',
-            ticket_scenario: 'document_upload_reminder',
-            status: 'open',
-            created_at: new Date()
-          });
-          
-          console.log(`✅ Created initial ticket ${ticketResult.ticket_id} for ${client.aktenzeichen}`);
-        }
-      }
-      
-      // Schedule for automated reminders - DocumentReminderService will handle
-      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
-      
-      // Mark for automatic reminders - the DocumentReminderService will pick this up
-      client.payment_ticket_type = 'document_request';
-      client.document_request_sent_at = new Date();
-      
-      ticketType = 'automated_reminder_scheduled';
-      nextAction = 'automated_reminder_system_will_handle';
-      
-      console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system - no immediate reminder sent`);
-      
-      client.document_request_sent_at = new Date();
-      
-    } else if (!state.allProcessed) {
-      // Documents uploaded but still processing
-      ticketType = 'processing_wait';
-      nextAction = 'wait_for_processing_complete';
-      client.payment_ticket_type = 'processing_wait';
-      
-    } else if (!state.hasCreditors) {
-      // Documents processed but no creditors found
-      ticketType = 'no_creditors_found';
-      nextAction = 'manual_document_check';
-      client.payment_ticket_type = 'no_creditors_found';
-      
-    } else {
-      // Documents processed, creditors found - ready for review
-      if (state.needsManualReview) {
-        ticketType = 'manual_review';
-        nextAction = 'start_manual_review';
-        client.payment_ticket_type = 'manual_review';
-      } else {
-        ticketType = 'auto_approved';
-        nextAction = 'send_confirmation_to_client';
-        client.payment_ticket_type = 'auto_approved';
-      }
-    }
-
-    // Update client with payment processing info
-    client.payment_processed_at = new Date();
-    
-    // Save client with error handling for document validation issues
-    try {
-      await client.save({ validateModifiedOnly: true });
-    } catch (saveError) {
-      console.error('⚠️ Error saving client with payment_processed_at, using direct update:', saveError.message);
-      
-      // Use direct update to bypass validation
-      await Client.findOneAndUpdate(
-        { _id: client._id },
-        {
-          $set: {
-            payment_processed_at: new Date(),
-            payment_ticket_type: client.payment_ticket_type
-          }
-        },
-        { runValidators: false }
-      );
-    }
+    // Skip to the main logic section below
     
     // Check if both conditions (payment + documents) are met for 7-day review
     const conditionCheckResult = await conditionCheckService.handlePaymentConfirmed(client.id);
@@ -734,13 +623,15 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     };
 
     // DETERMINE TICKET TYPE AND CONTENT BASED ON SCENARIO
-    let ticketType, ticketContent, nextAction, tags;
+    let ticketType, ticketContent, nextAction, tags, ticketSubject;
 
     if (!state.hasDocuments) {
-      // SCENARIO 2: No documents uploaded yet - send automatic side conversation reminder
-      ticketType = 'document_reminder_side_conversation';
-      nextAction = 'send_side_conversation_reminder';
-      client.payment_ticket_type = 'document_reminder_side_conversation';
+      // NEW SCENARIO: Payment made without documents - create payment confirmation ticket
+      console.log(`💰 PAYMENT-FIRST SCENARIO: Payment received without documents for ${client.aktenzeichen}`);
+      
+      ticketType = 'payment_confirmed_awaiting_documents';
+      nextAction = 'send_document_upload_request';
+      client.payment_ticket_type = 'payment_confirmed_awaiting_documents';
       
       // Send side conversation reminder instead of creating manual ticket
       try {
@@ -877,17 +768,67 @@ Thomas Scuric`;
       
       client.payment_ticket_type = 'no_creditors_found';
       
+    } else if (!state.hasDocuments) {
+      // NEW SCENARIO: Payment made without documents - create payment confirmation ticket
+      console.log(`💰 PAYMENT-FIRST SCENARIO: Payment received without documents for ${client.aktenzeichen}`);
+      
+      ticketType = 'payment_confirmed_awaiting_documents';
+      nextAction = 'send_document_upload_request';
+      client.payment_ticket_type = 'payment_confirmed_awaiting_documents';
+      
+      ticketContent = `💰 ZAHLUNG BESTÄTIGT - DOKUMENTE BENÖTIGT
+
+👤 MANDANT: ${client.firstName} ${client.lastName}
+📧 EMAIL: ${client.email}
+📁 AKTENZEICHEN: ${client.aktenzeichen}
+✅ ZAHLUNGSSTATUS: Erste Rate bezahlt
+📅 ZAHLUNGSDATUM: ${new Date().toLocaleDateString('de-DE')}
+
+⚠️ STATUS: Keine Dokumente hochgeladen
+
+🔧 NÄCHSTE SCHRITTE:
+1. Mandant muss Gläubigerdokumente im Portal hochladen
+2. Dokumente werden automatisch analysiert
+3. Gläubigerliste wird erstellt
+4. Weitere Bearbeitung folgt
+
+📝 MANDANTEN-PORTAL ZUGANG:
+🔗 ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login?token=${client.portal_token}
+
+📋 BENÖTIGTE DOKUMENTE:
+• Mahnungen und Zahlungsaufforderungen
+• Rechnungen und Verträge  
+• Inkasso-Schreiben
+• Kreditverträge
+• Sonstige Gläubigerschreiben
+
+🔄 AUTOMATISCHE ERINNERUNGEN:
+Das System sendet automatisch Erinnerungen nach 2 Tagen, falls keine Dokumente hochgeladen werden.
+
+Dieses Ticket wird aktualisiert, sobald Dokumente hochgeladen und verarbeitet wurden.`;
+
+      ticketSubject = `Zahlung bestätigt - Dokumente benötigt: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
+      tags = ['payment-confirmed', 'awaiting-documents', 'payment-first-workflow'];
+      
+      console.log(`📋 Creating payment confirmation ticket for payment-first client ${client.aktenzeichen}...`);
+      
+      // Schedule automated reminders for payment-first clients
+      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
+      client.document_request_sent_at = new Date();
+      
     } else {
       // SCENARIO 1: Documents processed, creditors found - ready for review
       if (state.needsManualReview) {
         ticketType = 'manual_review';
         ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, true);
+        ticketSubject = generateTicketSubject(client, ticketType);
         nextAction = 'start_manual_review';
         tags = ['payment-confirmed', 'manual-review-needed', 'creditors-found'];
         client.payment_ticket_type = 'manual_review';
       } else {
         ticketType = 'auto_approved';
         ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, false);
+        ticketSubject = generateTicketSubject(client, ticketType);
         nextAction = 'send_confirmation_to_client';
         tags = ['payment-confirmed', 'auto-approved', 'ready-for-confirmation'];
         client.payment_ticket_type = 'auto_approved';
@@ -929,7 +870,7 @@ Thomas Scuric`;
         console.log(`🎫 Creating automatic Zendesk ticket for scenario: ${ticketType}...`);
         
         zendeskTicket = await zendeskService.createTicket({
-          subject: generateTicketSubject(client, ticketType),
+          subject: ticketSubject || generateTicketSubject(client, ticketType),
           content: ticketContent,
           requesterEmail: client.email,
           tags: tags,
