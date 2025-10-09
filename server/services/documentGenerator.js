@@ -2877,8 +2877,13 @@ class DocumentGenerator {
 
             console.log(`📊 Processing ${creditorData.length} creditors for Nullplan`);
 
-            // Generate all three documents
-            const nullplanResult = await this.generateNullplan(clientData, creditorData);
+            // Generate individual Nullplan letters for each creditor
+            console.log('📄 Generating individual Nullplan letters for each creditor...');
+            const NullplanCreditorLetterGenerator = require('./nullplanCreditorLetterGenerator');
+            const letterGenerator = new NullplanCreditorLetterGenerator();
+            const nullplanLettersResult = await letterGenerator.generateNullplanLettersForAllCreditors(clientData, creditorData);
+            
+            // Generate Forderungsübersicht
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
             // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan)
@@ -2889,7 +2894,7 @@ class DocumentGenerator {
 
             return {
                 success: true,
-                nullplan: nullplanResult,
+                nullplan_letters: nullplanLettersResult,
                 forderungsuebersicht: forderungsuebersichtResult,
                 schuldenbereinigungsplan: nullplanTableResult,
                 client_reference: clientReference,
