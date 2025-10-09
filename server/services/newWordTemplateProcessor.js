@@ -42,6 +42,9 @@ class NewWordTemplateProcessor {
             const documentXml = await zip.file('word/document.xml').async('string');
 
             console.log('📄 Template loaded, document XML length:', documentXml.length);
+            
+            // Run analysis to understand template structure
+            await this.analyzeTemplate();
 
             // Prepare all variable replacements based on identified template variables
             const replacements = this.prepareVariableReplacements(clientData, settlementData, creditorData);
@@ -51,7 +54,23 @@ class NewWordTemplateProcessor {
             // Replace variables in the document XML
             let processedXml = documentXml;
             
-            // Support multiple quote types found in Word documents
+            // Debug: Show what quoted text exists in the document
+            console.log('🔍 Searching for quoted text patterns in document...');
+            const debugPatterns = [
+                /&quot;[^&]*?&quot;/g,
+                /"[^"]*?"/g,
+                /"[^"]*?"/g,
+                /"[^"]*?"/g
+            ];
+            
+            debugPatterns.forEach((pattern, index) => {
+                const matches = documentXml.match(pattern);
+                if (matches && matches.length > 0) {
+                    console.log(`   Pattern ${index + 1} found ${matches.length} matches:`, matches.slice(0, 5));
+                }
+            });
+            
+            // Support multiple quote types found in Word documents - with XML handling
             const quoteTypes = [
                 { name: 'HTML encoded', open: '&quot;', close: '&quot;' },
                 { name: 'Regular', open: '"', close: '"' },
@@ -59,20 +78,83 @@ class NewWordTemplateProcessor {
                 { name: 'Curly alternative', open: '"', close: '"' }
             ];
 
+            let totalReplacements = 0;
+
             Object.entries(replacements).forEach(([variable, value]) => {
+                let variableReplaced = false;
+                
                 quoteTypes.forEach(quoteType => {
-                    const pattern = new RegExp(
-                        `${this.escapeRegex(quoteType.open)}${this.escapeRegex(variable)}${this.escapeRegex(quoteType.close)}`,
+                    if (variableReplaced) return; // Skip if already replaced
+                    
+                    // Create more flexible pattern that handles XML structure
+                    const quotedVariable = `${quoteType.open}${variable}${quoteType.close}`;
+                    
+                    // First try exact match
+                    const exactPattern = new RegExp(
+                        this.escapeRegex(quotedVariable),
                         'g'
                     );
                     
-                    const beforeCount = (processedXml.match(pattern) || []).length;
-                    if (beforeCount > 0) {
-                        processedXml = processedXml.replace(pattern, value);
-                        console.log(`✅ Replaced "${variable}" (${quoteType.name}): ${beforeCount} occurrences`);
+                    const exactMatches = (processedXml.match(exactPattern) || []).length;
+                    if (exactMatches > 0) {
+                        processedXml = processedXml.replace(exactPattern, value);
+                        console.log(`✅ Exact match "${variable}" (${quoteType.name}): ${exactMatches} occurrences`);
+                        totalReplacements += exactMatches;
+                        variableReplaced = true;
+                        return;
+                    }
+                    
+                    // Try pattern that allows for XML tags between quotes and text
+                    const flexiblePattern = new RegExp(
+                        `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
+                        'g'
+                    );
+                    
+                    const flexibleMatches = processedXml.match(flexiblePattern);
+                    if (flexibleMatches && flexibleMatches.length > 0) {
+                        processedXml = processedXml.replace(flexiblePattern, (match, content) => {
+                            // Only replace if the content actually contains our variable
+                            if (content.includes(variable)) {
+                                console.log(`✅ Flexible match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                totalReplacements++;
+                                variableReplaced = true;
+                                return value;
+                            }
+                            return match;
+                        });
+                    }
+                    
+                    // Try ultra-flexible pattern for variables split across XML elements
+                    if (!variableReplaced) {
+                        // Build pattern for variables that might be split across <w:t> tags
+                        const splitPattern = new RegExp(
+                            `${this.escapeRegex(quoteType.open)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(quoteType.close)}`,
+                            'g'
+                        );
+                        
+                        const splitMatches = processedXml.match(splitPattern);
+                        if (splitMatches && splitMatches.length > 0) {
+                            processedXml = processedXml.replace(splitPattern, (match) => {
+                                // Extract just the text content to check
+                                const textContent = match.replace(/<[^>]*>/g, '');
+                                if (textContent.includes(variable)) {
+                                    console.log(`✅ Split-XML match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                    totalReplacements++;
+                                    variableReplaced = true;
+                                    return value;
+                                }
+                                return match;
+                            });
+                        }
                     }
                 });
+                
+                if (!variableReplaced) {
+                    console.log(`⚠️ Variable "${variable}" not found in document`);
+                }
             });
+            
+            console.log(`✅ Total replacements made: ${totalReplacements}`);
 
             // Update the document XML in the zip
             zip.file('word/document.xml', processedXml);
@@ -276,6 +358,53 @@ class NewWordTemplateProcessor {
         }
         
         return date.toLocaleDateString('de-DE');
+    }
+
+    /**
+     * Debug function to analyze what's actually in the Word template
+     */
+    async analyzeTemplate() {
+        try {
+            if (!fs.existsSync(this.templatePath)) {
+                console.log('❌ Template not found:', this.templatePath);
+                return;
+            }
+
+            const templateBuffer = fs.readFileSync(this.templatePath);
+            const zip = await JSZip.loadAsync(templateBuffer);
+            const documentXml = await zip.file('word/document.xml').async('string');
+
+            console.log('🔍 Template Analysis:');
+            console.log('📁 Template path:', this.templatePath);
+            console.log('📄 Document XML length:', documentXml.length);
+
+            // Look for all types of quoted text
+            const patterns = [
+                { name: 'HTML encoded quotes', regex: /&quot;[^&]*?&quot;/g },
+                { name: 'Regular quotes', regex: /"[^"]*?"/g },
+                { name: 'Left/right curly quotes', regex: /"[^"]*?"/g },
+                { name: 'Alternative curly quotes', regex: /"[^"]*?"/g }
+            ];
+
+            patterns.forEach(({ name, regex }) => {
+                const matches = documentXml.match(regex);
+                if (matches && matches.length > 0) {
+                    console.log(`\n📋 ${name} (${matches.length} found):`);
+                    matches.forEach((match, index) => {
+                        if (index < 10) { // Show first 10
+                            console.log(`   ${index + 1}. ${match}`);
+                        }
+                    });
+                    if (matches.length > 10) {
+                        console.log(`   ... and ${matches.length - 10} more`);
+                    }
+                }
+            });
+
+            return documentXml;
+        } catch (error) {
+            console.error('❌ Error analyzing template:', error.message);
+        }
     }
 
     /**
