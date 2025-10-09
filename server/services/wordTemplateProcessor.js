@@ -8,9 +8,9 @@ const JSZip = require('jszip');
  */
 class WordTemplateProcessor {
     constructor() {
-        this.templatePath = path.join(__dirname, '../documents/Ratenplan-Template-Original.docx');
-        this.nullplanTemplatePath = path.join(__dirname, '../documents/Nullplan-Template-Original.docx');
-        this.quotenplanNullplanTemplatePath = path.join(__dirname, '../documents/Quotenplan-Nullplan-Template-Original.docx');
+        this.templatePath = path.join(__dirname, '../templates/Template-Word-Pfaendbares-Einkommen.docx');
+        this.nullplanTemplatePath = path.join(__dirname, '../templates/Nullplan_Text_Template.docx');
+        this.quotenplanNullplanTemplatePath = path.join(__dirname, '../templates/Nullplan_Text_Template.docx');
     }
 
     /**
