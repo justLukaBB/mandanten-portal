@@ -412,7 +412,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       const ticket = req.body.ticket;
       const requester = ticket.requester || {};
       
-      aktenzeichen = ticket.aktenzeichen || requester.aktenzeichen || req.body.aktenzeichen;
+      aktenzeichen = requester.aktenzeichen; // This is the custom field!
       zendesk_ticket_id = ticket.id;
       requester_email = requester.email;
       requester_name = requester.name;
@@ -626,156 +626,43 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     let ticketType, ticketContent, nextAction, tags, ticketSubject;
 
     if (!state.hasDocuments) {
-      // NEW SCENARIO: Payment made without documents - create payment confirmation ticket
+      // PAYMENT-FIRST SCENARIO: Payment received before document upload
       console.log(`💰 PAYMENT-FIRST SCENARIO: Payment received without documents for ${client.aktenzeichen}`);
-      
+    
       ticketType = 'payment_confirmed_awaiting_documents';
       nextAction = 'send_document_upload_request';
       client.payment_ticket_type = 'payment_confirmed_awaiting_documents';
-      
-      // Send side conversation reminder instead of creating manual ticket
-      try {
-        if (!client.document_reminder_sent_via_side_conversation) {
-          // If no ticket exists yet, use the current one or create connection
-          let ticketIdForSideConversation = zendesk_ticket_id || client.zendesk_ticket_id;
-          
-          if (!ticketIdForSideConversation) {
-            console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
-            
-            const ticketResult = await zendeskService.createTicket({
-              subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-              requester_email: client.email || requester_email,
-              tags: ['payment-confirmed', 'document-upload-needed', 'automated'],
-              priority: 'normal',
-              type: 'task',
-              comment: {
-                body: `Client has paid but needs to upload documents. Automated reminder will be sent via side conversation.`,
-                public: false
-              }
-            });
-            
-            if (ticketResult && ticketResult.id) {
-              client.zendesk_ticket_id = ticketResult.id;
-              client.zendesk_tickets = client.zendesk_tickets || [];
-              client.zendesk_tickets.push({
-                ticket_id: ticketResult.id,
-                ticket_type: 'payment_first_workflow',
-                ticket_scenario: 'document_upload_reminder',
-                status: 'open',
-                created_at: new Date()
-              });
-              
-              ticketIdForSideConversation = ticketResult.id;
-              console.log(`✅ Created initial ticket ${ticketResult.id} for ${client.aktenzeichen}`);
-            }
-          }
-
-          const reminderText = `Hallo ${client.firstName} ${client.lastName},
-
-vielen Dank für Ihre Zahlung! 💰
-
-Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
-
-📎 **Bitte laden Sie Ihre Dokumente hoch:**
-
-${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
-
-**Was Sie hochladen sollten:**
-
-- Mahnungen, Forderungsschreiben
-- Inkassobriefe
-- Gerichtsbeschlüsse
-- Vollstreckungsbescheide
-- Sonstige Gläubigerdokumente
-
-Nach dem Upload werden Ihre Dokumente analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
-
-Bei Fragen stehen wir Ihnen gerne zur Verfügung.
-
-Ihr Team von der Rechtsanwaltskanzlei 
-
-Thomas Scuric`;
-
-          // Now send the side conversation if we have a ticket
-          if (ticketIdForSideConversation) {
-            const clientEmail = client.email || requester_email;
-            if (!clientEmail) {
-              throw new Error(`No email address available for client ${client.aktenzeichen}`);
-            }
-            
-            console.log(`📧 Creating Side Conversation on ticket ${ticketIdForSideConversation} to send email to ${clientEmail}...`);
-            
-            const sideConversationResult = await zendeskService.createSideConversation(
-              ticketIdForSideConversation,
-              {
-                recipientEmail: clientEmail,
-                recipientName: `${client.firstName} ${client.lastName}`,
-                subject: `Dokumenten-Upload Erinnerung für ${client.firstName} ${client.lastName}`,
-                body: reminderText,
-                internalNote: false
-              }
-            );
-          
-            if (sideConversationResult && sideConversationResult.success && sideConversationResult.side_conversation_id) {
-              client.document_reminder_sent_via_side_conversation = true;
-              client.document_reminder_side_conversation_at = new Date();
-              client.document_reminder_side_conversation_id = sideConversationResult.side_conversation_id;
-              
-              console.log(`✅ Document reminder sent via side conversation ${sideConversationResult.side_conversation_id} for ${client.aktenzeichen}`);
-            } else {
-              console.error(`❌ Failed to create side conversation for ${client.aktenzeichen}`, sideConversationResult);
-              throw new Error('Side conversation creation failed');
-            }
-          } else {
-            console.error(`❌ No Zendesk ticket ID available for ${client.aktenzeichen}`);
-            throw new Error('No Zendesk ticket available for side conversation');
-          }
-        }
-      } catch (sideConversationError) {
-        console.error('❌ Error sending side conversation reminder:', sideConversationError);
-        
-        // Try to schedule automatic reminder via DocumentReminderService instead
-        console.log(`🔄 Scheduling automatic reminder for ${client.aktenzeichen} via DocumentReminderService...`);
-        
-        // Mark for automatic reminders - the DocumentReminderService will pick this up
-        client.payment_ticket_type = 'document_request';
-        client.document_request_sent_at = new Date();
-        
-        // Do NOT create manual ticket - let automated system handle it
-        ticketType = 'automated_reminder_scheduled';
-        nextAction = 'automated_reminder_system_will_handle';
-        
-        console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system`);
-      }
-      
-      client.document_request_sent_at = new Date();
-      
-    } else if (!state.allProcessed) {
-      // SCENARIO 3: Documents uploaded but still processing
-      ticketType = 'processing_wait';
-      ticketContent = generateProcessingWaitTicket(client, documents, completedDocs);
-      nextAction = 'wait_for_processing_complete';
-      tags = ['payment-confirmed', 'processing-wait', 'ai-processing'];
-      
-      client.payment_ticket_type = 'processing_wait';
-      
-    } else if (!state.hasCreditors) {
-      // SCENARIO: Documents processed but no creditors found
-      ticketType = 'no_creditors_found';
-      ticketContent = generateNoCreditorsTicket(client, documents);
-      nextAction = 'manual_document_check';
-      tags = ['payment-confirmed', 'no-creditors', 'manual-check-needed'];
-      
-      client.payment_ticket_type = 'no_creditors_found';
-      
-    } else if (!state.hasDocuments) {
-      // NEW SCENARIO: Payment made without documents - create payment confirmation ticket
-      console.log(`💰 PAYMENT-FIRST SCENARIO: Payment received without documents for ${client.aktenzeichen}`);
-      
-      ticketType = 'payment_confirmed_awaiting_documents';
-      nextAction = 'send_document_upload_request';
-      client.payment_ticket_type = 'payment_confirmed_awaiting_documents';
-      
+    
+      const reminderText = `Hallo ${client.firstName} ${client.lastName},
+    
+    vielen Dank für Ihre Zahlung! 💰 ok bye
+    
+    Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
+    
+    📎 **Bitte laden Sie Ihre Dokumente hoch:**
+    
+    ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
+    
+    **Was Sie hochladen sollten:**
+    
+    - Mahnungen, Forderungsschreiben
+    - Inkassobriefe
+    - Gerichtsbeschlüsse
+    - Vollstreckungsbescheide
+    - Sonstige Gläubigerdokumente
+    
+    Nach dem Upload werden Ihre Dokumente analysiert und Sie erhalten innerhalb von 7 Tagen Feedback zur weiteren Bearbeitung.
+    
+    Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+    
+    Ihr Team von der Rechtsanwaltskanzlei 
+    Thomas Scuric`;
+    
+       // Schedule automated reminders for payment-first clients
+       console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
+       client.document_request_sent_at = new Date();
+    
+      // Create payment confirmation ticket content
       ticketContent = `💰 ZAHLUNG BESTÄTIGT - DOKUMENTE BENÖTIGT
 
 👤 MANDANT: ${client.firstName} ${client.lastName}
@@ -808,13 +695,29 @@ Das System sendet automatisch Erinnerungen nach 2 Tagen, falls keine Dokumente h
 Dieses Ticket wird aktualisiert, sobald Dokumente hochgeladen und verarbeitet wurden.`;
 
       ticketSubject = `Zahlung bestätigt - Dokumente benötigt: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
-      tags: ['payment-confirmed', 'payment-first', 'document-upload-needed', 'automated'],
+      tags = ['payment-confirmed', 'awaiting-documents', 'payment-first-workflow','payment-first'];
       
       console.log(`📋 Creating payment confirmation ticket for payment-first client ${client.aktenzeichen}...`);
-      
-      // Schedule automated reminders for payment-first clients
-      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
+    
       client.document_request_sent_at = new Date();
+    }
+    else if (!state.allProcessed) {
+      // SCENARIO 3: Documents uploaded but still processing
+      ticketType = 'processing_wait';
+      ticketContent = generateProcessingWaitTicket(client, documents, completedDocs);
+      nextAction = 'wait_for_processing_complete';
+      tags = ['payment-confirmed', 'processing-wait', 'ai-processing'];
+      
+      client.payment_ticket_type = 'processing_wait';
+      
+    } else if (!state.hasCreditors) {
+      // SCENARIO: Documents processed but no creditors found
+      ticketType = 'no_creditors_found';
+      ticketContent = generateNoCreditorsTicket(client, documents);
+      nextAction = 'manual_document_check';
+      tags = ['payment-confirmed', 'no-creditors', 'manual-check-needed'];
+      
+      client.payment_ticket_type = 'no_creditors_found';
       
     } else {
       // SCENARIO 1: Documents processed, creditors found - ready for review
