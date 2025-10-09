@@ -5633,19 +5633,30 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       
       if (settlementResult.success) {
         console.log(`✅ Generated Nullplan documents:`);
-        console.log(`   - Nullplan: ${settlementResult.nullplan.document_info.filename}`);
-        console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
-        if (settlementResult.ratenplan_nullplan) {
-          console.log(`   - Ratenplan (Nullplan): ${settlementResult.ratenplan_nullplan.document_info.filename}`);
+        
+        // Log individual Nullplan letters
+        if (settlementResult.nullplan_letters && settlementResult.nullplan_letters.documents) {
+          console.log(`   - Nullplan Letters: ${settlementResult.nullplan_letters.documents.length} individual letters`);
+          settlementResult.nullplan_letters.documents.forEach((doc, index) => {
+            console.log(`     ${index + 1}. ${doc.filename} (${doc.creditor_name})`);
+          });
+        }
+        
+        // Log Forderungsübersicht
+        if (settlementResult.forderungsuebersicht && settlementResult.forderungsuebersicht.document_info) {
+          console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
+        }
+        
+        // Log Schuldenbereinigungsplan (quota table)
+        if (settlementResult.schuldenbereinigungsplan && settlementResult.schuldenbereinigungsplan.filename) {
+          console.log(`   - Schuldenbereinigungsplan: ${settlementResult.schuldenbereinigungsplan.filename}`);
         } else {
           console.warn(`   ⚠️ Ratenplan (Nullplan) generation failed - continuing with 2 documents`);
         }
         // Store all documents in client for creditor emails
-        client.nullplan_document = settlementResult.nullplan;
+        client.nullplan_letters = settlementResult.nullplan_letters;
         client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
-        if (settlementResult.ratenplan_nullplan) {
-          client.ratenplan_nullplan_document = settlementResult.ratenplan_nullplan;
-        }
+        client.schuldenbereinigungsplan_document = settlementResult.schuldenbereinigungsplan;
         
         // Automatically send Nullplan to creditors
         console.log(`📧 Automatically sending Nullplan to creditors...`);
