@@ -725,7 +725,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     const creditors = client.final_creditor_list || [];
     const completedDocs = documents.filter(d => d.processing_status === 'completed');
     const creditorDocs = documents.filter(d => d.is_creditor_document === true);
-
+    
     const state = {
       hasDocuments: documents.some(d => d.filepath || d.filename || d.processing_status === 'completed'),
       allProcessed: documents.length > 0 && completedDocs.length === documents.length,
@@ -736,27 +736,12 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     // DETERMINE TICKET TYPE AND CONTENT BASED ON SCENARIO
     let ticketType, ticketContent, nextAction, tags;
 
-      if (!state.hasDocuments) {
-        console.log(`💰 PAYMENT-FIRST SCENARIO detected for ${client.aktenzeichen}`);
-  
-        ticketType = 'payment_first_pending_documents';
-        client.payment_ticket_type = ticketType;
-  
-        if (zendesk_ticket_id) {
-          console.log(`🧹 Found existing Zendesk ticket (${zendesk_ticket_id}) — will ignore after new one is created.`);
-          client.status_history.push({
-            id: uuidv4(),
-            status: 'previous_ticket_detected',
-            changed_by: 'system',
-            metadata: {
-              note: 'Old Zendesk ticket will be replaced after new payment-first ticket is created',
-              old_ticket_id: zendesk_ticket_id
-            },
-            created_at: new Date()
-          });
-          await client.save({ validateModifiedOnly: true });
-        }
-        
+    if (!state.hasDocuments) {
+      console.log(`💰 PAYMENT-FIRST SCENARIO detected for ${client.aktenzeichen}`);
+    
+      ticketType = 'payment_first_pending_documents';
+      nextAction = 'wait_for_document_upload';
+      client.payment_ticket_type = 'payment_first_pending_documents';
     
       // STEP 1️⃣ — Create the main Zendesk ticket
       const ticketSubject = `Payment received - awaiting documents: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
@@ -791,11 +776,8 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           priority: 'normal',
           type: 'task'
         });
-        
-        console.log('📨 Zendesk createTicket response:', JSON.stringify(paymentTicket, null, 2));
-
     
-        if (paymentTicket && (paymentTicket.success || paymentTicket.ticket_id)) {
+        if (paymentTicket && paymentTicket.success && paymentTicket.ticket_id) {
           client.zendesk_ticket_id = paymentTicket.ticket_id;
           client.zendesk_tickets = client.zendesk_tickets || [];
           client.zendesk_tickets.push({
@@ -805,8 +787,6 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
             status: 'open',
             created_at: new Date()
           });
-          console.log('💬 Zendesk createSideConversation response:', JSON.stringify(sideConversationResult, null, 2));
-
           await client.save({ validateModifiedOnly: true });
           console.log(`✅ Created 'Payment-first' ticket ${paymentTicket.ticket_id} for ${client.aktenzeichen}`);
         } else {
@@ -815,30 +795,13 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       } catch (err) {
         console.error(`❌ Exception creating payment-first ticket:`, err);
       }
-
-      if (zendesk_ticket_id) {
-        console.log(`🧹 Old Zendesk ticket (${zendesk_ticket_id}) ignored after new ticket creation.`);
-        client.status_history.push({
-          id: uuidv4(),
-          status: 'ignored_previous_ticket',
-          changed_by: 'system',
-          metadata: {
-            reason: 'Payment-first: replaced old Zendesk ticket after new ticket creation',
-            old_ticket_id: zendesk_ticket_id,
-            new_ticket_id: paymentTicket.ticket_id
-          },
-          created_at: new Date()
-        });
-        zendesk_ticket_id = null; // clear only now
-        await client.save({ validateModifiedOnly: true });
-      }
     
       // STEP 2️⃣ — Send a side conversation reminder (email)
-      if (paymentTicket && (paymentTicket.success || paymentTicket.ticket_id)){
+      if (paymentTicket?.success && paymentTicket.ticket_id) {
         try {
           const reminderText = `Hallo ${client.firstName} ${client.lastName},
     
-    vielen Dank für Ihre Zahlung! 💰 lets beginn see changeok!
+    vielen Dank für Ihre Zahlung! 💰
     
     Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläubigerdokumente.
     
@@ -893,7 +856,8 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
         next_action: nextAction
       });
     }
-     else if (!state.allProcessed) {
+    
+ else if (!state.allProcessed) {
       // SCENARIO 3: Documents uploaded but still processing
       ticketType = 'processing_wait';
       ticketContent = generateProcessingWaitTicket(client, documents, completedDocs);
@@ -1109,7 +1073,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       ticketCreationError = 'Zendesk API not configured';
     }
 
-    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Scenario: ${ticketType}, hasDocuments: ${state.hasDocuments}, Docs: ${documents.length}, Creditors: ${creditors.length}`);
+    console.log(`✅ Payment confirmed for ${client.aktenzeichen}. Scenario: ${ticketType}, Documents: ${documents.length}, Creditors: ${creditors.length}`);
 
     res.json({
       success: true,
