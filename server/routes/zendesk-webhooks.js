@@ -412,7 +412,7 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       const ticket = req.body.ticket;
       const requester = ticket.requester || {};
       
-      aktenzeichen = requester.aktenzeichen; // This is the custom field!
+      aktenzeichen = ticket.aktenzeichen || requester.aktenzeichen || req.body.aktenzeichen;
       zendesk_ticket_id = ticket.id;
       requester_email = requester.email;
       requester_name = requester.name;
@@ -808,7 +808,7 @@ Das System sendet automatisch Erinnerungen nach 2 Tagen, falls keine Dokumente h
 Dieses Ticket wird aktualisiert, sobald Dokumente hochgeladen und verarbeitet wurden.`;
 
       ticketSubject = `Zahlung bestätigt - Dokumente benötigt: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
-      tags = ['payment-confirmed', 'awaiting-documents', 'payment-first-workflow'];
+      tags: ['payment-confirmed', 'payment-first', 'document-upload-needed', 'automated'],
       
       console.log(`📋 Creating payment confirmation ticket for payment-first client ${client.aktenzeichen}...`);
       
