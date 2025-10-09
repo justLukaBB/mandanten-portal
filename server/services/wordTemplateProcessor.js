@@ -111,21 +111,35 @@ class WordTemplateProcessor {
                          settlementData.total_debt || 
                          97357.73;
         
+        // Get all creditors for counting
+        const allCreditors = client.creditor_calculation_table || settlementData.creditor_payments || [];
+        const creditorCount = allCreditors.length;
+        
         // Find specific creditor (Finanzamt) or use default
-        const finanzamtCreditor = this.findFinanzamtCreditor(client.creditor_calculation_table || []);
+        const finanzamtCreditor = this.findFinanzamtCreditor(allCreditors);
+        
+        // Find creditor position (index + 1)
+        const creditorPosition = finanzamtCreditor ? 
+            allCreditors.findIndex(c => c.name === finanzamtCreditor.name) + 1 : 12;
         
         // Calculate individual creditor payment
-        const creditorAmount = finanzamtCreditor?.final_amount || 1677.64;
+        const creditorAmount = finanzamtCreditor?.final_amount || finanzamtCreditor?.amount || 1677.64;
         const creditorTotalPayment = this.calculateCreditorPayment(creditorAmount, totalDebt, pfaendbarAmount);
         
         // Calculate tilgung percentage 
         const tilgungsquote = (creditorTotalPayment / creditorAmount) * 100;
-            
-        // Birth date (calculate age - assuming born around 1985 for now)
-        const birthDate = this.calculateBirthDate();
+        
+        // Get birth date from client data or calculate
+        const birthDate = client.geburtstag || this.calculateBirthDate();
         
         // Court determination
         const court = this.determineCourtFromAddress(client.address);
+        
+        // Income type determination
+        const incomeType = this.determineIncomeType(client);
+        
+        // Address parsing
+        const parsedAddress = this.parseAddress(client.address);
         
         return {
             // Personal Information
@@ -139,17 +153,26 @@ class WordTemplateProcessor {
             maritalStatus,
             numberOfChildren,
             
+            // Address Components
+            street: parsedAddress.street,
+            city: parsedAddress.city,
+            postalCode: parsedAddress.postalCode,
+            
             // Financial Information  
             monthlyNetIncome,
             grossIncome,
             pfaendbarAmount,
             totalDebt,
+            incomeType,
             
             // Creditor Information
+            creditorCount,
+            creditorPosition,
             finanzamtCreditor: {
                 name: finanzamtCreditor?.name || 'Finanzamt Bochum-Süd',
                 amount: creditorAmount,
-                reference: finanzamtCreditor?.reference_number || '350/2141/2659'
+                reference: finanzamtCreditor?.reference_number || '350/2141/2659',
+                address: finanzamtCreditor?.address || 'Königsallee 21, 44789 Bochum'
             },
             creditorTotalPayment,
             tilgungsquote,
@@ -247,51 +270,80 @@ class WordTemplateProcessor {
      * Build comprehensive replacements for template
      */
     buildReplacements(clientData) {
-        return {
-            // Dates
+        // Common replacements that might appear in quotes
+        const replacements = {
+            // Dates - various formats
+            '"aktuelles Datum"': clientData.currentDate,
+            '"Datum"': clientData.currentDate,
+            '"Startdatum Zahlungsplan"': clientData.planStartDate,
+            '"Deadline für Zustimmung"': clientData.deadlineDate,
+            
+            // Client Information
+            '"Vorname Nachname Mandant"': clientData.fullName,
+            '"Name Mandant"': clientData.fullName,
+            '"Herr/Frau Name Mandant"': `${this.getGenderTitle(clientData)} ${clientData.fullName}`,
+            '"Vorname"': clientData.firstName,
+            '"Nachname"': clientData.lastName,
+            '"Geburtsdatum"': clientData.birthDate,
+            '"Familienstand"': this.getMaritalStatusText(clientData.maritalStatus),
+            
+            // Address
+            '"Adresse Mandant"': clientData.address,
+            '"Straße"': clientData.street,
+            '"PLZ Ort"': `${clientData.postalCode} ${clientData.city}`,
+            
+            // Financial Information
+            '"Gesamtschulden"': this.formatGermanCurrency(clientData.totalDebt),
+            '"Bruttoeinkommen"': this.formatGermanCurrency(clientData.grossIncome),
+            '"Nettoeinkommen"': this.formatGermanCurrency(clientData.monthlyNetIncome),
+            '"pfändbarer Betrag"': this.formatGermanCurrency(clientData.pfaendbarAmount),
+            '"Einkommensart"': clientData.incomeType,
+            
+            // Creditor Information
+            '"Anzahl Gläubiger"': clientData.creditorCount.toString(),
+            '"Name Gläubiger"': clientData.finanzamtCreditor.name,
+            '"Adresse Gläubiger"': clientData.finanzamtCreditor.address,
+            '"Forderungsbetrag"': this.formatGermanCurrency(clientData.finanzamtCreditor.amount),
+            '"Gesamttilgungsbetrag"': this.formatGermanCurrency(clientData.creditorTotalPayment),
+            '"Tilgungsquote"': `${clientData.tilgungsquote.toFixed(2).replace('.', ',')}%`,
+            '"laufende Nummer"': clientData.creditorPosition.toString(),
+            
+            // Reference Numbers
+            '"Aktenzeichen"': `${clientData.reference}/TS-JK`,
+            '"Referenznummer Gläubiger"': clientData.finanzamtCreditor.reference,
+            
+            // Court Information
+            '"zuständiges Amtsgericht"': clientData.court,
+            '"Ort Amtsgericht"': clientData.courtAddress,
+            
+            // Also include the specific values from the template (as fallback)
             '02.05.2025': clientData.currentDate,
             '01.08.2025': clientData.planStartDate,
             '16.05.2025': clientData.deadlineDate,
-            
-            // Client Names - Multiple variations
             'Alexander Drewitz': clientData.fullName,
             'Alexander': clientData.firstName,
             'Drewitz': clientData.lastName,
             'Herr Drewitz': `Herr ${clientData.lastName}`,
             'Herr Alexander Drewitz': `Herr ${clientData.fullName}`,
-            
-            // Financial Amounts
             '97.357,73': this.formatGermanCurrency(clientData.totalDebt),
             '2.750,00': this.formatGermanCurrency(clientData.grossIncome),
             '680,78': this.formatGermanCurrency(clientData.pfaendbarAmount),
             '880,78': this.formatGermanCurrency(clientData.pfaendbarAmount),
             '1.677,64': this.formatGermanCurrency(clientData.finanzamtCreditor.amount),
             '546,38': this.formatGermanCurrency(clientData.creditorTotalPayment),
-            
-            // Percentages
             '32,57%': `${clientData.tilgungsquote.toFixed(2).replace('.', ',')}%`,
-            
-            // Reference Numbers
             '99/25 TS-JK': `${clientData.reference}/TS-JK`,
             '99/25 TS.JK': `${clientData.reference}/TS-JK`, 
             '350/2141/2659': clientData.finanzamtCreditor.reference || clientData.reference,
-            
-            // Birth Date
             '24.11.1985': clientData.birthDate,
-            
-            // Marital Status Specific Text
             'verheiratet': this.getMaritalStatusText(clientData.maritalStatus),
-            
-            // Court Information
             'Amtsgericht Bochum': clientData.court,
             'Bochum': clientData.courtAddress,
-            
-            // Dynamic creditor number (12 is from template)
-            '12 Gläubigern': `${(clientData.creditorCount || 12)} Gläubigern`,
-            
-            // Number 12 (creditor position)
-            'Nummer 12': `Nummer ${clientData.creditorPosition || 12}`
+            '12 Gläubigern': `${clientData.creditorCount} Gläubigern`,
+            'Nummer 12': `Nummer ${clientData.creditorPosition}`
         };
+        
+        return replacements;
     }
 
     /**
@@ -306,6 +358,20 @@ class WordTemplateProcessor {
             'getrennt_lebend': 'getrennt lebend'
         };
         return statusMap[status] || 'verheiratet';
+    }
+    
+    /**
+     * Get gender title (Herr/Frau)
+     */
+    getGenderTitle(clientData) {
+        // Check if we have gender information in client data
+        if (clientData.gender) {
+            return clientData.gender === 'female' ? 'Frau' : 'Herr';
+        }
+        
+        // Default to Herr for now
+        // TODO: Consider adding gender field to client model or better detection
+        return 'Herr';
     }
 
     /**
@@ -336,6 +402,45 @@ class WordTemplateProcessor {
      */
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /**
+     * Determine income type based on client data
+     */
+    determineIncomeType(client) {
+        // Check financial data for income type indicators
+        if (client.financial_data?.income_type) {
+            return client.financial_data.income_type;
+        }
+        
+        // Default to employment income
+        return 'Erwerbstätigkeit';
+    }
+
+    /**
+     * Parse address into components
+     */
+    parseAddress(address) {
+        if (!address) {
+            return {
+                street: 'Musterstraße 1',
+                postalCode: '44787',
+                city: 'Bochum'
+            };
+        }
+        
+        // Simple address parsing - could be enhanced
+        const parts = address.split(',').map(part => part.trim());
+        
+        // Try to extract postal code and city from last part
+        const lastPart = parts[parts.length - 1] || '';
+        const postalMatch = lastPart.match(/(\d{5})\s+(.+)/);
+        
+        return {
+            street: parts[0] || 'Musterstraße 1',
+            postalCode: postalMatch ? postalMatch[1] : '44787',
+            city: postalMatch ? postalMatch[2] : 'Bochum'
+        };
     }
 }
 

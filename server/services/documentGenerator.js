@@ -1505,7 +1505,7 @@ class DocumentGenerator {
             console.log('📄 Using original Word template for Ratenplan generation...');
             
             const result = await templateProcessor.processRatenplanTemplate(
-                clientReference, 
+                clientData.reference, 
                 settlementData, 
                 pfaendbarAmount
             );
