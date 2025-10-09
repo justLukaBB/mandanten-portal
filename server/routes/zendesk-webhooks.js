@@ -743,20 +743,20 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
         client.payment_ticket_type = ticketType;
   
         if (zendesk_ticket_id) {
-          console.log(`🧹 Ignoring existing Zendesk ticket (${zendesk_ticket_id})`);
+          console.log(`🧹 Found existing Zendesk ticket (${zendesk_ticket_id}) — will ignore after new one is created.`);
           client.status_history.push({
             id: uuidv4(),
-            status: 'ignored_previous_ticket',
+            status: 'previous_ticket_detected',
             changed_by: 'system',
             metadata: {
-              reason: 'Payment-first scenario: skipped linking to existing Zendesk ticket',
+              note: 'Old Zendesk ticket will be replaced after new payment-first ticket is created',
               old_ticket_id: zendesk_ticket_id
             },
             created_at: new Date()
           });
           await client.save({ validateModifiedOnly: true });
-          zendesk_ticket_id = null; // don't reuse old ticket
         }
+        
     
       // STEP 1️⃣ — Create the main Zendesk ticket
       const ticketSubject = `Payment received - awaiting documents: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
@@ -791,6 +791,9 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
           priority: 'normal',
           type: 'task'
         });
+        
+        console.log('📨 Zendesk createTicket response:', JSON.stringify(paymentTicket, null, 2));
+
     
         if (paymentTicket && (paymentTicket.success || paymentTicket.ticket_id)) {
           client.zendesk_ticket_id = paymentTicket.ticket_id;
@@ -802,6 +805,8 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
             status: 'open',
             created_at: new Date()
           });
+          console.log('💬 Zendesk createSideConversation response:', JSON.stringify(sideConversationResult, null, 2));
+
           await client.save({ validateModifiedOnly: true });
           console.log(`✅ Created 'Payment-first' ticket ${paymentTicket.ticket_id} for ${client.aktenzeichen}`);
         } else {
@@ -810,9 +815,26 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       } catch (err) {
         console.error(`❌ Exception creating payment-first ticket:`, err);
       }
+
+      if (zendesk_ticket_id) {
+        console.log(`🧹 Old Zendesk ticket (${zendesk_ticket_id}) ignored after new ticket creation.`);
+        client.status_history.push({
+          id: uuidv4(),
+          status: 'ignored_previous_ticket',
+          changed_by: 'system',
+          metadata: {
+            reason: 'Payment-first: replaced old Zendesk ticket after new ticket creation',
+            old_ticket_id: zendesk_ticket_id,
+            new_ticket_id: paymentTicket.ticket_id
+          },
+          created_at: new Date()
+        });
+        zendesk_ticket_id = null; // clear only now
+        await client.save({ validateModifiedOnly: true });
+      }
     
       // STEP 2️⃣ — Send a side conversation reminder (email)
-      if (paymentTicket?.success && paymentTicket.ticket_id) {
+      if (paymentTicket && (paymentTicket.success || paymentTicket.ticket_id)){
         try {
           const reminderText = `Hallo ${client.firstName} ${client.lastName},
     
