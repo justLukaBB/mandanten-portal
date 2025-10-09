@@ -2258,30 +2258,26 @@ class DocumentGenerator {
      */
     async generateNullplanRatenplanDocument(clientData, settlementData) {
         try {
-            // Use the Word template processor for Nullplan
+            // Use the Word template processor for Quotenplan-Nullplan (Nullplan with creditor quota table)
             const WordTemplateProcessor = require('./wordTemplateProcessor');
             const templateProcessor = new WordTemplateProcessor();
             
-            console.log('📄 Using Word template for Nullplan generation...');
+            console.log('📄 Using Quotenplan-Nullplan Word template for Nullplan generation...');
             
-            // Get creditor data for the template
-            const creditorData = settlementData.creditor_payments || [];
-            
-            const result = await templateProcessor.processNullplanTemplate(
+            const result = await templateProcessor.processQuotenplanNullplanTemplate(
                 clientData.reference, 
-                settlementData,
-                creditorData
+                settlementData
             );
             
             if (!result.success) {
-                throw new Error(`Nullplan template processing failed: ${result.error}`);
+                throw new Error(`Quotenplan-Nullplan template processing failed: ${result.error}`);
             }
             
             // Return the processed template result in the expected format
             return result;
             
         } catch (error) {
-            console.error('❌ Error with Nullplan template processor, falling back to docx generation:', error.message);
+            console.error('❌ Error with Quotenplan-Nullplan template processor, falling back to docx generation:', error.message);
             
             // Fallback to original docx generation
             return this.generateNullplanRatenplanDocumentFallback(clientData, settlementData);
@@ -2458,8 +2454,8 @@ class DocumentGenerator {
             };
         }
         
-        // Otherwise, treat as docx Document object and save normally
-        const filename = `Ratenplan-Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+        // Otherwise, treat as docx Document object and save normally (fallback)
+        const filename = `Quotenplan-Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
         return await this.saveDocument(doc, clientReference, filename);
     }
 

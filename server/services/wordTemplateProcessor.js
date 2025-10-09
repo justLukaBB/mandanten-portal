@@ -10,6 +10,7 @@ class WordTemplateProcessor {
     constructor() {
         this.templatePath = path.join(__dirname, '../documents/Ratenplan-Template-Original.docx');
         this.nullplanTemplatePath = path.join(__dirname, '../documents/Nullplan-Template-Original.docx');
+        this.quotenplanNullplanTemplatePath = path.join(__dirname, '../documents/Quotenplan-Nullplan-Template-Original.docx');
     }
 
     /**
@@ -615,6 +616,216 @@ class WordTemplateProcessor {
             '"Änderung der Verhältnisse"': 'Bei einer wesentlichen Verbesserung der Einkommenssituation wird der Zahlungsbetrag entsprechend angepasst.',
             '"Verpflichtung zur Mitteilung"': 'Der Schuldner verpflichtet sich, Änderungen seiner wirtschaftlichen Verhältnisse unverzüglich mitzuteilen.'
         };
+        
+        return replacements;
+    }
+
+    /**
+     * Process the Quotenplan-Nullplan template (Nullplan with creditor quota table)
+     */
+    async processQuotenplanNullplanTemplate(clientReference, settlementData) {
+        try {
+            console.log('📄 Processing Quotenplan-Nullplan template with creditor quota table...');
+
+            // Get full client data from database
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            // Read the Quotenplan-Nullplan template file
+            const templateBuffer = fs.readFileSync(this.quotenplanNullplanTemplatePath);
+            const zip = await JSZip.loadAsync(templateBuffer);
+
+            // Get the document XML
+            const documentXml = await zip.file('word/document.xml').async('string');
+
+            // Extract comprehensive client data for Quotenplan-Nullplan
+            const clientData = this.extractQuotenplanNullplanClientData(client, settlementData);
+            console.log('📊 Extracted Quotenplan-Nullplan client data:', {
+                name: clientData.fullName,
+                totalDebt: clientData.totalDebt,
+                creditorCount: clientData.creditorCount,
+                planType: 'Quotenplan-Nullplan'
+            });
+
+            // Build replacements for Quotenplan-Nullplan
+            const replacements = this.buildQuotenplanNullplanReplacements(clientData);
+            
+            console.log('🔄 Applying Quotenplan-Nullplan replacements:', Object.keys(replacements).length, 'replacements');
+
+            // Apply replacements to the document XML
+            let processedXml = documentXml;
+            let replacementCount = 0;
+            Object.entries(replacements).forEach(([search, replace]) => {
+                const regex = new RegExp(this.escapeRegex(search), 'g');
+                const before = processedXml.length;
+                processedXml = processedXml.replace(regex, (match) => {
+                    replacementCount++;
+                    return replace;
+                });
+            });
+            
+            console.log(`✅ Applied ${replacementCount} replacements in document`);
+
+            // Update the document in the zip
+            zip.file('word/document.xml', processedXml);
+
+            // Generate the new document
+            const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+            // Save to documents folder
+            const outputFilename = `Quotenplan-Nullplan_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+            const outputPath = path.join(__dirname, '../documents', outputFilename);
+            
+            fs.writeFileSync(outputPath, outputBuffer);
+
+            console.log('✅ Quotenplan-Nullplan template processed successfully');
+            console.log(`📁 Output: ${outputFilename}`);
+
+            return {
+                success: true,
+                filename: outputFilename,
+                path: outputPath,
+                size: outputBuffer.length
+            };
+
+        } catch (error) {
+            console.error('❌ Error processing Quotenplan-Nullplan template:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Extract client data specific to Quotenplan-Nullplan documents (Nullplan with quota table)
+     */
+    extractQuotenplanNullplanClientData(client, settlementData) {
+        const clientData = this.extractClientData(client, settlementData, 0); // 0 for pfändbar amount
+        
+        // Get creditor data from settlement data or client
+        const allCreditors = client.creditor_calculation_table || settlementData.creditor_payments || [];
+        const totalDebt = client.creditor_calculation_total_debt || settlementData.total_debt || 0;
+        
+        // Build detailed creditor data with quotas
+        const creditorDetails = allCreditors.map((creditor, index) => {
+            const amount = creditor.final_amount || creditor.amount || creditor.debt_amount || 0;
+            const quota = totalDebt > 0 ? (amount / totalDebt * 100) : 0;
+            const monthlyQuota = 0; // Always 0 for Nullplan
+            
+            return {
+                position: index + 1,
+                name: creditor.name || creditor.creditor_name || `Gläubiger ${index + 1}`,
+                reference: creditor.reference_number || '',
+                amount: amount,
+                quota: quota,
+                monthlyQuota: monthlyQuota,
+                totalPayment: 0 // Always 0 for Nullplan over 36 months
+            };
+        });
+        
+        return {
+            ...clientData,
+            // Override pfändbar amount for Nullplan
+            pfaendbarAmount: 0,
+            monthlyPayment: 0,
+            
+            // Quotenplan-Nullplan specific
+            planType: 'Quotenplan-Nullplan',
+            planDuration: '3 Jahre',
+            creditorDetails,
+            totalPaymentAllCreditors: 0,
+            averageQuota: creditorDetails.length > 0 ? 
+                creditorDetails.reduce((sum, c) => sum + c.quota, 0) / creditorDetails.length : 0
+        };
+    }
+
+    /**
+     * Build replacements for Quotenplan-Nullplan template
+     */
+    buildQuotenplanNullplanReplacements(clientData) {
+        const replacements = {
+            // Common replacements from regular template
+            ...this.buildReplacements(clientData),
+            
+            // Quotenplan-Nullplan specific replacements
+            '"Quotenplan Nullplan"': 'Quotenplan (Nullplan)',
+            '"Nullplan mit Quoten"': 'Nullplan mit Gläubigerquoten',
+            '"0,00 EUR"': '0,00 EUR',
+            '"0,00 €"': '0,00 €',
+            '"keine monatlichen Zahlungen"': 'keine monatlichen Zahlungen',
+            '"3 Jahre"': clientData.planDuration,
+            '"36 Monate"': '36 Monate',
+            
+            // Zero amounts - various formats
+            '"monatliche Gesamtzahlung"': '0,00 EUR',
+            '"Gesamtzahlung 36 Monate"': '0,00 EUR',
+            '"Durchschnittsquote"': `${clientData.averageQuota.toFixed(2).replace('.', ',')}%`,
+            '"Summe aller Raten"': '0,00 EUR',
+            '"Gesamtsumme"': '0,00 EUR',
+            
+            // Creditor table placeholders and individual entries
+            '"Gläubigertabelle"': this.buildCreditorTableText(clientData.creditorDetails),
+            
+            // Individual creditor data (for first few creditors as examples)
+            ...this.buildIndividualCreditorReplacements(clientData.creditorDetails),
+            
+            // Legal text for Quotenplan-Nullplan
+            '"Quotenerklärung"': 'Die Quoten zeigen die anteilige Verteilung der Forderungen. Da kein pfändbares Einkommen vorhanden ist, erfolgen keine Zahlungen während der 3-jährigen Überwachungsphase.',
+            '"Überwachungszeit"': 'dreijährige Überwachungsphase ohne Zahlungen',
+            '"Nullplan Begründung"': 'Aufgrund der wirtschaftlichen Verhältnisse ist kein pfändbares Einkommen vorhanden.',
+            '"Quotenverteilung"': 'Die Quoten entsprechen dem Verhältnis der einzelnen Forderungen zur Gesamtschuld.'
+        };
+        
+        return replacements;
+    }
+
+    /**
+     * Build creditor table text for document replacement
+     */
+    buildCreditorTableText(creditorDetails) {
+        if (!creditorDetails || creditorDetails.length === 0) {
+            return 'Keine Gläubiger vorhanden.';
+        }
+        
+        let tableText = '';
+        creditorDetails.forEach(creditor => {
+            tableText += `${creditor.position}. ${creditor.name} - ${this.formatGermanCurrency(creditor.amount)} (${creditor.quota.toFixed(2).replace('.', ',')}%) - Monatsquote: 0,00 EUR\n`;
+        });
+        
+        return tableText.trim();
+    }
+
+    /**
+     * Build individual creditor replacements for template variables
+     */
+    buildIndividualCreditorReplacements(creditorDetails) {
+        const replacements = {};
+        
+        if (!creditorDetails || creditorDetails.length === 0) {
+            return replacements;
+        }
+        
+        // Create replacements for individual creditors (up to 20 creditors)
+        creditorDetails.slice(0, 20).forEach((creditor, index) => {
+            const position = index + 1;
+            
+            replacements[`"Gläubiger ${position} Name"`] = creditor.name;
+            replacements[`"Gläubiger ${position} Betrag"`] = this.formatGermanCurrency(creditor.amount);
+            replacements[`"Gläubiger ${position} Quote"`] = `${creditor.quota.toFixed(2).replace('.', ',')}%`;
+            replacements[`"Gläubiger ${position} Monatsquote"`] = '0,00 EUR';
+            replacements[`"Gläubiger ${position} Gesamtzahlung"`] = '0,00 EUR';
+            replacements[`"Position ${position}"`] = position.toString();
+            
+            // Alternative formats
+            replacements[`"Name ${position}"`] = creditor.name;
+            replacements[`"Betrag ${position}"`] = this.formatGermanCurrency(creditor.amount);
+            replacements[`"Quote ${position}"`] = `${creditor.quota.toFixed(2).replace('.', ',')}%`;
+        });
         
         return replacements;
     }
