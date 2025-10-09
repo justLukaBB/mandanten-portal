@@ -66,9 +66,21 @@ class WordTemplateProcessor {
             // Apply replacements to the document XML
             let processedXml = documentXml;
             let replacementCount = 0;
+            
+            // Debug: Check if we can find any quoted text in the XML
+            const quotedMatches = documentXml.match(/[""].*?[""]|".*?"/g);
+            if (quotedMatches) {
+                console.log('🔍 Found quoted text in document:', quotedMatches.slice(0, 10)); // Show first 10 matches
+            } else {
+                console.log('⚠️ No quoted text found in document XML');
+            }
+            
             Object.entries(replacements).forEach(([search, replace]) => {
                 const regex = new RegExp(this.escapeRegex(search), 'g');
-                const before = processedXml.length;
+                const matches = processedXml.match(regex);
+                if (matches && matches.length > 0) {
+                    console.log(`🔄 Replacing "${search}" → "${replace}" (${matches.length} occurrences)`);
+                }
                 processedXml = processedXml.replace(regex, (match) => {
                     replacementCount++;
                     return replace;
@@ -290,7 +302,7 @@ class WordTemplateProcessor {
      */
     buildReplacements(clientData) {
         // Common replacements that might appear in quotes
-        const replacements = {
+        const baseReplacements = {
             // Dates - various formats
             '"aktuelles Datum"': clientData.currentDate,
             '"Datum"': clientData.currentDate,
@@ -362,7 +374,25 @@ class WordTemplateProcessor {
             'Nummer 12': `Nummer ${clientData.creditorPosition}`
         };
         
-        return replacements;
+        // Create extended replacements with different quote types
+        const finalReplacements = {};
+        
+        // Add base replacements
+        Object.assign(finalReplacements, baseReplacements);
+        
+        // Add variations with different quote types (curly quotes, straight quotes)
+        Object.entries(baseReplacements).forEach(([key, value]) => {
+            if (key.startsWith('"') && key.endsWith('"')) {
+                const innerText = key.slice(1, -1);
+                // Add curly quote variations
+                finalReplacements[`"${innerText}"`] = value;
+                finalReplacements[`"${innerText}"`] = value;
+                // Add without quotes (in case they're stored separately)
+                finalReplacements[innerText] = value;
+            }
+        });
+        
+        return finalReplacements;
     }
 
     /**
@@ -501,9 +531,21 @@ class WordTemplateProcessor {
             // Apply replacements to the document XML
             let processedXml = documentXml;
             let replacementCount = 0;
+            
+            // Debug: Check if we can find any quoted text in the XML
+            const quotedMatches = documentXml.match(/[""].*?[""]|".*?"/g);
+            if (quotedMatches) {
+                console.log('🔍 Found quoted text in document:', quotedMatches.slice(0, 10)); // Show first 10 matches
+            } else {
+                console.log('⚠️ No quoted text found in document XML');
+            }
+            
             Object.entries(replacements).forEach(([search, replace]) => {
                 const regex = new RegExp(this.escapeRegex(search), 'g');
-                const before = processedXml.length;
+                const matches = processedXml.match(regex);
+                if (matches && matches.length > 0) {
+                    console.log(`🔄 Replacing "${search}" → "${replace}" (${matches.length} occurrences)`);
+                }
                 processedXml = processedXml.replace(regex, (match) => {
                     replacementCount++;
                     return replace;
@@ -641,7 +683,12 @@ class WordTemplateProcessor {
             }
 
             // Read the Quotenplan-Nullplan template file
+            console.log('📁 Reading Quotenplan-Nullplan template from:', this.quotenplanNullplanTemplatePath);
+            if (!fs.existsSync(this.quotenplanNullplanTemplatePath)) {
+                throw new Error(`Quotenplan-Nullplan template file not found: ${this.quotenplanNullplanTemplatePath}`);
+            }
             const templateBuffer = fs.readFileSync(this.quotenplanNullplanTemplatePath);
+            console.log('📄 Quotenplan-Nullplan template file size:', templateBuffer.length, 'bytes');
             const zip = await JSZip.loadAsync(templateBuffer);
 
             // Get the document XML
@@ -664,9 +711,21 @@ class WordTemplateProcessor {
             // Apply replacements to the document XML
             let processedXml = documentXml;
             let replacementCount = 0;
+            
+            // Debug: Check if we can find any quoted text in the XML
+            const quotedMatches = documentXml.match(/[""].*?[""]|".*?"/g);
+            if (quotedMatches) {
+                console.log('🔍 Found quoted text in document:', quotedMatches.slice(0, 10)); // Show first 10 matches
+            } else {
+                console.log('⚠️ No quoted text found in document XML');
+            }
+            
             Object.entries(replacements).forEach(([search, replace]) => {
                 const regex = new RegExp(this.escapeRegex(search), 'g');
-                const before = processedXml.length;
+                const matches = processedXml.match(regex);
+                if (matches && matches.length > 0) {
+                    console.log(`🔄 Replacing "${search}" → "${replace}" (${matches.length} occurrences)`);
+                }
                 processedXml = processedXml.replace(regex, (match) => {
                     replacementCount++;
                     return replace;
