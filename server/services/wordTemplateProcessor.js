@@ -595,6 +595,12 @@ class WordTemplateProcessor {
         const planStartDate = new Date();
         planStartDate.setMonth(planStartDate.getMonth() + 3); // 3 months from now
         
+        // Get all creditors from client or settlement data
+        const allCreditors = client.creditor_calculation_table || settlementData.creditor_payments || [];
+        
+        // Get first creditor for this document (could be improved to generate individual letters)
+        const firstCreditor = allCreditors.length > 0 ? allCreditors[0] : null;
+        
         return {
             ...clientData,
             // Override pfändbar amount for Nullplan
@@ -606,13 +612,24 @@ class WordTemplateProcessor {
             planDuration: '3 Jahre',
             planStartDate: planStartDate.toLocaleDateString('de-DE'),
             
-            // Creditor for current letter (if generating individual letters)
-            currentCreditor: creditorData && creditorData[0] ? {
-                name: creditorData[0].name || creditorData[0].creditor_name,
-                address: creditorData[0].address || `${creditorData[0].creditor_street || ''}, ${creditorData[0].creditor_postal_code || ''} ${creditorData[0].creditor_city || ''}`.trim(),
-                reference: creditorData[0].reference_number || '',
-                amount: creditorData[0].amount || creditorData[0].debt_amount || 0
-            } : null
+            // All creditors
+            allCreditors: allCreditors,
+            creditorCount: allCreditors.length,
+            
+            // Current creditor for this letter
+            currentCreditor: firstCreditor ? {
+                name: firstCreditor.name || firstCreditor.creditor_name || 'Gläubiger',
+                address: firstCreditor.address || 
+                        `${firstCreditor.creditor_street || ''}, ${firstCreditor.creditor_postal_code || ''} ${firstCreditor.creditor_city || ''}`.trim() ||
+                        'Gläubiger Adresse',
+                reference: firstCreditor.reference_number || '',
+                amount: firstCreditor.final_amount || firstCreditor.amount || firstCreditor.debt_amount || 0
+            } : {
+                name: 'Test Gläubiger',
+                address: 'Musterstraße 1, 12345 Musterstadt',
+                reference: '123456',
+                amount: 5000
+            }
         };
     }
 
@@ -620,8 +637,33 @@ class WordTemplateProcessor {
      * Build replacements for Nullplan template
      */
     buildNullplanReplacements(clientData) {
+        // Extract current creditor for this specific document
+        const currentCreditor = clientData.currentCreditor || {
+            name: 'Gläubiger',
+            address: 'Gläubiger Adresse',
+            amount: 0
+        };
+        
         const replacements = {
-            // Common replacements from regular template
+            // Exact template variables from the Nullplan_Text_Template.docx
+            "Adresse des Creditors": currentCreditor.address,
+            "Name Mandant": clientData.fullName || 'Max Mustermann',
+            "808080/TS-JK der Forderung": `${clientData.reference}/TS-JK`,
+            "Gläuibgeranzahl": clientData.creditorCount?.toString() || '0',
+            "Schuldsumme Insgesamt": this.formatGermanCurrency(clientData.totalDebt || 0),
+            "Heutiges 9.10.2025": clientData.currentDate,
+            "Geburtstag": clientData.birthDate || '01.01.1980',
+            "ledig": this.getMaritalStatusText(clientData.maritalStatus),
+            "Mandant Name": clientData.fullName || 'Max Mustermann',
+            "Einkommen": this.formatGermanCurrency(clientData.monthlyNetIncome || 0),
+            "Forderungsnummer in der Forderungsliste": this.getCreditorPosition(clientData),
+            "Forderungssumme": this.formatGermanCurrency(currentCreditor.amount),
+            "Quote des Gläubigers": this.calculateCreditorQuote(currentCreditor.amount, clientData.totalDebt),
+            "9.10.2025 in 14 Tagen": clientData.deadlineDate || this.calculateDeadlineDate(),
+            "new test 08": clientData.fullName || 'Max Mustermann',
+            "Datum in 3 Monaten zum 1.": clientData.planStartDate || '01.01.2026',
+            
+            // Common replacements from regular template (as fallback)
             ...this.buildReplacements(clientData),
             
             // Nullplan specific replacements
@@ -846,6 +888,22 @@ class WordTemplateProcessor {
         };
         
         return replacements;
+    }
+
+    /**
+     * Get creditor position in the list
+     */
+    getCreditorPosition(clientData) {
+        return clientData.creditorPosition?.toString() || '1';
+    }
+
+    /**
+     * Calculate creditor quote percentage
+     */
+    calculateCreditorQuote(creditorAmount, totalDebt) {
+        if (!totalDebt || totalDebt === 0) return '0,00';
+        const percentage = (creditorAmount / totalDebt) * 100;
+        return `${percentage.toFixed(2).replace('.', ',')}`;
     }
 
     /**
