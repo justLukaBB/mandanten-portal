@@ -742,6 +742,13 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
       ticketType = 'payment_first_pending_documents';
       nextAction = 'wait_for_document_upload';
       client.payment_ticket_type = 'payment_first_pending_documents';
+
+
+      if (zendesk_ticket_id) {
+        console.log(`🧹 Ignoring existing Zendesk ticket (${zendesk_ticket_id}) for payment-first scenario`);
+        zendesk_ticket_id = null;
+        delete client.zendesk_ticket_id;
+      }
     
       // STEP 1️⃣ — Create the main Zendesk ticket
       const ticketSubject = `Payment received - awaiting documents: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`;
