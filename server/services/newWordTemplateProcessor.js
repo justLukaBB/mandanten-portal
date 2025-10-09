@@ -161,7 +161,16 @@ class NewWordTemplateProcessor {
 
             // Generate output
             const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-            const filename = `Ratenplan-Pfaendbares-Einkommen_${clientData?.aktenzeichen || clientData?.reference}_${Date.now()}.docx`;
+            
+            // Create filename with creditor-specific info if available
+            let filename;
+            if (creditorData && creditorData.name) {
+                const creditorName = creditorData.name.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+                const clientRef = clientData?.aktenzeichen || clientData?.reference;
+                filename = `Pfaendbares-Einkommen_${clientRef}_${creditorName}_${Date.now()}.docx`;
+            } else {
+                filename = `Pfaendbares-Einkommen_${clientData?.aktenzeichen || clientData?.reference}_${Date.now()}.docx`;
+            }
             const outputPath = path.join(this.outputDir, filename);
 
             // Save the file

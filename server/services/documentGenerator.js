@@ -1497,18 +1497,16 @@ class DocumentGenerator {
      * Generate Ratenplan pfändbares Einkommen using original Word template
      */
     async generateRatenplanDocument(clientData, settlementData, pfaendbarAmount) {
-        console.log('🎯 NEW generateRatenplanDocument called with:', {
+        console.log('🎯 NEW generateRatenplanDocument called - generating documents for ALL creditors:', {
             clientReference: clientData?.reference,
             pfaendbarAmount,
-            hasSettlementData: !!settlementData
+            hasSettlementData: !!settlementData,
+            creditorCount: settlementData?.creditor_payments?.length || 0
         });
         
         try {
             // Use the NEW Word template processor for "Template Word Pfändbares Einkommen"
             const NewWordTemplateProcessor = require('./newWordTemplateProcessor');
-            const templateProcessor = new NewWordTemplateProcessor();
-            
-            console.log('📄 Using NEW Word template processor (Template Word Pfändbares Einkommen)...');
             
             // Get full client data for template processing
             const Client = require('../models/Client');
@@ -1536,21 +1534,99 @@ class DocumentGenerator {
                 };
             }
             
-            const result = await templateProcessor.processTemplate(
-                fullClientData, 
-                settlementData,
-                null // No specific creditor data - this generates the general letter
-            );
+            // Get all creditors from settlement data
+            const creditors = settlementData?.creditor_payments || [];
             
-            if (!result.success) {
-                console.error('❌ NEW template processing failed:', result.error);
-                throw new Error(`NEW template processing failed: ${result.error}`);
+            if (creditors.length === 0) {
+                console.log('⚠️ No creditors found, generating single general document');
+                const templateProcessor = new NewWordTemplateProcessor();
+                
+                const result = await templateProcessor.processTemplate(
+                    fullClientData, 
+                    settlementData,
+                    null // No specific creditor data
+                );
+                
+                return {
+                    success: true,
+                    documents: result.success ? [result] : [],
+                    totalDocuments: result.success ? 1 : 0,
+                    errors: result.success ? [] : [result.error]
+                };
             }
             
-            console.log('✅ NEW Word template processing successful!');
-            console.log('📊 Replacements made:', result.replacements_made);
+            console.log(`📄 Generating individual "Pfändbares Einkommen" documents for ${creditors.length} creditors...`);
             
-            return result;
+            const generatedDocuments = [];
+            const errors = [];
+            
+            // Generate document for each creditor
+            for (let i = 0; i < creditors.length; i++) {
+                const creditor = creditors[i];
+                console.log(`\n🎯 Processing creditor ${i + 1}/${creditors.length}: ${creditor.creditor_name || creditor.name}`);
+                
+                try {
+                    const templateProcessor = new NewWordTemplateProcessor();
+                    
+                    // Prepare creditor-specific data
+                    const creditorData = {
+                        creditor_name: creditor.creditor_name || creditor.name,
+                        name: creditor.creditor_name || creditor.name,
+                        debt_amount: creditor.debt_amount || creditor.amount || creditor.final_amount,
+                        address: creditor.creditor_address || 
+                               `${creditor.creditor_street || ''}, ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+                               'Gläubiger Adresse nicht verfügbar',
+                        aktenzeichen: creditor.reference_number || creditor.creditor_reference || `REF-${i + 1}`,
+                        creditor_index: i
+                    };
+                    
+                    console.log('📊 Creditor data:', {
+                        name: creditorData.name,
+                        amount: creditorData.debt_amount,
+                        address: creditorData.address,
+                        reference: creditorData.aktenzeichen
+                    });
+                    
+                    const result = await templateProcessor.processTemplate(
+                        fullClientData, 
+                        settlementData,
+                        creditorData // Pass specific creditor data
+                    );
+                    
+                    if (result.success) {
+                        generatedDocuments.push({
+                            ...result,
+                            creditor_name: creditorData.name,
+                            creditor_index: i + 1
+                        });
+                        console.log(`✅ Document generated for ${creditorData.name}: ${result.filename}`);
+                    } else {
+                        const errorMsg = `Failed to generate document for ${creditorData.name}: ${result.error}`;
+                        errors.push(errorMsg);
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                    
+                } catch (creditorError) {
+                    const errorMsg = `Error processing creditor ${creditor.creditor_name || creditor.name}: ${creditorError.message}`;
+                    errors.push(errorMsg);
+                    console.error(`❌ ${errorMsg}`);
+                }
+            }
+            
+            console.log(`\n📊 Summary: Generated ${generatedDocuments.length}/${creditors.length} documents`);
+            if (errors.length > 0) {
+                console.log(`❌ Errors: ${errors.length}`);
+                errors.forEach(error => console.log(`   - ${error}`));
+            }
+            
+            return {
+                success: generatedDocuments.length > 0,
+                documents: generatedDocuments,
+                totalDocuments: generatedDocuments.length,
+                totalCreditors: creditors.length,
+                errors: errors,
+                summary: `Generated ${generatedDocuments.length} individual "Pfändbares Einkommen" documents for creditors`
+            };
             
         } catch (error) {
             console.error('❌ Error with NEW template processor, falling back to old method:');
@@ -1559,7 +1635,14 @@ class DocumentGenerator {
             console.log('🔄 Using fallback docx generation instead of NEW Word template');
             
             // Fallback to original docx generation
-            return this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
+            const fallbackResult = await this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
+            return {
+                success: fallbackResult.success,
+                documents: fallbackResult.success ? [fallbackResult] : [],
+                totalDocuments: fallbackResult.success ? 1 : 0,
+                errors: fallbackResult.success ? [] : [fallbackResult.error],
+                summary: 'Generated using fallback method'
+            };
         }
     }
 
@@ -2272,10 +2355,39 @@ class DocumentGenerator {
     }
 
     /**
-     * Save Ratenplan document with specific naming
+     * Save Ratenplan document(s) with specific naming - handles multiple creditor documents
      */
     async saveRatenplanDocument(doc, clientReference) {
-        // Check if doc is a processed template result (not a docx Document object)
+        // Check if doc is the new multi-document result format
+        if (doc && doc.documents && Array.isArray(doc.documents)) {
+            console.log(`📊 Processing ${doc.totalDocuments} Ratenplan documents for multiple creditors`);
+            
+            // For backward compatibility, return the first document with additional info
+            if (doc.documents.length > 0) {
+                const fs = require('fs');
+                const firstDoc = doc.documents[0];
+                const buffer = fs.readFileSync(firstDoc.path);
+                
+                return {
+                    ...firstDoc,
+                    buffer,
+                    // Additional info about all documents
+                    total_documents: doc.totalDocuments,
+                    total_creditors: doc.totalCreditors,
+                    all_documents: doc.documents.map(d => ({
+                        filename: d.filename,
+                        creditor_name: d.creditor_name,
+                        creditor_index: d.creditor_index,
+                        size: d.size
+                    })),
+                    summary: doc.summary
+                };
+            } else {
+                throw new Error('No documents were generated');
+            }
+        }
+        
+        // Check if doc is a single processed template result (not a docx Document object)
         if (doc && doc.success && doc.path) {
             // This is already a processed template result, return it with buffer
             const fs = require('fs');
@@ -2769,25 +2881,17 @@ class DocumentGenerator {
             const nullplanResult = await this.generateNullplan(clientData, creditorData);
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
-            // Generate Ratenplan-Nullplan (with 0 EUR payment)
-            // Use a Nullplan-specific settlement data structure
-            const nullplanSettlementData = {
-                plan_type: 'nullplan',
-                monthly_payment: 0,
-                garnishable_amount: 0,
-                total_debt: creditorData.reduce((sum, c) => sum + (c.debt_amount || 0), 0),
-                creditors: creditorData
-            };
-            const ratenplanNullplanResult = await this.generateRatenplanPfaendbaresEinkommen(
-                clientReference,
-                nullplanSettlementData
-            );
+            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan)
+            console.log('📊 Generating Nullplan quota table instead of standard Schuldenbereinigungsplan...');
+            const NullplanTableGenerator = require('./nullplanTableGenerator');
+            const tableGenerator = new NullplanTableGenerator();
+            const nullplanTableResult = await tableGenerator.generateNullplanTable(clientData, creditorData);
 
             return {
                 success: true,
                 nullplan: nullplanResult,
                 forderungsuebersicht: forderungsuebersichtResult,
-                ratenplan_nullplan: ratenplanNullplanResult,
+                schuldenbereinigungsplan: nullplanTableResult,
                 client_reference: clientReference,
                 generated_at: new Date().toISOString()
             };
