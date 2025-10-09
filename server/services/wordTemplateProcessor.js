@@ -29,7 +29,12 @@ class WordTemplateProcessor {
             }
 
             // Read the template file
+            console.log('📁 Reading template from:', this.templatePath);
+            if (!fs.existsSync(this.templatePath)) {
+                throw new Error(`Template file not found: ${this.templatePath}`);
+            }
             const templateBuffer = fs.readFileSync(this.templatePath);
+            console.log('📄 Template file size:', templateBuffer.length, 'bytes');
             const zip = await JSZip.loadAsync(templateBuffer);
 
             // Get the document XML
@@ -79,7 +84,7 @@ class WordTemplateProcessor {
             const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
             // Save to documents folder
-            const outputFilename = `Ratenplan-Pfaendbares-Einkommen_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
+            const outputFilename = `Ratenplan-Template_${clientReference}_${new Date().toISOString().split('T')[0]}.docx`;
             const outputPath = path.join(__dirname, '../documents', outputFilename);
             
             fs.writeFileSync(outputPath, outputBuffer);

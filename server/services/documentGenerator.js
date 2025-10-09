@@ -1518,7 +1518,10 @@ class DocumentGenerator {
             return result;
             
         } catch (error) {
-            console.error('❌ Error with template processor, falling back to docx generation:', error.message);
+            console.error('❌ Error with template processor, falling back to docx generation:');
+            console.error('   Error message:', error.message);
+            console.error('   Error stack:', error.stack);
+            console.log('🔄 Using fallback docx generation instead of Word template');
             
             // Fallback to original docx generation
             return this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
