@@ -378,6 +378,29 @@ class NewWordTemplateProcessor {
                 }
             ];
             
+            // 2. DYNAMIC CREDITOR NAME REPLACEMENT 
+            // Search for any existing creditor name in the document and replace with current creditor
+            const currentCreditorName = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
+            
+            // Common creditor name patterns that might appear in documents
+            const creditorNamePatterns = [
+                "EOS Deutscher Inkasso-Dienst GmbH",
+                "Inkasso",
+                "Gläubiger Name",
+                "Name des Gläubigers",
+                "Creditor Name"
+            ];
+            
+            creditorNamePatterns.forEach(pattern => {
+                const regex = new RegExp(`<w:t>${this.escapeRegex(pattern)}</w:t>`, 'g');
+                const matches = processedXml.match(regex);
+                if (matches && matches.length > 0) {
+                    processedXml = processedXml.replace(regex, `<w:t>${currentCreditorName}</w:t>`);
+                    console.log(`✅ Dynamic creditor name replacement "${pattern}" -> "${currentCreditorName}": ${matches.length} occurrences`);
+                    totalReplacements += matches.length;
+                }
+            });
+            
             plainTextReplacements.forEach(({ pattern, value, name }) => {
                 const matches = processedXml.match(pattern);
                 if (matches && matches.length > 0) {
