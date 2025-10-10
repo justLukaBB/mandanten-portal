@@ -23,7 +23,7 @@ class NewWordTemplateProcessor {
      */
     async processTemplate(clientData, settlementData, creditorData = null) {
         try {
-            console.log('🎯 Processing new Word template with identified variables...');
+            console.log('🎯 Processing new Word template with identified variables (v2)...');
             console.log('📊 Input data:', {
                 clientReference: clientData?.aktenzeichen || clientData?.reference,
                 hasSettlementData: !!settlementData,
