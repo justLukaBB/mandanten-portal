@@ -158,33 +158,15 @@ class NewWordTemplateProcessor {
                 { name: 'Curly alternative', open: '"', close: '"' }
             ];
 
-            // Variables that are handled by split-XML patterns - don't process them in regular replacement
-            // REDUCED LIST - only variables that are ACTUALLY replaced by split-XML patterns
-            const splitXmlVariables = [
-                "Adresse des Creditors",
-                "Aktenzeichen der Forderung", 
-                "Gessamtsumme Verschuldung",
-                "Heutiges Datum",
-                "Aktenzeichen des Mandanten",
-                "pfändbares Einkommen",
-                "monatlicher pfändbarer Betrag",
-                "Summe für die Tilgung des Gläubigers monatlich",
-                "Nummer im Schuldenbereinigungsplan",
-                "Datum in 14 Tagen"
-            ];
-
+            // Note: Simplified approach - let split-XML patterns handle what they can,
+            // then complete systematic replacement will handle everything else
+            
             Object.entries(replacements).forEach(([variable, value]) => {
                 let variableReplaced = false;
                 
                 // Skip placeholder variables that were already replaced by split-XML patterns
                 if (variable.includes('_PLACEHOLDER')) {
                     console.log(`✅ Skipping "${variable}" - already replaced by split-XML pattern`);
-                    return;
-                }
-                
-                // Skip variables that are handled by split-XML patterns
-                if (splitXmlVariables.includes(variable)) {
-                    console.log(`✅ Skipping "${variable}" - handled by split-XML pattern`);
                     return;
                 }
                 
@@ -340,20 +322,82 @@ class NewWordTemplateProcessor {
             
             console.log(`✅ Total replacements made: ${totalReplacements}`);
             
-            // FINAL AGGRESSIVE REPLACEMENT for stubborn variables
-            const stubbornVariables = [
-                { pattern: /[""]Name des Mandanten[""]|&quot;Name des Mandanten&quot;/g, value: clientName },
-                { pattern: /[""]Einkommen[""]|&quot;Einkommen&quot;/g, value: this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0) }
+            // === SYSTEMATIC COMPLETION OF MISSED VARIABLES ===
+            
+            // 1. PLAIN TEXT VARIABLES (no quotes in template)
+            const plainTextReplacements = [
+                {
+                    pattern: /<w:t>Einkommen<\/w:t>/g,
+                    value: `<w:t>${this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0)}</w:t>`,
+                    name: "Einkommen"
+                }
             ];
             
-            stubbornVariables.forEach(({ pattern, value }) => {
-                const beforeLength = processedXml.length;
-                processedXml = processedXml.replace(pattern, value);
-                const afterLength = processedXml.length;
-                if (beforeLength !== afterLength) {
-                    console.log(`✅ Aggressive replacement made for ${pattern}`);
-                    totalReplacements++;
+            plainTextReplacements.forEach(({ pattern, value, name }) => {
+                const matches = processedXml.match(pattern);
+                if (matches && matches.length > 0) {
+                    processedXml = processedXml.replace(pattern, value);
+                    console.log(`✅ Plain text replacement "${name}": ${matches.length} occurrences`);
+                    totalReplacements += matches.length;
                 }
+            });
+            
+            // 2. COMPLETE VARIABLE COVERAGE - ensure ALL template variables are covered
+            const completeVariableMap = {
+                // Client information
+                "Name des Mandanten": clientName,
+                "Mandant": clientName,
+                "Familienstand": this.getFamilienstand(clientData),
+                "Geburtstag": this.formatDate(clientData?.geburtstag) || this.formatDate(clientData?.birthDate) || '01.01.1980',
+                "Aktenzeichen des Mandanten": clientReference,
+                
+                // Financial data  
+                "Forderungssumme": this.formatCurrency(creditorData?.debt_amount || 0),
+                "Gessamtsumme Verschuldung": this.formatCurrency(totalDebt),
+                "Tilgungsqoute": creditorData ? (creditorData.debt_amount / totalDebt * 100).toFixed(2) : "0.00",
+                "Gläubigeranzahl": creditorCount.toString(),
+                "Summe für die Tilgung des Gläubigers monatlich": creditorData ? this.formatCurrency((monthlyPayment * (creditorData.debt_amount / totalDebt)) * 36) : "0,00",
+                
+                // Income related
+                "pfändbares Einkommen": this.formatCurrency(pfaendbarAmount),
+                "monatlicher pfändbarer Betrag": this.formatCurrency(monthlyPayment),
+                
+                // Dates
+                "Heutiges Datum": this.formatDate(new Date()),
+                "Datum in 14 Tagen": this.formatDate(deadlineDate),
+                "Immer der erste in 3 Monaten": this.formatDate(paymentStartDate),
+                
+                // Creditor info
+                "Adresse des Creditors": creditorData?.address || "Gläubiger Adresse",
+                "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
+                "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
+                "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
+                "Aktenzeichen der Forderung": creditorData?.aktenzeichen || `${clientReference}/TS-JK`,
+                
+                // Administrative
+                "Nummer im Schuldenbereinigungsplan": "1",
+                
+                // Date fixes for hardcoded values
+                "01.08.2025": this.formatDate(paymentStartDate),
+                "Datum in 3 Monaten": this.formatDate(paymentStartDate),
+                "Startdatum": this.formatDate(paymentStartDate)
+            };
+            
+            // 3. AGGRESSIVE QUOTED VARIABLE REPLACEMENT with multiple quote types
+            const quoteTypes = ['&quot;', '"', '"', '"'];
+            
+            Object.entries(completeVariableMap).forEach(([variable, value]) => {
+                quoteTypes.forEach(quoteType => {
+                    const quotedPattern = `${quoteType}${variable}${quoteType}`;
+                    const regex = new RegExp(this.escapeRegex(quotedPattern), 'g');
+                    
+                    const matches = processedXml.match(regex);
+                    if (matches && matches.length > 0) {
+                        processedXml = processedXml.replace(regex, value);
+                        console.log(`✅ Complete replacement "${variable}" (${quoteType}): ${matches.length} occurrences`);
+                        totalReplacements += matches.length;
+                    }
+                });
             });
 
             // Validate XML structure before saving to prevent corruption
@@ -490,26 +534,7 @@ class NewWordTemplateProcessor {
         
         replacements["Datum in 14 Tagen"] = this.formatDate(deadlineDate);
         
-        // Additional simple variables found in template
-        replacements["Mandant"] = clientName;
-        replacements["Name des Mandanten"] = clientName; // Also add this for normal replacement
-        replacements["Geburtstag"] = this.formatDate(clientData?.geburtstag) || this.formatDate(clientData?.birthDate) || '01.01.1980';
-        replacements["Familienstand"] = this.getFamilienstand(clientData);
-        replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
-        replacements["Gläubigeranzahl"] = creditorCount.toString();
-        
-        // Fix payment start date variable  
-        replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
-        
-        // Alternative date variables for 3-month start date
-        replacements["01.08.2025"] = this.formatDate(paymentStartDate);
-        replacements["Datum in 3 Monaten"] = this.formatDate(paymentStartDate);
-        replacements["Startdatum"] = this.formatDate(paymentStartDate);
-        replacements["Datum"] = this.formatDate(paymentStartDate);
-        
-        // Alternative variable names that might be in template
-        replacements["monatliches Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
-        replacements["Erwerbseinkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
+        // Note: Individual variable assignments moved to complete systematic replacement section below
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
