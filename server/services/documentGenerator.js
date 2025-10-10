@@ -1570,8 +1570,8 @@ class DocumentGenerator {
             // First try to get creditors from creditor_calculation_table (has more complete data)
             let allCreditors = [];
             
-            const Client = require('../models/Client');
-            const client = await Client.findOne({ aktenzeichen: clientData.reference });
+            // Use the already loaded fullClientData instead of loading again
+            const client = fullClientData;
             
             if (client?.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
                 console.log(`📊 Using creditor_calculation_table with ${client.creditor_calculation_table.length} creditors`);
