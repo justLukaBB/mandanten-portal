@@ -1505,6 +1505,11 @@ class DocumentGenerator {
         });
         
         try {
+            // Clear require cache to ensure we get the latest version (Docker deployment fix)
+            const templateProcessorPath = require.resolve('./newWordTemplateProcessor');
+            delete require.cache[templateProcessorPath];
+            console.log('🔄 Cleared require cache for newWordTemplateProcessor');
+            
             // Use the NEW Word template processor for "Template Word Pfändbares Einkommen"
             const NewWordTemplateProcessor = require('./newWordTemplateProcessor');
             
