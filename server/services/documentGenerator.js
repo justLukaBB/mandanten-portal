@@ -1620,7 +1620,7 @@ class DocumentGenerator {
                         name: creditor.creditor_name || creditor.name,
                         debt_amount: creditor.debt_amount || creditor.amount || creditor.final_amount,
                         address: creditor.creditor_address || 
-                               `${creditor.creditor_street || ''}, ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+                               this.buildCreditorAddress(creditor) ||
                                'Gläubiger Adresse nicht verfügbar',
                         aktenzeichen: creditor.reference_number || creditor.creditor_reference || `REF-${i + 1}`,
                         creditor_index: i
@@ -2998,6 +2998,29 @@ class DocumentGenerator {
                 client_reference: clientReference
             };
         }
+    }
+
+    /**
+     * Build creditor address from individual components
+     */
+    buildCreditorAddress(creditor) {
+        const street = creditor.creditor_street || '';
+        const postalCode = creditor.creditor_postal_code || '';
+        const city = creditor.creditor_city || '';
+        
+        // Only build address if we have meaningful data
+        if (!street && !postalCode && !city) {
+            return null; // Return null so fallback can be used
+        }
+        
+        const parts = [];
+        if (street) parts.push(street);
+        if (postalCode || city) {
+            const locationPart = `${postalCode} ${city}`.trim();
+            if (locationPart) parts.push(locationPart);
+        }
+        
+        return parts.length > 0 ? parts.join(', ') : null;
     }
 }
 

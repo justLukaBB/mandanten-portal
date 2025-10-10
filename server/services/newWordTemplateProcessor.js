@@ -451,6 +451,13 @@ class NewWordTemplateProcessor {
         }
         
         replacements["Datum in 14 Tagen"] = this.formatDate(deadlineDate);
+        
+        // Additional simple variables found in template
+        replacements["Mandant"] = clientName;
+        replacements["Geburtstag"] = this.formatDate(clientData?.geburtstag) || this.formatDate(clientData?.birthDate) || '01.01.1980';
+        replacements["Familienstand"] = this.getFamilienstand(clientData);
+        replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
+        replacements["Gläubigeranzahl"] = creditorCount.toString();
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
