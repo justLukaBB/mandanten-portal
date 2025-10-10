@@ -1,4 +1,5 @@
 const DocumentGenerator = require('./documentGenerator');
+const CreditorDocumentPackageGenerator = require('./creditorDocumentPackageGenerator');
 const fs = require('fs');
 const path = require('path');
 
@@ -9,6 +10,7 @@ const path = require('path');
 class SecondRoundDocumentService {
     constructor() {
         this.documentGenerator = new DocumentGenerator();
+        this.packageGenerator = new CreditorDocumentPackageGenerator();
         this.outputDir = path.join(__dirname, '../generated_documents/second_round');
         
         // Ensure output directory exists
@@ -82,21 +84,78 @@ class SecondRoundDocumentService {
                 };
             }
 
-            // Generate individual "Pfändbares Einkommen" documents using the new DocumentGenerator
-            console.log('📄 Generating individual "Pfändbares Einkommen" documents...');
+            // Generate ALL 3 documents for the 2nd round using package generator + our custom Ratenplan
+            console.log('📄 Generating all 3 documents for 2nd round...');
             
-            const generationResult = await this.documentGenerator.generateRatenplanDocument(
-                clientData,
-                settlementData,
-                pfaendbarAmount
-            );
+            const allDocuments = {
+                schuldenbereinigungsplan: null,
+                forderungsuebersicht: null,
+                ratenplan_documents: []
+            };
 
-            if (!generationResult.success) {
-                throw new Error(`Document generation failed: ${generationResult.error || 'Unknown error'}`);
+            // First, try to generate the 2 standard documents using package generator
+            try {
+                console.log('  📋 Generating standard documents (Schuldenbereinigungsplan & Forderungsübersicht)...');
+                const standardDocs = await this.packageGenerator.generateAllWordDocuments(
+                    clientData,
+                    settlementData,
+                    clientData.reference
+                );
+                
+                allDocuments.schuldenbereinigungsplan = standardDocs.schuldenbereinigungsplan;
+                allDocuments.forderungsuebersicht = standardDocs.forderungsuebersicht;
+                console.log('  ✅ Standard documents generated successfully');
+            } catch (error) {
+                console.error('  ❌ Error generating standard documents:', error.message);
+                console.log('  🔄 Falling back to individual generation...');
+                
+                // Fallback: try individual generation
+                try {
+                    console.log('    📋 Generating Schuldenbereinigungsplan...');
+                    const schuldenplan = await this.documentGenerator.generateSettlementPlanDocument(
+                        clientData.reference,
+                        settlementData
+                    );
+                    allDocuments.schuldenbereinigungsplan = schuldenplan;
+                    console.log('    ✅ Schuldenbereinigungsplan generated');
+                } catch (fallbackError) {
+                    console.error('    ❌ Fallback Schuldenbereinigungsplan failed:', fallbackError.message);
+                }
+
+                try {
+                    console.log('    📋 Generating Forderungsübersicht...');
+                    const forderungsuebersicht = await this.documentGenerator.generateForderungsuebersichtDocument(
+                        clientData.reference
+                    );
+                    allDocuments.forderungsuebersicht = forderungsuebersicht;
+                    console.log('    ✅ Forderungsübersicht generated');
+                } catch (fallbackError) {
+                    console.error('    ❌ Fallback Forderungsübersicht failed:', fallbackError.message);
+                }
             }
 
-            // Process the results to match our expected format
-            const processedDocuments = this.processGenerationResults(generationResult, clientReference);
+            // Generate individual "Pfändbares Einkommen" documents (one per creditor) - this always works
+            try {
+                console.log('  📋 Generating individual "Pfändbares Einkommen" documents...');
+                const generationResult = await this.documentGenerator.generateRatenplanDocument(
+                    clientData,
+                    settlementData,
+                    pfaendbarAmount
+                );
+                
+                if (!generationResult.success) {
+                    throw new Error(`Ratenplan generation failed: ${generationResult.error || 'Unknown error'}`);
+                }
+                
+                allDocuments.ratenplan_documents = generationResult.documents || [];
+                console.log(`  ✅ Generated ${allDocuments.ratenplan_documents.length} individual Ratenplan documents`);
+            } catch (error) {
+                console.error('  ❌ Error generating Ratenplan documents:', error.message);
+                throw error;
+            }
+
+            // Process all documents into our expected format
+            const processedDocuments = this.processAllDocuments(allDocuments, clientReference);
 
             console.log(`✅ Second round document generation completed:`);
             console.log(`   - Total documents: ${processedDocuments.length}`);
@@ -126,7 +185,60 @@ class SecondRoundDocumentService {
     }
 
     /**
-     * Process the document generation results into our expected format
+     * Process all 3 document types into our expected format
+     */
+    processAllDocuments(allDocuments, clientReference) {
+        const documents = [];
+
+        // 1. Add Schuldenbereinigungsplan
+        if (allDocuments.schuldenbereinigungsplan) {
+            documents.push({
+                document_type: 'schuldenbereinigungsplan',
+                creditor_name: 'General',
+                creditor_index: 0,
+                filename: allDocuments.schuldenbereinigungsplan.filename,
+                path: allDocuments.schuldenbereinigungsplan.path,
+                size: allDocuments.schuldenbereinigungsplan.size || 0,
+                client_reference: clientReference,
+                generated_at: new Date().toISOString()
+            });
+        }
+
+        // 2. Add Forderungsübersicht
+        if (allDocuments.forderungsuebersicht) {
+            documents.push({
+                document_type: 'forderungsuebersicht',
+                creditor_name: 'General',
+                creditor_index: 0,
+                filename: allDocuments.forderungsuebersicht.filename,
+                path: allDocuments.forderungsuebersicht.path,
+                size: allDocuments.forderungsuebersicht.size || 0,
+                client_reference: clientReference,
+                generated_at: new Date().toISOString()
+            });
+        }
+
+        // 3. Add individual Ratenplan documents (one per creditor)
+        if (allDocuments.ratenplan_documents && Array.isArray(allDocuments.ratenplan_documents)) {
+            allDocuments.ratenplan_documents.forEach((doc, index) => {
+                documents.push({
+                    document_type: 'pfaendbares_einkommen',
+                    creditor_name: doc.creditor_name || `Creditor ${index + 1}`,
+                    creditor_index: doc.creditor_index || index + 1,
+                    filename: doc.filename,
+                    path: doc.path,
+                    size: doc.size,
+                    client_reference: clientReference,
+                    generated_at: new Date().toISOString()
+                });
+            });
+        }
+
+        return documents;
+    }
+
+    /**
+     * Process the document generation results into our expected format (legacy method)
      */
     processGenerationResults(generationResult, clientReference) {
         const documents = [];

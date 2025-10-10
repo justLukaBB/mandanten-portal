@@ -53,6 +53,72 @@ class NewWordTemplateProcessor {
 
             // Replace variables in the document XML
             let processedXml = documentXml;
+
+            // First, replace the complex split XML patterns with simple placeholders
+            const splitXmlReplacements = [
+                {
+                    pattern: "&quot;Adresse</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-7\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-7\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Creditors</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-5\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-10\"/><w:sz w:val=\"22\"/></w:rPr><w:t>&quot;",
+                    variable: "Adresse des Creditors",
+                    placeholder: "CREDITOR_ADDRESS_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Aktenzeichen</w:t></w:r><w:r><w:rPr><w:color w:val=\"0E1012\"/><w:spacing w:val=\"5\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0E1012\"/><w:spacing w:val=\"-8\"/><w:sz w:val=\"22\"/></w:rPr><w:t>der</w:t></w:r><w:r><w:rPr><w:color w:val=\"0E1012\"/><w:spacing w:val=\"5\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0E1012\"/><w:spacing w:val=\"-8\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Forderung&quot;",
+                    variable: "Aktenzeichen der Forderung",
+                    placeholder: "CREDITOR_REFERENCE_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-12\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Mandanten&quot;",
+                    variable: "Name des Mandanten",
+                    placeholder: "CLIENT_NAME_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Gessamtsumme</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-16\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Verschuldung&quot;",
+                    variable: "Gessamtsumme Verschuldung",
+                    placeholder: "TOTAL_DEBT_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Heutiges </w:t></w:r><w:r><w:rPr><w:color w:val=\"1A1A1D\"/><w:spacing w:val=\"-2\"/></w:rPr><w:t>Datum&quot;",
+                    variable: "Heutiges Datum",
+                    placeholder: "TODAY_DATE_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Aktenzeichen</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Helvetica\"/><w:color w:val=\"0E0F11\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Helvetica\"/><w:color w:val=\"0E0F11\"/><w:spacing w:val=\"-6\"/></w:rPr><w:t>des </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Helvetica\"/><w:color w:val=\"0E0F11\"/><w:spacing w:val=\"-2\"/></w:rPr><w:t>Mandanten&quot;",
+                    variable: "Aktenzeichen des Mandanten",
+                    placeholder: "CLIENT_REFERENCE_PLACEHOLDER"
+                },
+                {
+                    pattern: "</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Times New Roman\" w:hAnsi=\"Times New Roman\"/><w:i/><w:color w:val=\"101113\"/><w:sz w:val=\"22\"/></w:rPr><w:t>pfändbares Einkommen</w:t></w:r><w:r><w:rPr><w:i/><w:color w:val=\"101113\"/><w:sz w:val=\"22\"/></w:rPr><w:t>&quot;",
+                    variable: "pfändbares Einkommen",
+                    placeholder: "PFAENDBAR_INCOME_PLACEHOLDER"
+                },
+                {
+                    pattern: "</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Times New Roman\" w:hAnsi=\"Times New Roman\"/><w:i/><w:color w:val=\"0F1012\"/><w:sz w:val=\"22\"/></w:rPr><w:t>monatlicher pfändbarer</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Times New Roman\" w:hAnsi=\"Times New Roman\"/><w:i/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"40\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Times New Roman\" w:hAnsi=\"Times New Roman\"/><w:i/><w:color w:val=\"0F1012\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Betrag</w:t></w:r><w:r><w:rPr><w:i/><w:color w:val=\"0F1012\"/><w:sz w:val=\"22\"/></w:rPr><w:t>&quot;",
+                    variable: "monatlicher pfändbarer Betrag",
+                    placeholder: "MONTHLY_PFAENDBAR_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Summe</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>für</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>die</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>Tilgung</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>Gläubigers</w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/><w:u w:val=\"thick\" w:color=\"0F1012\"/></w:rPr><w:t>monatlich&quot;",
+                    variable: "Summe für die Tilgung des Gläubigers monatlich",
+                    placeholder: "TOTAL_MONTHLY_PAYMENT_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Nummer</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-9\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F1012\"/><w:sz w:val=\"22\"/></w:rPr><w:t>im </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Schuldenbereinigungsplan&quot;",
+                    variable: "Nummer im Schuldenbereinigungsplan",
+                    placeholder: "PLAN_NUMBER_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Datum</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-4\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>in</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>14</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>Tagen&quot;",
+                    variable: "Datum in 14 Tagen",
+                    placeholder: "DEADLINE_DATE_PLACEHOLDER"
+                }
+            ];
+
+            splitXmlReplacements.forEach(({ pattern, placeholder }) => {
+                if (processedXml.includes(pattern)) {
+                    processedXml = processedXml.replace(pattern, placeholder);
+                    console.log(`✅ Replaced split XML pattern with ${placeholder}`);
+                }
+            });
             
             // Debug: Show what quoted text exists in the document
             console.log('🔍 Searching for quoted text patterns in document...');
@@ -104,7 +170,40 @@ class NewWordTemplateProcessor {
                         return;
                     }
                     
-                    // Try pattern that allows for XML tags between quotes and text
+                    // Advanced split-XML pattern for variables that are broken across multiple <w:t> tags
+                    if (!variableReplaced && quoteType.name === 'HTML encoded') {
+                        // Build a more comprehensive pattern for complex split variables
+                        const variableParts = variable.split(/\s+/); // Split on whitespace
+                        
+                        if (variableParts.length > 1) {
+                            // Create pattern that matches quotes, then looks for all parts of the variable with XML in between
+                            let splitVariablePattern = this.escapeRegex(quoteType.open);
+                            
+                            // Add the first part
+                            splitVariablePattern += `[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(variableParts[0]);
+                            
+                            // Add patterns for remaining parts with XML tags in between
+                            for (let i = 1; i < variableParts.length; i++) {
+                                splitVariablePattern += `(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(variableParts[i]);
+                            }
+                            
+                            // End with closing quote
+                            splitVariablePattern += `[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(quoteType.close);
+                            
+                            const advancedSplitPattern = new RegExp(splitVariablePattern, 'g');
+                            const advancedSplitMatches = processedXml.match(advancedSplitPattern);
+                            
+                            if (advancedSplitMatches && advancedSplitMatches.length > 0) {
+                                processedXml = processedXml.replace(advancedSplitPattern, value);
+                                console.log(`✅ Advanced split-XML match "${variable}" (${quoteType.name}): ${advancedSplitMatches.length} occurrences`);
+                                totalReplacements += advancedSplitMatches.length;
+                                variableReplaced = true;
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // Try pattern that allows for XML tags between quotes and text  
                     const flexiblePattern = new RegExp(
                         `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
                         'g'
@@ -224,19 +323,20 @@ class NewWordTemplateProcessor {
         deadlineDate.setDate(deadlineDate.getDate() + 14);
 
         // Template Variables - based on actual analysis
-        replacements["Adresse des Creditors"] = creditorData?.address || "Gläubiger Adresse";
+        // Use placeholders for split XML variables
+        replacements["CREDITOR_ADDRESS_PLACEHOLDER"] = creditorData?.address || "Gläubiger Adresse";
         replacements["Mandant"] = clientName;
-        replacements["Aktenzeichen der Forderung"] = creditorData?.aktenzeichen || "AZ-12345";
-        replacements["Name des Mandanten"] = clientName;
+        replacements["CREDITOR_REFERENCE_PLACEHOLDER"] = creditorData?.aktenzeichen || "AZ-12345";
+        replacements["CLIENT_NAME_PLACEHOLDER"] = clientName;
         replacements["Gläubigeranzahl"] = creditorCount.toString();
-        replacements["Gessamtsumme Verschuldung"] = this.formatCurrency(totalDebt);
-        replacements["Heutiges Datum"] = this.formatDate(new Date());
-        replacements["Aktenzeichen des Mandanten"] = clientReference;
+        replacements["TOTAL_DEBT_PLACEHOLDER"] = this.formatCurrency(totalDebt);
+        replacements["TODAY_DATE_PLACEHOLDER"] = this.formatDate(new Date());
+        replacements["CLIENT_REFERENCE_PLACEHOLDER"] = clientReference;
         replacements["Geburtstag"] = this.formatDate(clientData?.geburtstag);
         replacements["Familienstand"] = this.getFamilienstand(clientData);
         replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
-        replacements["pfändbares Einkommen"] = this.formatCurrency(pfaendbarAmount);
-        replacements["monatlicher pfändbarer Betrag"] = this.formatCurrency(monthlyPayment);
+        replacements["PFAENDBAR_INCOME_PLACEHOLDER"] = this.formatCurrency(pfaendbarAmount);
+        replacements["MONTHLY_PFAENDBAR_PLACEHOLDER"] = this.formatCurrency(monthlyPayment);
         
         // Creditor-specific variables (if creditor data provided)
         if (creditorData) {
@@ -246,19 +346,19 @@ class NewWordTemplateProcessor {
             const totalCreditorPayment = monthlyCreditororPayment * 36; // 3 years
 
             replacements["Forderungssumme"] = this.formatCurrency(creditorDebt);
-            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(totalCreditorPayment);
+            replacements["TOTAL_MONTHLY_PAYMENT_PLACEHOLDER"] = this.formatCurrency(totalCreditorPayment);
             replacements["Tilgungsqoute"] = tilgungsquote.toFixed(2);
-            replacements["Nummer im Schuldenbereinigungsplan"] = this.getCreditorNumber(creditorData, settlementData);
+            replacements["PLAN_NUMBER_PLACEHOLDER"] = this.getCreditorNumber(creditorData, settlementData);
         } else {
             // Default values if no specific creditor
             replacements["Forderungssumme"] = this.formatCurrency(0);
-            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(0);
+            replacements["TOTAL_MONTHLY_PAYMENT_PLACEHOLDER"] = this.formatCurrency(0);
             replacements["Tilgungsqoute"] = "0,00";
-            replacements["Nummer im Schuldenbereinigungsplan"] = "1";
+            replacements["PLAN_NUMBER_PLACEHOLDER"] = "1";
         }
         
         replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
-        replacements["Datum in 14 Tagen"] = this.formatDate(deadlineDate);
+        replacements["DEADLINE_DATE_PLACEHOLDER"] = this.formatDate(deadlineDate);
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
