@@ -1566,8 +1566,22 @@ class DocumentGenerator {
                 };
             }
             
-            // Get all creditors from settlement data
-            const creditors = settlementData?.creditor_payments || [];
+            // Get all creditors from settlement data and deduplicate by name
+            const allCreditors = settlementData?.creditor_payments || [];
+            
+            // Deduplicate creditors by name to avoid generating multiple documents for the same creditor
+            const creditorNames = new Set();
+            const creditors = allCreditors.filter(creditor => {
+                const name = creditor.creditor_name || creditor.name;
+                if (creditorNames.has(name)) {
+                    console.log(`⚠️ Skipping duplicate creditor: ${name}`);
+                    return false;
+                }
+                creditorNames.add(name);
+                return true;
+            });
+            
+            console.log(`📊 Deduplicated ${allCreditors.length} creditors to ${creditors.length} unique creditors`);
             
             if (creditors.length === 0) {
                 console.log('⚠️ No creditors found, generating single general document');
