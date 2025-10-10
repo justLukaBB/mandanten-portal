@@ -128,6 +128,22 @@ class NewWordTemplateProcessor {
                     pattern: "&quot;Datum</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-4\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>in</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>14</w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0B0D10\"/><w:spacing w:val=\"-8\"/></w:rPr><w:t>Tagen&quot;",
                     variable: "Datum in 14 Tagen",
                     placeholder: "DEADLINE_DATE_PLACEHOLDER"
+                },
+                // Additional "Name des Mandanten" patterns found in template analysis
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Mandanten&quot;",
+                    variable: "Name des Mandanten",
+                    placeholder: "CLIENT_NAME_PLACEHOLDER_2"
+                },
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F1012\"/><w:spacing w:val=\"-16\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F1012\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des Mandanten&quot;",
+                    variable: "Name des Mandanten",
+                    placeholder: "CLIENT_NAME_PLACEHOLDER_3"
+                },
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Mandanten&quot;",
+                    variable: "Name des Mandanten",
+                    placeholder: "CLIENT_NAME_PLACEHOLDER_4"
                 }
             ];
 
