@@ -51,6 +51,15 @@ class NewWordTemplateProcessor {
 
             console.log('🔄 Prepared replacements:', Object.keys(replacements).length, 'variables');
 
+            // Extract basic client info for use in this method
+            const clientName = this.getClientName(clientData);
+            const clientReference = clientData?.aktenzeichen || clientData?.reference || 'UNBEKANNT';
+            
+            // Calculate key financial values
+            const totalDebt = settlementData?.total_debt || 0;
+            const creditorCount = settlementData?.creditor_payments?.length || 0;
+            const monthlyPayment = this.calculatePfaendbarAmount(clientData);
+
             // Replace variables in the document XML
             let processedXml = documentXml;
 
