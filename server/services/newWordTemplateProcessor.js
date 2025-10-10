@@ -113,10 +113,12 @@ class NewWordTemplateProcessor {
                 }
             ];
 
-            splitXmlReplacements.forEach(({ pattern, placeholder }) => {
+            splitXmlReplacements.forEach(({ pattern, variable, placeholder }) => {
                 if (processedXml.includes(pattern)) {
-                    processedXml = processedXml.replace(pattern, placeholder);
-                    console.log(`✅ Replaced split XML pattern with ${placeholder}`);
+                    const actualValue = replacements[variable] || placeholder;
+                    processedXml = processedXml.replace(pattern, actualValue);
+                    console.log(`✅ Replaced split XML pattern "${variable}" with "${actualValue}"`);
+                    totalReplacements++;
                 }
             });
             
@@ -146,12 +148,33 @@ class NewWordTemplateProcessor {
 
             let totalReplacements = 0;
 
+            // Variables that are handled by split-XML patterns - don't process them in regular replacement
+            const splitXmlVariables = [
+                "Adresse des Creditors",
+                "Aktenzeichen der Forderung", 
+                "Name des Mandanten",
+                "Gessamtsumme Verschuldung",
+                "Heutiges Datum",
+                "Aktenzeichen des Mandanten",
+                "pfändbares Einkommen",
+                "monatlicher pfändbarer Betrag",
+                "Summe für die Tilgung des Gläubigers monatlich",
+                "Nummer im Schuldenbereinigungsplan",
+                "Datum in 14 Tagen"
+            ];
+
             Object.entries(replacements).forEach(([variable, value]) => {
                 let variableReplaced = false;
                 
                 // Skip placeholder variables that were already replaced by split-XML patterns
                 if (variable.includes('_PLACEHOLDER')) {
                     console.log(`✅ Skipping "${variable}" - already replaced by split-XML pattern`);
+                    return;
+                }
+                
+                // Skip variables that are handled by split-XML patterns
+                if (splitXmlVariables.includes(variable)) {
+                    console.log(`✅ Skipping "${variable}" - handled by split-XML pattern`);
                     return;
                 }
                 
