@@ -378,27 +378,45 @@ class NewWordTemplateProcessor {
                 }
             ];
             
-            // 2. DYNAMIC CREDITOR NAME REPLACEMENT 
-            // Search for any existing creditor name in the document and replace with current creditor
-            const currentCreditorName = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
-            
-            // Common creditor name patterns that might appear in documents
-            const creditorNamePatterns = [
-                "EOS Deutscher Inkasso-Dienst GmbH",
-                "Inkasso",
-                "Gläubiger Name",
-                "Name des Gläubigers",
-                "Creditor Name"
+            // 2. DYNAMIC CONTENT REPLACEMENT 
+            // Search for common placeholder patterns that might exist in documents
+            const dynamicReplacements = [
+                // Creditor names
+                {
+                    patterns: ["EOS Deutscher Inkasso-Dienst GmbH", "Inkasso", "Gläubiger Name", "Name des Gläubigers", "Creditor Name"],
+                    value: creditorData?.name || creditorData?.creditor_name || "Gläubiger",
+                    name: "Creditor Name"
+                },
+                // Financial amounts that might appear as hardcoded values
+                {
+                    patterns: ["0,00", "0.00", "XXX,XX", "000,00"],
+                    value: this.formatCurrency(creditorData?.debt_amount || 0),
+                    name: "Debt Amount"
+                },
+                // Client name alternatives
+                {
+                    patterns: ["Max Mustermann", "Mandant Name", "Client Name"],
+                    value: clientName,
+                    name: "Client Name Alternatives"
+                },
+                // Date placeholders
+                {
+                    patterns: ["01.01.2025", "DD.MM.YYYY", "Datum"],
+                    value: this.formatDate(new Date()),
+                    name: "Date Placeholders"
+                }
             ];
             
-            creditorNamePatterns.forEach(pattern => {
-                const regex = new RegExp(`<w:t>${this.escapeRegex(pattern)}</w:t>`, 'g');
-                const matches = processedXml.match(regex);
-                if (matches && matches.length > 0) {
-                    processedXml = processedXml.replace(regex, `<w:t>${currentCreditorName}</w:t>`);
-                    console.log(`✅ Dynamic creditor name replacement "${pattern}" -> "${currentCreditorName}": ${matches.length} occurrences`);
-                    totalReplacements += matches.length;
-                }
+            dynamicReplacements.forEach(({ patterns, value, name }) => {
+                patterns.forEach(pattern => {
+                    const regex = new RegExp(`<w:t>${this.escapeRegex(pattern)}</w:t>`, 'g');
+                    const matches = processedXml.match(regex);
+                    if (matches && matches.length > 0) {
+                        processedXml = processedXml.replace(regex, `<w:t>${value}</w:t>`);
+                        console.log(`✅ Dynamic ${name} replacement "${pattern}" -> "${value}": ${matches.length} occurrences`);
+                        totalReplacements += matches.length;
+                    }
+                });
             });
             
             plainTextReplacements.forEach(({ pattern, value, name }) => {
