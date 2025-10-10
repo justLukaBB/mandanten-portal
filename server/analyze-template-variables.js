@@ -1,181 +1,135 @@
-/**
- * Analysis of the new Nullplan Table Template and integration strategy
- * Compares the new template with current Nullplan generation system
- */
-
 const fs = require('fs');
-const path = require('path');
 
-console.log('=== NULLPLAN TABLE TEMPLATE ANALYSIS ===\n');
+// Read the extracted text
+const text = fs.readFileSync('./template-readable-text.txt', 'utf8');
 
-// Read the analyzed template data
-const templateAnalysis = JSON.parse(fs.readFileSync('template-variables.json', 'utf8'));
-
-console.log('1. NEW TEMPLATE STRUCTURE:');
-console.log('   Template Type:', templateAnalysis.templateType);
-console.log('   Variables Required:', templateAnalysis.variables);
-console.log('   Table Structure:');
-console.log('     - Columns:', templateAnalysis.tableStructure.columns);
-console.log('     - Max Rows:', templateAnalysis.tableStructure.maxRows);
-console.log('     - Has Summary Row:', templateAnalysis.tableStructure.hasSummaryRow);
-console.log('   Quota System:', templateAnalysis.quotaSystem);
-console.log('   Fixed Values:', templateAnalysis.fixedValues);
-
-console.log('\n2. CURRENT NULLPLAN GENERATION SYSTEM:');
-console.log('   Current flow for Nullplan cases:');
-console.log('   - Detection: settlementData.plan_type === "nullplan" OR pfaendbarAmount < 1');
-console.log('   - Generation: generateNullplanRatenplanDocument()');
-console.log('   - Template: Uses wordTemplateProcessor.processQuotenplanNullplanTemplate()');
-console.log('   - Template File: templates/Nullplan_Text_Template.docx');
-console.log('   - Output: Quotenplan-Nullplan document');
-
-console.log('\n3. NEW TEMPLATE INTEGRATION STRATEGY:');
-
-const integrationPlan = {
-    templateFile: {
-        current: 'templates/Nullplan_Text_Template.docx',
-        new: 'templates/Tabelle Nullplan Template.docx',
-        action: 'Replace or add alongside existing'
-    },
-    
-    variableMapping: {
-        description: 'Map new template variables to existing data structure',
-        mappings: [
-            {
-                templateVar: 'Heutiges Datum',
-                source: 'new Date().toLocaleDateString("de-DE")',
-                current: 'clientData.currentDate'
-            },
-            {
-                templateVar: 'Name Mandant',
-                source: 'client.firstName + " " + client.lastName',
-                current: 'clientData.fullName'
-            },
-            {
-                templateVar: 'Datum in 3 Monaten',
-                source: 'new Date(Date.now() + 3*30*24*60*60*1000).toLocaleDateString("de-DE")',
-                current: 'calculated based on currentDate + 3 months'
-            }
-        ]
-    },
-
-    tableGeneration: {
-        description: 'Generate creditor table with quota calculations',
-        requirements: [
-            'Extract creditor data from settlementData.creditor_payments or client.creditors',
-            'Calculate total debt from all creditors',
-            'Calculate quota percentage for each creditor (debt_amount / total_debt * 100)',
-            'Format currency amounts in German format (1.234,56 EUR)',
-            'Round quota percentages to 2 decimal places',
-            'Ensure sum of quotas approximately equals 100%',
-            'Handle up to 8 creditors (template limit)',
-            'Add summary row with totals'
-        ]
-    },
-
-    codeChanges: {
-        description: 'Required code modifications',
-        changes: [
-            {
-                file: 'services/wordTemplateProcessor.js',
-                action: 'Add new method processNullplanTableTemplate()',
-                details: 'Process the new table template with creditor data'
-            },
-            {
-                file: 'services/documentGenerator.js',
-                action: 'Update generateNullplanRatenplanDocument()',
-                details: 'Route to new table template processor'
-            },
-            {
-                file: 'services/wordTemplateProcessor.js',
-                action: 'Add template path property',
-                details: 'this.nullplanTableTemplatePath for new template'
-            }
-        ]
-    },
-
-    quotaCalculation: {
-        description: 'Quota calculation system',
-        algorithm: [
-            '1. Get all creditor amounts from settlementData.creditor_payments',
-            '2. Calculate totalDebt = sum of all creditor amounts',
-            '3. For each creditor: quota = (creditor.debt_amount / totalDebt) * 100',
-            '4. Round quota to 2 decimal places',
-            '5. Handle rounding discrepancies (sum may not equal exactly 100%)',
-            '6. Format amounts as German currency (1.234,56 EUR)',
-            '7. Fill table rows (max 8 creditors, numbered 1-8)',
-            '8. Add summary row with total amounts'
-        ]
-    }
+// Define patterns to look for
+const patterns = {
+    dates: /\d{1,2}\.\d{1,2}\.\d{4}/g,
+    aktenzeichen: /\d{3}\/\d{2}\s+[A-Z]{2}-[A-Z]{2}/g,
+    amounts: /\d{1,3}(\.\d{3})*,\d{2}\s*€?/g,
+    names: /(Anke\s+Laux|Thomas\s+Scuric|EOS\s+Deutscher)/g,
+    addresses: /(Bongardstraße\s+\d+|Steindamm\s+\d+|44787\s+Bochum|20085\s+Hamburg)/g,
+    phones: /\d{4}\s+\d{7}/g,
+    bankDetails: /(Konto-Nr\.:\s*\d+\s+\d+\s+\d+|BLZ:\s*\d+\s+\d+\s+\d+)/g,
+    hardcodedTexts: [
+        'Rechtsanwaltskanzlei Scuric',
+        'EOS Deutscher Inkasso Dienst', 
+        'info@ra-scuric.de',
+        'Deutsche Bank',
+        'Anke Laux',
+        'Thomas Scuric',
+        '42883554201', // ID number
+        '904/24 TS-JK', // Case number
+        '05.03.1967', // Birth date
+        '05.05.2025', // Document date
+        '02.06.2025', // Deadline date
+        '01.08.2025', // Plan date
+        '25.947,78 €', // Total debt
+        '4.413,46 €', // Individual claim
+        '17,01%', // Quote percentage
+        '540,00 €', // Income
+        'Bongardstraße 33',
+        '44787 Bochum',
+        'Steindamm 71',
+        '20085 Hamburg',
+        '0234 9136810', // Phone
+        '172 209 900', // Account number
+        '430 700 24' // Bank code
+    ]
 };
 
-console.log('   Template File Strategy:');
-console.log('     - Current:', integrationPlan.templateFile.current);
-console.log('     - New:', integrationPlan.templateFile.new);
-console.log('     - Action:', integrationPlan.templateFile.action);
+console.log('=== TEMPLATE VARIABLE ANALYSIS ===\n');
 
-console.log('\n   Variable Mapping:');
-integrationPlan.variableMapping.mappings.forEach((mapping, index) => {
-    console.log(`     ${index + 1}. "${mapping.templateVar}"`);
-    console.log(`        Source: ${mapping.source}`);
-    console.log(`        Current: ${mapping.current}`);
+// Find all dates
+console.log('📅 DATES FOUND:');
+const dates = text.match(patterns.dates) || [];
+dates.forEach(date => console.log(`  - ${date}`));
+
+// Find case numbers
+console.log('\n📋 CASE NUMBERS:');
+const caseNumbers = text.match(patterns.aktenzeichen) || [];
+caseNumbers.forEach(cn => console.log(`  - ${cn}`));
+
+// Find amounts
+console.log('\n💰 AMOUNTS:');
+const amounts = text.match(patterns.amounts) || [];
+amounts.forEach(amount => console.log(`  - ${amount}`));
+
+// Find names
+console.log('\n👤 NAMES:');
+const names = text.match(patterns.names) || [];
+names.forEach(name => console.log(`  - ${name}`));
+
+// Find addresses
+console.log('\n🏠 ADDRESSES:');
+const addresses = text.match(patterns.addresses) || [];
+addresses.forEach(addr => console.log(`  - ${addr}`));
+
+// Find phone numbers
+console.log('\n📞 PHONE NUMBERS:');
+const phones = text.match(patterns.phones) || [];
+phones.forEach(phone => console.log(`  - ${phone}`));
+
+// Find bank details
+console.log('\n🏦 BANK DETAILS:');
+const bankDetails = text.match(patterns.bankDetails) || [];
+bankDetails.forEach(bank => console.log(`  - ${bank}`));
+
+console.log('\n🔍 HARDCODED VALUES THAT SHOULD BE VARIABLES:');
+patterns.hardcodedTexts.forEach(hardcoded => {
+    if (text.includes(hardcoded)) {
+        console.log(`  ✓ Found: "${hardcoded}"`);
+    }
 });
 
-console.log('\n   Table Generation Requirements:');
-integrationPlan.tableGeneration.requirements.forEach((req, index) => {
-    console.log(`     ${index + 1}. ${req}`);
+// Look for potential variable patterns
+console.log('\n🎯 RECOMMENDED VARIABLES TO ADD:');
+const recommendations = [
+    { variable: '{{LAWYER_NAME}}', current: 'Thomas Scuric', description: 'Lawyer name' },
+    { variable: '{{LAWYER_FIRM}}', current: 'Rechtsanwaltskanzlei Scuric', description: 'Law firm name' },
+    { variable: '{{LAWYER_ADDRESS}}', current: 'Bongardstraße 33', description: 'Lawyer address' },
+    { variable: '{{LAWYER_CITY}}', current: '44787 Bochum', description: 'Lawyer city' },
+    { variable: '{{LAWYER_PHONE}}', current: '0234 9136810', description: 'Lawyer phone' },
+    { variable: '{{LAWYER_EMAIL}}', current: 'info@ra-scuric.de', description: 'Lawyer email' },
+    { variable: '{{CREDITOR_NAME}}', current: 'EOS Deutscher Inkasso Dienst', description: 'Creditor name' },
+    { variable: '{{CREDITOR_ADDRESS}}', current: 'Steindamm 71', description: 'Creditor address' },
+    { variable: '{{CREDITOR_CITY}}', current: '20085 Hamburg', description: 'Creditor city' },
+    { variable: '{{DEBTOR_NAME}}', current: 'Anke Laux', description: 'Debtor name' },
+    { variable: '{{DEBTOR_FIRST_NAME}}', current: 'Anke', description: 'Debtor first name' },
+    { variable: '{{DEBTOR_LAST_NAME}}', current: 'Laux', description: 'Debtor last name' },
+    { variable: '{{DEBTOR_ID}}', current: '42883554201', description: 'Debtor ID number' },
+    { variable: '{{CASE_NUMBER}}', current: '904/24 TS-JK', description: 'Case/file number' },
+    { variable: '{{DOCUMENT_DATE}}', current: '05.05.2025', description: 'Document creation date' },
+    { variable: '{{DEADLINE_DATE}}', current: '02.06.2025', description: 'Response deadline date' },
+    { variable: '{{PLAN_DATE}}', current: '01.08.2025', description: 'Plan start date' },
+    { variable: '{{DEBTOR_BIRTH_DATE}}', current: '05.03.1967', description: 'Debtor birth date' },
+    { variable: '{{TOTAL_DEBT}}', current: '25.947,78 €', description: 'Total debt amount' },
+    { variable: '{{CLAIM_AMOUNT}}', current: '4.413,46 €', description: 'Individual claim amount' },
+    { variable: '{{CLAIM_QUOTE}}', current: '17,01%', description: 'Claim quote percentage' },
+    { variable: '{{DEBTOR_INCOME}}', current: '540,00 €', description: 'Debtor monthly income' },
+    { variable: '{{CREDITOR_COUNT}}', current: '8', description: 'Number of creditors' },
+    { variable: '{{CLAIM_NUMBER}}', current: '8', description: 'Claim number in list' },
+    { variable: '{{BANK_NAME}}', current: 'Deutsche Bank', description: 'Bank name' },
+    { variable: '{{ACCOUNT_NUMBER}}', current: '172 209 900', description: 'Account number' },
+    { variable: '{{BANK_CODE}}', current: '430 700 24', description: 'Bank code (BLZ)' }
+];
+
+recommendations.forEach(rec => {
+    console.log(`  ${rec.variable} → "${rec.current}" (${rec.description})`);
 });
-
-console.log('\n   Code Changes Required:');
-integrationPlan.codeChanges.changes.forEach((change, index) => {
-    console.log(`     ${index + 1}. File: ${change.file}`);
-    console.log(`        Action: ${change.action}`);
-    console.log(`        Details: ${change.details}`);
-});
-
-console.log('\n   Quota Calculation Algorithm:');
-integrationPlan.quotaCalculation.algorithm.forEach((step, index) => {
-    console.log(`     ${step}`);
-});
-
-console.log('\n4. IMPLEMENTATION RECOMMENDATION:');
-console.log('   Option A: Replace existing Nullplan template entirely');
-console.log('     - Update wordTemplateProcessor.processQuotenplanNullplanTemplate()');
-console.log('     - Use new table template for all Nullplan cases');
-console.log('     - Simpler maintenance');
-console.log('');
-console.log('   Option B: Add new template as alternative');
-console.log('     - Keep existing template for compatibility');
-console.log('     - Add new processNullplanTableTemplate() method');
-console.log('     - Allow choice between table and text format');
-console.log('     - Better for gradual migration');
-
-console.log('\n5. DATA FLOW ANALYSIS:');
-console.log('   Current Nullplan Detection:');
-console.log('     - Trigger: settlementData.plan_type === "nullplan" OR pfaendbarAmount < 1');
-console.log('     - Path: generateNullplanRatenplanDocument() -> processQuotenplanNullplanTemplate()');
-console.log('');
-console.log('   Required Data for New Template:');
-console.log('     - Client name (already available)');
-console.log('     - Current date (already available)');
-console.log('     - Start date (+3 months, needs calculation)');
-console.log('     - Creditor list with amounts (available in settlementData.creditor_payments)');
-console.log('     - Total debt calculation (needs sum of creditor amounts)');
-console.log('     - Quota percentages (needs calculation)');
-
-console.log('\n6. NEXT STEPS:');
-console.log('   1. Create new template processor method for table template');
-console.log('   2. Implement quota calculation logic');
-console.log('   3. Add German currency formatting');
-console.log('   4. Update document generator to use new template');
-console.log('   5. Test with sample client data');
-console.log('   6. Verify quota calculations sum to ~100%');
 
 // Save the analysis
-fs.writeFileSync('nullplan-table-integration-plan.json', JSON.stringify({
-    templateAnalysis,
-    integrationPlan,
-    timestamp: new Date().toISOString()
-}, null, 2));
+const analysis = {
+    dates,
+    caseNumbers,
+    amounts,
+    names,
+    addresses,
+    phones,
+    bankDetails,
+    recommendations
+};
 
-console.log('\n✅ Analysis complete - integration plan saved to nullplan-table-integration-plan.json');
+fs.writeFileSync('./template-variables.json', JSON.stringify(analysis, null, 2));
+console.log('\n💾 Analysis saved to template-variables.json');
