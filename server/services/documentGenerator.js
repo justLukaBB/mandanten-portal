@@ -1639,14 +1639,49 @@ class DocumentGenerator {
             console.error('   Error stack:', error.stack);
             console.log('🔄 Using fallback docx generation instead of NEW Word template');
             
-            // Fallback to original docx generation
-            const fallbackResult = await this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
+            // Fallback: Generate individual documents per creditor using old method
+            console.log('🔄 Generating individual fallback documents for each creditor...');
+            
+            const creditors = settlementData?.creditor_payments || [];
+            const fallbackDocuments = [];
+            const fallbackErrors = [];
+            
+            for (let i = 0; i < creditors.length; i++) {
+                const creditor = creditors[i];
+                console.log(`📄 Fallback generation for creditor ${i + 1}/${creditors.length}: ${creditor.creditor_name || creditor.name}`);
+                
+                try {
+                    const fallbackResult = await this.generateRatenplanDocumentFallback(clientData, settlementData, pfaendbarAmount);
+                    
+                    if (fallbackResult.success) {
+                        // Add creditor-specific info to the result
+                        fallbackDocuments.push({
+                            ...fallbackResult,
+                            creditor_name: creditor.creditor_name || creditor.name,
+                            creditor_index: i + 1
+                        });
+                        console.log(`✅ Fallback document generated for ${creditor.creditor_name || creditor.name}`);
+                    } else {
+                        const errorMsg = `Fallback failed for ${creditor.creditor_name || creditor.name}: ${fallbackResult.error}`;
+                        fallbackErrors.push(errorMsg);
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                } catch (creditorError) {
+                    const errorMsg = `Fallback error for ${creditor.creditor_name || creditor.name}: ${creditorError.message}`;
+                    fallbackErrors.push(errorMsg);
+                    console.error(`❌ ${errorMsg}`);
+                }
+            }
+            
+            console.log(`📊 Fallback summary: Generated ${fallbackDocuments.length}/${creditors.length} documents`);
+            
             return {
-                success: fallbackResult.success,
-                documents: fallbackResult.success ? [fallbackResult] : [],
-                totalDocuments: fallbackResult.success ? 1 : 0,
-                errors: fallbackResult.success ? [] : [fallbackResult.error],
-                summary: 'Generated using fallback method'
+                success: fallbackDocuments.length > 0,
+                documents: fallbackDocuments,
+                totalDocuments: fallbackDocuments.length,
+                totalCreditors: creditors.length,
+                errors: fallbackErrors,
+                summary: `Generated ${fallbackDocuments.length} documents using fallback method`
             };
         }
     }
