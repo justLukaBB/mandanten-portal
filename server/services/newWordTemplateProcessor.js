@@ -74,6 +74,13 @@ class NewWordTemplateProcessor {
 
             // First, replace the complex split XML patterns with simple placeholders
             const splitXmlReplacements = [
+                // NEW TEMPLATE: Updated Adresse des Creditors pattern
+                {
+                    pattern: "&quot;Adresse</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"15\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:w w:val=\"90\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"15\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:w w:val=\"90\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Creditors</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"17\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-10\"/><w:w w:val=\"90\"/><w:sz w:val=\"22\"/></w:rPr><w:t>&quot;",
+                    variable: "Adresse des Creditors",
+                    placeholder: "CREDITOR_ADDRESS_NEW_TEMPLATE"
+                },
+                // OLD TEMPLATE: Keep for compatibility
                 {
                     pattern: "&quot;Adresse</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-7\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-7\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Creditors</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-5\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-10\"/><w:sz w:val=\"22\"/></w:rPr><w:t>&quot;",
                     variable: "Adresse des Creditors",
@@ -176,7 +183,16 @@ class NewWordTemplateProcessor {
 
             splitXmlReplacements.forEach(({ pattern, variable, placeholder }) => {
                 if (processedXml.includes(pattern)) {
-                    const actualValue = replacements[variable] || placeholder;
+                    // Get the actual creditor name or address
+                    let actualValue;
+                    if (variable === "Name des Gläubigers") {
+                        actualValue = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
+                    } else if (variable === "Adresse des Creditors") {
+                        actualValue = creditorData?.address || "Adresse nicht verfügbar";
+                    } else {
+                        actualValue = replacements[variable] || placeholder;
+                    }
+                    
                     processedXml = processedXml.replace(pattern, actualValue);
                     console.log(`✅ Replaced split XML pattern "${variable}" with "${actualValue}"`);
                     totalReplacements++;
