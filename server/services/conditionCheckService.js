@@ -121,7 +121,39 @@ class ConditionCheckService {
       return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document_after_reminder');
     }
     
-    return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document');
+    // Check if both conditions are met first
+    const conditionResult = await this.checkAndScheduleIfBothConditionsMet(clientId, 'document');
+    
+    // NEW: If both conditions are met (payment + documents), trigger processing-complete webhook
+    // This ensures the main processing ticket is created when documents are uploaded after payment
+    if (conditionResult.bothConditionsMet && conditionResult.scheduled) {
+      console.log(`🎯 Both conditions met for ${client.aktenzeichen} - triggering processing-complete webhook...`);
+      
+      try {
+        // Import the processing-complete webhook handler
+        const { triggerProcessingCompleteWebhook } = require('../routes/portal-webhooks');
+        
+        // Trigger the processing-complete webhook asynchronously
+        setTimeout(async () => {
+          try {
+            await triggerProcessingCompleteWebhook(clientId);
+            console.log(`✅ Processing-complete webhook triggered for ${client.aktenzeichen}`);
+          } catch (error) {
+            console.error(`❌ Error triggering processing-complete webhook for ${client.aktenzeichen}:`, error);
+          }
+        }, 1000); // Small delay to ensure database save completes first
+        
+        // Update the result to indicate that processing was triggered
+        conditionResult.processingTriggered = true;
+        conditionResult.processingTriggeredAt = new Date();
+        
+      } catch (error) {
+        console.error(`❌ Error setting up processing-complete webhook for ${client.aktenzeichen}:`, error);
+        conditionResult.processingError = error.message;
+      }
+    }
+    
+    return conditionResult;
   }
 }
 
