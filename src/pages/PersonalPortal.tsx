@@ -254,6 +254,13 @@ export const PersonalPortal = ({
           >
             Erneut versuchen
           </button>
+            <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-white rounded-lg ms-1"
+            style={{ backgroundColor: customColors.primary }}
+          >
+            Abmelden
+          </button>
         </div>
       </div>
     );
