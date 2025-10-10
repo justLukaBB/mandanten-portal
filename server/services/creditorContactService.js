@@ -1115,9 +1115,46 @@ class CreditorContactService {
             const fs = require('fs');
             const path = require('path');
 
-            // PRIORITY 1: Use provided document paths from generation (most reliable)
-            if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
-                console.log(`✅ Using provided document info from generation`);
+            // PRIORITY 1: Handle Nullplan documents (individual letters + table)
+            if (generatedDocuments && generatedDocuments.nullplan_letters) {
+                console.log(`✅ Processing Nullplan documents with individual letters`);
+                
+                // Add individual Nullplan letters
+                if (generatedDocuments.nullplan_letters.documents) {
+                    generatedDocuments.nullplan_letters.documents.forEach(doc => {
+                        if (fs.existsSync(doc.path)) {
+                            documentFiles.push({ 
+                                path: doc.path, 
+                                type: 'nullplan_letter',
+                                creditor_name: doc.creditor_name,
+                                creditor_id: doc.creditor_id
+                            });
+                            console.log(`  ✓ Nullplan letter: ${path.basename(doc.path)} (${doc.creditor_name})`);
+                        }
+                    });
+                }
+                
+                // Add Forderungsübersicht
+                if (generatedDocuments.forderungsuebersicht && generatedDocuments.forderungsuebersicht.document_info) {
+                    const overviewPath = generatedDocuments.forderungsuebersicht.document_info.path;
+                    if (overviewPath && fs.existsSync(overviewPath)) {
+                        documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
+                        console.log(`  ✓ Forderungsübersicht: ${path.basename(overviewPath)}`);
+                    }
+                }
+                
+                // Add Schuldenbereinigungsplan (quota table)
+                if (generatedDocuments.schuldenbereinigungsplan && generatedDocuments.schuldenbereinigungsplan.path) {
+                    const tablePath = generatedDocuments.schuldenbereinigungsplan.path;
+                    if (fs.existsSync(tablePath)) {
+                        documentFiles.push({ path: tablePath, type: 'schuldenbereinigungsplan' });
+                        console.log(`  ✓ Schuldenbereinigungsplan: ${path.basename(tablePath)}`);
+                    }
+                }
+            }
+            // PRIORITY 2: Use provided document paths from regular generation (most reliable)
+            else if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
+                console.log(`✅ Using provided document info from regular generation`);
                 const settlementPath = generatedDocuments.settlementResult.document_info?.path;
                 const overviewPath = generatedDocuments.overviewResult.document_info?.path;
                 const ratenplanPath = generatedDocuments.ratenplanResult?.document_info?.path;
@@ -1410,13 +1447,18 @@ class CreditorContactService {
             try {
                 console.log(`💬 Creating Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
 
-                // Create Side Conversation with download links
+                // Filter download URLs for this specific creditor (for Nullplan individual letters)
+                const creditorSpecificUrls = this.filterUrlsForCreditor(downloadUrls, creditor, creditorName);
+                
+                console.log(`📎 Creditor ${creditorName} gets ${creditorSpecificUrls.length}/${downloadUrls.length} documents`);
+                
+                // Create Side Conversation with creditor-specific download links
                 const result = await this.zendesk.createSideConversationWithDownloadLinks(
                     settlementTicketId,
                     creditor,
                     clientData,
                     settlementData,
-                    downloadUrls
+                    creditorSpecificUrls
                 );
 
                 emailResults.push({
@@ -1454,6 +1496,35 @@ class CreditorContactService {
         }
 
         return emailResults;
+    }
+
+    /**
+     * Filter download URLs for a specific creditor (for individual Nullplan letters)
+     */
+    filterUrlsForCreditor(downloadUrls, creditor, creditorName) {
+        const filteredUrls = [];
+        
+        downloadUrls.forEach(doc => {
+            // Include general documents (Forderungsübersicht, Schuldenbereinigungsplan)
+            if (doc.type === 'creditor_overview' || doc.type === 'schuldenbereinigungsplan' || doc.type === 'settlement_plan') {
+                filteredUrls.push(doc);
+            }
+            // Include only this creditor's specific Nullplan letter
+            else if (doc.type === 'nullplan_letter') {
+                // Match by creditor name (normalize for comparison)
+                const docCreditorName = (doc.creditor_name || '').toLowerCase().trim();
+                const targetCreditorName = creditorName.toLowerCase().trim();
+                
+                if (docCreditorName === targetCreditorName) {
+                    filteredUrls.push(doc);
+                    console.log(`  ✓ Including individual Nullplan letter for ${creditorName}`);
+                } else {
+                    console.log(`  ⚠️ Excluding Nullplan letter for ${doc.creditor_name} (looking for ${creditorName})`);
+                }
+            }
+        });
+        
+        return filteredUrls;
     }
 
     /**
