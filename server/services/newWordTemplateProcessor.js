@@ -159,10 +159,10 @@ class NewWordTemplateProcessor {
             ];
 
             // Variables that are handled by split-XML patterns - don't process them in regular replacement
+            // REDUCED LIST - only variables that are ACTUALLY replaced by split-XML patterns
             const splitXmlVariables = [
                 "Adresse des Creditors",
                 "Aktenzeichen der Forderung", 
-                "Name des Mandanten",
                 "Gessamtsumme Verschuldung",
                 "Heutiges Datum",
                 "Aktenzeichen des Mandanten",
@@ -242,14 +242,15 @@ class NewWordTemplateProcessor {
                         }
                     }
                     
-                    // TRY 1: Direct exact match for simple cases
-                    const directExactPattern = new RegExp(this.escapeRegex(quoteType.open + variable + quoteType.close), 'g');
-                    if (processedXml.includes(quoteType.open + variable + quoteType.close)) {
-                        processedXml = processedXml.replace(directExactPattern, (match) => {
+                    // TRY 1: Direct exact match for simple cases - GLOBAL REPLACEMENT
+                    const quotedVar = quoteType.open + variable + quoteType.close;
+                    const directExactPattern = new RegExp(this.escapeRegex(quotedVar), 'g');
+                    
+                    if (processedXml.includes(quotedVar)) {
+                        let matchCount = 0;
+                        processedXml = processedXml.replace(directExactPattern, (match, offset) => {
                             // Extra safety: check we're not in an XML attribute
-                            const matchIndex = processedXml.indexOf(match);
-                            const beforeMatch = processedXml.substring(Math.max(0, matchIndex - 100), matchIndex);
-                            const afterMatch = processedXml.substring(matchIndex, Math.min(processedXml.length, matchIndex + 100));
+                            const beforeMatch = processedXml.substring(Math.max(0, offset - 100), offset);
                             
                             // Check if we're inside an XML tag (dangerous)
                             const lastOpen = beforeMatch.lastIndexOf('<');
@@ -259,11 +260,15 @@ class NewWordTemplateProcessor {
                                 return match; // Skip - we're inside a non-text tag
                             }
                             
-                            console.log(`✅ Exact match "${variable}" (${quoteType.name}): 1 occurrence`);
-                            totalReplacements++;
-                            variableReplaced = true;
+                            matchCount++;
                             return value;
                         });
+                        
+                        if (matchCount > 0) {
+                            console.log(`✅ Exact match "${variable}" (${quoteType.name}): ${matchCount} occurrences`);
+                            totalReplacements += matchCount;
+                            variableReplaced = true;
+                        }
                     }
                     
                     // TRY 2: Flexible pattern for variables split across XML elements
@@ -468,6 +473,7 @@ class NewWordTemplateProcessor {
         
         // Additional simple variables found in template
         replacements["Mandant"] = clientName;
+        replacements["Name des Mandanten"] = clientName; // Also add this for normal replacement
         replacements["Geburtstag"] = this.formatDate(clientData?.geburtstag) || this.formatDate(clientData?.birthDate) || '01.01.1980';
         replacements["Familienstand"] = this.getFamilienstand(clientData);
         replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
@@ -475,6 +481,10 @@ class NewWordTemplateProcessor {
         
         // Fix payment start date variable  
         replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
+        
+        // Alternative variable names that might be in template
+        replacements["monatliches Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
+        replacements["Erwerbseinkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
