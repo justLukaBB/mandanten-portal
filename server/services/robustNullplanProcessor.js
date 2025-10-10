@@ -293,7 +293,7 @@ class RobustNullplanProcessor {
             "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
             "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
             "Datum in 3 Monaten": this.calculateDateInMonths(3),
-            "Aktenzeichen": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
+            "Aktenzeichen": `${clientData.reference || clientData.aktenzeichen}`,
             "Name des Gläubigers": creditorName
         };
         
