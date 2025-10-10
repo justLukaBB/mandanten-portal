@@ -1567,7 +1567,22 @@ class DocumentGenerator {
             }
             
             // Get all creditors from settlement data and deduplicate by name
-            const allCreditors = settlementData?.creditor_payments || [];
+            // First try to get creditors from creditor_calculation_table (has more complete data)
+            let allCreditors = [];
+            
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientData.reference });
+            
+            if (client?.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
+                console.log(`📊 Using creditor_calculation_table with ${client.creditor_calculation_table.length} creditors`);
+                allCreditors = client.creditor_calculation_table;
+            } else if (settlementData?.creditor_payments) {
+                console.log(`📊 Fallback to creditor_payments with ${settlementData.creditor_payments.length} creditors`);
+                allCreditors = settlementData.creditor_payments;
+            } else {
+                console.log(`⚠️ No creditor data found in either creditor_calculation_table or creditor_payments`);
+                allCreditors = [];
+            }
             
             // Deduplicate creditors by name to avoid generating multiple documents for the same creditor
             const creditorNames = new Set();
@@ -1614,12 +1629,12 @@ class DocumentGenerator {
                 try {
                     const templateProcessor = new NewWordTemplateProcessor();
                     
-                    // Prepare creditor-specific data
+                    // Prepare creditor-specific data with proper field mapping
                     const creditorData = {
-                        creditor_name: creditor.creditor_name || creditor.name,
-                        name: creditor.creditor_name || creditor.name,
-                        debt_amount: creditor.debt_amount || creditor.amount || creditor.final_amount,
-                        address: creditor.creditor_address || 
+                        creditor_name: creditor.name || creditor.creditor_name,
+                        name: creditor.name || creditor.creditor_name,
+                        debt_amount: creditor.final_amount || creditor.debt_amount || creditor.amount,
+                        address: creditor.address || creditor.creditor_address || 
                                this.buildCreditorAddress(creditor) ||
                                'Gläubiger Adresse nicht verfügbar',
                         aktenzeichen: creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
@@ -1634,11 +1649,19 @@ class DocumentGenerator {
                     });
                     
                     console.log('🔍 Full creditor object:', {
+                        name: creditor.name,
+                        creditor_name: creditor.creditor_name,
+                        address: creditor.address,
                         creditor_address: creditor.creditor_address,
                         creditor_street: creditor.creditor_street,
                         creditor_postal_code: creditor.creditor_postal_code,
                         creditor_city: creditor.creditor_city,
-                        address: creditor.address,
+                        reference_number: creditor.reference_number,
+                        creditor_reference: creditor.creditor_reference,
+                        aktenzeichen: creditor.aktenzeichen,
+                        final_amount: creditor.final_amount,
+                        debt_amount: creditor.debt_amount,
+                        amount: creditor.amount,
                         buildResult: this.buildCreditorAddress(creditor)
                     });
                     

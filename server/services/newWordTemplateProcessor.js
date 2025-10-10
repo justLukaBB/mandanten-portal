@@ -316,6 +316,12 @@ class NewWordTemplateProcessor {
                 
                 if (!variableReplaced) {
                     console.log(`⚠️ Variable "${variable}" not found in document`);
+                    // Try to find similar variables in the document for debugging
+                    const searchTerm = variable.length > 3 ? variable.substring(0, Math.min(variable.length, 8)) : variable;
+                    const documentSnippets = processedXml.match(new RegExp(`[^<]*${this.escapeRegex(searchTerm)}[^>]*`, 'gi'));
+                    if (documentSnippets && documentSnippets.length > 0) {
+                        console.log(`   🔍 Found similar text in document:`, documentSnippets.slice(0, 3));
+                    }
                 }
             });
             
