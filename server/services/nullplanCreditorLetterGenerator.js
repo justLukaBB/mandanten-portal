@@ -97,33 +97,117 @@ class NullplanCreditorLetterGenerator {
             
             console.log(`🔄 Applying ${Object.keys(replacements).length} replacements for ${creditor.name || creditor.creditor_name}`);
 
-            // Replace variables in the document XML
+            // Replace variables in the document XML - using advanced method that handles XML splitting
             let processedXml = documentXml;
             let totalReplacements = 0;
 
-            Object.entries(replacements).forEach(([variable, value]) => {
-                // Support multiple quote types found in Word documents
-                const quoteTypes = [
-                    { open: '&quot;', close: '&quot;' },
-                    { open: '"', close: '"' },
-                    { open: '"', close: '"' },
-                    { open: '"', close: '"' }
-                ];
+            // Support multiple quote types found in Word documents
+            const quoteTypes = [
+                { name: 'HTML encoded', open: '&quot;', close: '&quot;' },
+                { name: 'Regular', open: '"', close: '"' },
+                { name: 'Curly left/right', open: '"', close: '"' },
+                { name: 'Curly alternative', open: '"', close: '"' }
+            ];
 
+            Object.entries(replacements).forEach(([variable, value]) => {
                 let variableReplaced = false;
                 
                 quoteTypes.forEach(quoteType => {
-                    if (variableReplaced) return;
+                    if (variableReplaced) return; // Skip if already replaced
                     
+                    // Create more flexible pattern that handles XML structure
                     const quotedVariable = `${quoteType.open}${variable}${quoteType.close}`;
-                    const pattern = new RegExp(this.escapeRegex(quotedVariable), 'g');
                     
-                    const matches = (processedXml.match(pattern) || []).length;
-                    if (matches > 0) {
-                        processedXml = processedXml.replace(pattern, value);
-                        console.log(`✅ Replaced "${variable}": ${matches} occurrences`);
-                        totalReplacements += matches;
+                    // First try exact match
+                    const exactPattern = new RegExp(
+                        this.escapeRegex(quotedVariable),
+                        'g'
+                    );
+                    
+                    const exactMatches = (processedXml.match(exactPattern) || []).length;
+                    if (exactMatches > 0) {
+                        processedXml = processedXml.replace(exactPattern, value);
+                        console.log(`✅ Exact match "${variable}" (${quoteType.name}): ${exactMatches} occurrences`);
+                        totalReplacements += exactMatches;
                         variableReplaced = true;
+                        return;
+                    }
+                    
+                    // Advanced split-XML pattern for variables that are broken across multiple <w:t> tags
+                    if (!variableReplaced && quoteType.name === 'HTML encoded') {
+                        // Build a more comprehensive pattern for complex split variables
+                        const variableParts = variable.split(/\s+/); // Split on whitespace
+                        
+                        if (variableParts.length > 1) {
+                            // Create pattern that matches quotes, then looks for all parts of the variable with XML in between
+                            let splitVariablePattern = this.escapeRegex(quoteType.open);
+                            
+                            // Add the first part
+                            splitVariablePattern += `[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(variableParts[0]);
+                            
+                            // Add patterns for remaining parts with XML tags in between
+                            for (let i = 1; i < variableParts.length; i++) {
+                                splitVariablePattern += `(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(variableParts[i]);
+                            }
+                            
+                            // End with closing quote
+                            splitVariablePattern += `[^${this.escapeRegex(quoteType.close)}]*?` + this.escapeRegex(quoteType.close);
+                            
+                            const advancedSplitPattern = new RegExp(splitVariablePattern, 'g');
+                            const advancedSplitMatches = processedXml.match(advancedSplitPattern);
+                            
+                            if (advancedSplitMatches && advancedSplitMatches.length > 0) {
+                                processedXml = processedXml.replace(advancedSplitPattern, value);
+                                console.log(`✅ Advanced split-XML match "${variable}" (${quoteType.name}): ${advancedSplitMatches.length} occurrences`);
+                                totalReplacements += advancedSplitMatches.length;
+                                variableReplaced = true;
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // Try pattern that allows for XML tags between quotes and text  
+                    const flexiblePattern = new RegExp(
+                        `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
+                        'g'
+                    );
+                    
+                    const flexibleMatches = processedXml.match(flexiblePattern);
+                    if (flexibleMatches && flexibleMatches.length > 0) {
+                        processedXml = processedXml.replace(flexiblePattern, (match, content) => {
+                            // Only replace if the content actually contains our variable
+                            if (content.includes(variable)) {
+                                console.log(`✅ Flexible match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                totalReplacements++;
+                                variableReplaced = true;
+                                return value;
+                            }
+                            return match;
+                        });
+                    }
+                    
+                    // Try ultra-flexible pattern for variables split across XML elements
+                    if (!variableReplaced) {
+                        // Build pattern for variables that might be split across <w:t> tags
+                        const splitPattern = new RegExp(
+                            `${this.escapeRegex(quoteType.open)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(quoteType.close)}`,
+                            'g'
+                        );
+                        
+                        const splitMatches = processedXml.match(splitPattern);
+                        if (splitMatches && splitMatches.length > 0) {
+                            processedXml = processedXml.replace(splitPattern, (match) => {
+                                // Extract just the text content to check
+                                const textContent = match.replace(/<[^>]*>/g, '');
+                                if (textContent.includes(variable)) {
+                                    console.log(`✅ Split-XML match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                    totalReplacements++;
+                                    variableReplaced = true;
+                                    return value;
+                                }
+                                return match;
+                            });
+                        }
                     }
                 });
                 
@@ -191,7 +275,7 @@ class NullplanCreditorLetterGenerator {
             
             // Client variables (same for all)
             "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
-            "808080/TS-JK der Forderung": `${clientData.reference}/TS-JK`,
+            "808080/TS-JK der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
             "Gläuibgeranzahl": totalCreditors.toString(),
             "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
             "Heutiges 9.10.2025": new Date().toLocaleDateString('de-DE'),
