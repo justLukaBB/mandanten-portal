@@ -2888,11 +2888,19 @@ class DocumentGenerator {
                 throw new Error(`Client ${clientReference} is not eligible for Nullplan (recommended_plan_type: ${client.financial_data?.recommended_plan_type})`);
             }
 
-            // Prepare client data
+            // Prepare complete client data for robust processors
             const clientData = {
+                firstName: client.firstName,
+                lastName: client.lastName,
+                fullName: `${client.firstName} ${client.lastName}`,
                 name: `${client.firstName} ${client.lastName}`,
                 email: client.email,
-                reference: client.aktenzeichen
+                reference: client.aktenzeichen,
+                aktenzeichen: client.aktenzeichen,
+                financial_data: client.financial_data,
+                birthDate: client.geburtstag,
+                geburtstag: client.geburtstag,
+                maritalStatus: client.financial_data?.marital_status
             };
 
             // Get creditor data

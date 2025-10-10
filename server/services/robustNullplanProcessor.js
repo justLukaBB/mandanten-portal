@@ -61,7 +61,8 @@ class RobustNullplanProcessor {
             "Gläuibgeranzahl",
             "Einkommen",
             "Geburtstag",
-            "Familienstand"
+            "Familienstand",
+            "Datum in 3 Monaten"
         ];
     }
 
@@ -88,7 +89,7 @@ class RobustNullplanProcessor {
                 const creditor = allCreditors[i];
                 const creditorPosition = i + 1;
                 
-                console.log(`📝 [ROBUST] Processing creditor ${creditorPosition}/${allCreditors.length}: ${creditor.name || creditor.creditor_name}`);
+                console.log(`📝 [ROBUST] Processing creditor ${creditorPosition}/${allCreditors.length}: ${creditor.sender_name || creditor.name || creditor.creditor_name}`);
                 
                 const letterResult = await this.generateNullplanLetterForCreditor(
                     clientData, 
@@ -101,7 +102,7 @@ class RobustNullplanProcessor {
                 if (letterResult.success) {
                     results.push(letterResult);
                 } else {
-                    console.error(`❌ [ROBUST] Failed to generate letter for ${creditor.name}: ${letterResult.error}`);
+                    console.error(`❌ [ROBUST] Failed to generate letter for ${creditor.sender_name || creditor.name || creditor.creditor_name}: ${letterResult.error}`);
                 }
             }
 
@@ -191,10 +192,10 @@ class RobustNullplanProcessor {
             // Generate output
             const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
             
-            // Create creditor-specific filename
-            const creditorName = (creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`)
+            // Create creditor-specific filename using correct field priority
+            const creditorNameForFile = (creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`)
                 .replace(/[^a-zA-Z0-9\-_.]/g, '_');
-            const filename = `Nullplan_${clientData.reference || clientData.aktenzeichen}_${creditorName}_${new Date().toISOString().split('T')[0]}.docx`;
+            const filename = `Nullplan_${clientData.reference || clientData.aktenzeichen}_${creditorNameForFile}_${new Date().toISOString().split('T')[0]}.docx`;
             const outputPath = path.join(this.outputDir, filename);
             
             fs.writeFileSync(outputPath, outputBuffer);
@@ -206,7 +207,7 @@ class RobustNullplanProcessor {
                 filename: filename,
                 path: outputPath,
                 size: outputBuffer.length,
-                creditor_name: creditor.name || creditor.creditor_name || creditor.sender_name || `Creditor_${creditorPosition}`,
+                creditor_name: creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`,
                 creditor_id: creditor.id || creditorPosition
             };
 
@@ -215,7 +216,7 @@ class RobustNullplanProcessor {
             return {
                 success: false,
                 error: error.message,
-                creditor_name: creditor.name || creditor.creditor_name
+                creditor_name: creditor.sender_name || creditor.name || creditor.creditor_name
             };
         }
     }
@@ -228,13 +229,18 @@ class RobustNullplanProcessor {
         const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address with better fallback
+        // Build creditor address using correct field mapping (sender_address is primary)
         let creditorAddress = '';
         
-        if (creditor.address && creditor.address.trim()) {
+        // Priority order based on actual database schema
+        if (creditor.sender_address && creditor.sender_address.trim()) {
+            creditorAddress = creditor.sender_address.trim();
+        } else if (creditor.address && creditor.address.trim()) {
             creditorAddress = creditor.address.trim();
+        } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
+            creditorAddress = creditor.creditor_address.trim();
         } else {
-            // Build from individual parts
+            // Build from individual parts as fallback
             const parts = [];
             if (creditor.creditor_street || creditor.sender_street) {
                 parts.push(creditor.creditor_street || creditor.sender_street);
@@ -248,17 +254,23 @@ class RobustNullplanProcessor {
         }
         
         // Final fallback
-        if (!creditorAddress || creditorAddress === ',') {
-            creditorAddress = `${creditor.name || creditor.creditor_name || 'Gläubiger'}\nAdresse nicht verfügbar`;
+        if (!creditorAddress || creditorAddress === ',' || creditorAddress === '') {
+            creditorAddress = `${creditor.sender_name || creditor.name || creditor.creditor_name || 'Gläubiger'}\nAdresse nicht verfügbar`;
         }
 
         // Client name
         const clientName = clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann';
 
+        // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
+        const creditorReference = creditor.reference_number || 
+                                creditor.creditor_reference || 
+                                creditor.reference || 
+                                `${clientData.reference || clientData.aktenzeichen}-${creditorPosition}`;
+
         const replacements = {
             // XML-split variables (exact mapping)
             "Adresse des Creditors": creditorAddress,
-            "Aktenzeichen der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
+            "Aktenzeichen der Forderung": creditorReference,
             "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
             "Heutiges Datum": new Date().toLocaleDateString('de-DE'),
             "Mandant Name": clientName,
@@ -274,10 +286,13 @@ class RobustNullplanProcessor {
             "Gläuibgeranzahl": totalCreditors.toString(),
             "Einkommen": this.formatGermanCurrency(clientData.financial_data?.monthly_net_income || clientData.monthlyNetIncome || 0),
             "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
-            "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status)
+            "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
+            "Datum in 3 Monaten": this.calculateDateInMonths(3)
         };
 
-        console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditor.name || creditor.creditor_name}`);
+        const creditorName = creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`;
+        
+        console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
         console.log(`   Address: ${creditorAddress}`);
         console.log(`   Amount: ${replacements["Forderungssumme"]}`);
         console.log(`   Quote: ${replacements["Quote des Gläubigers"]}`);
@@ -310,6 +325,15 @@ class RobustNullplanProcessor {
         const deadline = new Date();
         deadline.setDate(deadline.getDate() + 14);
         return deadline.toLocaleDateString('de-DE');
+    }
+
+    /**
+     * Calculate date in specified number of months
+     */
+    calculateDateInMonths(months) {
+        const futureDate = new Date();
+        futureDate.setMonth(futureDate.getMonth() + months);
+        return futureDate.toLocaleDateString('de-DE');
     }
 
     /**
