@@ -41,6 +41,14 @@ class RobustNullplanProcessor {
             "Datum in 14 Tagen": {
                 "type": "xml-split",
                 "pattern": "&quot;Datum</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>in</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>14</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Tagen&quot;"
+            },
+            "Name Mandant XML-1": {
+                "type": "xml-split",
+                "pattern": "&quot;Name</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-8\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:sz w:val=\"22\"/></w:rPr><w:t>Mandant&quot;"
+            },
+            "Name Mandant XML-2": {
+                "type": "xml-split", 
+                "pattern": "&quot;Name</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-4\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Mandant&quot;"
             }
         };
 
@@ -220,11 +228,29 @@ class RobustNullplanProcessor {
         const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address
-        const creditorAddress = creditor.address || 
-            `${creditor.creditor_street || ''}, ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
-            `${creditor.sender_street || ''}, ${creditor.sender_postal_code || ''} ${creditor.sender_city || ''}`.trim() ||
-            'Gläubiger Adresse';
+        // Build creditor address with better fallback
+        let creditorAddress = '';
+        
+        if (creditor.address && creditor.address.trim()) {
+            creditorAddress = creditor.address.trim();
+        } else {
+            // Build from individual parts
+            const parts = [];
+            if (creditor.creditor_street || creditor.sender_street) {
+                parts.push(creditor.creditor_street || creditor.sender_street);
+            }
+            if (creditor.creditor_postal_code || creditor.sender_postal_code) {
+                const city = creditor.creditor_city || creditor.sender_city || '';
+                parts.push(`${creditor.creditor_postal_code || creditor.sender_postal_code} ${city}`.trim());
+            }
+            
+            creditorAddress = parts.filter(p => p && p.trim()).join(', ');
+        }
+        
+        // Final fallback
+        if (!creditorAddress || creditorAddress === ',') {
+            creditorAddress = `${creditor.name || creditor.creditor_name || 'Gläubiger'}\nAdresse nicht verfügbar`;
+        }
 
         // Client name
         const clientName = clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann';
@@ -237,6 +263,8 @@ class RobustNullplanProcessor {
             "Heutiges Datum": new Date().toLocaleDateString('de-DE'),
             "Mandant Name": clientName,
             "Datum in 14 Tagen": this.calculateDeadlineDate(),
+            "Name Mandant XML-1": clientName,
+            "Name Mandant XML-2": clientName,
             
             // Simple variables
             "Name Mandant": clientName,
@@ -244,7 +272,7 @@ class RobustNullplanProcessor {
             "Quote des Gläubigers": `${creditorQuote.toFixed(2).replace('.', ',')}%`,
             "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
             "Gläuibgeranzahl": totalCreditors.toString(),
-            "Einkommen": this.formatGermanCurrency(clientData.monthlyNetIncome || clientData.financial_data?.monthly_net_income || 0),
+            "Einkommen": this.formatGermanCurrency(clientData.financial_data?.monthly_net_income || clientData.monthlyNetIncome || 0),
             "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
             "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status)
         };

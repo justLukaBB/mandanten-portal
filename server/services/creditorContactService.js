@@ -1557,7 +1557,7 @@ class CreditorContactService {
                     filteredUrls.push(doc);
                     console.log(`  ✓ Including individual Nullplan letter for ${creditorName}`);
                 } else {
-                    console.log(`  ⚠️ Excluding Nullplan letter for ${doc.creditor_name} (looking for ${creditorName})`);
+                    console.log(`  ⚠️ Excluding Nullplan letter for ${doc.creditor_name || 'undefined'} (looking for ${creditorName})`);
                 }
             }
         });
