@@ -128,6 +128,14 @@ class NewWordTemplateProcessor {
             
             // Debug: Show what quoted text exists in the document
             console.log('🔍 Searching for quoted text patterns in document...');
+            
+            // Extract all simple quoted variables for debugging
+            const simpleQuotedVars = processedXml.match(/&quot;[^&<]*?&quot;/g) || [];
+            console.log('📋 All simple quoted variables found in template:');
+            simpleQuotedVars.forEach((match, index) => {
+                const cleanVar = match.replace(/&quot;/g, '"');
+                console.log(`   ${index + 1}. ${cleanVar}`);
+            });
             const debugPatterns = [
                 /&quot;[^&]*?&quot;/g,
                 /"[^"]*?"/g,
