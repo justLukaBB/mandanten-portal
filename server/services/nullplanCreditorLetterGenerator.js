@@ -124,6 +124,11 @@ class NullplanCreditorLetterGenerator {
                     value: replacements["Schuldsumme Insgesamt"]
                 },
                 {
+                    variable: "Mandant Name",
+                    pattern: "&quot;Mandant</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-1\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Name&quot;",
+                    value: replacements["Mandant Name"]
+                },
+                {
                     variable: "Datum in 14 Tagen",
                     pattern: "&quot;Datum</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>in</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>14</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Tagen&quot;",
                     value: replacements["Datum in 14 Tagen"]
