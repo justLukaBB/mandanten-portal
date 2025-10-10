@@ -339,6 +339,22 @@ class NewWordTemplateProcessor {
             });
             
             console.log(`✅ Total replacements made: ${totalReplacements}`);
+            
+            // FINAL AGGRESSIVE REPLACEMENT for stubborn variables
+            const stubbornVariables = [
+                { pattern: /[""]Name des Mandanten[""]|&quot;Name des Mandanten&quot;/g, value: clientName },
+                { pattern: /[""]Einkommen[""]|&quot;Einkommen&quot;/g, value: this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0) }
+            ];
+            
+            stubbornVariables.forEach(({ pattern, value }) => {
+                const beforeLength = processedXml.length;
+                processedXml = processedXml.replace(pattern, value);
+                const afterLength = processedXml.length;
+                if (beforeLength !== afterLength) {
+                    console.log(`✅ Aggressive replacement made for ${pattern}`);
+                    totalReplacements++;
+                }
+            });
 
             // Validate XML structure before saving to prevent corruption
             try {
@@ -442,6 +458,9 @@ class NewWordTemplateProcessor {
         // Template Variables - based on actual template analysis
         // REAL VARIABLES from the document (not placeholders!)
         replacements["Adresse des Creditors"] = creditorData?.address || "Gläubiger Adresse";
+        replacements["Name des Creditors"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
+        replacements["Creditor"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
+        replacements["Gläubiger"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
         replacements["Name des Mandanten"] = clientName;
         replacements["Aktenzeichen der Forderung"] = creditorData?.aktenzeichen || "AZ-12345";
         replacements["Gessamtsumme Verschuldung"] = this.formatCurrency(totalDebt);
@@ -481,6 +500,12 @@ class NewWordTemplateProcessor {
         
         // Fix payment start date variable  
         replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
+        
+        // Alternative date variables for 3-month start date
+        replacements["01.08.2025"] = this.formatDate(paymentStartDate);
+        replacements["Datum in 3 Monaten"] = this.formatDate(paymentStartDate);
+        replacements["Startdatum"] = this.formatDate(paymentStartDate);
+        replacements["Datum"] = this.formatDate(paymentStartDate);
         
         // Alternative variable names that might be in template
         replacements["monatliches Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
