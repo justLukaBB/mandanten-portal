@@ -384,10 +384,10 @@ class NewWordTemplateProcessor {
             };
             
             // 3. AGGRESSIVE QUOTED VARIABLE REPLACEMENT with multiple quote types
-            const quoteTypes = ['&quot;', '"', '"', '"'];
+            const simpleQuoteTypes = ['&quot;', '"', '"', '"'];
             
             Object.entries(completeVariableMap).forEach(([variable, value]) => {
-                quoteTypes.forEach(quoteType => {
+                simpleQuoteTypes.forEach(quoteType => {
                     const quotedPattern = `${quoteType}${variable}${quoteType}`;
                     const regex = new RegExp(this.escapeRegex(quotedPattern), 'g');
                     
