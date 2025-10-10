@@ -58,7 +58,16 @@ class NewWordTemplateProcessor {
             // Calculate key financial values
             const totalDebt = settlementData?.total_debt || 0;
             const creditorCount = settlementData?.creditor_payments?.length || 0;
-            const monthlyPayment = this.calculatePfaendbarAmount(clientData);
+            const pfaendbarAmount = this.calculatePfaendbarAmount(clientData);
+            const monthlyPayment = pfaendbarAmount;
+            
+            // Calculate dates
+            const deadlineDate = new Date();
+            deadlineDate.setDate(deadlineDate.getDate() + 14);
+            
+            const paymentStartDate = new Date();
+            paymentStartDate.setMonth(paymentStartDate.getMonth() + 3);
+            paymentStartDate.setDate(1);
 
             // Replace variables in the document XML
             let processedXml = documentXml;
@@ -363,7 +372,7 @@ class NewWordTemplateProcessor {
                 // Financial data  
                 "Forderungssumme": this.formatCurrency(creditorData?.debt_amount || 0),
                 "Gessamtsumme Verschuldung": this.formatCurrency(totalDebt),
-                "Tilgungsqoute": creditorData ? (creditorData.debt_amount / totalDebt * 100).toFixed(2) : "0.00",
+                "Tilgungsqoute": creditorData ? (creditorData.debt_amount / totalDebt * 100).toFixed(2).replace('.', ',') + "%" : "0,00%",
                 "Gläubigeranzahl": creditorCount.toString(),
                 "Summe für die Tilgung des Gläubigers monatlich": creditorData ? this.formatCurrency((monthlyPayment * (creditorData.debt_amount / totalDebt)) * 36) : "0,00",
                 
@@ -381,7 +390,7 @@ class NewWordTemplateProcessor {
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
                 "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
-                "Aktenzeichen der Forderung": creditorData?.aktenzeichen || `${clientReference}/TS-JK`,
+                "Aktenzeichen der Forderung": creditorData?.reference || creditorData?.creditor_reference || `${clientReference}/TS-JK`,
                 
                 // Administrative
                 "Nummer im Schuldenbereinigungsplan": "1",
