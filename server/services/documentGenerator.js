@@ -1622,7 +1622,7 @@ class DocumentGenerator {
                         address: creditor.creditor_address || 
                                this.buildCreditorAddress(creditor) ||
                                'Gläubiger Adresse nicht verfügbar',
-                        aktenzeichen: creditor.reference_number || creditor.creditor_reference || `REF-${i + 1}`,
+                        aktenzeichen: creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
                         creditor_index: i
                     };
                     
@@ -1631,6 +1631,15 @@ class DocumentGenerator {
                         amount: creditorData.debt_amount,
                         address: creditorData.address,
                         reference: creditorData.aktenzeichen
+                    });
+                    
+                    console.log('🔍 Full creditor object:', {
+                        creditor_address: creditor.creditor_address,
+                        creditor_street: creditor.creditor_street,
+                        creditor_postal_code: creditor.creditor_postal_code,
+                        creditor_city: creditor.creditor_city,
+                        address: creditor.address,
+                        buildResult: this.buildCreditorAddress(creditor)
                     });
                     
                     const result = await templateProcessor.processTemplate(

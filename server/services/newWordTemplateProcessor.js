@@ -458,6 +458,9 @@ class NewWordTemplateProcessor {
         replacements["Familienstand"] = this.getFamilienstand(clientData);
         replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
         replacements["Gläubigeranzahl"] = creditorCount.toString();
+        
+        // Fix payment start date variable  
+        replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
