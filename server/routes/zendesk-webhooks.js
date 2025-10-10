@@ -425,7 +425,6 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
         requester_name
       });
     } else {
-      // Fallback for direct format (backward compatibility)
       ({
         aktenzeichen,
         zendesk_ticket_id,
@@ -486,26 +485,32 @@ if (zendeskService.isConfigured() && (!client.documents || client.documents.leng
     const subject = `💰 Zahlung bestätigt – Dokumente benötigt (${client.firstName} ${client.lastName}, ${client.aktenzeichen})`;
 
     const body = `
-Hallo ${client.firstName} ${client.lastName},
-
-vielen Dank für Ihre Zahlung! 💰  
-Ihre erste Rate wurde erfolgreich bestätigt.
-
-Damit wir Ihren Fall weiterbearbeiten können, benötigen wir noch Ihre Gläubigerdokumente.
-
-📎 **Dokumente hochladen:**  
-${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
-
-**Benötigte Unterlagen:**  
-• Mahnungen und Zahlungsaufforderungen  
-• Inkasso-Schreiben  
-• Gerichtliche Beschlüsse oder Vollstreckungsbescheide  
-
-Sobald Ihre Dokumente hochgeladen sind, analysiert unser System diese automatisch und informiert Sie über den weiteren Ablauf.
-
-Mit freundlichen Grüßen  
-Ihr Kanzlei-Team
-`;
+    👋 Hallo ${client.firstName} ${client.lastName},
+    
+    vielen Dank für Ihre Zahlung! 💰  
+    Ihre **erste Rate wurde erfolgreich bestätigt.**
+    
+    Damit wir mit der Bearbeitung Ihres Falls fortfahren können, benötigen wir bitte noch Ihre **Gläubigerdokumente**.
+    
+    📎 **Dokumente hochladen:**  
+    ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
+    
+    📂 **Benötigte Unterlagen:**  
+    • 📄 Mahnungen oder Zahlungsaufforderungen  
+    • 🧾 Inkasso-Schreiben  
+    • ⚖️ Gerichtliche Beschlüsse oder Vollstreckungsbescheide  
+    • 📬 Sonstige Schreiben Ihrer Gläubiger
+    
+    🧠 **Was passiert danach?**  
+    Nach dem Upload werden Ihre Dokumente automatisch analysiert.  
+    Sie erhalten anschließend **innerhalb weniger Tage** eine Rückmeldung zum weiteren Vorgehen.
+    
+    📞 **Bei Fragen stehen wir Ihnen selbstverständlich gerne zur Verfügung.**
+    
+    Mit freundlichen Grüßen  
+    👨‍⚖️ Ihr Kanzlei-Team
+    `;
+    
 
     const ticket = await zendeskService.createTicket({
       subject,
