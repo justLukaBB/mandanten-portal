@@ -386,7 +386,7 @@ class NewWordTemplateProcessor {
                 "Immer der erste in 3 Monaten": this.formatDate(paymentStartDate),
                 
                 // Creditor info
-                "Adresse des Creditors": creditorData?.address || "Gläubiger Adresse",
+                "Adresse des Creditors": `${creditorData?.name || creditorData?.creditor_name || "Gläubiger"}\n${creditorData?.address || "Adresse nicht verfügbar"}`,
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
                 "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
