@@ -1173,12 +1173,31 @@ class CreditorContactService {
                     console.warn(`  ⚠️ Creditor overview not found at: ${overviewPath}`);
                 }
 
+                // Handle single ratenplan OR multiple individual documents per creditor
                 if (ratenplanPath && fs.existsSync(ratenplanPath)) {
                     documentFiles.push({ path: ratenplanPath, type: 'ratenplan_pfaendbares_einkommen' });
                     console.log(`  ✓ Ratenplan: ${path.basename(ratenplanPath)}`);
                 } else if (ratenplanPath) {
                     console.warn(`  ⚠️ Ratenplan not found at: ${ratenplanPath}`);
                 }
+            }
+            // PRIORITY 3: Handle 2nd round individual creditor documents (NEW)
+            else if (generatedDocuments && generatedDocuments.documents && Array.isArray(generatedDocuments.documents)) {
+                console.log(`✅ Using 2nd round document generation with individual creditor documents`);
+                
+                generatedDocuments.documents.forEach(doc => {
+                    if (fs.existsSync(doc.path)) {
+                        documentFiles.push({ 
+                            path: doc.path, 
+                            type: doc.document_type,
+                            creditor_name: doc.creditor_name,
+                            creditor_index: doc.creditor_index
+                        });
+                        console.log(`  ✓ ${doc.document_type}: ${path.basename(doc.filename)} (${doc.creditor_name || 'General'})`);
+                    } else {
+                        console.warn(`  ⚠️ Document not found at: ${doc.path}`);
+                    }
+                });
             }
 
             // FALLBACK: Search documents folder by pattern (less reliable)
