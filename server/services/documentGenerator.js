@@ -2882,19 +2882,19 @@ class DocumentGenerator {
 
             console.log(`📊 Processing ${creditorData.length} creditors for Nullplan`);
 
-            // Generate individual Nullplan letters for each creditor
+            // Generate individual Nullplan letters for each creditor using ROBUST processor
             console.log('📄 Generating individual Nullplan letters for each creditor...');
-            const NullplanCreditorLetterGenerator = require('./nullplanCreditorLetterGenerator');
-            const letterGenerator = new NullplanCreditorLetterGenerator();
+            const RobustNullplanProcessor = require('./robustNullplanProcessor');
+            const letterGenerator = new RobustNullplanProcessor();
             const nullplanLettersResult = await letterGenerator.generateNullplanLettersForAllCreditors(clientData, creditorData);
             
             // Generate Forderungsübersicht
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
-            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan)
+            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan) using ROBUST generator
             console.log('📊 Generating Nullplan quota table instead of standard Schuldenbereinigungsplan...');
-            const NullplanTableGenerator = require('./nullplanTableGenerator');
-            const tableGenerator = new NullplanTableGenerator();
+            const RobustNullplanTableGenerator = require('./robustNullplanTableGenerator');
+            const tableGenerator = new RobustNullplanTableGenerator();
             const nullplanTableResult = await tableGenerator.generateNullplanTable(clientData, creditorData);
 
             return {
