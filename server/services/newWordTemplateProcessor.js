@@ -113,6 +113,9 @@ class NewWordTemplateProcessor {
                 }
             ];
 
+            // Initialize totalReplacements counter
+            let totalReplacements = 0;
+
             splitXmlReplacements.forEach(({ pattern, variable, placeholder }) => {
                 if (processedXml.includes(pattern)) {
                     const actualValue = replacements[variable] || placeholder;
@@ -145,8 +148,6 @@ class NewWordTemplateProcessor {
                 { name: 'Curly left/right', open: '"', close: '"' },
                 { name: 'Curly alternative', open: '"', close: '"' }
             ];
-
-            let totalReplacements = 0;
 
             // Variables that are handled by split-XML patterns - don't process them in regular replacement
             const splitXmlVariables = [
