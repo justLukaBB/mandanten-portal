@@ -23,7 +23,7 @@ class NewWordTemplateProcessor {
      */
     async processTemplate(clientData, settlementData, creditorData = null) {
         try {
-            console.log('🎯 Processing new Word template with identified variables (v2)...');
+            console.log('🎯 Processing new Word template with identified variables (v3 - totalReplacements fix)...');
             console.log('📊 Input data:', {
                 clientReference: clientData?.aktenzeichen || clientData?.reference,
                 hasSettlementData: !!settlementData,
@@ -115,6 +115,7 @@ class NewWordTemplateProcessor {
 
             // Initialize totalReplacements counter
             let totalReplacements = 0;
+            console.log('🔢 totalReplacements initialized to 0');
 
             splitXmlReplacements.forEach(({ pattern, variable, placeholder }) => {
                 if (processedXml.includes(pattern)) {
