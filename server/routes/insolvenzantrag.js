@@ -235,78 +235,228 @@ async function fillInsolvenzantragWithCheckboxes(formData, originalPdfPath) {
     }
 }
 
-async function injectCreditorsIntoAnlage6(pdfBytes, client, options = {}) {
-    try {
-        const pdfDoc = await PDFDocument.load(pdfBytes);
+// async function injectCreditorsIntoAnlage6(pdfBytes, client, options = {}) {
+//     try {
+//         const pdfDoc = await PDFDocument.load(pdfBytes);
 
-        const targetIndex = Number(options.targetIndex ?? 23); // 0-based
-        const startFieldNumber = Number(options.startFieldNumber ?? 423); // first row's first field
-        const fieldsPerRow = Number(options.fieldsPerRow ?? 8); // 8 fields per row
-        const maxRowsPerPage = Number(options.maxRowsPerPage ?? 20); // adjust according to template
+//         const targetIndex = Number(options.targetIndex ?? 23); // 0-based
+//         const startFieldNumber = Number(options.startFieldNumber ?? 423); // first row's first field
+//         const fieldsPerRow = Number(options.fieldsPerRow ?? 8); // 8 fields per row
+//         const maxRowsPerPage = Number(options.maxRowsPerPage ?? 20); // adjust according to template
 
-        const creditors = client.final_creditor_list || [];
-        if (!Array.isArray(creditors) || creditors.length === 0) return pdfBytes;
+//         const creditors = client.final_creditor_list || [];
+//         if (!Array.isArray(creditors) || creditors.length === 0) return pdfBytes;
 
-        const form = pdfDoc.getForm();
-        let pageOffset = 0;
+//         const form = pdfDoc.getForm();
+//         let pageOffset = 0;
 
-        for (let i = 0; i < creditors.length; i++) {
-            const rowInPage = i % maxRowsPerPage;
+//         for (let i = 0; i < creditors.length; i++) {
+//             const rowInPage = i % maxRowsPerPage;
 
-            // Duplicate page if needed
-            if (i > 0 && rowInPage === 0) {
-                const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
-                pdfDoc.addPage(dup);
-                pageOffset++;
-            }
+//             // Duplicate page if needed
+//             if (i > 0 && rowInPage === 0) {
+//                 const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+//                 pdfDoc.addPage(dup);
+//                 pageOffset++;
+//             }
 
-            const creditor = creditors[i];
+//             const creditor = creditors[i];
 
-            // Fill all 8 text fields for this row
-            for (let f = 0; f < fieldsPerRow; f++) {
-                const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
-                const fieldName = `Textfeld ${fieldNumber}`;
-                let text = '';
-                const principal = Number(creditor.claim_amount ?? creditor.current_debt_amount ?? creditor.amount ?? 0);
-                switch (f) {
-                    case 0: 
-                        text = `${i + 1}.`; // Serial No.
-                        break;
-                    case 1: 
-                        text = creditor.sender_name || creditor.name || 'Unbekannt'; // Name
-                        break;
-                    case 2: 
-                        text = `${principal.toFixed(2)} €`; // Principal Claim
-                        break;
-                    case 3: 
-                        text = '0'
-                        break;
-                    case 4: 
-                        text = '0'
-                        break;
-                    case 5: 
-                        text = `${principal.toFixed(2)} €`; // Principal Claim
-                        break;
-                    case 6: 
-                        text = creditor.actual_creditor || ''; // Claim Reason / Basis
-                        break;
-                    case 7: 
-                        text = `${principal.toFixed(2)} €`; // Principal Claim
-                        break;
-                }
+//             // Fill all 8 text fields for this row
+//             for (let f = 0; f < fieldsPerRow; f++) {
+//                 const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
+//                 const fieldName = `Textfeld ${fieldNumber}`;
+//                 let text = '';
+//                 const principal = Number(creditor.claim_amount ?? creditor.current_debt_amount ?? creditor.amount ?? 0);
+//                 switch (f) {
+//                     case 0: 
+//                         text = `${i + 1}.`; // Serial No.
+//                         break;
+//                     case 1: 
+//                         text = creditor.sender_name || creditor.name || 'Unbekannt'; // Name
+//                         break;
+//                     case 2: 
+//                         text = `${principal.toFixed(2)} €`; // Principal Claim
+//                         break;
+//                     case 3: 
+//                         text = '0'
+//                         break;
+//                     case 4: 
+//                         text = '0'
+//                         break;
+//                     case 5: 
+//                         text = `${principal.toFixed(2)} €`; // Principal Claim
+//                         break;
+//                     case 6: 
+//                         text = creditor.actual_creditor || ''; // Claim Reason / Basis
+//                         break;
+//                     case 7: 
+//                         text = `${principal.toFixed(2)} €`; // Principal Claim
+//                         break;
+//                 }
 
-                try { form.getTextField(fieldName).setText(text); } catch {}
-            }
-        }
+//                 try { form.getTextField(fieldName).setText(text); } catch {}
+//             }
+//         }
 
-        return await pdfDoc.save();
+//         return await pdfDoc.save();
 
-    } catch (e) {
-        console.warn('⚠️ Failed to inject creditors into Anlage 6:', e.message);
-        return pdfBytes;
+//     } catch (e) {
+//         console.warn('⚠️ Failed to inject creditors into Anlage 6:', e.message);
+//         return pdfBytes;
+//     }
+// }
+
+
+async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const form = pdfDoc.getForm();
+
+    // ------------------- 📄 ANLAGE 6 -------------------
+    const creditors = client.final_creditor_list || [];
+    if (Array.isArray(creditors) && creditors.length > 0) {
+      await fillAnlage6(pdfDoc, form, creditors, options);
+      await fillAnlage7(pdfDoc, form, creditors, options);
     }
+
+    // ------------------- 📄 ANLAGE 7 -------------------
+    // const relatedPersons = client.related_persons || []; // 👈 use another dataset here
+    // if (Array.isArray(relatedPersons) && relatedPersons.length > 0) {
+    //   await fillAnlage7(pdfDoc, form, relatedPersons, options);
+    // }
+
+    return await pdfDoc.save();
+  } catch (err) {
+    console.warn("⚠️ Failed to inject data into Anlage 6 & 7:", err.message);
+    return pdfBytes;
+  }
 }
 
+//
+// ------------------- 📄 ANLAGE 6 -------------------
+//
+async function fillAnlage6(pdfDoc, form, creditors, options) {
+  const targetIndex = Number(options.anlage6Index ?? 23); // 0-based (page 24)
+  const startFieldNumber = Number(options.anlage6Start ?? 423);
+  const fieldsPerRow = 8;
+  const maxRowsPerPage = 20;
+
+  let pageOffset = 0;
+
+  for (let i = 0; i < creditors.length; i++) {
+    const rowInPage = i % maxRowsPerPage;
+
+    // Duplicate page if needed
+    if (i > 0 && rowInPage === 0) {
+      const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+      pdfDoc.addPage(dup);
+      pageOffset++;
+    }
+
+    const creditor = creditors[i];
+    const principal = Number(creditor.claim_amount ?? creditor.amount ?? 0);
+
+    for (let f = 0; f < fieldsPerRow; f++) {
+      const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
+      const fieldName = `Textfeld ${fieldNumber}`;
+      let text = "";
+
+      switch (f) {
+        case 0:
+          text = `${i + 1}.`;
+          break;
+        case 1:
+          text = creditor.sender_name || creditor.name || "Unbekannt";
+          break;
+        case 2:
+          text = `${principal.toFixed(2)} €`;
+          break;
+        case 3:
+        case 4:
+          text = "0";
+          break;
+        case 5:
+          text = `${principal.toFixed(2)} €`;
+          break;
+        case 6:
+          text = creditor.actual_creditor || "";
+          break;
+        case 7:
+          text = `${principal.toFixed(2)} €`;
+          break;
+      }
+
+      try {
+        form.getTextField(fieldName).setText(text);
+      } catch {}
+    }
+  }
+}
+
+//
+// ------------------- 📄 ANLAGE 7 -------------------
+//
+async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
+  const targetIndex = Number(options.anlage7Index ?? 25); // Page index (0-based)
+  const startFieldNumber = Number(options.anlage7Start ?? 643); // Starts from Textfeld 643
+  const fieldGap = 7; // Gap between each creditor block (next creditor starts 7 fields later)
+  const fieldsPerCreditor = 5; // Number of fields filled per creditor
+  const maxRowsPerPage = 6; // Number of creditor blocks per page (3 left + 3 right columns)
+
+  // Dummy France address for now
+  const dummyStreet = "Rue de Lyon";
+  const dummyHouseNumber = "18B";
+  const dummyZip = "75012";
+  const dummyCity = "Paris";
+
+  let pageOffset = 0;
+
+  for (let i = 0; i < creditors.length; i++) {
+    const rowInPage = i % maxRowsPerPage;
+
+    // ➕ Duplicate page when the current page fills up
+    if (i > 0 && rowInPage === 0) {
+      const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+      pdfDoc.addPage(dup);
+      pageOffset++;
+    }
+
+    const baseFieldNumber =
+      startFieldNumber + (rowInPage + pageOffset * maxRowsPerPage) * fieldGap;
+
+    const creditor = creditors[i];
+
+    // 🧭 Define mapping (matches PDF structure)
+    const rows = [
+      `${creditor.name || creditor.sender_name || "Unbekannt"}`, // 643, Name / Firma
+      `${dummyStreet} ${dummyHouseNumber}`.trim(), // 644, Straße / Hausnummer
+      `${dummyZip} ${dummyCity}`.trim(), // 645, Postleitzahl / Ort
+      `${creditor.reference || ""}`, // 646, Geschäftszeichen
+      `${creditor.representative || ""}`, // 647, gesetzlich vertreten durch
+      // 648 = Gläubigers in EUR (calculated separately)
+    ];
+
+    // 🖋 Fill creditor fields
+    rows.forEach((text, idx) => {
+      const fieldName = `Textfeld ${baseFieldNumber + idx}`;
+      try {
+        form.getTextField(fieldName).setText(text);
+      } catch {
+        console.warn(`⚠️ Missing field: ${fieldName}`);
+      }
+    });
+
+    // 💶 Fill “Gläubigers in EUR” value (field 648 for first creditor, then +7 per next)
+    const claimFieldName = `Textfeld ${baseFieldNumber + 5}`;
+    const claimValue = `${Number(creditor.claim_amount || creditor.amount || 0).toFixed(2)} €`;
+    try {
+      form.getTextField(claimFieldName).setText(claimValue);
+    } catch {
+      console.warn(`⚠️ Missing claim field: ${claimFieldName}`);
+    }
+  }
+}
 
 
 // Check if all prerequisites are completed
@@ -397,7 +547,7 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
         console.log('📝 Generating main Insolvenzantrag form only (attachments disabled for testing)');
         
         // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
-        const mergedPdfBytes = await injectCreditorsIntoAnlage6(insolvenzantragBytes, client, req.query);
+        const mergedPdfBytes = await injectCreditorsIntoAnlage6and7(insolvenzantragBytes, client, req.query);
 
         // Send the PDF as download
         res.setHeader('Content-Type', 'application/pdf');
@@ -568,6 +718,8 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         const formData = mapClientDataToPDF(client);
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
+        // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
+        let mergedPdfBytes = await injectCreditorsIntoAnlage6(insolvenzantragBytes, client, req.query);
 
         // 2. Generate creditor document package
         let creditorPackageBytes = null;
@@ -630,7 +782,7 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         const finalPdf = await PDFDocument.create();
         
         // Add main Insolvenzantrag
-        const mainDoc = await PDFDocument.load(insolvenzantragBytes);
+        const mainDoc = await PDFDocument.load(mergedPdfBytes);
         const mainPages = await finalPdf.copyPages(mainDoc, mainDoc.getPageIndices());
         mainPages.forEach(page => finalPdf.addPage(page));
         

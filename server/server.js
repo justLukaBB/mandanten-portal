@@ -20,6 +20,7 @@ const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
 const insolvenzantragRoutes = require('./routes/insolvenzantrag');
+const secondRoundApiRoutes = require('./routes/second-round-api');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -58,6 +59,7 @@ app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
+app.use('/api/second-round', secondRoundApiRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -5631,19 +5633,30 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       
       if (settlementResult.success) {
         console.log(`✅ Generated Nullplan documents:`);
-        console.log(`   - Nullplan: ${settlementResult.nullplan.document_info.filename}`);
-        console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
-        if (settlementResult.ratenplan_nullplan) {
-          console.log(`   - Ratenplan (Nullplan): ${settlementResult.ratenplan_nullplan.document_info.filename}`);
+        
+        // Log individual Nullplan letters
+        if (settlementResult.nullplan_letters && settlementResult.nullplan_letters.documents) {
+          console.log(`   - Nullplan Letters: ${settlementResult.nullplan_letters.documents.length} individual letters`);
+          settlementResult.nullplan_letters.documents.forEach((doc, index) => {
+            console.log(`     ${index + 1}. ${doc.filename} (${doc.creditor_name})`);
+          });
+        }
+        
+        // Log Forderungsübersicht
+        if (settlementResult.forderungsuebersicht && settlementResult.forderungsuebersicht.document_info) {
+          console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
+        }
+        
+        // Log Schuldenbereinigungsplan (quota table)
+        if (settlementResult.schuldenbereinigungsplan && settlementResult.schuldenbereinigungsplan.filename) {
+          console.log(`   - Schuldenbereinigungsplan: ${settlementResult.schuldenbereinigungsplan.filename}`);
         } else {
           console.warn(`   ⚠️ Ratenplan (Nullplan) generation failed - continuing with 2 documents`);
         }
         // Store all documents in client for creditor emails
-        client.nullplan_document = settlementResult.nullplan;
+        client.nullplan_letters = settlementResult.nullplan_letters;
         client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
-        if (settlementResult.ratenplan_nullplan) {
-          client.ratenplan_nullplan_document = settlementResult.ratenplan_nullplan;
-        }
+        client.schuldenbereinigungsplan_document = settlementResult.schuldenbereinigungsplan;
         
         // Automatically send Nullplan to creditors
         console.log(`📧 Automatically sending Nullplan to creditors...`);
@@ -5659,6 +5672,10 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
           
           // Convert Nullplan document structure to expected format
           const nullplanDocuments = {
+            nullplan_letters: settlementResult.nullplan_letters, // Include individual letters
+            forderungsuebersicht: settlementResult.forderungsuebersicht,
+            schuldenbereinigungsplan: settlementResult.schuldenbereinigungsplan,
+            // Fallback for legacy format
             settlementResult: settlementResult.nullplan,
             overviewResult: settlementResult.forderungsuebersicht,
             ratenplanResult: settlementResult.ratenplan_nullplan
