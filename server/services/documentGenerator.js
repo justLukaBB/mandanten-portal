@@ -626,13 +626,40 @@ class DocumentGenerator {
                 doc = await this.generateNullplanRatenplanDocument(clientData, settlementData);
                 result = await this.saveNullplanRatenplanDocument(doc, clientReference);
             } else {
-                // For regular plan: Generate pfändbares Einkommen Ratenplan
+                // For regular plan: Generate pfändbares Einkommen Ratenplan (NEW: Multi-document per creditor)
                 console.log(`📝 Generating regular Ratenplan with monthly payments`);
-                doc = await this.generateRatenplanDocument(clientData, settlementData, pfaendbarAmount);
-                result = await this.saveRatenplanDocument(doc, clientReference);
+                const multiDocResult = await this.generateRatenplanDocument(clientData, settlementData, pfaendbarAmount);
+                
+                if (!multiDocResult.success || !multiDocResult.documents || multiDocResult.documents.length === 0) {
+                    throw new Error(multiDocResult.error || 'No documents generated');
+                }
+                
+                // NEW: Return both old format (for backwards compatibility) and new format (for multi-document)
+                const firstDoc = multiDocResult.documents[0]; // Use first document for backwards compatibility
+                console.log(`✅ Ratenplan pfändbares Einkommen document generated successfully`);
+                console.log(`📁 File: ${firstDoc.filename} (${Math.round(firstDoc.size / 1024)} KB)`);
+                
+                return {
+                    success: true,
+                    // OLD FORMAT: Backwards compatibility (first document only)
+                    document_info: {
+                        filename: firstDoc.filename,
+                        path: firstDoc.path,
+                        size: firstDoc.size,
+                        client_reference: clientReference,
+                        document_type: 'ratenplan_pfaendbares_einkommen',
+                        generated_at: new Date().toISOString()
+                    },
+                    buffer: firstDoc.buffer,
+                    // NEW FORMAT: Multi-document support
+                    documents: multiDocResult.documents,
+                    totalDocuments: multiDocResult.totalDocuments,
+                    totalCreditors: multiDocResult.totalCreditors,
+                    errors: multiDocResult.errors
+                };
             }
 
-            const documentType = isNullplan ? 'Nullplan-Ratenplan' : 'Ratenplan pfändbares Einkommen';
+            const documentType = 'Nullplan-Ratenplan';
             console.log(`✅ ${documentType} document generated successfully`);
             console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
 
@@ -643,7 +670,7 @@ class DocumentGenerator {
                     path: result.path,
                     size: result.size,
                     client_reference: clientReference,
-                    document_type: isNullplan ? 'ratenplan_nullplan' : 'ratenplan_pfaendbares_einkommen',
+                    document_type: 'ratenplan_nullplan',
                     generated_at: new Date().toISOString()
                 },
                 buffer: result.buffer
