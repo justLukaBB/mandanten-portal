@@ -234,6 +234,23 @@ class SecondRoundDocumentService {
             });
         }
 
+        // 4. Add individual Nullplan letters (one per creditor) for Nullplan cases
+        if (allDocuments.nullplan_letters && Array.isArray(allDocuments.nullplan_letters)) {
+            allDocuments.nullplan_letters.forEach((doc, index) => {
+                documents.push({
+                    document_type: 'nullplan_letter',
+                    creditor_name: doc.creditor_name || `Creditor ${index + 1}`,
+                    creditor_index: doc.creditor_index || index + 1,
+                    filename: doc.filename,
+                    path: doc.path,
+                    size: doc.size,
+                    client_reference: clientReference,
+                    generated_at: new Date().toISOString()
+                });
+            });
+            console.log(`📄 Added ${allDocuments.nullplan_letters.length} individual Nullplan letters to document list`);
+        }
+
         return documents;
     }
 

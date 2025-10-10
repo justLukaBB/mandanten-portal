@@ -5672,6 +5672,10 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
           
           // Convert Nullplan document structure to expected format
           const nullplanDocuments = {
+            nullplan_letters: settlementResult.nullplan_letters, // Include individual letters
+            forderungsuebersicht: settlementResult.forderungsuebersicht,
+            schuldenbereinigungsplan: settlementResult.schuldenbereinigungsplan,
+            // Fallback for legacy format
             settlementResult: settlementResult.nullplan,
             overviewResult: settlementResult.forderungsuebersicht,
             ratenplanResult: settlementResult.ratenplan_nullplan
