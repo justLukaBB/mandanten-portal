@@ -135,40 +135,15 @@ class NullplanTableGenerator {
 
         console.log(`💰 Total debt: ${this.formatGermanCurrency(totalDebt)} from ${creditorData.length} creditors`);
 
-        // Prepare basic document variables
+        // EXACT variables from Nullplan table template analysis - only 3 variables exist!
         const replacements = {
             "Heutiges Datum": new Date().toLocaleDateString('de-DE'),
             "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
             "Datum in 3 Monaten": this.calculateStartDate()
         };
 
-        // Process up to 8 creditors (template limitation)
-        const maxCreditors = 8;
-        const creditorsToProcess = creditorData.slice(0, maxCreditors);
-
-        creditorsToProcess.forEach((creditor, index) => {
-            const position = index + 1;
-            const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
-            const quota = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
-
-            replacements[`Gläubiger ${position}`] = creditor.name || creditor.creditor_name || `Gläubiger ${position}`;
-            replacements[`Forderung ${position}`] = this.formatGermanCurrency(creditorAmount);
-            replacements[`Quote ${position}`] = `${quota.toFixed(2).replace('.', ',')} %`;
-            
-            console.log(`   ${position}. ${replacements[`Gläubiger ${position}`]}: ${replacements[`Forderung ${position}`]} (${replacements[`Quote ${position}`]})`);
-        });
-
-        // Fill empty rows if less than 8 creditors
-        for (let i = creditorsToProcess.length; i < maxCreditors; i++) {
-            const position = i + 1;
-            replacements[`Gläubiger ${position}`] = '';
-            replacements[`Forderung ${position}`] = '';
-            replacements[`Quote ${position}`] = '';
-        }
-
-        // Add totals
-        replacements['Gesamtsumme'] = this.formatGermanCurrency(totalDebt);
-        replacements['Gesamtquote'] = '100,00 %';
+        // Note: This template doesn't have individual creditor fields like "Gläubiger 1", "Forderung 1", etc.
+        // It's a simple table template with just basic header information
 
         return replacements;
     }

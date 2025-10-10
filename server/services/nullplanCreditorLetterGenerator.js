@@ -173,7 +173,7 @@ class NullplanCreditorLetterGenerator {
                 filename: filename,
                 path: outputPath,
                 size: outputBuffer.length,
-                creditor_name: creditor.name || creditor.creditor_name,
+                creditor_name: creditor.name || creditor.creditor_name || creditor.sender_name,
                 creditor_id: creditor.id || creditorPosition
             };
 
@@ -201,25 +201,25 @@ class NullplanCreditorLetterGenerator {
             'Gläubiger Adresse';
 
         const replacements = {
-            // Creditor-specific variables
+            // EXACT variables from template analysis
             "Adresse des Creditors": creditorAddress,
             "Forderungssumme": this.formatGermanCurrency(creditorAmount),
-            "Quote des Gläubigers": `${creditorQuote.toFixed(2).replace('.', ',')}`,
+            "Quote des Gläubigers": `${creditorQuote.toFixed(2).replace('.', ',')}%`,
             "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
-            
-            // Client variables (same for all)
-            "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
-            "808080/TS-JK der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
-            "Gläuibgeranzahl": totalCreditors.toString(),
+            "Aktenzeichen der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
             "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
-            "Heutiges 9.10.2025": new Date().toLocaleDateString('de-DE'),
-            "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
-            "ledig": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
+            "Gläuibgeranzahl": totalCreditors.toString(),
+            
+            // Client variables
+            "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
             "Mandant Name": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
             "Einkommen": this.formatGermanCurrency(clientData.monthlyNetIncome || clientData.financial_data?.monthly_net_income || 0),
-            "9.10.2025 in 14 Tagen": this.calculateDeadlineDate(),
-            "new test 08": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
-            "Datum in 3 Monaten zum 1.": this.calculateStartDate()
+            "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
+            "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
+            
+            // Date variables
+            "Heutiges Datum": new Date().toLocaleDateString('de-DE'),
+            "Datum in 14 Tagen": this.calculateDeadlineDate()
         };
 
         console.log(`💼 Creditor ${creditorPosition}: ${creditor.name || creditor.creditor_name}`);
