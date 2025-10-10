@@ -1180,6 +1180,25 @@ class CreditorContactService {
                 } else if (ratenplanPath) {
                     console.warn(`  ⚠️ Ratenplan not found at: ${ratenplanPath}`);
                 }
+                
+                // NEW: Handle multiple individual ratenplan documents (2nd round format)
+                if (generatedDocuments.ratenplanResult && generatedDocuments.ratenplanResult.documents && Array.isArray(generatedDocuments.ratenplanResult.documents)) {
+                    console.log(`📄 Found ${generatedDocuments.ratenplanResult.documents.length} individual Ratenplan documents`);
+                    
+                    generatedDocuments.ratenplanResult.documents.forEach((doc, index) => {
+                        if (fs.existsSync(doc.path)) {
+                            documentFiles.push({ 
+                                path: doc.path, 
+                                type: 'ratenplan_pfaendbares_einkommen',
+                                creditor_name: doc.creditor_name,
+                                creditor_index: doc.creditor_index || index + 1
+                            });
+                            console.log(`  ✓ Ratenplan (${doc.creditor_name}): ${path.basename(doc.filename)}`);
+                        } else {
+                            console.warn(`  ⚠️ Ratenplan document not found: ${doc.path}`);
+                        }
+                    });
+                }
             }
             // PRIORITY 3: Handle 2nd round individual creditor documents (NEW)
             else if (generatedDocuments && generatedDocuments.documents && Array.isArray(generatedDocuments.documents)) {

@@ -203,52 +203,82 @@ class NewWordTemplateProcessor {
                         }
                     }
                     
-                    // SAFE: Only replace within text content, not in XML attributes
-                    // Pattern that matches quoted variables but checks they're in text content
-                    const safePattern = new RegExp(
-                        `(<w:t[^>]*>)([^<]*?)${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}([^<]*?)(</w:t>)`,
-                        'g'
-                    );
-                    
-                    const safeMatches = processedXml.match(safePattern);
-                    if (safeMatches && safeMatches.length > 0) {
-                        processedXml = processedXml.replace(safePattern, (match, openTag, beforeText, content, afterText, closeTag) => {
-                            // Only replace if the content actually contains our variable
-                            if (content.includes(variable)) {
-                                console.log(`✅ Safe match "${variable}" (${quoteType.name}): 1 occurrence`);
-                                totalReplacements++;
-                                variableReplaced = true;
-                                return openTag + beforeText + value + afterText + closeTag;
+                    // TRY 1: Direct exact match for simple cases
+                    const exactPattern = new RegExp(this.escapeRegex(quoteType.open + variable + quoteType.close), 'g');
+                    if (processedXml.includes(quoteType.open + variable + quoteType.close)) {
+                        processedXml = processedXml.replace(exactPattern, (match) => {
+                            // Extra safety: check we're not in an XML attribute
+                            const matchIndex = processedXml.indexOf(match);
+                            const beforeMatch = processedXml.substring(Math.max(0, matchIndex - 100), matchIndex);
+                            const afterMatch = processedXml.substring(matchIndex, Math.min(processedXml.length, matchIndex + 100));
+                            
+                            // Check if we're inside an XML tag (dangerous)
+                            const lastOpen = beforeMatch.lastIndexOf('<');
+                            const lastClose = beforeMatch.lastIndexOf('>');
+                            
+                            if (lastOpen > lastClose && !beforeMatch.includes('<w:t')) {
+                                return match; // Skip - we're inside a non-text tag
                             }
-                            return match;
+                            
+                            console.log(`✅ Exact match "${variable}" (${quoteType.name}): 1 occurrence`);
+                            totalReplacements++;
+                            variableReplaced = true;
+                            return value;
                         });
                     }
                     
-                    // FALLBACK: Try flexible pattern for complex cases but with validation
+                    // TRY 2: Flexible pattern for variables split across XML elements
                     if (!variableReplaced) {
                         const flexiblePattern = new RegExp(
                             `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
                             'g'
                         );
                         
-                        processedXml = processedXml.replace(flexiblePattern, (match, content) => {
-                            // SAFETY CHECK: Don't replace if this looks like it's inside an XML attribute
-                            const beforeMatch = processedXml.substring(0, processedXml.indexOf(match));
-                            const lastOpenBracket = beforeMatch.lastIndexOf('<');
-                            const lastCloseBracket = beforeMatch.lastIndexOf('>');
-                            
-                            // If we're inside a tag (between < and >), skip this replacement
-                            if (lastOpenBracket > lastCloseBracket) {
-                                return match; // Keep original, we're inside a tag
-                            }
+                        const matches = [];
+                        let match;
+                        const regex = new RegExp(flexiblePattern.source, flexiblePattern.flags);
+                        
+                        while ((match = regex.exec(processedXml)) !== null) {
+                            matches.push({
+                                match: match[0],
+                                content: match[1],
+                                index: match.index
+                            });
+                        }
+                        
+                        // Process matches in reverse order to avoid index shifting
+                        matches.reverse().forEach(matchInfo => {
+                            const { match: fullMatch, content, index } = matchInfo;
                             
                             if (content.includes(variable)) {
+                                // SAFETY CHECK: Don't replace if this looks like it's inside an XML attribute
+                                const beforeMatch = processedXml.substring(Math.max(0, index - 200), index);
+                                const lastOpenBracket = beforeMatch.lastIndexOf('<');
+                                const lastCloseBracket = beforeMatch.lastIndexOf('>');
+                                
+                                // Advanced check: look for attribute patterns like val="..."
+                                const attributePattern = /\s+\w+\s*=\s*$/;
+                                if (attributePattern.test(beforeMatch)) {
+                                    return; // Skip - this looks like an attribute value
+                                }
+                                
+                                // If we're inside a tag but it's a text tag, it's probably OK
+                                if (lastOpenBracket > lastCloseBracket) {
+                                    const tagContent = beforeMatch.substring(lastOpenBracket);
+                                    if (!tagContent.includes('<w:t') && !tagContent.includes('</w:r>')) {
+                                        return; // Skip - we're inside a non-text tag
+                                    }
+                                }
+                                
                                 console.log(`✅ Flexible match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                
+                                // Replace this specific occurrence
+                                processedXml = processedXml.substring(0, index) + 
+                                              value + 
+                                              processedXml.substring(index + fullMatch.length);
                                 totalReplacements++;
                                 variableReplaced = true;
-                                return value;
                             }
-                            return match;
                         });
                     }
                 });
