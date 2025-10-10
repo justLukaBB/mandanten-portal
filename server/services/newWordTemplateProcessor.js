@@ -419,6 +419,33 @@ class NewWordTemplateProcessor {
                 });
             });
             
+            // 3. AGGRESSIVE CREDITOR NAME SEARCH
+            // Search for any remaining placeholder patterns that might contain creditor names
+            const creditorName = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
+            const creditorPlaceholders = [
+                // Common placeholder patterns
+                "Gläubiger",
+                "Creditor", 
+                "Inkasso",
+                "Unternehmen",
+                "Firma",
+                // Generic placeholders
+                "[CREDITOR]",
+                "[GLÄUBIGER]",
+                "___________"
+            ];
+            
+            creditorPlaceholders.forEach(placeholder => {
+                // Try both direct text and XML patterns
+                const directRegex = new RegExp(`<w:t>${this.escapeRegex(placeholder)}</w:t>`, 'g');
+                const matches = processedXml.match(directRegex);
+                if (matches && matches.length > 0 && placeholder !== creditorName) {
+                    processedXml = processedXml.replace(directRegex, `<w:t>${creditorName}</w:t>`);
+                    console.log(`✅ Aggressive creditor placeholder replacement "${placeholder}" -> "${creditorName}": ${matches.length} occurrences`);
+                    totalReplacements += matches.length;
+                }
+            });
+            
             plainTextReplacements.forEach(({ pattern, value, name }) => {
                 const matches = processedXml.match(pattern);
                 if (matches && matches.length > 0) {
