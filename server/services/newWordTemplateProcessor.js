@@ -395,21 +395,16 @@ class NewWordTemplateProcessor {
         const deadlineDate = new Date();
         deadlineDate.setDate(deadlineDate.getDate() + 14);
 
-        // Template Variables - based on actual analysis
-        // Use placeholders for split XML variables
-        replacements["CREDITOR_ADDRESS_PLACEHOLDER"] = creditorData?.address || "Gläubiger Adresse";
-        replacements["Mandant"] = clientName;
-        replacements["CREDITOR_REFERENCE_PLACEHOLDER"] = creditorData?.aktenzeichen || "AZ-12345";
-        replacements["CLIENT_NAME_PLACEHOLDER"] = clientName;
-        replacements["Gläubigeranzahl"] = creditorCount.toString();
-        replacements["TOTAL_DEBT_PLACEHOLDER"] = this.formatCurrency(totalDebt);
-        replacements["TODAY_DATE_PLACEHOLDER"] = this.formatDate(new Date());
-        replacements["CLIENT_REFERENCE_PLACEHOLDER"] = clientReference;
-        replacements["Geburtstag"] = this.formatDate(clientData?.geburtstag);
-        replacements["Familienstand"] = this.getFamilienstand(clientData);
-        replacements["Einkommen"] = this.formatCurrency(clientData?.financial_data?.monthly_net_income || 0);
-        replacements["PFAENDBAR_INCOME_PLACEHOLDER"] = this.formatCurrency(pfaendbarAmount);
-        replacements["MONTHLY_PFAENDBAR_PLACEHOLDER"] = this.formatCurrency(monthlyPayment);
+        // Template Variables - based on actual template analysis
+        // REAL VARIABLES from the document (not placeholders!)
+        replacements["Adresse des Creditors"] = creditorData?.address || "Gläubiger Adresse";
+        replacements["Name des Mandanten"] = clientName;
+        replacements["Aktenzeichen der Forderung"] = creditorData?.aktenzeichen || "AZ-12345";
+        replacements["Gessamtsumme Verschuldung"] = this.formatCurrency(totalDebt);
+        replacements["Heutiges Datum"] = this.formatDate(new Date());
+        replacements["Aktenzeichen des Mandanten"] = clientReference;
+        replacements["pfändbares Einkommen"] = this.formatCurrency(pfaendbarAmount);
+        replacements["monatlicher pfändbarer Betrag"] = this.formatCurrency(monthlyPayment);
         
         // Creditor-specific variables (if creditor data provided)
         if (creditorData) {
@@ -419,19 +414,18 @@ class NewWordTemplateProcessor {
             const totalCreditorPayment = monthlyCreditororPayment * 36; // 3 years
 
             replacements["Forderungssumme"] = this.formatCurrency(creditorDebt);
-            replacements["TOTAL_MONTHLY_PAYMENT_PLACEHOLDER"] = this.formatCurrency(totalCreditorPayment);
+            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(totalCreditorPayment);
             replacements["Tilgungsqoute"] = tilgungsquote.toFixed(2);
-            replacements["PLAN_NUMBER_PLACEHOLDER"] = this.getCreditorNumber(creditorData, settlementData);
+            replacements["Nummer im Schuldenbereinigungsplan"] = this.getCreditorNumber(creditorData, settlementData);
         } else {
             // Default values if no specific creditor
             replacements["Forderungssumme"] = this.formatCurrency(0);
-            replacements["TOTAL_MONTHLY_PAYMENT_PLACEHOLDER"] = this.formatCurrency(0);
+            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(0);
             replacements["Tilgungsqoute"] = "0,00";
-            replacements["PLAN_NUMBER_PLACEHOLDER"] = "1";
+            replacements["Nummer im Schuldenbereinigungsplan"] = "1";
         }
         
-        replacements["Immer der erste in 3 Monaten"] = this.formatDate(paymentStartDate);
-        replacements["DEADLINE_DATE_PLACEHOLDER"] = this.formatDate(deadlineDate);
+        replacements["Datum in 14 Tagen"] = this.formatDate(deadlineDate);
 
         console.log('📋 Variable replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
