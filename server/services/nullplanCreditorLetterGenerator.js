@@ -97,56 +97,72 @@ class NullplanCreditorLetterGenerator {
             
             console.log(`🔄 Applying ${Object.keys(replacements).length} replacements for ${creditor.name || creditor.creditor_name}`);
 
-            // Replace variables in the document XML - using advanced method that handles XML splitting
+            // Replace variables in the document XML - handling XML-split variables
             let processedXml = documentXml;
             let totalReplacements = 0;
 
-            // Support multiple quote types found in Word documents
-            const quoteTypes = [
-                { name: 'HTML encoded', open: '&quot;', close: '&quot;' },
-                { name: 'Regular', open: '"', close: '"' },
-                { name: 'Curly left/right', open: '"', close: '"' },
-                { name: 'Curly alternative', open: '"', close: '"' }
+            // First, handle the XML-split patterns identified in the template
+            const xmlSplitPatterns = [
+                {
+                    variable: "Adresse des Creditors",
+                    pattern: "&quot;Adresse</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-7\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>des</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-6\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Creditors&quot;",
+                    value: replacements["Adresse des Creditors"]
+                },
+                {
+                    variable: "Aktenzeichen der Forderung",
+                    pattern: "&quot;Aktenzeichen der</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"40\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:sz w:val=\"22\"/></w:rPr><w:t>Forderung &quot;",
+                    value: replacements["Aktenzeichen der Forderung"]
+                },
+                {
+                    variable: "Heutiges Datum",
+                    pattern: "&quot;Heutiges </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/><w:sz w:val=\"20\"/></w:rPr><w:t>Datum&quot;",
+                    value: replacements["Heutiges Datum"]
+                },
+                {
+                    variable: "Schuldsumme Insgesamt",
+                    pattern: "&quot;Schuldsumme</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Insgesamt&quot;",
+                    value: replacements["Schuldsumme Insgesamt"]
+                },
+                {
+                    variable: "Datum in 14 Tagen",
+                    pattern: "&quot;Datum</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>in</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>14</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-5\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Tagen&quot;",
+                    value: replacements["Datum in 14 Tagen"]
+                }
             ];
 
-            Object.entries(replacements).forEach(([variable, value]) => {
-                let variableReplaced = false;
-                
-                quoteTypes.forEach(quoteType => {
-                    if (variableReplaced) return; // Skip if already replaced
-                    
-                    const quotedVariable = `${quoteType.open}${variable}${quoteType.close}`;
-                    
-                    // Try exact match first (safest)
-                    const exactPattern = new RegExp(this.escapeRegex(quotedVariable), 'g');
-                    const exactMatches = (processedXml.match(exactPattern) || []).length;
-                    if (exactMatches > 0) {
-                        processedXml = processedXml.replace(exactPattern, value);
-                        console.log(`✅ Exact match "${variable}" (${quoteType.name}): ${exactMatches} occurrences`);
-                        totalReplacements += exactMatches;
-                        variableReplaced = true;
-                        return;
+            // Apply XML-split pattern replacements
+            xmlSplitPatterns.forEach(({ variable, pattern, value }) => {
+                if (processedXml.includes(pattern)) {
+                    processedXml = processedXml.replace(pattern, value);
+                    console.log(`✅ XML-split pattern replaced: "${variable}"`);
+                    totalReplacements++;
+                } else {
+                    console.log(`⚠️ XML-split pattern not found: "${variable}"`);
+                }
+            });
+
+            // Then handle simple quoted variables that aren't XML-split
+            const simpleVariables = [
+                "Name Mandant",
+                "Forderungssumme", 
+                "Quote des Gläubigers",
+                "Forderungsnummer in der Forderungsliste",
+                "Gläuibgeranzahl",
+                "Einkommen",
+                "Geburtstag",
+                "Familienstand"
+            ];
+
+            simpleVariables.forEach(variable => {
+                if (replacements[variable]) {
+                    const quotedVariable = `&quot;${variable}&quot;`;
+                    if (processedXml.includes(quotedVariable)) {
+                        processedXml = processedXml.replace(new RegExp(this.escapeRegex(quotedVariable), 'g'), replacements[variable]);
+                        console.log(`✅ Simple variable replaced: "${variable}"`);
+                        totalReplacements++;
+                    } else {
+                        console.log(`⚠️ Simple variable not found: "${variable}"`);
                     }
-                    
-                    // Simple flexible pattern (conservative approach)
-                    // Only allows whitespace and basic characters between quotes and variable
-                    const simpleFlexiblePattern = new RegExp(
-                        `${this.escapeRegex(quoteType.open)}\\s*${this.escapeRegex(variable)}\\s*${this.escapeRegex(quoteType.close)}`,
-                        'g'
-                    );
-                    
-                    const simpleMatches = (processedXml.match(simpleFlexiblePattern) || []).length;
-                    if (simpleMatches > 0) {
-                        processedXml = processedXml.replace(simpleFlexiblePattern, value);
-                        console.log(`✅ Simple flexible match "${variable}" (${quoteType.name}): ${simpleMatches} occurrences`);
-                        totalReplacements += simpleMatches;
-                        variableReplaced = true;
-                        return;
-                    }
-                });
-                
-                if (!variableReplaced) {
-                    console.log(`⚠️ Variable "${variable}" not found in template`);
                 }
             });
             
@@ -173,7 +189,7 @@ class NullplanCreditorLetterGenerator {
                 filename: filename,
                 path: outputPath,
                 size: outputBuffer.length,
-                creditor_name: creditor.name || creditor.creditor_name || creditor.sender_name,
+                creditor_name: creditor.name || creditor.creditor_name || creditor.sender_name || `Creditor_${creditorPosition}`,
                 creditor_id: creditor.id || creditorPosition
             };
 

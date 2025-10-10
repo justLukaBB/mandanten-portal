@@ -1,0 +1,71 @@
+{
+  "templatePath": "/Users/luka/Documents/Development/Mandanten-Portal/server/templates/Nullplan_Text_Template.docx",
+  "templateName": "Nullplan_Text_Template",
+  "analyzedAt": "2025-10-10T08:36:42.440Z",
+  "totalVariablesFound": 14,
+  "variables": [
+    "Einkommen",
+    "Geburtstag",
+    "Mandant Name",
+    "Name Mandant",
+    "Familienstand",
+    "Heutiges Datum",
+    "Forderungssumme",
+    "Gläuibgeranzahl",
+    "Datum in 14 Tagen",
+    "Quote des Gläubigers",
+    "Adresse des Creditors",
+    "Schuldsumme Insgesamt",
+    "Aktenzeichen der Forderung",
+    "Forderungsnummer in der Forderungsliste"
+  ],
+  "variablesByLength": [
+    "Einkommen",
+    "Geburtstag",
+    "Mandant Name",
+    "Name Mandant",
+    "Familienstand",
+    "Heutiges Datum",
+    "Forderungssumme",
+    "Gläuibgeranzahl",
+    "Datum in 14 Tagen",
+    "Quote des Gläubigers",
+    "Adresse des Creditors",
+    "Schuldsumme Insgesamt",
+    "Aktenzeichen der Forderung",
+    "Forderungsnummer in der Forderungsliste"
+  ],
+  "variablesByCategory": {
+    "client": [
+      "Mandant Name",
+      "Name Mandant"
+    ],
+    "creditor": [
+      "Quote des Gläubigers",
+      "Adresse des Creditors"
+    ],
+    "financial": [
+      "Forderungssumme",
+      "Schuldsumme Insgesamt",
+      "Aktenzeichen der Forderung",
+      "Forderungsnummer in der Forderungsliste"
+    ],
+    "dates": [
+      "Geburtstag",
+      "Heutiges Datum",
+      "Datum in 14 Tagen"
+    ],
+    "contact": [],
+    "case": [],
+    "other": [
+      "Einkommen",
+      "Familienstand",
+      "Gläuibgeranzahl"
+    ]
+  },
+  "analysisFiles": {
+    "rawXml": "/Users/luka/Documents/Development/Mandanten-Portal/server/Nullplan_Text_Template-raw.xml",
+    "cleanText": "/Users/luka/Documents/Development/Mandanten-Portal/server/Nullplan_Text_Template-clean.txt",
+    "report": "/Users/luka/Documents/Development/Mandanten-Portal/server/Nullplan_Text_Template-variables.json"
+  }
+}

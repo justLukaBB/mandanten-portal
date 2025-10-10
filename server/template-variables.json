@@ -1,0 +1,28 @@
+{
+  "templateType": "Außergerichtlicher Schuldenbereinigungsplan - Quotenplan",
+  "variables": [
+    "Heutiges Datum",
+    "Name Mandant",
+    "Datum in 3 Monaten"
+  ],
+  "tableStructure": {
+    "columns": [
+      "Nr.",
+      "Gläubiger",
+      "Forderung",
+      "Quote von Gesamtverschuldung"
+    ],
+    "maxRows": 8,
+    "hasSummaryRow": true
+  },
+  "quotaSystem": {
+    "type": "percentage-based",
+    "recalculation": "monthly",
+    "distribution": "annual",
+    "rounding": "2 decimal places"
+  },
+  "fixedValues": {
+    "duration": "36 Monate",
+    "startDateOffset": "3 months from document date"
+  }
+}
