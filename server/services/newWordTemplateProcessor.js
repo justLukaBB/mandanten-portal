@@ -144,6 +144,17 @@ class NewWordTemplateProcessor {
                     pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"0F0F12\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Mandanten&quot;",
                     variable: "Name des Mandanten",
                     placeholder: "CLIENT_NAME_PLACEHOLDER_4"
+                },
+                // Potential creditor name patterns (based on similar structure to Name des Mandanten)
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-12\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Gläubigers&quot;",
+                    variable: "Name des Gläubigers",
+                    placeholder: "CREDITOR_NAME_PLACEHOLDER"
+                },
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Creditors&quot;",
+                    variable: "Name des Creditors",
+                    placeholder: "CREDITOR_NAME_PLACEHOLDER_2"
                 }
             ];
 
@@ -404,6 +415,7 @@ class NewWordTemplateProcessor {
                 // Creditor info
                 "Adresse des Creditors": `${creditorData?.name || creditorData?.creditor_name || "Gläubiger"}\n${creditorData?.address || "Adresse nicht verfügbar"}`,
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
+                "Name des Gläubigers": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
                 "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Aktenzeichen der Forderung": creditorData?.reference || creditorData?.creditor_reference || `${clientReference}/TS-JK`,
