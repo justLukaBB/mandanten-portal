@@ -425,29 +425,47 @@ class NewWordTemplateProcessor {
                 });
             });
             
-            // 3. AGGRESSIVE CREDITOR NAME SEARCH
-            // Search for any remaining placeholder patterns that might contain creditor names
+            // 3. UNIVERSAL CREDITOR NAME REPLACEMENT
+            // Replace ANY company name that looks like a creditor with the actual creditor
             const creditorName = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
-            const creditorPlaceholders = [
-                // Common placeholder patterns
+            
+            // Common creditor name patterns to replace (hardcoded company names in template)
+            const hardcodedCreditorNames = [
+                "EOS Deutscher Inkasso-Dienst GmbH",
+                "Schufa Holding AG", 
+                "CRIF Bürgel GmbH",
+                "Boniversum GmbH",
+                "Creditreform",
+                "Inkasso Unternehmen",
+                "Gläubiger AG",
+                "Muster Inkasso GmbH"
+            ];
+            
+            hardcodedCreditorNames.forEach(hardcodedName => {
+                const regex = new RegExp(`<w:t>${this.escapeRegex(hardcodedName)}</w:t>`, 'g');
+                const matches = processedXml.match(regex);
+                if (matches && matches.length > 0) {
+                    processedXml = processedXml.replace(regex, `<w:t>${creditorName}</w:t>`);
+                    console.log(`✅ Universal creditor name replacement "${hardcodedName}" -> "${creditorName}": ${matches.length} occurrences`);
+                    totalReplacements += matches.length;
+                }
+            });
+            
+            // Also replace common generic placeholders
+            const genericPlaceholders = [
                 "Gläubiger",
                 "Creditor", 
                 "Inkasso",
-                "Unternehmen",
-                "Firma",
-                // Generic placeholders
                 "[CREDITOR]",
-                "[GLÄUBIGER]",
-                "___________"
+                "[GLÄUBIGER]"
             ];
             
-            creditorPlaceholders.forEach(placeholder => {
-                // Try both direct text and XML patterns
-                const directRegex = new RegExp(`<w:t>${this.escapeRegex(placeholder)}</w:t>`, 'g');
-                const matches = processedXml.match(directRegex);
+            genericPlaceholders.forEach(placeholder => {
+                const regex = new RegExp(`<w:t>${this.escapeRegex(placeholder)}</w:t>`, 'g');
+                const matches = processedXml.match(regex);
                 if (matches && matches.length > 0 && placeholder !== creditorName) {
-                    processedXml = processedXml.replace(directRegex, `<w:t>${creditorName}</w:t>`);
-                    console.log(`✅ Aggressive creditor placeholder replacement "${placeholder}" -> "${creditorName}": ${matches.length} occurrences`);
+                    processedXml = processedXml.replace(regex, `<w:t>${creditorName}</w:t>`);
+                    console.log(`✅ Generic creditor placeholder replacement "${placeholder}" -> "${creditorName}": ${matches.length} occurrences`);
                     totalReplacements += matches.length;
                 }
             });
