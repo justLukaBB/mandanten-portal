@@ -493,7 +493,7 @@ class NewWordTemplateProcessor {
                 "Gläubiger Name": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
                 "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
-                "Aktenzeichen der Forderung": creditorData?.reference || creditorData?.creditor_reference || `${clientReference}/TS-JK`,
+                "Aktenzeichen der Forderung": creditorData?.reference || creditorData?.creditor_reference || clientReference,
                 
                 // Administrative
                 "Nummer im Schuldenbereinigungsplan": "1",
