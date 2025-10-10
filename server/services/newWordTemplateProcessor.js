@@ -155,6 +155,12 @@ class NewWordTemplateProcessor {
                     pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"111214\"/><w:spacing w:val=\"-2\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Creditors&quot;",
                     variable: "Name des Creditors",
                     placeholder: "CREDITOR_NAME_PLACEHOLDER_2"
+                },
+                // Potential pattern for creditor name above address
+                {
+                    pattern: "&quot;Gläubiger</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-7\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"-6\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Name&quot;",
+                    variable: "Gläubiger Name",
+                    placeholder: "CREDITOR_NAME_HEADER_PLACEHOLDER"
                 }
             ];
 
@@ -481,9 +487,10 @@ class NewWordTemplateProcessor {
                 "Immer der erste in 3 Monaten": this.formatDate(paymentStartDate),
                 
                 // Creditor info
-                "Adresse des Creditors": `${creditorData?.name || creditorData?.creditor_name || "Gläubiger"}\n${creditorData?.address || "Adresse nicht verfügbar"}`,
+                "Adresse des Creditors": creditorData?.address || "Adresse nicht verfügbar",
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Name des Gläubigers": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
+                "Gläubiger Name": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Creditor": creditorData?.name || creditorData?.creditor_name || "Gläubiger", 
                 "Gläubiger": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Aktenzeichen der Forderung": creditorData?.reference || creditorData?.creditor_reference || `${clientReference}/TS-JK`,
