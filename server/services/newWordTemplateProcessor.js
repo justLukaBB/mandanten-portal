@@ -145,7 +145,13 @@ class NewWordTemplateProcessor {
                     variable: "Name des Mandanten",
                     placeholder: "CLIENT_NAME_PLACEHOLDER_4"
                 },
-                // Potential creditor name patterns (based on similar structure to Name des Mandanten)
+                // NEW TEMPLATE: Name des Gläubigers pattern from updated template
+                {
+                    pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"10\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:w w:val=\"90\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:spacing w:val=\"11\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"101012\"/><w:w w:val=\"90\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Gläubiger&quot;",
+                    variable: "Name des Gläubigers",
+                    placeholder: "CREDITOR_NAME_NEW_TEMPLATE"
+                },
+                // Old template pattern (keeping for compatibility)
                 {
                     pattern: "&quot;Name</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-12\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>des</w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-11\"/><w:sz w:val=\"22\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:color w:val=\"121215\"/><w:spacing w:val=\"-4\"/><w:sz w:val=\"22\"/></w:rPr><w:t>Gläubigers&quot;",
                     variable: "Name des Gläubigers",
