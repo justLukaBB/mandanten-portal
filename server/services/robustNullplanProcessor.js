@@ -62,7 +62,9 @@ class RobustNullplanProcessor {
             "Einkommen",
             "Geburtstag",
             "Familienstand",
-            "Datum in 3 Monaten"
+            "Datum in 3 Monaten",
+            "Aktenzeichen",
+            "Name des Gläubigers"
         ];
     }
 
@@ -261,6 +263,9 @@ class RobustNullplanProcessor {
         // Client name
         const clientName = clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann';
 
+        // Creditor name
+        const creditorName = creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`;
+
         // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
         const creditorReference = creditor.reference_number || 
                                 creditor.creditor_reference || 
@@ -287,10 +292,10 @@ class RobustNullplanProcessor {
             "Einkommen": this.formatGermanCurrency(clientData.financial_data?.monthly_net_income || clientData.monthlyNetIncome || 0),
             "Geburtstag": clientData.birthDate || clientData.geburtstag || '01.01.1980',
             "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
-            "Datum in 3 Monaten": this.calculateDateInMonths(3)
+            "Datum in 3 Monaten": this.calculateDateInMonths(3),
+            "Aktenzeichen": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
+            "Name des Gläubigers": creditorName
         };
-
-        const creditorName = creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`;
         
         console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
         console.log(`   Address: ${creditorAddress}`);
