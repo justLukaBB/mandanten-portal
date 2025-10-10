@@ -149,6 +149,12 @@ class NewWordTemplateProcessor {
             Object.entries(replacements).forEach(([variable, value]) => {
                 let variableReplaced = false;
                 
+                // Skip placeholder variables that were already replaced by split-XML patterns
+                if (variable.includes('_PLACEHOLDER')) {
+                    console.log(`✅ Skipping "${variable}" - already replaced by split-XML pattern`);
+                    return;
+                }
+                
                 quoteTypes.forEach(quoteType => {
                     if (variableReplaced) return; // Skip if already replaced
                     
