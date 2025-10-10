@@ -204,9 +204,9 @@ class NewWordTemplateProcessor {
                     }
                     
                     // TRY 1: Direct exact match for simple cases
-                    const exactPattern = new RegExp(this.escapeRegex(quoteType.open + variable + quoteType.close), 'g');
+                    const directExactPattern = new RegExp(this.escapeRegex(quoteType.open + variable + quoteType.close), 'g');
                     if (processedXml.includes(quoteType.open + variable + quoteType.close)) {
-                        processedXml = processedXml.replace(exactPattern, (match) => {
+                        processedXml = processedXml.replace(directExactPattern, (match) => {
                             // Extra safety: check we're not in an XML attribute
                             const matchIndex = processedXml.indexOf(match);
                             const beforeMatch = processedXml.substring(Math.max(0, matchIndex - 100), matchIndex);
