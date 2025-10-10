@@ -375,4 +375,3 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
 });
 
 module.exports = router;
-module.exports.triggerProcessingCompleteWebhook = triggerProcessingCompleteWebhook;
