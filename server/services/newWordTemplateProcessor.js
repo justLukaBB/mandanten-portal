@@ -203,16 +203,45 @@ class NewWordTemplateProcessor {
                         }
                     }
                     
-                    // Try pattern that allows for XML tags between quotes and text  
-                    const flexiblePattern = new RegExp(
-                        `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
+                    // SAFE: Only replace within text content, not in XML attributes
+                    // Pattern that matches quoted variables but checks they're in text content
+                    const safePattern = new RegExp(
+                        `(<w:t[^>]*>)([^<]*?)${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}([^<]*?)(</w:t>)`,
                         'g'
                     );
                     
-                    const flexibleMatches = processedXml.match(flexiblePattern);
-                    if (flexibleMatches && flexibleMatches.length > 0) {
-                        processedXml = processedXml.replace(flexiblePattern, (match, content) => {
+                    const safeMatches = processedXml.match(safePattern);
+                    if (safeMatches && safeMatches.length > 0) {
+                        processedXml = processedXml.replace(safePattern, (match, openTag, beforeText, content, afterText, closeTag) => {
                             // Only replace if the content actually contains our variable
+                            if (content.includes(variable)) {
+                                console.log(`✅ Safe match "${variable}" (${quoteType.name}): 1 occurrence`);
+                                totalReplacements++;
+                                variableReplaced = true;
+                                return openTag + beforeText + value + afterText + closeTag;
+                            }
+                            return match;
+                        });
+                    }
+                    
+                    // FALLBACK: Try flexible pattern for complex cases but with validation
+                    if (!variableReplaced) {
+                        const flexiblePattern = new RegExp(
+                            `${this.escapeRegex(quoteType.open)}([^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?)${this.escapeRegex(quoteType.close)}`,
+                            'g'
+                        );
+                        
+                        processedXml = processedXml.replace(flexiblePattern, (match, content) => {
+                            // SAFETY CHECK: Don't replace if this looks like it's inside an XML attribute
+                            const beforeMatch = processedXml.substring(0, processedXml.indexOf(match));
+                            const lastOpenBracket = beforeMatch.lastIndexOf('<');
+                            const lastCloseBracket = beforeMatch.lastIndexOf('>');
+                            
+                            // If we're inside a tag (between < and >), skip this replacement
+                            if (lastOpenBracket > lastCloseBracket) {
+                                return match; // Keep original, we're inside a tag
+                            }
+                            
                             if (content.includes(variable)) {
                                 console.log(`✅ Flexible match "${variable}" (${quoteType.name}): 1 occurrence`);
                                 totalReplacements++;
@@ -221,30 +250,6 @@ class NewWordTemplateProcessor {
                             }
                             return match;
                         });
-                    }
-                    
-                    // Try ultra-flexible pattern for variables split across XML elements
-                    if (!variableReplaced) {
-                        // Build pattern for variables that might be split across <w:t> tags
-                        const splitPattern = new RegExp(
-                            `${this.escapeRegex(quoteType.open)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(variable)}[^${this.escapeRegex(quoteType.close)}]*?(?:<[^>]*>)*?[^${this.escapeRegex(quoteType.close)}]*?${this.escapeRegex(quoteType.close)}`,
-                            'g'
-                        );
-                        
-                        const splitMatches = processedXml.match(splitPattern);
-                        if (splitMatches && splitMatches.length > 0) {
-                            processedXml = processedXml.replace(splitPattern, (match) => {
-                                // Extract just the text content to check
-                                const textContent = match.replace(/<[^>]*>/g, '');
-                                if (textContent.includes(variable)) {
-                                    console.log(`✅ Split-XML match "${variable}" (${quoteType.name}): 1 occurrence`);
-                                    totalReplacements++;
-                                    variableReplaced = true;
-                                    return value;
-                                }
-                                return match;
-                            });
-                        }
                     }
                 });
                 
@@ -255,11 +260,43 @@ class NewWordTemplateProcessor {
             
             console.log(`✅ Total replacements made: ${totalReplacements}`);
 
+            // Validate XML structure before saving to prevent corruption
+            try {
+                // Basic XML validation - check for unclosed tags
+                const openTags = (processedXml.match(/<w:r>/g) || []).length;
+                const closeTags = (processedXml.match(/<\/w:r>/g) || []).length;
+                const openProps = (processedXml.match(/<w:rPr>/g) || []).length;
+                const closeProps = (processedXml.match(/<\/w:rPr>/g) || []).length;
+                
+                if (openTags !== closeTags) {
+                    console.warn(`⚠️ XML Warning: Mismatched <w:r> tags - ${openTags} open, ${closeTags} close`);
+                }
+                if (openProps !== closeProps) {
+                    console.warn(`⚠️ XML Warning: Mismatched <w:rPr> tags - ${openProps} open, ${closeProps} close`);
+                }
+                
+                // Quick XML syntax check
+                if (processedXml.includes('<>') || processedXml.includes('</>')) {
+                    throw new Error('Invalid XML syntax detected - empty tags found');
+                }
+                
+                console.log(`✅ XML validation passed - document structure appears intact`);
+            } catch (xmlError) {
+                console.error(`❌ XML validation failed: ${xmlError.message}`);
+                throw new Error(`Document XML is corrupted: ${xmlError.message}`);
+            }
+
             // Update the document XML in the zip
             zip.file('word/document.xml', processedXml);
 
-            // Generate output
-            const outputBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+            // Generate output with proper Word document settings
+            const outputBuffer = await zip.generateAsync({ 
+                type: 'nodebuffer',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 },
+                platform: 'DOS',  // Better compatibility with Microsoft Word
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
             
             // Create filename with creditor-specific info if available
             let filename;
