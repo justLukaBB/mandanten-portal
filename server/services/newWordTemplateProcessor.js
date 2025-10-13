@@ -250,14 +250,14 @@ class NewWordTemplateProcessor {
                     const quotedVariable = `${quoteType.open}${variable}${quoteType.close}`;
                     
                     // First try exact match
-                    const simpleExactPattern = new RegExp(
+                    const exactMatchPattern = new RegExp(
                         this.escapeRegex(quotedVariable),
                         'g'
                     );
                     
-                    const exactMatches = (processedXml.match(simpleExactPattern) || []).length;
+                    const exactMatches = (processedXml.match(exactMatchPattern) || []).length;
                     if (exactMatches > 0) {
-                        processedXml = processedXml.replace(simpleExactPattern, value);
+                        processedXml = processedXml.replace(exactMatchPattern, value);
                         console.log(`✅ Exact match "${variable}" (${quoteType.name}): ${exactMatches} occurrences`);
                         totalReplacements += exactMatches;
                         variableReplaced = true;
