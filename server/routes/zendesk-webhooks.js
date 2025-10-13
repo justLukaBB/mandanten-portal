@@ -1258,7 +1258,15 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
     }
 
     // Check if this client paid first rate and is waiting for processing
-    if (!client.first_payment_received || client.payment_ticket_type !== 'processing_wait') {
+    // For payment-first clients, we need to handle them even if payment_ticket_type is not 'processing_wait'
+    const isPaymentFirstClient = client.first_payment_received && 
+                                 (client.payment_ticket_type === 'processing_wait' || 
+                                  client.payment_ticket_type === 'document_reminder_side_conversation' ||
+                                  client.payment_ticket_type === 'automated_reminder_scheduled' ||
+                                  client.payment_ticket_type === 'document_request' ||
+                                  !client.payment_ticket_type);
+    
+    if (!isPaymentFirstClient) {
       return res.json({
         success: true,
         message: 'Processing complete but client not in waiting state',

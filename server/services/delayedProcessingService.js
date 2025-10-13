@@ -177,7 +177,7 @@ class DelayedProcessingService {
    */
   async triggerProcessingCompleteWebhook(clientId, documentId = null) {
     try {
-      const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+      const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal-docker.onrender.com'|| 'http://localhost:3001';
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
       
       console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
