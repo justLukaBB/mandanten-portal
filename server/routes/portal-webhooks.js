@@ -16,7 +16,8 @@ async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const webhookUrl = `${baseUrl}/api/zendesk-webhook/processing-complete`;
     
-    console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
+    console.log(`🔗 PAYMENT-FIRST FLOW: Triggering processing-complete webhook for client ${clientId}`);
+    console.log(`🌐 PAYMENT-FIRST FLOW: Webhook URL: ${webhookUrl}`);
     
     const response = await axios.post(webhookUrl, {
       client_id: clientId,
@@ -31,11 +32,12 @@ async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
       }
     });
     
-    console.log(`✅ Processing-complete webhook triggered successfully for client ${clientId}`);
+    console.log(`✅ PAYMENT-FIRST FLOW: Processing-complete webhook triggered successfully for client ${clientId}`);
+    console.log(`📊 PAYMENT-FIRST FLOW: Webhook response:`, response.data);
     return response.data;
     
   } catch (error) {
-    console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
+    console.error(`❌ PAYMENT-FIRST FLOW: Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
     // Don't throw - webhook failure shouldn't break document processing
     return null;
   }
@@ -349,7 +351,9 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
           }
           
           // Trigger the processing-complete webhook asynchronously
+          console.log(`🎯 PAYMENT-FIRST FLOW: About to trigger processing-complete webhook for client ${client.id}`);
           setTimeout(async () => {
+            console.log(`🚀 PAYMENT-FIRST FLOW: Triggering processing-complete webhook for client ${client.id}`);
             await triggerProcessingCompleteWebhook(client.id, document_id);
           }, 1000); // Small delay to ensure database save completes first
         }

@@ -1229,6 +1229,7 @@ ${finalCreditorsList}
 router.post('/processing-complete', rateLimits.general, async (req, res) => {
   try {
     console.log('🔄 Zendesk Webhook: Processing-Complete received', req.body);
+    console.log('🎯 PAYMENT-FIRST FLOW: Processing complete webhook triggered for payment-first client');
     
     const { client_id, document_id } = req.body;
 
@@ -1238,24 +1239,19 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
-    // Use safeClientUpdate to prevent race conditions with settlement field updates
-    const { safeClientUpdate } = require('../server');
+    // Find client directly
+    const client = await Client.findOne({ id: client_id });
     
-    let client;
-    try {
-      client = await safeClientUpdate(client_id, async (currentClient) => {
-        // All the processing logic will be moved inside this function
-        return currentClient; // We'll modify this after moving the logic
+    if (!client) {
+      console.log('❌ PAYMENT-FIRST FLOW: Client not found for processing-complete webhook');
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: client_id
       });
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        return res.status(404).json({
-          error: 'Client not found',
-          client_id: client_id
-        });
-      }
-      throw error;
     }
+
+    console.log(`📋 PAYMENT-FIRST FLOW: Found client ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+    console.log(`💰 Payment status: first_payment_received=${client.first_payment_received}, payment_ticket_type=${client.payment_ticket_type}`);
 
     // Check if this client paid first rate and is waiting for processing
     // For payment-first clients, we need to handle them even if payment_ticket_type is not 'processing_wait'
@@ -1267,6 +1263,10 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
                                   !client.payment_ticket_type);
     
     if (!isPaymentFirstClient) {
+      console.log('⚠️ PAYMENT-FIRST FLOW: Client not eligible for processing-complete webhook');
+      console.log(`   - first_payment_received: ${client.first_payment_received}`);
+      console.log(`   - payment_ticket_type: ${client.payment_ticket_type}`);
+      console.log(`   - current_status: ${client.current_status}`);
       return res.json({
         success: true,
         message: 'Processing complete but client not in waiting state',
@@ -1275,12 +1275,16 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
+    console.log('✅ PAYMENT-FIRST FLOW: Client is eligible for processing-complete webhook');
+
     // Check if all documents are now processed
     const documents = client.documents || [];
     const completedDocs = documents.filter(d => d.processing_status === 'completed');
     
+    console.log(`📊 PAYMENT-FIRST FLOW: Document processing status - ${completedDocs.length}/${documents.length} completed`);
+    
     if (completedDocs.length < documents.length) {
-      console.log(`Still processing: ${documents.length - completedDocs.length} documents remaining`);
+      console.log(`⏳ PAYMENT-FIRST FLOW: Still processing ${documents.length - completedDocs.length} documents remaining`);
       return res.json({
         success: true,
         message: 'Still processing remaining documents',
@@ -1288,8 +1292,12 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
+    console.log('✅ PAYMENT-FIRST FLOW: All documents processed, proceeding with creditor analysis');
+
     // All documents processed - analyze and create review ticket
     const creditors = client.final_creditor_list || [];
+    console.log(`📋 PAYMENT-FIRST FLOW: Found ${creditors.length} creditors in final_creditor_list`);
+    
     // Check if documents need manual review based on Claude AI confidence
     const lowConfidenceDocuments = documents.filter(d => 
       d.extracted_data?.confidence && d.extracted_data.confidence < 0.8
@@ -1298,6 +1306,8 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       d.extracted_data?.manual_review_required === true ||
       (d.extracted_data?.confidence && d.extracted_data.confidence < 0.8)
     );
+
+    console.log(`🔍 PAYMENT-FIRST FLOW: Manual review analysis - low confidence docs: ${lowConfidenceDocuments.length}, manual review required: ${manualReviewRequired}`);
 
     const state = {
       hasCreditors: creditors.length > 0,
@@ -1312,17 +1322,23 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       ticketContent = generateNoCreditorsTicket(client, documents);
       tags = ['processing-complete', 'no-creditors', 'manual-check-needed'];
       client.payment_ticket_type = 'no_creditors_found';
+      console.log('⚠️ PAYMENT-FIRST FLOW: No creditors found - will create no_creditors_found ticket');
     } else if (state.needsManualReview) {
       ticketType = 'manual_review';
       ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, true);
       tags = ['processing-complete', 'manual-review-needed', 'creditors-found'];
       client.payment_ticket_type = 'manual_review';
+      console.log('🔍 PAYMENT-FIRST FLOW: Manual review required - will create manual_review ticket with generateCreditorReviewTicketContent');
     } else {
       ticketType = 'auto_approved';
       ticketContent = generateCreditorReviewTicketContent(client, documents, creditors, false);
       tags = ['processing-complete', 'auto-approved', 'ready-for-confirmation'];
       client.payment_ticket_type = 'auto_approved';
+      console.log('✅ PAYMENT-FIRST FLOW: Auto-approved - will create auto_approved ticket with generateCreditorReviewTicketContent');
     }
+
+    console.log(`🎫 PAYMENT-FIRST FLOW: Ticket type determined: ${ticketType}`);
+    console.log(`📝 PAYMENT-FIRST FLOW: Will generate creditor review ticket content using generateCreditorReviewTicketContent function`);
 
     // Mark all documents processed timestamp
     client.all_documents_processed_at = new Date();
@@ -1438,7 +1454,9 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       }
     }
 
-    console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
+    console.log(`✅ PAYMENT-FIRST FLOW: Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
+    console.log(`🎯 PAYMENT-FIRST FLOW: SUCCESS - Creditor review ticket generated using generateCreditorReviewTicketContent`);
+    console.log(`📊 PAYMENT-FIRST FLOW: Final stats - Documents: ${documents.length}, Creditors: ${creditors.length}, Ticket Type: ${ticketType}`);
 
     res.json({
       success: true,
