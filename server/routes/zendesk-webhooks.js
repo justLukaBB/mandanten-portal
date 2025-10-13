@@ -1382,105 +1382,120 @@ try {
     
     console.log(`✅ Processing complete webhook saved client ${client.aktenzeichen} with preserved settlement fields`);
 
-    // ADD PROCESSING COMPLETE COMMENT TO ORIGINAL TICKET
-    let zendeskComment = null;
-    let commentError = null;
+    // CREATE NEW SEPARATE TICKET FOR CREDITOR REVIEW (like existing flow)
+    let zendeskTicket = null;
+    let ticketCreationError = null;
 
-    // Try to find the original ticket ID from client's zendesk_tickets
-    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
-    const originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id;
-
-    if (zendeskService.isConfigured() && originalTicketId) {
+    if (zendeskService.isConfigured()) {
       try {
-        console.log(`💬 Adding processing complete comment to ticket ${originalTicketId}...`);
+        console.log(`🎫 PAYMENT-FIRST FLOW: Creating NEW separate Zendesk ticket for creditor review...`);
+        console.log(`📝 PAYMENT-FIRST FLOW: Ticket type: ${ticketType}, Subject: ${generateTicketSubject(client, ticketType)}`);
         
-        // Generate processing complete comment
-        const processingCompleteComment = `**🔄 PROCESSING COMPLETE - ANALYSIS READY**\n\n👤 **Client:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n${generateInternalComment(client, ticketType, documents, creditors, state)}`;
-        const ticketStatus = getTicketStatusForScenario(ticketType);
-        const ticketTags = ['processing-complete', `scenario-${ticketType}`, ...tags];
-        
-        zendeskComment = await zendeskService.addInternalComment(originalTicketId, {
-          content: processingCompleteComment,
-          // status: ticketStatus, // REMOVED: Don't change the original ticket status
-          tags: ticketTags
+        zendeskTicket = await zendeskService.createTicket({
+          subject: generateTicketSubject(client, ticketType),
+          content: ticketContent,
+          requesterEmail: client.email,
+          tags: tags,
+          priority: ticketType === 'manual_review' ? 'normal' : 'low',
+          type: 'task'
         });
 
-        if (zendeskComment.success) {
-          console.log(`✅ Processing complete comment added to ticket ${originalTicketId}`);
+        if (zendeskTicket.success) {
+          console.log(`✅ PAYMENT-FIRST FLOW: NEW ticket created successfully: ${zendeskTicket.ticket_id}`);
           
-          // Update client ticket tracking
-          if (originalTicket) {
-            originalTicket.last_comment_at = new Date();
-            originalTicket.processing_complete_scenario = ticketType;
+          // Store the created ticket ID for reference
+          client.zendesk_tickets = client.zendesk_tickets || [];
+          client.zendesk_tickets.push({
+            ticket_id: zendeskTicket.ticket_id,
+            ticket_type: 'creditor_review',
+            ticket_scenario: ticketType,
+            status: 'active',
+            created_at: new Date()
+          });
+          
+          // Add to status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'creditor_review_ticket_created',
+            changed_by: 'system',
+            metadata: {
+              zendesk_ticket_id: zendeskTicket.ticket_id,
+              ticket_scenario: ticketType,
+              ticket_subject: generateTicketSubject(client, ticketType),
+              payment_first_flow: true
+            }
+          });
+
+          // Save client with new ticket info
+          try {
+            await client.save({ validateModifiedOnly: true });
+            console.log(`✅ PAYMENT-FIRST FLOW: Client saved with new ticket ${zendeskTicket.ticket_id}`);
+          } catch (saveError) {
+            console.error('⚠️ Error saving client with new ticket, using direct update:', saveError.message);
+            await Client.findOneAndUpdate(
+              { _id: client._id },
+              {
+                $push: {
+                  zendesk_tickets: {
+                    ticket_id: zendeskTicket.ticket_id,
+                    ticket_type: 'creditor_review',
+                    ticket_scenario: ticketType,
+                    status: 'active',
+                    created_at: new Date()
+                  },
+                  status_history: {
+                    id: uuidv4(),
+                    status: 'creditor_review_ticket_created',
+                    changed_by: 'system',
+                    metadata: {
+                      zendesk_ticket_id: zendeskTicket.ticket_id,
+                      ticket_scenario: ticketType,
+                      ticket_subject: generateTicketSubject(client, ticketType),
+                      payment_first_flow: true
+                    }
+                  }
+                }
+              },
+              { runValidators: false }
+            );
           }
           
-          await client.save();
-          
-          // UPDATE STATUS for auto_approved scenarios but DO NOT trigger creditor contact yet
-          if (ticketType === 'auto_approved' && creditors.length > 0) {
-            // Mark as auto-approved and waiting for BOTH confirmations
-            client.current_status = 'awaiting_client_confirmation';
-            client.admin_approved = true; // Auto-approved by system due to high confidence
-            client.admin_approved_at = new Date();
-            client.admin_approved_by = 'System (Auto-Approved)';
-            client.updated_at = new Date();
-            
-            client.status_history.push({
-              id: uuidv4(),
-              status: 'awaiting_client_confirmation',
-              changed_by: 'system',
-              metadata: {
-                auto_approved: true,
-                reason: 'High AI confidence - no manual review needed',
-                total_creditors: creditors.length,
-                requires_client_confirmation: true
-              }
-            });
-            
-            await client.save();
-            
-            console.log(`✅ Auto-approved ${client.aktenzeichen} - Now waiting for client confirmation before creditor contact`);
-          }
+          console.log(`🎯 PAYMENT-FIRST FLOW: SUCCESS - NEW separate creditor review ticket created: ${zendeskTicket.ticket_id}`);
           
         } else {
-          commentError = zendeskComment.error;
-          console.error('❌ Failed to add processing complete comment:', zendeskComment.error);
+          ticketCreationError = zendeskTicket.error;
+          console.error('❌ PAYMENT-FIRST FLOW: Failed to create new ticket:', zendeskTicket.error);
         }
       } catch (error) {
-        commentError = error.message;
-        console.error('❌ Exception adding processing complete comment:', error);
+        ticketCreationError = error.message;
+        console.error('❌ PAYMENT-FIRST FLOW: Exception creating new ticket:', error);
       }
     } else {
-      if (!zendeskService.isConfigured()) {
-        console.log('⚠️ Zendesk service not configured - skipping comment');
-        commentError = 'Zendesk API not configured';
-      } else {
-        console.log('⚠️ No original ticket ID found - cannot add comment');
-        commentError = 'No original ticket ID available';
-      }
+      console.log('⚠️ PAYMENT-FIRST FLOW: Zendesk service not configured - skipping new ticket creation');
+      ticketCreationError = 'Zendesk API not configured';
     }
 
     console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
 
     res.json({
       success: true,
-      message: 'Processing complete - Review ticket ready',
+      message: 'Processing complete - NEW creditor review ticket created',
       scenario: ticketType,
       client_status: client.current_status,
       ticket_data: {
-        subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
+        subject: generateTicketSubject(client, ticketType),
         content: ticketContent,
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
       },
-      zendesk_comment: zendeskComment ? {
-        added: zendeskComment.success,
-        ticket_id: originalTicketId,
+      zendesk_ticket: zendeskTicket ? {
+        created: zendeskTicket.success,
+        ticket_id: zendeskTicket.ticket_id,
         scenario: ticketType,
-        error: commentError
+        error: ticketCreationError
       } : {
-        added: false,
-        error: commentError
+        created: false,
+        error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
