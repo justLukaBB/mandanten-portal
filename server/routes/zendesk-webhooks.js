@@ -1257,24 +1257,13 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       throw error;
     }
 
-    // Check if this client paid first rate and is in a state where processing completion should trigger review
-    // Allow processing-complete webhook for:
-    // 1. Clients with payment_ticket_type === 'processing_wait' (documents uploaded before payment)
-    // 2. Clients with payment-first scenarios (payment_ticket_type includes 'document_reminder', 'document_request', etc.)
-    const validPaymentTicketTypes = [
-      'processing_wait',
-      'document_reminder_side_conversation', 
-      'document_request',
-      'automated_reminder_scheduled'
-    ];
-    
-    if (!client.first_payment_received || !validPaymentTicketTypes.includes(client.payment_ticket_type)) {
+    // Check if this client paid first rate and is waiting for processing
+    if (!client.first_payment_received || client.payment_ticket_type !== 'processing_wait') {
       return res.json({
         success: true,
-        message: 'Processing complete but client not in waiting state or payment-first scenario',
+        message: 'Processing complete but client not in waiting state',
         client_status: client.current_status,
-        payment_ticket_type: client.payment_ticket_type,
-        first_payment_received: client.first_payment_received
+        payment_ticket_type: client.payment_ticket_type
       });
     }
 
@@ -1363,63 +1352,6 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
     
     console.log(`✅ Processing complete webhook saved client ${client.aktenzeichen} with preserved settlement fields`);
 
-    // CREATE NEW MAIN CREDITOR REVIEW TICKET (like payment-confirmed webhook)
-    let zendeskTicket = null;
-    let ticketCreationError = null;
-
-    if (zendeskService.isConfigured()) {
-      try {
-        console.log(`🎫 Creating automatic Zendesk ticket for processing-complete scenario: ${ticketType}...`);
-        
-        zendeskTicket = await zendeskService.createTicket({
-          subject: generateTicketSubject(client, ticketType),
-          content: ticketContent,
-          requesterEmail: client.email,
-          tags: tags,
-          priority: ticketType === 'manual_review' ? 'normal' : 'low',
-          type: 'task'
-        });
-
-        if (zendeskTicket.success) {
-          // Store the created ticket ID for reference
-          client.zendesk_tickets = client.zendesk_tickets || [];
-          client.zendesk_tickets.push({
-            ticket_id: zendeskTicket.ticket_id,
-            ticket_type: 'creditor_review',
-            ticket_scenario: ticketType,
-            status: 'active',
-            created_at: new Date()
-          });
-          
-          // Add to status history
-          client.status_history.push({
-            id: uuidv4(),
-            status: 'zendesk_ticket_created',
-            changed_by: 'system',
-            metadata: {
-              zendesk_ticket_id: zendeskTicket.ticket_id,
-              ticket_scenario: ticketType,
-              ticket_subject: generateTicketSubject(client, ticketType),
-              triggered_by: 'processing_complete_webhook'
-            }
-          });
-
-          await client.save();
-          
-          console.log(`✅ Created creditor review ticket ${zendeskTicket.ticket_id} for ${client.aktenzeichen}`);
-        } else {
-          ticketCreationError = zendeskTicket.error;
-          console.error('❌ Failed to create creditor review ticket:', zendeskTicket.error);
-        }
-      } catch (error) {
-        ticketCreationError = error.message;
-        console.error('❌ Exception creating creditor review ticket:', error);
-      }
-    } else {
-      console.log('⚠️ Zendesk service not configured - skipping automatic ticket creation');
-      ticketCreationError = 'Zendesk API not configured';
-    }
-
     // ADD PROCESSING COMPLETE COMMENT TO ORIGINAL TICKET
     let zendeskComment = null;
     let commentError = null;
@@ -1506,19 +1438,10 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       scenario: ticketType,
       client_status: client.current_status,
       ticket_data: {
-        subject: generateTicketSubject(client, ticketType),
+        subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
         content: ticketContent,
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
-      },
-      zendesk_ticket: zendeskTicket ? {
-        created: zendeskTicket.success,
-        ticket_id: zendeskTicket.ticket_id,
-        scenario: ticketType,
-        error: ticketCreationError
-      } : {
-        created: false,
-        error: ticketCreationError
       },
       zendesk_comment: zendeskComment ? {
         added: zendeskComment.success,
