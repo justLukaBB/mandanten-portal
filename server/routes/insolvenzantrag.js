@@ -9,23 +9,24 @@ const Client = require('../models/Client');
 
 // Helper function to get client (handles both id and aktenzeichen lookups)
 async function getClient(clientId) {
-  try {
-    // Try to find by id first, then by aktenzeichen
-    let client = await Client.findOne({ id: clientId });
-    if (!client) {
-      client = await Client.findOne({ aktenzeichen: clientId });
+    try {
+        // Try to find by id first, then by aktenzeichen
+        let client = await Client.findOne({ id: clientId });
+        if (!client) {
+            client = await Client.findOne({ aktenzeichen: clientId });
+        }
+        return client;
+    } catch (error) {
+        console.error('Error getting client from MongoDB:', error);
+        throw error;
     }
-    return client;
-  } catch (error) {
-    console.error('Error getting client from MongoDB:', error);
-    throw error;
-  }
 }
 const QuickFieldMapper = require('../pdf-form-test/quick-field-mapper');
 const INSOLVENZANTRAG_CONFIG = require('../insolvenzantrag-checkbox-config');
 const { convertDocxToPdf, generateSchuldenbereinigungsplanPdf, generateGlaeubigerlistePdf } = require('../services/documentConverter');
 const documentGenerator = require('../services/documentGenerator');
 const CreditorDocumentPackageGenerator = require('../services/creditorDocumentPackageGenerator');
+const { percentageValue } = require('docx');
 
 // Helper function to calculate creditor response statistics from second email round
 function calculateCreditorResponseStats(client) {
@@ -210,21 +211,21 @@ function mapClientDataToPDF(client) {
 // Enhanced PDF filling function with automatic checkbox application
 async function fillInsolvenzantragWithCheckboxes(formData, originalPdfPath) {
     console.log('🔧 Starting enhanced PDF generation with automatic checkboxes...');
-    
+
     // First, fill the basic form fields
     const filledPdfBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
-    
+
     // If client has pfändbares Einkommen, apply default checkboxes
     if (formData.has_pfaendbares_einkommen) {
         console.log('💰 Client has pfändbares Einkommen - applying default checkboxes...');
-        
+
         try {
             // Apply the checkbox configuration to the PDF
             const finalPdfBytes = await INSOLVENZANTRAG_CONFIG.applyDefaultCheckboxesToPdf(filledPdfBytes);
-            
+
             console.log('✅ Successfully applied default checkbox configuration');
             return finalPdfBytes;
-            
+
         } catch (error) {
             console.error('⚠️ Error applying checkboxes, using basic form:', error.message);
             return filledPdfBytes;
@@ -309,153 +310,267 @@ async function fillInsolvenzantragWithCheckboxes(formData, originalPdfPath) {
 
 
 async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
-  try {
-    const pdfDoc = await PDFDocument.load(pdfBytes);
-    const form = pdfDoc.getForm();
+    try {
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+        const form = pdfDoc.getForm();
 
-    // ------------------- 📄 ANLAGE 6 -------------------
-    const creditors = client.final_creditor_list || [];
-    if (Array.isArray(creditors) && creditors.length > 0) {
-      await fillAnlage6(pdfDoc, form, creditors, options);
-      await fillAnlage7(pdfDoc, form, creditors, options);
+        // ------------------- 📄 ANLAGE 6 -------------------
+        const creditors = client.final_creditor_list || [];
+        if (Array.isArray(creditors) && creditors.length > 0) {
+            await fillAnlage6(pdfDoc, form, creditors, options);
+            await fillAnlage7(pdfDoc, form, creditors, options);
+        }
+
+        // ------------------- 📄 ANLAGE 7 -------------------
+        // const relatedPersons = client.related_persons || []; // 👈 use another dataset here
+        // if (Array.isArray(relatedPersons) && relatedPersons.length > 0) {
+        //   await fillAnlage7(pdfDoc, form, relatedPersons, options);
+        // }
+
+        return await pdfDoc.save();
+    } catch (err) {
+        console.warn("⚠️ Failed to inject data into Anlage 6 & 7:", err.message);
+        return pdfBytes;
     }
-
-    // ------------------- 📄 ANLAGE 7 -------------------
-    // const relatedPersons = client.related_persons || []; // 👈 use another dataset here
-    // if (Array.isArray(relatedPersons) && relatedPersons.length > 0) {
-    //   await fillAnlage7(pdfDoc, form, relatedPersons, options);
-    // }
-
-    return await pdfDoc.save();
-  } catch (err) {
-    console.warn("⚠️ Failed to inject data into Anlage 6 & 7:", err.message);
-    return pdfBytes;
-  }
 }
 
 //
 // ------------------- 📄 ANLAGE 6 -------------------
 //
 async function fillAnlage6(pdfDoc, form, creditors, options) {
-  const targetIndex = Number(options.anlage6Index ?? 23); // 0-based (page 24)
-  const startFieldNumber = Number(options.anlage6Start ?? 423);
-  const fieldsPerRow = 8;
-  const maxRowsPerPage = 20;
+    const targetIndex = Number(options.anlage6Index ?? 23); // 0-based (page 24)
+    const startFieldNumber = Number(options.anlage6Start ?? 423);
+    const fieldsPerRow = 8;
+    const maxRowsPerPage = 20;
 
-  let pageOffset = 0;
+    let pageOffset = 0;
 
-  for (let i = 0; i < creditors.length; i++) {
-    const rowInPage = i % maxRowsPerPage;
+    for (let i = 0; i < creditors.length; i++) {
+        const rowInPage = i % maxRowsPerPage;
 
-    // Duplicate page if needed
-    if (i > 0 && rowInPage === 0) {
-      const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
-      pdfDoc.addPage(dup);
-      pageOffset++;
+        // Duplicate page if needed
+        if (i > 0 && rowInPage === 0) {
+            const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+            pdfDoc.addPage(dup);
+            pageOffset++;
+        }
+
+        const creditor = creditors[i];
+        const principal = Number(creditor.claim_amount ?? creditor.amount ?? 0);
+
+        for (let f = 0; f < fieldsPerRow; f++) {
+            const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
+            const fieldName = `Textfeld ${fieldNumber}`;
+            let text = "";
+
+            switch (f) {
+                case 0:
+                    text = `${i + 1}.`;
+                    break;
+                case 1:
+                    text = creditor.sender_name || creditor.name || "Unbekannt";
+                    break;
+                case 2:
+                    text = `${principal.toFixed(2)} €`;
+                    break;
+                case 3:
+                case 4:
+                    text = "0";
+                    break;
+                case 5:
+                    text = `${principal.toFixed(2)} €`;
+                    break;
+                case 6:
+                    text = creditor.actual_creditor || "";
+                    break;
+                case 7:
+                    text = `${principal.toFixed(2)} €`;
+                    break;
+            }
+
+            try {
+                form.getTextField(fieldName).setText(text);
+            } catch { }
+        }
     }
-
-    const creditor = creditors[i];
-    const principal = Number(creditor.claim_amount ?? creditor.amount ?? 0);
-
-    for (let f = 0; f < fieldsPerRow; f++) {
-      const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
-      const fieldName = `Textfeld ${fieldNumber}`;
-      let text = "";
-
-      switch (f) {
-        case 0:
-          text = `${i + 1}.`;
-          break;
-        case 1:
-          text = creditor.sender_name || creditor.name || "Unbekannt";
-          break;
-        case 2:
-          text = `${principal.toFixed(2)} €`;
-          break;
-        case 3:
-        case 4:
-          text = "0";
-          break;
-        case 5:
-          text = `${principal.toFixed(2)} €`;
-          break;
-        case 6:
-          text = creditor.actual_creditor || "";
-          break;
-        case 7:
-          text = `${principal.toFixed(2)} €`;
-          break;
-      }
-
-      try {
-        form.getTextField(fieldName).setText(text);
-      } catch {}
-    }
-  }
 }
 
 //
 // ------------------- 📄 ANLAGE 7 -------------------
 //
+// async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
+//     const targetIndex = Number(options.anlage7Index ?? 25); // Page index (0-based)
+//     const startFieldNumber = Number(options.anlage7Start ?? 643); // Starts from Textfeld 643
+//     const fieldGap = 11; // Gap between each creditor block (next creditor starts 7 fields later)
+//     const fieldsPerCreditor = 5; // Number of fields filled per creditor
+//     const maxRowsPerPage = 6; // Number of creditor blocks per page (3 left + 3 right columns)
+
+//     // Dummy France address for now
+//     const dummyStreet = "Rue de Lyon";
+//     const dummyHouseNumber = "18B";
+//     const dummyZip = "75012";
+//     const dummyCity = "Paris";
+
+//     let pageOffset = 0;
+
+//      // Calculate total debt amount (sum of all claim_amounts)
+//     const totalDebtAmount = creditors.reduce((sum, c) => {
+//         const amount = parseFloat(c.claim_amount || c.amount || 0);
+//         return sum + (isNaN(amount) ? 0 : amount);
+//     }, 0);
+
+//     for (let i = 0; i < 9; i++) {
+//         const rowInPage = i % maxRowsPerPage;
+
+//         // ➕ Duplicate page when current page fills up
+//         if (i > 0 && rowInPage === 0) {
+//             const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+//             pdfDoc.addPage(dup);
+//             pageOffset++;
+//         }
+
+//         const baseFieldNumber =
+//             startFieldNumber + (rowInPage + pageOffset * maxRowsPerPage) * fieldGap;
+
+//         const creditor = creditors[i];
+
+//         const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0);
+//         const percentage =
+//         totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : "0.00";
+
+//         // 🧭 Dummy address for France
+//         const dummyStreet = "Rue de Lyon";
+//         const dummyHouseNumber = "18B";
+//         const dummyZip = "75012";
+//         const dummyCity = "Paris";
+
+//         // 🧭 Map main fields (643–647)
+//         const rows = [
+//             `${creditor.name || creditor.sender_name || "Unbekannt"}`, // 643
+//             `${dummyStreet} ${dummyHouseNumber}`.trim(), // 644
+//             `${dummyZip} ${dummyCity}`.trim(), // 645
+//             `${creditor.reference_number || ""}`, // 646
+//             `${creditor.actual_creditor || ""}`, // 647
+//         ];
+
+//         // 🖋 Fill main creditor fields
+//         rows.forEach((text, idx) => {
+//             const fieldName = `Textfeld ${baseFieldNumber + idx}`;
+//             try {
+//                 form.getTextField(fieldName).setText(text);
+//             } catch {
+//                 console.warn(`⚠️ Missing field: ${fieldName}`);
+//             }
+//         });
+
+//         // ⏩ Skip 4 fields (648–651)
+//         const claimFieldIndex = baseFieldNumber + 9; // 643 + 9 = 652
+//         const percentFieldIndex = baseFieldNumber + 10; // 643 + 10 = 653
+
+//         // 🧮 Fill claim amount and percentage
+//         try {
+//             form.getTextField(`Textfeld ${claimFieldIndex}`).setText(
+//                 `${claimAmount}`
+//             );
+//         } catch {
+//             console.warn(`⚠️ Missing field: Textfeld ${claimFieldIndex}`);
+//         }
+
+//         try {
+//             form.getTextField(`Textfeld ${percentFieldIndex}`).setText(
+//                 `${percentage}`
+//             );
+//         } catch {
+//             console.warn(`⚠️ Missing field: Textfeld ${percentFieldIndex}`);
+//         }
+//     }
+
+// }
 async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
-  const targetIndex = Number(options.anlage7Index ?? 25); // Page index (0-based)
-  const startFieldNumber = Number(options.anlage7Start ?? 643); // Starts from Textfeld 643
-  const fieldGap = 7; // Gap between each creditor block (next creditor starts 7 fields later)
-  const fieldsPerCreditor = 5; // Number of fields filled per creditor
-  const maxRowsPerPage = 6; // Number of creditor blocks per page (3 left + 3 right columns)
+    const targetIndex = Number(options.anlage7Index ?? 25); // Page index (0-based)
+    const startFieldNumber = Number(options.anlage7Start ?? 643); // Starts from Textfeld 643
+    const maxRowsPerPage = 6; // Number of creditor blocks per page (3 left + 3 right columns)
 
-  // Dummy France address for now
-  const dummyStreet = "Rue de Lyon";
-  const dummyHouseNumber = "18B";
-  const dummyZip = "75012";
-  const dummyCity = "Paris";
+    // Dummy France address for now
+    // const dummyStreet = "Rue de Lyon";
+    // const dummyHouseNumber = "18B";
+    // const dummyZip = "75012";
+    // const dummyCity = "Paris";
 
-  let pageOffset = 0;
+    let pageOffset = 0;
+    let currentFieldNumber = startFieldNumber; // 👈 Track actual field number manually
 
-  for (let i = 0; i < creditors.length; i++) {
-    const rowInPage = i % maxRowsPerPage;
+    // Calculate total debt amount (sum of all claim_amounts)
+    const totalDebtAmount = creditors.reduce((sum, c) => {
+        const amount = parseFloat(c.claim_amount || c.amount || 0);
+        return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
 
-    // ➕ Duplicate page when the current page fills up
-    if (i > 0 && rowInPage === 0) {
-      const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
-      pdfDoc.addPage(dup);
-      pageOffset++;
+    // 🔁 Loop from 1 to 9 (inclusive)
+    for (let i = 1; i <= 9; i++) {
+        const rowInPage = (i - 1) % maxRowsPerPage;
+
+        // ➕ Duplicate page when current page fills up
+        if (i > 1 && rowInPage === 0) {
+            const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
+            pdfDoc.addPage(dup);
+            pageOffset++;
+        }
+
+        const creditor = creditors[i - 1];
+        if (!creditor) continue;
+
+        let street = creditor.strasse || '';
+        let houseNumber = creditor.hausnummer || '';
+        let zipCode = creditor.plz || '';
+        let city = creditor.ort || '';
+
+        const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0);
+        const percentage =
+            totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : "0.00";
+
+        // 🧭 Prepare data rows
+        const rows = [
+            `${creditor.name || creditor.sender_name || "Unbekannt"}`,
+            `${street} ${houseNumber}`.trim(),
+            `${zipCode} ${city}`.trim(),
+            `${creditor.reference_number || ""}`,
+            `${creditor.actual_creditor || ""}`,
+        ];
+
+        // 🧾 Add iteration number at start from i >= 4
+        const finalRows = i >= 4 ? [`${i}.`, ...rows] : rows;
+
+        // 🖋 Fill fields
+        finalRows.forEach((text, idx) => {
+            const fieldName = `Textfeld ${currentFieldNumber + idx}`;
+            try {
+                form.getTextField(fieldName).setText(text);
+            } catch {
+                console.warn(`⚠️ Missing field: ${fieldName}`);
+            }
+        });
+
+        // Calculate indexes for claim and percentage fields dynamically
+        const claimFieldIndex = currentFieldNumber + finalRows.length + 4; // skip 4 fields (48–51)
+        const percentFieldIndex = claimFieldIndex + 1;
+
+        try {
+            form.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`);
+        } catch {
+            console.warn(`⚠️ Missing field: Textfeld ${claimFieldIndex}`);
+        }
+
+        try {
+            form.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`);
+        } catch {
+            console.warn(`⚠️ Missing field: Textfeld ${percentFieldIndex}`);
+        }
+
+        // 🧮 Increment field number for next creditor
+        const fieldGap = i >= 4 ? 12 : 11;
+        currentFieldNumber += fieldGap;
     }
-
-    const baseFieldNumber =
-      startFieldNumber + (rowInPage + pageOffset * maxRowsPerPage) * fieldGap;
-
-    const creditor = creditors[i];
-
-    // 🧭 Define mapping (matches PDF structure)
-    const rows = [
-      `${creditor.name || creditor.sender_name || "Unbekannt"}`, // 643, Name / Firma
-      `${dummyStreet} ${dummyHouseNumber}`.trim(), // 644, Straße / Hausnummer
-      `${dummyZip} ${dummyCity}`.trim(), // 645, Postleitzahl / Ort
-      `${creditor.reference || ""}`, // 646, Geschäftszeichen
-      `${creditor.representative || ""}`, // 647, gesetzlich vertreten durch
-      // 648 = Gläubigers in EUR (calculated separately)
-    ];
-
-    // 🖋 Fill creditor fields
-    rows.forEach((text, idx) => {
-      const fieldName = `Textfeld ${baseFieldNumber + idx}`;
-      try {
-        form.getTextField(fieldName).setText(text);
-      } catch {
-        console.warn(`⚠️ Missing field: ${fieldName}`);
-      }
-    });
-
-    // 💶 Fill “Gläubigers in EUR” value (field 648 for first creditor, then +7 per next)
-    const claimFieldName = `Textfeld ${baseFieldNumber + 5}`;
-    const claimValue = `${Number(creditor.claim_amount || creditor.amount || 0).toFixed(2)} €`;
-    try {
-      form.getTextField(claimFieldName).setText(claimValue);
-    } catch {
-      console.warn(`⚠️ Missing claim field: ${claimFieldName}`);
-    }
-  }
 }
 
 
@@ -481,8 +596,8 @@ async function checkPrerequisites(client) {
 
     // Check financial data - accept if completed, client_form_filled, OR calculated_settlement_plan exists
     const hasFinancialData = client.financial_data?.completed ||
-                             client.financial_data?.client_form_filled ||
-                             client.calculated_settlement_plan;
+        client.financial_data?.client_form_filled ||
+        client.calculated_settlement_plan;
     if (!hasFinancialData) {
         errors.push('Financial information form not completed');
     }
@@ -538,14 +653,14 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
 
         // 2. Generate the main Insolvenzantrag PDF with checkboxes
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
-        
+
         // Fill form fields and apply checkboxes
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
 
         // 3. For now, we'll only generate the main Insolvenzantrag form
         // Attachment generation will be added later
         console.log('📝 Generating main Insolvenzantrag form only (attachments disabled for testing)');
-        
+
         // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
         const mergedPdfBytes = await injectCreditorsIntoAnlage6and7(insolvenzantragBytes, client, req.query);
 
@@ -612,7 +727,7 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
 
         // Check if client has settlement data
         if (!client.debt_settlement_plan && !client.final_creditor_list) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'Settlement data not available',
                 details: ['Client must have debt settlement plan and creditor list']
             });
@@ -620,14 +735,14 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
 
         // Determine if this is a Nullplan or regular plan
         const pfaendbarAmount = client.calculated_settlement_plan?.garnishable_amount ||
-                               client.debt_settlement_plan?.pfaendbar_amount ||
-                               client.financial_data?.garnishable_amount ||
-                               client.financial_data?.pfaendbar_amount || 0;
+            client.debt_settlement_plan?.pfaendbar_amount ||
+            client.financial_data?.garnishable_amount ||
+            client.financial_data?.pfaendbar_amount || 0;
 
         // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
         const isNullplan = pfaendbarAmount < 1 ||
-                          client.financial_data?.recommended_plan_type === 'nullplan' ||
-                          client.calculated_settlement_plan?.plan_type === 'nullplan';
+            client.financial_data?.recommended_plan_type === 'nullplan' ||
+            client.calculated_settlement_plan?.plan_type === 'nullplan';
 
         const planType = isNullplan ? 'nullplan' : 'quotenplan';
 
@@ -664,15 +779,15 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
         const packageResult = await packageGenerator.generateCompleteCreditorPackage(client, settlementData);
 
         if (!packageResult.success) {
-            return res.status(500).json({ 
-                error: 'Failed to generate creditor package', 
-                details: packageResult.error 
+            return res.status(500).json({
+                error: 'Failed to generate creditor package',
+                details: packageResult.error
             });
         }
 
         // Send the merged PDF
         const pdfBuffer = await require('fs').promises.readFile(packageResult.path);
-        
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${packageResult.filename}"`);
         res.send(pdfBuffer);
@@ -719,7 +834,7 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
         const originalPdfPath = path.join(__dirname, '../pdf-form-test/original_form.pdf');
         const insolvenzantragBytes = await fillInsolvenzantragWithCheckboxes(formData, originalPdfPath);
         // Inject creditor table into Anlage 6 (page 24) with optional positioning overrides from query params
-        let mergedPdfBytes = await injectCreditorsIntoAnlage6(insolvenzantragBytes, client, req.query);
+        let mergedPdfBytes = await injectCreditorsIntoAnlage6and7(insolvenzantragBytes, client, req.query);
 
         // 2. Generate creditor document package
         let creditorPackageBytes = null;
@@ -727,14 +842,14 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
             try {
                 // Determine if this is a Nullplan or regular plan
                 const pfaendbarAmount = client.calculated_settlement_plan?.garnishable_amount ||
-                                       client.debt_settlement_plan?.pfaendbar_amount ||
-                                       client.financial_data?.garnishable_amount ||
-                                       client.financial_data?.pfaendbar_amount || 0;
+                    client.debt_settlement_plan?.pfaendbar_amount ||
+                    client.financial_data?.garnishable_amount ||
+                    client.financial_data?.pfaendbar_amount || 0;
 
                 // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
                 const isNullplan = pfaendbarAmount < 1 ||
-                                  client.financial_data?.recommended_plan_type === 'nullplan' ||
-                                  client.calculated_settlement_plan?.plan_type === 'nullplan';
+                    client.financial_data?.recommended_plan_type === 'nullplan' ||
+                    client.calculated_settlement_plan?.plan_type === 'nullplan';
 
                 const planType = isNullplan ? 'nullplan' : 'quotenplan';
 
@@ -768,7 +883,7 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
 
                 const packageGenerator = new CreditorDocumentPackageGenerator();
                 const packageResult = await packageGenerator.generateCompleteCreditorPackage(client, settlementData);
-                
+
                 if (packageResult.success) {
                     creditorPackageBytes = await require('fs').promises.readFile(packageResult.path);
                     console.log('✅ Creditor document package included in complete Insolvenzantrag');
@@ -780,19 +895,19 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
 
         // 3. Merge all documents
         const finalPdf = await PDFDocument.create();
-        
+
         // Add main Insolvenzantrag
         const mainDoc = await PDFDocument.load(mergedPdfBytes);
         const mainPages = await finalPdf.copyPages(mainDoc, mainDoc.getPageIndices());
         mainPages.forEach(page => finalPdf.addPage(page));
-        
+
         // Add creditor document package if available
         if (creditorPackageBytes) {
             const creditorDoc = await PDFDocument.load(creditorPackageBytes);
             const creditorPages = await finalPdf.copyPages(creditorDoc, creditorDoc.getPageIndices());
             creditorPages.forEach(page => finalPdf.addPage(page));
         }
-        
+
         const finalPdfBytes = await finalPdf.save();
 
         // Send the complete PDF
