@@ -58,8 +58,15 @@ class NewWordTemplateProcessor {
             // Calculate key financial values
             const totalDebt = settlementData?.total_debt || 0;
             const creditorCount = settlementData?.creditor_payments?.length || 0;
-            const pfaendbarAmount = this.calculatePfaendbarAmount(clientData);
-            const monthlyPayment = pfaendbarAmount;
+            
+            // Get the ACTUAL monthly payment from settlementData (calculated in Schuldenbereinigungsplan step)
+            const monthlyPayment = settlementData?.monthly_payment || 
+                                 settlementData?.garnishable_amount || 
+                                 clientData?.debt_settlement_plan?.pfaendbar_amount ||
+                                 clientData?.financial_data?.pfaendbar_amount ||
+                                 0;
+            
+            console.log('💰 Monthly payment from settlement plan:', monthlyPayment);
             
             // Calculate dates
             const deadlineDate = new Date();
@@ -515,10 +522,10 @@ class NewWordTemplateProcessor {
                 "Gessamtsumme Verschuldung": this.formatCurrency(totalDebt),
                 "Tilgungsqoute": creditorData ? (creditorData.debt_amount / totalDebt * 100).toFixed(2).replace('.', ',') + "%" : "0,00%",
                 "Gläubigeranzahl": creditorCount.toString(),
-                "Summe für die Tilgung des Gläubigers monatlich": creditorData ? this.formatCurrency((monthlyPayment * (creditorData.debt_amount / totalDebt)) * 36) : "0,00",
+                "Summe für die Tilgung des Gläubigers monatlich": creditorData && totalDebt > 0 ? this.formatCurrency(monthlyPayment * (creditorData.debt_amount / totalDebt)) : "0,00",
                 
-                // Income related
-                "pfändbares Einkommen": this.formatCurrency(pfaendbarAmount),
+                // Income related - use ACTUAL monthly payment from settlement plan
+                "pfändbares Einkommen": this.formatCurrency(monthlyPayment),
                 "monatlicher pfändbarer Betrag": this.formatCurrency(monthlyPayment),
                 
                 // Dates
@@ -647,9 +654,16 @@ class NewWordTemplateProcessor {
         
         // Calculate key financial values
         const totalDebt = settlementData?.total_debt || 0;
-        const pfaendbarAmount = this.calculatePfaendbarAmount(clientData);
-        const monthlyPayment = pfaendbarAmount;
         const creditorCount = settlementData?.creditor_payments?.length || 0;
+        
+        // Get the ACTUAL monthly payment from settlementData (calculated in Schuldenbereinigungsplan step)
+        const monthlyPayment = settlementData?.monthly_payment || 
+                             settlementData?.garnishable_amount || 
+                             clientData?.debt_settlement_plan?.pfaendbar_amount ||
+                             clientData?.financial_data?.pfaendbar_amount ||
+                             0;
+        
+        console.log('💰 Monthly payment from settlement plan:', monthlyPayment);
 
         // Calculate payment start date (3 months from now, first of month)
         const paymentStartDate = new Date();
@@ -671,19 +685,18 @@ class NewWordTemplateProcessor {
         replacements["Gessamtsumme Verschuldung"] = this.formatCurrency(totalDebt);
         replacements["Heutiges Datum"] = this.formatDate(new Date());
         replacements["Aktenzeichen des Mandanten"] = clientReference;
-        replacements["pfändbares Einkommen"] = this.formatCurrency(pfaendbarAmount);
+        replacements["pfändbares Einkommen"] = this.formatCurrency(monthlyPayment);
         replacements["monatlicher pfändbarer Betrag"] = this.formatCurrency(monthlyPayment);
         
         // Creditor-specific variables (if creditor data provided)
         if (creditorData) {
             const creditorDebt = creditorData?.debt_amount || 0;
             const tilgungsquote = totalDebt > 0 ? (creditorDebt / totalDebt * 100) : 0;
-            const monthlyCreditororPayment = monthlyPayment * (creditorDebt / totalDebt);
-            const totalCreditorPayment = monthlyCreditororPayment * 36; // 3 years
+            const monthlyCreditorPayment = totalDebt > 0 ? monthlyPayment * (creditorDebt / totalDebt) : 0;
 
             replacements["Forderungssumme"] = this.formatCurrency(creditorDebt);
-            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(totalCreditorPayment);
-            replacements["Tilgungsqoute"] = tilgungsquote.toFixed(2);
+            replacements["Summe für die Tilgung des Gläubigers monatlich"] = this.formatCurrency(monthlyCreditorPayment);
+            replacements["Tilgungsqoute"] = tilgungsquote.toFixed(2).replace('.', ',');
             replacements["Nummer im Schuldenbereinigungsplan"] = this.getCreditorNumber(creditorData, settlementData);
         } else {
             // Default values if no specific creditor
