@@ -611,7 +611,8 @@ class NewWordTemplateProcessor {
             if (creditorData && creditorData.name) {
                 const creditorName = creditorData.name.replace(/[^a-zA-Z0-9\-_.]/g, '_');
                 const clientRef = clientData?.aktenzeichen || clientData?.reference;
-                filename = `Pfaendbares-Einkommen_${clientRef}_${creditorName}_${Date.now()}.docx`;
+                const creditorRef = creditorData.aktenzeichen ? `_${creditorData.aktenzeichen.replace(/[^a-zA-Z0-9\-_.]/g, '_')}` : '';
+                filename = `Pfaendbares-Einkommen_${clientRef}_${creditorName}${creditorRef}_${Date.now()}.docx`;
             } else {
                 filename = `Pfaendbares-Einkommen_${clientData?.aktenzeichen || clientData?.reference}_${Date.now()}.docx`;
             }
