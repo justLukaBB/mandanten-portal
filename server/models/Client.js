@@ -182,7 +182,7 @@ const clientSchema = new mongoose.Schema({
     ticket_id: String,
     ticket_type: {
       type: String,
-      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact', 'payment_review', 'main_ticket']
+      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact', 'payment_review', 'main_ticket', 'creditor_review']
     },
     ticket_scenario: String, // For tracking specific scenarios like document_request, manual_review, etc.
     status: String,
