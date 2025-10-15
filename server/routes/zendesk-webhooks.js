@@ -329,118 +329,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
       }
     });
 
-    // ANALYZE CURRENT STATE AND DETERMINE SCENARIO (same logic as payment-confirmed webhook)
-    const documents = client.documents || [];
-    const creditors = client.final_creditor_list || [];
-    const completedDocs = documents.filter(d => d.processing_status === 'completed');
-    const creditorDocs = documents.filter(d => d.is_creditor_document === true);
-    
-    const state = {
-      hasDocuments: documents.length > 0,
-      allProcessed: documents.length > 0 && completedDocs.length === documents.length,
-      hasCreditors: creditors.length > 0,
-      needsManualReview: creditors.some(c => (c.ai_confidence || c.confidence || 0) < 0.8)
-    };
-
-    // DETERMINE PAYMENT TICKET TYPE BASED ON SCENARIO
-    let ticketType, nextAction;
-
-    if (!state.hasDocuments) {
-      // No documents uploaded yet - mark for reminder service to handle
-      ticketType = 'document_request';
-      nextAction = 'wait_for_document_upload';
-      client.payment_ticket_type = 'document_request';
-      client.document_request_sent_at = new Date();
-      
-      // Create ticket to track but DO NOT send immediate reminder for user-payment-confirmed
-      // The user-payment-confirmed should use DocumentReminderService, not immediate reminders
-      console.log(`📋 Creating initial ticket for payment-first client ${client.aktenzeichen}...`);
-      
-      if (!client.zendesk_ticket_id) {
-        const ticketResult = await zendeskService.createTicket({
-          subject: `Payment confirmed - Document upload needed: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-          content: `Client has paid but needs to upload documents. DocumentReminderService will handle automated reminders after 2 days.`,
-          requesterEmail: client.email,
-          tags: ['payment-confirmed', 'document-upload-needed', 'automated-reminders'],
-          priority: 'normal',
-          type: 'task'
-        });
-        
-        if (ticketResult && ticketResult.success && ticketResult.ticket_id) {
-          client.zendesk_ticket_id = ticketResult.ticket_id;
-          client.zendesk_tickets = client.zendesk_tickets || [];
-          client.zendesk_tickets.push({
-            ticket_id: ticketResult.ticket_id,
-            ticket_type: 'payment_first_workflow',
-            ticket_scenario: 'document_upload_reminder',
-            status: 'open',
-            created_at: new Date()
-          });
-          
-          console.log(`✅ Created initial ticket ${ticketResult.ticket_id} for ${client.aktenzeichen}`);
-        }
-      }
-      
-      // Schedule for automated reminders - DocumentReminderService will handle
-      console.log(`🔄 Scheduling automated reminders for ${client.aktenzeichen} via DocumentReminderService...`);
-      
-      // Mark for automatic reminders - the DocumentReminderService will pick this up
-      client.payment_ticket_type = 'document_request';
-      client.document_request_sent_at = new Date();
-      
-      ticketType = 'automated_reminder_scheduled';
-      nextAction = 'automated_reminder_system_will_handle';
-      
-      console.log(`✅ Client ${client.aktenzeichen} marked for automated reminder system - no immediate reminder sent`);
-      
-      client.document_request_sent_at = new Date();
-      
-    } else if (!state.allProcessed) {
-      // Documents uploaded but still processing
-      ticketType = 'processing_wait';
-      nextAction = 'wait_for_processing_complete';
-      client.payment_ticket_type = 'processing_wait';
-      
-    } else if (!state.hasCreditors) {
-      // Documents processed but no creditors found
-      ticketType = 'no_creditors_found';
-      nextAction = 'manual_document_check';
-      client.payment_ticket_type = 'no_creditors_found';
-      
-    } else {
-      // Documents processed, creditors found - ready for review
-      if (state.needsManualReview) {
-        ticketType = 'manual_review';
-        nextAction = 'start_manual_review';
-        client.payment_ticket_type = 'manual_review';
-      } else {
-        ticketType = 'auto_approved';
-        nextAction = 'send_confirmation_to_client';
-        client.payment_ticket_type = 'auto_approved';
-      }
-    }
-
-    // Update client with payment processing info
-    client.payment_processed_at = new Date();
-    
-    // Save client with error handling for document validation issues
-    try {
-      await client.save({ validateModifiedOnly: true });
-    } catch (saveError) {
-      console.error('⚠️ Error saving client with payment_processed_at, using direct update:', saveError.message);
-      
-      // Use direct update to bypass validation
-      await Client.findOneAndUpdate(
-        { _id: client._id },
-        {
-          $set: {
-            payment_processed_at: new Date(),
-            payment_ticket_type: client.payment_ticket_type
-          }
-        },
-        { runValidators: false }
-      );
-    }
+    // Skip to the main logic section below
     
     // Check if both conditions (payment + documents) are met for 7-day review
     const conditionCheckResult = await conditionCheckService.handlePaymentConfirmed(client.id);
@@ -508,7 +397,7 @@ router.post('/user-payment-confirmed', parseZendeskPayload, rateLimits.general, 
 // Triggered when agent checks "erste_rate_bezahlt" checkbox on a ticket
 router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async (req, res) => {
   try {
-    console.log('💰 Zendesk Webhook: Payment-Confirmed received');
+    console.log('💰 Zendesk Webhook: Payment-Confirmed received....');
     console.log('Request Headers:', req.headers);
     console.log('Request Body:', JSON.stringify(req.body, null, 2));
     console.log('Body Type:', typeof req.body);
@@ -536,7 +425,6 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
         requester_name
       });
     } else {
-      // Fallback for direct format (backward compatibility)
       ({
         aktenzeichen,
         zendesk_ticket_id,
@@ -588,6 +476,75 @@ router.post('/payment-confirmed', parseZendeskPayload, rateLimits.general, async
     client.current_status = 'payment_confirmed';
     client.payment_processed_at = new Date();
     client.updated_at = new Date();
+
+
+
+    // === NEW: create main ticket for payment-first clients ===
+if (zendeskService.isConfigured() && (!client.documents || client.documents.length === 0)) {
+  try {
+    const subject = `💰 Zahlung bestätigt – Dokumente benötigt (${client.firstName} ${client.lastName}, ${client.aktenzeichen})`;
+
+    const body = `
+    👋 Hallo ${client.firstName} ${client.lastName},
+    
+    vielen Dank für Ihre Zahlung! 💰  
+    Ihre **erste Rate wurde erfolgreich bestätigt.**
+    
+    Damit wir mit der Bearbeitung Ihres Falls fortfahren können, benötigen wir bitte noch Ihre **Gläubigerdokumente**.
+    
+    📎 **Dokumente hochladen:**  
+    ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}
+    
+    📂 **Benötigte Unterlagen:**  
+    • 📄 Mahnungen oder Zahlungsaufforderungen  
+    • 🧾 Inkasso-Schreiben  
+    • ⚖️ Gerichtliche Beschlüsse oder Vollstreckungsbescheide  
+    • 📬 Sonstige Schreiben Ihrer Gläubiger
+    
+    🧠 **Was passiert danach?**  
+    Nach dem Upload werden Ihre Dokumente automatisch analysiert.  
+    Sie erhalten anschließend **innerhalb weniger Tage** eine Rückmeldung zum weiteren Vorgehen.
+    
+    📞 **Bei Fragen stehen wir Ihnen selbstverständlich gerne zur Verfügung.**
+    
+    Mit freundlichen Grüßen  
+    👨‍⚖️ Ihr Kanzlei-Team
+    `;
+    
+
+    const ticket = await zendeskService.createTicket({
+      subject,
+      content: body,
+      requesterEmail: client.email,
+      tags: ['payment-first', 'payment-confirmed', 'awaiting-documents', 'main-ticket'],
+      priority: 'normal',
+      type: 'task'
+    });
+
+    if (ticket.success) {
+      console.log(`✅ Main payment ticket created for ${client.aktenzeichen}: ${ticket.ticket_id}`);
+      client.zendesk_tickets = client.zendesk_tickets || [];
+      client.zendesk_tickets.push({
+        ticket_id: ticket.ticket_id,
+        ticket_type: 'main_payment_ticket',
+        status: 'active',
+        created_at: new Date()
+      });
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'zendesk_main_ticket_created',
+        changed_by: 'system',
+        metadata: { zendesk_ticket_id: ticket.ticket_id, scenario: 'payment-first' }
+      });
+      await client.save({ validateModifiedOnly: true });
+    } else {
+      console.error('❌ Failed to create payment-first ticket:', ticket.error);
+    }
+  } catch (err) {
+    console.error('❌ Exception while creating payment-first ticket:', err);
+  }
+}
+
     
     // MANUAL CREDITOR EXTRACTION: Go through all documents and extract creditors
     console.log(`🔍 MANUAL CREDITOR EXTRACTION: Checking all documents for client ${client.aktenzeichen}`);
@@ -1117,6 +1074,7 @@ Thomas Scuric`;
   }
 });
 
+
 // Zendesk Webhook: Start Manual Review (Phase 2)
 // Triggered when agent clicks "Manuelle Prüfung starten" button
 router.post('/start-manual-review', rateLimits.general, async (req, res) => {
@@ -1271,6 +1229,7 @@ ${finalCreditorsList}
 router.post('/processing-complete', rateLimits.general, async (req, res) => {
   try {
     console.log('🔄 Zendesk Webhook: Processing-Complete received', req.body);
+    console.log('🎯 PAYMENT-FIRST FLOW: Processing complete webhook triggered for payment-first client');
     
     const { client_id, document_id } = req.body;
 
@@ -1280,27 +1239,30 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
-    // Use safeClientUpdate to prevent race conditions with settlement field updates
-    const { safeClientUpdate } = require('../server');
+    // Find client directly
+    const client = await Client.findOne({ id: client_id });
     
-    let client;
-    try {
-      client = await safeClientUpdate(client_id, async (currentClient) => {
-        // All the processing logic will be moved inside this function
-        return currentClient; // We'll modify this after moving the logic
+    if (!client) {
+      console.log('❌ PAYMENT-FIRST FLOW: Client not found for processing-complete webhook');
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: client_id
       });
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        return res.status(404).json({
-          error: 'Client not found',
-          client_id: client_id
-        });
-      }
-      throw error;
     }
 
+    console.log(`📋 PAYMENT-FIRST FLOW: Found client ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+    console.log(`💰 Payment status: first_payment_received=${client.first_payment_received}, payment_ticket_type=${client.payment_ticket_type}`);
+
     // Check if this client paid first rate and is waiting for processing
-    if (!client.first_payment_received || client.payment_ticket_type !== 'processing_wait') {
+    // For payment-first clients, we need to handle them even if payment_ticket_type is not 'processing_wait'
+    const isPaymentFirstClient = client.first_payment_received && 
+                                 (client.payment_ticket_type === 'processing_wait' || 
+                                  client.payment_ticket_type === 'document_reminder_side_conversation' ||
+                                  client.payment_ticket_type === 'automated_reminder_scheduled' ||
+                                  client.payment_ticket_type === 'document_request' ||
+                                  !client.payment_ticket_type);
+    
+    if (!isPaymentFirstClient) {
       return res.json({
         success: true,
         message: 'Processing complete but client not in waiting state',
@@ -1390,109 +1352,150 @@ router.post('/processing-complete', rateLimits.general, async (req, res) => {
       });
     }
 
-    await client.save();
+ // ✅ Fix missing document fields before saving (prevent validation crash)
+(client.documents || []).forEach((doc, index) => {
+  if (!doc.id) {
+    doc.id = doc._id?.toString() || uuidv4();
+    console.log(`⚙️ Added missing id for document ${index + 1}: ${doc.id}`);
+  }
+  if (!doc.name) {
+    doc.name = doc.filename || `Document_${index + 1}_${doc.id.substring(0, 6)}`;
+    console.log(`⚙️ Added missing name for document ${index + 1}: ${doc.name}`);
+  }
+});
+client.markModified('documents');
+
+// 🩹 Safe save wrapper to bypass Mongoose validation if needed
+try {
+  await client.save({ validateModifiedOnly: true });
+  console.log(`✅ Processing complete webhook saved client ${client.aktenzeichen} with preserved settlement fields`);
+} catch (err) {
+  console.warn('⚠️ Validation failed on client.save(), retrying without validators...');
+  await Client.findOneAndUpdate(
+    { _id: client._id },
+    { $set: { documents: client.documents } },
+    { runValidators: false }
+  );
+  console.log(`✅ Fallback save succeeded for client ${client.aktenzeichen}`);
+}
+
     
     console.log(`✅ Processing complete webhook saved client ${client.aktenzeichen} with preserved settlement fields`);
 
-    // ADD PROCESSING COMPLETE COMMENT TO ORIGINAL TICKET
-    let zendeskComment = null;
-    let commentError = null;
+    // CREATE NEW SEPARATE TICKET FOR CREDITOR REVIEW (like existing flow)
+    let zendeskTicket = null;
+    let ticketCreationError = null;
 
-    // Try to find the original ticket ID from client's zendesk_tickets
-    const originalTicket = client.zendesk_tickets?.find(t => t.ticket_type === 'main_ticket' || t.status === 'active');
-    const originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id;
-
-    if (zendeskService.isConfigured() && originalTicketId) {
+    if (zendeskService.isConfigured()) {
       try {
-        console.log(`💬 Adding processing complete comment to ticket ${originalTicketId}...`);
+        console.log(`🎫 PAYMENT-FIRST FLOW: Creating NEW separate Zendesk ticket for creditor review...`);
+        console.log(`📝 PAYMENT-FIRST FLOW: Ticket type: ${ticketType}, Subject: ${generateTicketSubject(client, ticketType)}`);
         
-        // Generate processing complete comment
-        const processingCompleteComment = `**🔄 PROCESSING COMPLETE - ANALYSIS READY**\n\n👤 **Client:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})\n⏰ **Completed:** ${new Date().toLocaleString('de-DE')}\n\n${generateInternalComment(client, ticketType, documents, creditors, state)}`;
-        const ticketStatus = getTicketStatusForScenario(ticketType);
-        const ticketTags = ['processing-complete', `scenario-${ticketType}`, ...tags];
-        
-        zendeskComment = await zendeskService.addInternalComment(originalTicketId, {
-          content: processingCompleteComment,
-          // status: ticketStatus, // REMOVED: Don't change the original ticket status
-          tags: ticketTags
+        zendeskTicket = await zendeskService.createTicket({
+          subject: generateTicketSubject(client, ticketType),
+          content: ticketContent,
+          requesterEmail: client.email,
+          tags: tags,
+          priority: ticketType === 'manual_review' ? 'normal' : 'low',
+          type: 'task'
         });
 
-        if (zendeskComment.success) {
-          console.log(`✅ Processing complete comment added to ticket ${originalTicketId}`);
+        if (zendeskTicket.success) {
+          console.log(`✅ PAYMENT-FIRST FLOW: NEW ticket created successfully: ${zendeskTicket.ticket_id}`);
           
-          // Update client ticket tracking
-          if (originalTicket) {
-            originalTicket.last_comment_at = new Date();
-            originalTicket.processing_complete_scenario = ticketType;
+          // Store the created ticket ID for reference
+          client.zendesk_tickets = client.zendesk_tickets || [];
+          client.zendesk_tickets.push({
+            ticket_id: zendeskTicket.ticket_id,
+            ticket_type: 'creditor_review',
+            ticket_scenario: ticketType,
+            status: 'active',
+            created_at: new Date()
+          });
+          
+          // Add to status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'creditor_review_ticket_created',
+            changed_by: 'system',
+            metadata: {
+              zendesk_ticket_id: zendeskTicket.ticket_id,
+              ticket_scenario: ticketType,
+              ticket_subject: generateTicketSubject(client, ticketType),
+              payment_first_flow: true
+            }
+          });
+
+          // Save client with new ticket info
+          try {
+            await client.save({ validateModifiedOnly: true });
+            console.log(`✅ PAYMENT-FIRST FLOW: Client saved with new ticket ${zendeskTicket.ticket_id}`);
+          } catch (saveError) {
+            console.error('⚠️ Error saving client with new ticket, using direct update:', saveError.message);
+            await Client.findOneAndUpdate(
+              { _id: client._id },
+              {
+                $push: {
+                  zendesk_tickets: {
+                    ticket_id: zendeskTicket.ticket_id,
+                    ticket_type: 'creditor_review',
+                    ticket_scenario: ticketType,
+                    status: 'active',
+                    created_at: new Date()
+                  },
+                  status_history: {
+                    id: uuidv4(),
+                    status: 'creditor_review_ticket_created',
+                    changed_by: 'system',
+                    metadata: {
+                      zendesk_ticket_id: zendeskTicket.ticket_id,
+                      ticket_scenario: ticketType,
+                      ticket_subject: generateTicketSubject(client, ticketType),
+                      payment_first_flow: true
+                    }
+                  }
+                }
+              },
+              { runValidators: false }
+            );
           }
           
-          await client.save();
-          
-          // UPDATE STATUS for auto_approved scenarios but DO NOT trigger creditor contact yet
-          if (ticketType === 'auto_approved' && creditors.length > 0) {
-            // Mark as auto-approved and waiting for BOTH confirmations
-            client.current_status = 'awaiting_client_confirmation';
-            client.admin_approved = true; // Auto-approved by system due to high confidence
-            client.admin_approved_at = new Date();
-            client.admin_approved_by = 'System (Auto-Approved)';
-            client.updated_at = new Date();
-            
-            client.status_history.push({
-              id: uuidv4(),
-              status: 'awaiting_client_confirmation',
-              changed_by: 'system',
-              metadata: {
-                auto_approved: true,
-                reason: 'High AI confidence - no manual review needed',
-                total_creditors: creditors.length,
-                requires_client_confirmation: true
-              }
-            });
-            
-            await client.save();
-            
-            console.log(`✅ Auto-approved ${client.aktenzeichen} - Now waiting for client confirmation before creditor contact`);
-          }
+          console.log(`🎯 PAYMENT-FIRST FLOW: SUCCESS - NEW separate creditor review ticket created: ${zendeskTicket.ticket_id}`);
           
         } else {
-          commentError = zendeskComment.error;
-          console.error('❌ Failed to add processing complete comment:', zendeskComment.error);
+          ticketCreationError = zendeskTicket.error;
+          console.error('❌ PAYMENT-FIRST FLOW: Failed to create new ticket:', zendeskTicket.error);
         }
       } catch (error) {
-        commentError = error.message;
-        console.error('❌ Exception adding processing complete comment:', error);
+        ticketCreationError = error.message;
+        console.error('❌ PAYMENT-FIRST FLOW: Exception creating new ticket:', error);
       }
     } else {
-      if (!zendeskService.isConfigured()) {
-        console.log('⚠️ Zendesk service not configured - skipping comment');
-        commentError = 'Zendesk API not configured';
-      } else {
-        console.log('⚠️ No original ticket ID found - cannot add comment');
-        commentError = 'No original ticket ID available';
-      }
+      console.log('⚠️ PAYMENT-FIRST FLOW: Zendesk service not configured - skipping new ticket creation');
+      ticketCreationError = 'Zendesk API not configured';
     }
 
     console.log(`✅ Processing complete for ${client.aktenzeichen}. Ticket type: ${ticketType}`);
 
     res.json({
       success: true,
-      message: 'Processing complete - Review ticket ready',
+      message: 'Processing complete - NEW creditor review ticket created',
       scenario: ticketType,
       client_status: client.current_status,
       ticket_data: {
-        subject: `UPDATE: ${generateTicketSubject(client, ticketType)}`,
+        subject: generateTicketSubject(client, ticketType),
         content: ticketContent,
         tags: tags,
         priority: ticketType === 'manual_review' ? 'normal' : 'low'
       },
-      zendesk_comment: zendeskComment ? {
-        added: zendeskComment.success,
-        ticket_id: originalTicketId,
+      zendesk_ticket: zendeskTicket ? {
+        created: zendeskTicket.success,
+        ticket_id: zendeskTicket.ticket_id,
         scenario: ticketType,
-        error: commentError
+        error: ticketCreationError
       } : {
-        added: false,
-        error: commentError
+        created: false,
+        error: ticketCreationError
       },
       review_dashboard_url: (ticketType === 'manual_review') 
         ? `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}`
