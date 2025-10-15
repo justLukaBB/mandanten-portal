@@ -1584,15 +1584,25 @@ class DocumentGenerator {
                 allCreditors = [];
             }
             
-            // Deduplicate creditors by name to avoid generating multiple documents for the same creditor
-            const creditorNames = new Set();
+            // Deduplicate creditors by name + reference number to handle same creditor with different claims
+            const creditorKeys = new Set();
             const creditors = allCreditors.filter(creditor => {
                 const name = creditor.creditor_name || creditor.name;
-                if (creditorNames.has(name)) {
-                    console.log(`⚠️ Skipping duplicate creditor: ${name}`);
+                const reference = creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || 'NO_REF';
+                const uniqueKey = `${name}__${reference}`; // Combine name and reference
+                
+                if (creditorKeys.has(uniqueKey)) {
+                    console.log(`⚠️ Skipping duplicate creditor entry: ${name} (${reference})`);
                     return false;
                 }
-                creditorNames.add(name);
+                creditorKeys.add(uniqueKey);
+                
+                // Log when same creditor has different references
+                const existingWithSameName = Array.from(creditorKeys).filter(key => key.startsWith(name + '__'));
+                if (existingWithSameName.length > 1) {
+                    console.log(`📋 Note: Creditor "${name}" has multiple claims with different references`);
+                }
+                
                 return true;
             });
             
