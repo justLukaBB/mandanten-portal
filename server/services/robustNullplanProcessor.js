@@ -197,7 +197,17 @@ class RobustNullplanProcessor {
             // Create creditor-specific filename using correct field priority
             const creditorNameForFile = (creditor.sender_name || creditor.name || creditor.creditor_name || `Creditor_${creditorPosition}`)
                 .replace(/[^a-zA-Z0-9\-_.]/g, '_');
-            const filename = `Nullplan_${clientData.reference || clientData.aktenzeichen}_${creditorNameForFile}_${new Date().toISOString().split('T')[0]}.docx`;
+            
+            // Get creditor reference for filename uniqueness
+            const creditorRef = (creditor.reference_number || 
+                               creditor.creditor_reference || 
+                               creditor.reference || 
+                               creditor.aktenzeichen || 
+                               `REF_${creditorPosition}`)
+                               .replace(/[^a-zA-Z0-9\-_.]/g, '_');
+            
+            // Always include creditor position to ensure uniqueness
+            const filename = `Nullplan_${clientData.reference || clientData.aktenzeichen}_${creditorNameForFile}_${creditorRef}_${creditorPosition}_${new Date().toISOString().split('T')[0]}.docx`;
             const outputPath = path.join(this.outputDir, filename);
             
             fs.writeFileSync(outputPath, outputBuffer);

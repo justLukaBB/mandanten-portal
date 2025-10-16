@@ -1584,23 +1584,45 @@ class DocumentGenerator {
                 allCreditors = [];
             }
             
-            // Deduplicate creditors by name + reference number to handle same creditor with different claims
+            // First, log all creditors to debug the issue
+            console.log(`🔍 All creditors before deduplication:`);
+            allCreditors.forEach((creditor, idx) => {
+                console.log(`   ${idx + 1}. ${creditor.creditor_name || creditor.name} - Ref: ${creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || 'NO_REF'} - Amount: ${creditor.final_amount || creditor.debt_amount || creditor.amount}`);
+            });
+            
+            // Deduplicate creditors - use name + reference, but if references are same, use amount as tiebreaker
             const creditorKeys = new Set();
-            const creditors = allCreditors.filter(creditor => {
+            const creditors = allCreditors.filter((creditor, index) => {
                 const name = creditor.creditor_name || creditor.name;
                 const reference = creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || 'NO_REF';
-                const uniqueKey = `${name}__${reference}`; // Combine name and reference
+                const amount = creditor.final_amount || creditor.debt_amount || creditor.amount || 0;
                 
-                if (creditorKeys.has(uniqueKey)) {
-                    console.log(`⚠️ Skipping duplicate creditor entry: ${name} (${reference})`);
-                    return false;
+                // First try with reference
+                let uniqueKey = `${name}__${reference}`;
+                
+                // If this key already exists and references are the same, use amount as tiebreaker
+                if (creditorKeys.has(uniqueKey) && reference !== 'NO_REF') {
+                    // Check if it's truly the same entry or different amounts
+                    const isDifferentAmount = !Array.from(creditorKeys).some(key => key === `${uniqueKey}__${amount}`);
+                    if (isDifferentAmount) {
+                        uniqueKey = `${name}__${reference}__${amount}`;
+                        console.log(`📋 Same creditor "${name}" with same reference "${reference}" but different amount: €${amount}`);
+                    } else {
+                        console.log(`⚠️ Skipping duplicate creditor entry: ${name} (${reference}) - Amount: €${amount}`);
+                        return false;
+                    }
+                } else if (reference === 'NO_REF') {
+                    // If no reference, use index to ensure uniqueness
+                    uniqueKey = `${name}__${index}__${amount}`;
                 }
-                creditorKeys.add(uniqueKey);
                 
-                // Log when same creditor has different references
+                creditorKeys.add(uniqueKey);
+                if (amount) creditorKeys.add(`${name}__${reference}__${amount}`); // Track amount combinations
+                
+                // Log when same creditor has different entries
                 const existingWithSameName = Array.from(creditorKeys).filter(key => key.startsWith(name + '__'));
                 if (existingWithSameName.length > 1) {
-                    console.log(`📋 Note: Creditor "${name}" has multiple claims with different references`);
+                    console.log(`📋 Note: Creditor "${name}" has ${existingWithSameName.length} separate entries`);
                 }
                 
                 return true;

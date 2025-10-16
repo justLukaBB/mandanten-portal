@@ -1272,7 +1272,9 @@ class CreditorContactService {
                         type: docFile.type,
                         filename: filename,
                         token: uploadResult.token,
-                        size: uploadResult.size
+                        size: uploadResult.size,
+                        creditor_name: docFile.creditor_name,  // Preserve creditor name for filtering
+                        creditor_index: docFile.creditor_index  // Preserve creditor index for filtering
                     });
                     console.log(`✅ ${docFile.type} uploaded: ${uploadResult.token}`);
                 } else {
