@@ -77,6 +77,27 @@ class RobustNullplanTableGenerator {
             });
             
             console.log(`✅ [ROBUST] Total replacements made: ${totalReplacements}`);
+            
+            // Also replace simple quoted variables (for creditor data)
+            Object.entries(replacements).forEach(([variable, value]) => {
+                // Skip already processed XML-split patterns
+                if (!this.templateMapping[variable]) {
+                    const quotedVariable = `&quot;${variable}&quot;`;
+                    if (processedXml.includes(quotedVariable)) {
+                        processedXml = processedXml.replace(new RegExp(this.escapeRegex(quotedVariable), 'g'), value);
+                        console.log(`✅ [ROBUST] Simple variable replaced: "${variable}"`);
+                        totalReplacements++;
+                    }
+                }
+            });
+            
+            console.log(`✅ [ROBUST] Total replacements after simple variables: ${totalReplacements}`);
+            
+            // If no creditor placeholders were found, try to populate table rows dynamically
+            if (totalReplacements <= 3) {
+                console.log('⚠️ [ROBUST] No creditor placeholders found, attempting dynamic table population...');
+                processedXml = this.populateTableRows(processedXml, creditorData);
+            }
 
             // Update the document XML in the zip
             zip.file('word/document.xml', processedXml);
@@ -127,6 +148,20 @@ class RobustNullplanTableGenerator {
             "Name Mandant": clientName,
             "Datum in 3 Monaten": this.calculateStartDate()
         };
+        
+        // Add creditor-specific replacements for the table
+        // The template should have placeholders like "Gläubiger 1", "Forderung 1", "Quote 1" etc.
+        creditorData.forEach((creditor, index) => {
+            const creditorNum = index + 1;
+            const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+            const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+            const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+            
+            // Add replacements for this creditor
+            replacements[`Gläubiger ${creditorNum}`] = creditorName;
+            replacements[`Forderung ${creditorNum}`] = this.formatGermanCurrencyNoSymbol(creditorAmount);
+            replacements[`Quote ${creditorNum}`] = `${creditorQuote.toFixed(2).replace('.', ',')}%`;
+        });
 
         console.log('📋 [ROBUST] Table replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
@@ -153,6 +188,79 @@ class RobustNullplanTableGenerator {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(amount) + ' €';
+    }
+    
+    /**
+     * Format number as German currency without symbol (for table cells)
+     */
+    formatGermanCurrencyNoSymbol(amount) {
+        return new Intl.NumberFormat('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    }
+    
+    /**
+     * Populate table rows with creditor data dynamically
+     */
+    populateTableRows(documentXml, creditorData) {
+        try {
+            // Find the first empty table row (usually starts with <w:tr> and has empty cells)
+            // Look for a pattern that represents empty table cells
+            const tableRowPattern = /(<w:tr[^>]*>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<\/w:tr>)/;
+            
+            const match = documentXml.match(tableRowPattern);
+            if (!match) {
+                console.log('⚠️ [ROBUST] Could not find table row pattern to populate');
+                return documentXml;
+            }
+            
+            const emptyRowTemplate = match[1];
+            console.log('✓ [ROBUST] Found empty table row template');
+            
+            // Calculate total debt for quotas
+            const totalDebt = creditorData.reduce((sum, creditor) => {
+                return sum + (creditor.debt_amount || creditor.final_amount || creditor.amount || 0);
+            }, 0);
+            
+            // Generate rows for each creditor
+            let newRows = '';
+            creditorData.forEach((creditor, index) => {
+                const creditorNum = index + 1;
+                const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+                const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+                
+                // Create a row by replacing the empty row template with actual data
+                let creditorRow = emptyRowTemplate;
+                
+                // Replace empty paragraphs with actual content
+                // This is a simplified approach - we replace the first three empty paragraphs
+                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorNum}</w:t></w:r></w:p>`);
+                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorName}</w:t></w:r></w:p>`);
+                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${this.formatGermanCurrencyNoSymbol(creditorAmount)}</w:t></w:r></w:p>`);
+                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorQuote.toFixed(2).replace('.', ',')}%</w:t></w:r></w:p>`);
+                
+                newRows += creditorRow;
+            });
+            
+            // Replace the first empty row with all creditor rows
+            const result = documentXml.replace(emptyRowTemplate, newRows);
+            console.log(`✓ [ROBUST] Successfully populated ${creditorData.length} creditor rows`);
+            
+            return result;
+            
+        } catch (error) {
+            console.error('❌ [ROBUST] Error populating table rows:', error.message);
+            return documentXml;
+        }
+    }
+    
+    /**
+     * Escape special regex characters
+     */
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 }
 
