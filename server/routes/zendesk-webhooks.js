@@ -718,12 +718,65 @@ router.post(
         }
       });
 
-      // Update client with manually extracted creditors
+      // Update client with manually extracted creditors (with deduplication)
       if (manualExtractedCreditors.length > 0) {
-        client.final_creditor_list = manualExtractedCreditors;
-        console.log(
-          `✅ MANUAL EXTRACTION COMPLETE: Added ${manualExtractedCreditors.length} creditors to final_creditor_list`
+        console.log(`\n🎯 ================================`);
+        console.log(`🎯 ZENDESK WEBHOOK: MANUAL CREDITOR EXTRACTION`);
+        console.log(`🎯 ================================`);
+        console.log(`👤 Client: ${client.aktenzeichen || 'NO_AKTENZEICHEN'}`);
+        console.log(`📄 Total documents: ${allDocuments.length}`);
+        console.log(`📄 Creditor documents: ${creditorDocuments.length}`);
+        console.log(`📊 Extracted creditors: ${manualExtractedCreditors.length}`);
+        console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+        
+        console.log(`\n📋 ZENDESK WEBHOOK EXTRACTED CREDITORS:`);
+        manualExtractedCreditors.forEach((creditor, index) => {
+          console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+          console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+          console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+          console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+        });
+        
+        console.log(`\n🔄 ZENDESK WEBHOOK: STARTING CREDITOR DEDUPLICATION...`);
+        
+        // Use deduplication utility to handle duplicate creditors
+        const creditorDeduplication = require('../utils/creditorDeduplication');
+        const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(
+          manualExtractedCreditors, 
+          'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
         );
+        
+        // Merge with existing final_creditor_list if any
+        const existingCreditors = client.final_creditor_list || [];
+        console.log(`\n📊 ZENDESK WEBHOOK EXISTING CREDITORS: ${existingCreditors.length}`);
+        
+        const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+          existingCreditors, 
+          deduplicatedCreditors, 
+          'highest_amount'
+        );
+        
+        client.final_creditor_list = mergedCreditors;
+        
+        console.log(`\n✅ ================================`);
+        console.log(`✅ ZENDESK WEBHOOK: FINAL CREDITOR LIST UPDATED`);
+        console.log(`✅ ================================`);
+        console.log(`👤 Client: ${client.aktenzeichen}`);
+        console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+        console.log(`📄 Processed from: ${manualExtractedCreditors.length} extracted`);
+        console.log(`🗑️ Duplicates removed: ${manualExtractedCreditors.length - deduplicatedCreditors.length}`);
+        console.log(`⏰ Updated at: ${new Date().toISOString()}`);
+        
+        // Log final creditor list for monitoring
+        console.log(`\n📋 ZENDESK WEBHOOK FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
+        mergedCreditors.forEach((creditor, index) => {
+          console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+          console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+          console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+          console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
+          console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+        });
+        console.log(`\n`);
 
         // Add extraction history
         client.status_history.push({
@@ -732,9 +785,11 @@ router.post(
           changed_by: "system",
           metadata: {
             extracted_creditors: manualExtractedCreditors.length,
+            final_creditors_after_deduplication: mergedCreditors.length,
             total_documents: allDocuments.length,
             creditor_documents: creditorDocuments.length,
             extraction_method: "manual_payment_confirmation",
+            deduplication_strategy: "highest_amount"
           },
           created_at: new Date(),
         });
