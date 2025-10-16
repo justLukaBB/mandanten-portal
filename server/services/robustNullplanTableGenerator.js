@@ -8,7 +8,7 @@ const JSZip = require('jszip');
  */
 class RobustNullplanTableGenerator {
     constructor() {
-        this.templatePath = path.join(__dirname, '../templates/Tabelle Nullplan Template.docx');
+        this.templatePath = path.join(__dirname, '../templates/Nullplan_Table_Template_New.docx');
         this.outputDir = path.join(__dirname, '../documents');
         
         // Create output directory if it doesn't exist
@@ -16,20 +16,14 @@ class RobustNullplanTableGenerator {
             fs.mkdirSync(this.outputDir, { recursive: true });
         }
 
-        // Exact template mapping from analysis
+        // Template mappings for literal text replacement
         this.templateMapping = {
-            "Heutiges Datum": {
-                "type": "xml-split",
-                "pattern": "&quot;Heutiges</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-1\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Datum&quot;"
-            },
-            "Name Mandant": {
-                "type": "xml-split",
-                "pattern": "&quot;Name</w:t></w:r><w:r><w:rPr><w:b/><w:spacing w:val=\"-11\"/><w:sz w:val=\"18\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:b/><w:spacing w:val=\"-2\"/><w:sz w:val=\"18\"/></w:rPr><w:t>Mandant&quot;"
-            },
-            "Datum in 3 Monaten": {
-                "type": "xml-split",
-                "pattern": "&quot;Datum</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>in</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"3\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>3</w:t></w:r><w:r><w:rPr><w:spacing w:val=\"4\"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val=\"-2\"/></w:rPr><w:t>Monaten&quot;"
-            }
+            // Replace hardcoded client name
+            "okla test": "CLIENT_NAME",
+            // Replace hardcoded date
+            "16.10.2025": "TODAY_DATE",
+            // Replace hardcoded start date
+            "16.1.2026": "START_DATE"
         };
     }
 
@@ -60,19 +54,30 @@ class RobustNullplanTableGenerator {
             let processedXml = documentXml;
             let totalReplacements = 0;
 
-            // Apply XML-split pattern replacements
-            Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
-                if (replacements[variable]) {
-                    const pattern = mapping.pattern;
-                    
-                    if (processedXml.includes(pattern)) {
-                        processedXml = processedXml.replace(pattern, replacements[variable]);
-                        console.log(`✅ [ROBUST] XML-split pattern replaced: "${variable}"`);
-                        totalReplacements++;
-                    } else {
-                        console.log(`⚠️ [ROBUST] XML-split pattern not found: "${variable}"`);
-                        console.log(`   Expected pattern: ${pattern.substring(0, 50)}...`);
+            // Apply literal text replacements
+            Object.entries(this.templateMapping).forEach(([oldText, placeholder]) => {
+                if (processedXml.includes(`<w:t>${oldText}</w:t>`)) {
+                    let newText = '';
+                    switch(placeholder) {
+                        case 'CLIENT_NAME':
+                            newText = clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann';
+                            break;
+                        case 'TODAY_DATE':
+                            newText = new Date().toLocaleDateString('de-DE');
+                            break;
+                        case 'START_DATE':
+                            const startDate = new Date();
+                            startDate.setMonth(startDate.getMonth() + 3);
+                            newText = startDate.toLocaleDateString('de-DE');
+                            break;
+                        default:
+                            newText = oldText;
                     }
+                    processedXml = processedXml.replace(`<w:t>${oldText}</w:t>`, `<w:t>${newText}</w:t>`);
+                    console.log(`✅ [ROBUST] Literal text replaced: "${oldText}" → "${newText}"`);
+                    totalReplacements++;
+                } else {
+                    console.log(`⚠️ [ROBUST] Literal text not found: "${oldText}"`);
                 }
             });
             
@@ -93,11 +98,9 @@ class RobustNullplanTableGenerator {
             
             console.log(`✅ [ROBUST] Total replacements after simple variables: ${totalReplacements}`);
             
-            // If no creditor placeholders were found, try to populate table rows dynamically
-            if (totalReplacements <= 3) {
-                console.log('⚠️ [ROBUST] No creditor placeholders found, attempting dynamic table population...');
-                processedXml = this.populateTableRows(processedXml, creditorData);
-            }
+            // Always populate table rows with creditor data for new template
+            console.log('🔄 [ROBUST] Populating table rows with creditor data...');
+            processedXml = this.populateTableRows(processedXml, creditorData);
 
             // Update the document XML in the zip
             zip.file('word/document.xml', processedXml);
@@ -142,26 +145,8 @@ class RobustNullplanTableGenerator {
         // Client name
         const clientName = clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann';
 
-        // EXACT variables from Nullplan table template analysis
-        const replacements = {
-            "Heutiges Datum": new Date().toLocaleDateString('de-DE'),
-            "Name Mandant": clientName,
-            "Datum in 3 Monaten": this.calculateStartDate()
-        };
-        
-        // Add creditor-specific replacements for the table
-        // The template should have placeholders like "Gläubiger 1", "Forderung 1", "Quote 1" etc.
-        creditorData.forEach((creditor, index) => {
-            const creditorNum = index + 1;
-            const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
-            const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
-            const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
-            
-            // Add replacements for this creditor
-            replacements[`Gläubiger ${creditorNum}`] = creditorName;
-            replacements[`Forderung ${creditorNum}`] = this.formatGermanCurrencyNoSymbol(creditorAmount);
-            replacements[`Quote ${creditorNum}`] = `${creditorQuote.toFixed(2).replace('.', ',')}%`;
-        });
+        // Replacements for the new template - will be handled by populateTableRows
+        const replacements = {};
 
         console.log('📋 [ROBUST] Table replacements prepared:');
         Object.entries(replacements).forEach(([key, value]) => {
@@ -205,49 +190,39 @@ class RobustNullplanTableGenerator {
      */
     populateTableRows(documentXml, creditorData) {
         try {
-            // Find the first empty table row (usually starts with <w:tr> and has empty cells)
-            // Look for a pattern that represents empty table cells
-            const tableRowPattern = /(<w:tr[^>]*>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<w:tc[^>]*>.*?<w:p[^>]*>.*?<\/w:p>.*?<\/w:tc>.*?<\/w:tr>)/;
-            
-            const match = documentXml.match(tableRowPattern);
-            if (!match) {
-                console.log('⚠️ [ROBUST] Could not find table row pattern to populate');
-                return documentXml;
-            }
-            
-            const emptyRowTemplate = match[1];
-            console.log('✓ [ROBUST] Found empty table row template');
-            
             // Calculate total debt for quotas
             const totalDebt = creditorData.reduce((sum, creditor) => {
                 return sum + (creditor.debt_amount || creditor.final_amount || creditor.amount || 0);
             }, 0);
             
-            // Generate rows for each creditor
-            let newRows = '';
+            let result = documentXml;
+            
+            // Replace placeholder text "Test 1" with actual creditor data
             creditorData.forEach((creditor, index) => {
                 const creditorNum = index + 1;
                 const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
                 const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
                 const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
                 
-                // Create a row by replacing the empty row template with actual data
-                let creditorRow = emptyRowTemplate;
+                // Replace "Test 1" placeholders for this creditor row
+                // Each row has 3 "Test 1" occurrences for: creditor name, amount, quote
                 
-                // Replace empty paragraphs with actual content
-                // This is a simplified approach - we replace the first three empty paragraphs
-                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorNum}</w:t></w:r></w:p>`);
-                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorName}</w:t></w:r></w:p>`);
-                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${this.formatGermanCurrencyNoSymbol(creditorAmount)}</w:t></w:r></w:p>`);
-                creditorRow = creditorRow.replace(/<w:p[^>]*><\/w:p>/, `<w:p><w:r><w:t>${creditorQuote.toFixed(2).replace('.', ',')}%</w:t></w:r></w:p>`);
+                // Find the pattern for this row number and replace the "Test 1" placeholders
+                const rowPattern = new RegExp(`(<w:tr[^>]*>[\\s\\S]*?<w:t>${creditorNum}<\\/w:t>[\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>`);
                 
-                newRows += creditorRow;
+                result = result.replace(rowPattern, `$1<w:t>${creditorName}</w:t>$2<w:t>${this.formatGermanCurrencyNoSymbol(creditorAmount)}</w:t>$3<w:t>${creditorQuote.toFixed(2).replace('.', ',')}%</w:t>`);
+                
+                console.log(`✓ [ROBUST] Populated row ${creditorNum}: ${creditorName} - ${this.formatGermanCurrencyNoSymbol(creditorAmount)} - ${creditorQuote.toFixed(2).replace('.', ',')}%`);
             });
             
-            // Replace the first empty row with all creditor rows
-            const result = documentXml.replace(emptyRowTemplate, newRows);
-            console.log(`✓ [ROBUST] Successfully populated ${creditorData.length} creditor rows`);
+            // Remove rows that weren't populated (rows beyond the number of creditors)
+            for (let i = creditorData.length + 1; i <= 8; i++) {
+                const emptyRowPattern = new RegExp(`<w:tr[^>]*>[\\s\\S]*?<w:t>${i}<\\/w:t>[\\s\\S]*?<\\/w:tr>`);
+                result = result.replace(emptyRowPattern, '');
+                console.log(`✓ [ROBUST] Removed empty row ${i}`);
+            }
             
+            console.log(`✓ [ROBUST] Successfully populated ${creditorData.length} creditor rows`);
             return result;
             
         } catch (error) {
