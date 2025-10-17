@@ -260,7 +260,7 @@ class ZendeskService {
   }
 
   // Create side conversation to send email to customer - IMPROVED
-  async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, internalNote = true }) {
+  async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, htmlBody = null, internalNote = true }) {
     try {
       console.log(`📧 Creating Side Conversation on ticket ${ticketId} to send email to ${recipientEmail}...`);
       
@@ -303,7 +303,7 @@ class ZendeskService {
           ],
           subject: subject,
           body: body,
-          html_body: body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          html_body: htmlBody || body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         }
       };
 
