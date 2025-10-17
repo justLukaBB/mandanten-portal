@@ -36,7 +36,7 @@ interface Document {
   is_creditor_document?: boolean;
   confidence?: number;
   manual_review_required?: boolean;
-  document_status?: 'creditor_confirmed' | 'non_creditor_confirmed' | 'needs_review' | 'duplicate_detected' | 'processing_failed' | 'unknown';
+  document_status?: 'creditor_confirmed' | 'non_creditor_confirmed' | 'needs_review' | 'duplicate' | 'processing_failed' | 'unknown';
   status_reason?: string;
   is_duplicate?: boolean;
   duplicate_reason?: string;
