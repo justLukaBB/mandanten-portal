@@ -171,7 +171,7 @@ Rechtsanwalt Thomas Scuric
     }
 
     /**
-     * Generate HTML welcome email with professional styling
+     * Generate premium HTML welcome email with advanced styling
      */
     generateHTMLWelcomeEmail(userData) {
         const { firstName, lastName, email, aktenzeichen } = userData;
@@ -184,232 +184,503 @@ Rechtsanwalt Thomas Scuric
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ihr Zugang zum Mandantenportal</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
     <style>
+        /* Reset styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* Base styles */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
             line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .email-container {
-            background-color: white;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #007bff;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .title {
-            font-size: 24px;
-            font-weight: bold;
-            color: #007bff;
-            margin: 0;
-        }
-        .greeting {
-            font-size: 18px;
-            margin-bottom: 25px;
             color: #2c3e50;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            width: 100% !important;
+            min-height: 100vh;
         }
-        .section {
-            margin-bottom: 30px;
+        
+        /* Email container */
+        .email-wrapper {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
         }
-        .section-title {
+        
+        .email-container {
+            max-width: 680px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Header with gradient */
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="60" cy="30" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="30" cy="70" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+            animation: float 20s infinite linear;
+        }
+        
+        @keyframes float {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        .logo-area {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.5px;
+        }
+        
+        .subtitle {
             font-size: 18px;
-            font-weight: bold;
-            color: #007bff;
-            margin-bottom: 15px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        /* Content area */
+        .content {
+            padding: 50px 40px;
+        }
+        
+        .greeting {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1e3c72;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .intro-text {
+            font-size: 17px;
+            line-height: 1.8;
+            color: #5a6c7d;
+            text-align: center;
+            margin-bottom: 40px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* Credentials section */
+        .credentials-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 16px;
+            padding: 35px;
+            margin: 40px 0;
+            border: 2px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .credentials-section::before {
+            content: '🔐';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 60px;
+            opacity: 0.1;
+            transform: rotate(15deg);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e3c72;
+            margin-bottom: 25px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
-        .credentials-box {
-            background-color: #f8f9fa;
-            border: 2px solid #007bff;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 15px 0;
+        
+        .credential-grid {
+            display: grid;
+            gap: 20px;
         }
+        
         .credential-item {
-            margin-bottom: 12px;
-            font-size: 16px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #1e3c72;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease;
         }
+        
+        .credential-item:hover {
+            transform: translateY(-2px);
+        }
+        
         .credential-label {
-            font-weight: bold;
-            color: #495057;
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
             display: block;
-            margin-bottom: 4px;
         }
+        
         .credential-value {
-            color: #007bff;
-            font-weight: bold;
             font-size: 16px;
+            font-weight: 700;
+            color: #1e3c72;
             word-break: break-all;
         }
-        .portal-link {
-            background-color: #007bff;
-            color: white !important;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 6px;
-            display: inline-block;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .portal-link:hover {
-            background-color: #0056b3;
-        }
-        .steps {
-            background-color: #e8f4f8;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 15px 0;
-        }
-        .step {
-            margin-bottom: 10px;
-            padding-left: 5px;
-        }
-        .documents-list {
-            background-color: #fff8dc;
-            border-left: 4px solid #ffc107;
-            padding: 20px;
-            margin: 15px 0;
-        }
-        .document-item {
-            margin-bottom: 8px;
-            color: #495057;
-        }
-        .important-note {
-            background-color: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 6px;
-            padding: 15px;
-            margin: 20px 0;
-            color: #856404;
-        }
-        .footer {
-            border-top: 2px solid #dee2e6;
-            padding-top: 20px;
-            margin-top: 40px;
+        
+        /* Portal button */
+        .portal-button-container {
             text-align: center;
-            color: #6c757d;
+            margin: 30px 0;
+        }
+        
+        .portal-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white !important;
+            padding: 16px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s ease;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .portal-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .portal-button:hover::before {
+            left: 100%;
+        }
+        
+        .portal-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* Important notice */
+        .important-notice {
+            background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+            border: 2px solid #fb923c;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 25px 0;
+            position: relative;
+        }
+        
+        .important-notice::before {
+            content: '⚠️';
+            font-size: 24px;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+        }
+        
+        .important-notice strong {
+            color: #ea580c;
+        }
+        
+        /* Steps section */
+        .steps-section {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 16px;
+            padding: 35px;
+            margin: 40px 0;
+            border: 2px solid #0ea5e9;
+        }
+        
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
             font-size: 14px;
+            margin-right: 15px;
+            flex-shrink: 0;
         }
-        .signature {
-            margin-top: 30px;
-            color: #2c3e50;
+        
+        .step-text {
+            font-size: 16px;
+            line-height: 1.5;
+            color: #374151;
         }
-        .signature-name {
-            font-weight: bold;
-            color: #007bff;
+        
+        /* Documents section */
+        .documents-section {
+            background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+            border-radius: 16px;
+            padding: 35px;
+            margin: 40px 0;
+            border: 2px solid #f59e0b;
+            position: relative;
         }
-        .auto-generated {
-            font-size: 12px;
-            color: #868e96;
-            font-style: italic;
+        
+        .documents-section::before {
+            content: '📤';
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 32px;
+        }
+        
+        .document-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
             margin-top: 20px;
         }
-        @media (max-width: 600px) {
-            .email-container {
-                padding: 20px;
-            }
-            .title {
-                font-size: 20px;
-            }
-            .portal-link {
-                display: block;
-                text-align: center;
-                margin: 15px 0;
-            }
+        
+        .document-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #f59e0b;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Footer */
+        .footer {
+            background: #f8fafc;
+            padding: 40px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .signature {
+            margin-bottom: 30px;
+        }
+        
+        .signature-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e3c72;
+            margin-bottom: 5px;
+        }
+        
+        .signature-title {
+            font-size: 16px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        .legal-text {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-top: 20px;
+        }
+        
+        /* Responsive design */
+        @media only screen and (max-width: 600px) {
+            .email-wrapper { padding: 20px 10px; }
+            .content { padding: 30px 25px; }
+            .header { padding: 40px 25px; }
+            .title { font-size: 26px; }
+            .subtitle { font-size: 16px; }
+            .credentials-section, .steps-section, .documents-section { padding: 25px; }
+            .portal-button { padding: 14px 30px; font-size: 14px; }
+            .document-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            .email-container { background: #1f2937; color: #f9fafb; }
+            .content { background: #1f2937; }
+            .credential-item, .step-item, .document-item { background: #374151; }
+            .credentials-section { background: #374151; }
+            .steps-section { background: #1e3a8a; }
+            .documents-section { background: #92400e; }
         }
     </style>
 </head>
 <body>
-    <div class="email-container">
-        <div class="header">
-            <h1 class="title">🧾 Ihr Zugang zum Mandantenportal</h1>
-        </div>
-        
-        <div class="greeting">
-            Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,
-        </div>
-        
-        <p>ab sofort steht Ihnen Ihr persönliches Mandantenportal zur Verfügung.</p>
-        <p>Hier finden Sie alle wichtigen Dokumente und Informationen – und können selbst Unterlagen hochladen.</p>
-        
-        <div class="section">
-            <div class="section-title">
-                🔐 Ihre Zugangsdaten
-            </div>
-            <div class="credentials-box">
-                <div class="credential-item">
-                    <span class="credential-label">Portal-Link:</span>
-                    <a href="${portalLink}" class="portal-link">Zum Mandantenportal</a>
-                </div>
-                <div class="credential-item">
-                    <span class="credential-label">Login-E-Mail:</span>
-                    <span class="credential-value">${email}</span>
-                </div>
-                <div class="credential-item">
-                    <span class="credential-label">Einmaliges Passwort (Aktenzeichen):</span>
-                    <span class="credential-value">${aktenzeichen}</span>
+    <div class="email-wrapper">
+        <div class="email-container">
+            <!-- Header -->
+            <div class="header">
+                <div class="logo-area">
+                    <div class="title">🧾 Mandantenportal</div>
+                    <div class="subtitle">Ihr sicherer Zugang zu allen Dokumenten</div>
                 </div>
             </div>
             
-            <div class="important-note">
-                <strong>Wichtig:</strong> Das Aktenzeichen dient beim ersten Login als einmaliges Passwort. Danach legen Sie ein eigenes, sicheres Passwort fest.
-            </div>
-        </div>
-        
-        <div class="section">
-            <div class="section-title">
-                🚀 So nutzen Sie das Portal
-            </div>
-            <div class="steps">
-                <div class="step"><strong>1.</strong> Öffnen Sie den oben genannten Portal-Link</div>
-                <div class="step"><strong>2.</strong> Melden Sie sich mit Ihrer E-Mail-Adresse und dem Aktenzeichen an</div>
-                <div class="step"><strong>3.</strong> Vergeben Sie ein neues Passwort (wird beim ersten Login abgefragt)</div>
-                <div class="step"><strong>4.</strong> Laden Sie Ihre Unterlagen im Portal hoch</div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <div class="section-title">
-                📤 Bitte laden Sie folgende Unterlagen hoch
-            </div>
-            <div class="documents-list">
-                <div class="document-item">• Mahnungen oder Mahnbescheide</div>
-                <div class="document-item">• Inkassoschreiben</div>
-                <div class="document-item">• Unbezahlte Rechnungen</div>
-                <div class="document-item">• Anwaltliche Zahlungsaufforderungen</div>
-                <div class="document-item">• Gerichtliche Schreiben</div>
+            <!-- Content -->
+            <div class="content">
+                <div class="greeting">
+                    Willkommen, ${firstName} ${lastName}!
+                </div>
+                
+                <div class="intro-text">
+                    Ihr persönliches Mandantenportal ist ab sofort verfügbar. Hier finden Sie alle wichtigen Dokumente und können sicher Unterlagen hochladen.
+                </div>
+                
+                <!-- Credentials Section -->
+                <div class="credentials-section">
+                    <div class="section-title">
+                        🔐 Ihre Zugangsdaten
+                    </div>
+                    
+                    <div class="credential-grid">
+                        <div class="credential-item">
+                            <span class="credential-label">Portal-Link</span>
+                            <div class="portal-button-container">
+                                <a href="${portalLink}" class="portal-button">
+                                    🚀 Zum Portal
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="credential-item">
+                            <span class="credential-label">Login E-Mail</span>
+                            <span class="credential-value">${email}</span>
+                        </div>
+                        
+                        <div class="credential-item">
+                            <span class="credential-label">Temporäres Passwort</span>
+                            <span class="credential-value">${aktenzeichen}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="important-notice">
+                        <strong>Wichtiger Hinweis:</strong> Verwenden Sie Ihr Aktenzeichen beim ersten Login als Passwort. Sie werden dann aufgefordert, ein eigenes sicheres Passwort zu erstellen.
+                    </div>
+                </div>
+                
+                <!-- Steps Section -->
+                <div class="steps-section">
+                    <div class="section-title">
+                        🚀 So starten Sie
+                    </div>
+                    
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-text">Klicken Sie auf den Portal-Button oben</div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-text">Melden Sie sich mit Ihrer E-Mail und dem Aktenzeichen an</div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-text">Erstellen Sie Ihr persönliches, sicheres Passwort</div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <div class="step-number">4</div>
+                        <div class="step-text">Laden Sie Ihre Dokumente sicher hoch</div>
+                    </div>
+                </div>
+                
+                <!-- Documents Section -->
+                <div class="documents-section">
+                    <div class="section-title">
+                        📤 Diese Dokumente benötigen wir
+                    </div>
+                    
+                    <div class="document-grid">
+                        <div class="document-item">📄 Mahnungen oder Mahnbescheide</div>
+                        <div class="document-item">💰 Inkassoschreiben</div>
+                        <div class="document-item">🧾 Unbezahlte Rechnungen</div>
+                        <div class="document-item">⚖️ Anwaltliche Zahlungsaufforderungen</div>
+                        <div class="document-item">🏛️ Gerichtliche Schreiben</div>
+                        <div class="document-item">📋 Weitere Forderungsschreiben</div>
+                    </div>
+                    
+                    <div class="important-notice" style="margin-top: 25px;">
+                        <strong>Hinweis:</strong> Laden Sie bitte alle Dokumente hoch, in denen Geld von Ihnen gefordert wird. Ihr Zugang bleibt dauerhaft aktiv und sicher.
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin: 40px 0; padding: 30px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 16px; border: 2px solid #22c55e;">
+                    <div style="font-size: 18px; font-weight: 600; color: #15803d; margin-bottom: 10px;">
+                        💬 Haben Sie Fragen?
+                    </div>
+                    <div style="font-size: 16px; color: #374151;">
+                        Ich stehe Ihnen gerne zur Verfügung und helfe bei allen Anliegen.
+                    </div>
+                </div>
             </div>
             
-            <div class="important-note">
-                <strong>Hinweis:</strong> Laden Sie bitte alle Dokumente hoch, in denen Geld von Ihnen gefordert wird. Ihr Zugang bleibt dauerhaft aktiv.
-            </div>
-        </div>
-        
-        <p>Bei Fragen stehe ich Ihnen selbstverständlich gerne zur Verfügung.</p>
-        
-        <div class="signature">
-            Mit freundlichen Grüßen<br>
-            <span class="signature-name">Luka Scuric</span><br>
-            Rechtsanwalt Thomas Scuric
-        </div>
-        
-        <div class="footer">
-            <div class="auto-generated">
-                📎 Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht direkt auf diese Nachricht.
-            </div>
-            <div style="margin-top: 15px;">
-                © 2025 Rechtsanwalt Thomas Scuric
+            <!-- Footer -->
+            <div class="footer">
+                <div class="signature">
+                    <div class="signature-name">Luka Scuric</div>
+                    <div class="signature-title">Rechtsanwalt Thomas Scuric</div>
+                </div>
+                
+                <div class="legal-text">
+                    📎 Diese E-Mail wurde automatisch generiert.<br>
+                    Bitte antworten Sie nicht direkt auf diese Nachricht.<br><br>
+                    © 2025 Rechtsanwalt Thomas Scuric | Alle Rechte vorbehalten
+                </div>
             </div>
         </div>
     </div>
