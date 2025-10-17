@@ -593,6 +593,19 @@ app.post('/api/clients/:clientId/documents',
       return res.status(404).json({ error: 'Client not found' });
     }
     
+    console.log(`\n📤 ================================`);
+    console.log(`📤 DOCUMENT UPLOAD STARTED`);
+    console.log(`📤 ================================`);
+    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+    console.log(`📄 Files uploaded: ${req.files.length}`);
+    console.log(`⏰ Upload time: ${new Date().toISOString()}`);
+    
+    // Log uploaded files
+    console.log(`\n📋 UPLOADED FILES:`);
+    req.files.forEach((file, index) => {
+      console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+    });
+    
     const uploadedDocuments = [];
     
     // Process each uploaded file
@@ -878,37 +891,74 @@ app.post('/api/clients/:clientId/documents',
             
             // Check if all documents are processed and trigger webhook for clients with payment received
             if (allDocsCompleted && client.first_payment_received) {
-              console.log(`🎯 All documents completed for client ${clientId} with payment received - triggering webhook`);
+              console.log(`\n🎯 ================================`);
+              console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
+              console.log(`🎯 ================================`);
+              console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+              console.log(`💰 Payment received: ${client.first_payment_received}`);
+              console.log(`📄 All documents completed: ${allDocsCompleted}`);
+              console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
               
-              // Update final creditor list if needed
+              // Update final creditor list with deduplication
               const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
-              const extractedCreditors = [];
+              console.log(`\n📊 DOCUMENT ANALYSIS:`);
+              console.log(`📄 Total completed documents: ${completedDocs.length}`);
+              console.log(`📄 Creditor documents found: ${creditorDocuments.length}`);
               
-              creditorDocuments.forEach(doc => {
-                if (doc.extracted_data?.creditor_data) {
-                  const creditorData = doc.extracted_data.creditor_data;
-                  extractedCreditors.push({
-                    id: uuidv4(),
-                    sender_name: creditorData.sender_name,
-                    sender_address: creditorData.sender_address,
-                    sender_email: creditorData.sender_email,
-                    reference_number: creditorData.reference_number,
-                    claim_amount: creditorData.claim_amount || 0,
-                    is_representative: creditorData.is_representative || false,
-                    actual_creditor: creditorData.actual_creditor,
-                    source_document: doc.name,
-                    source_document_id: doc.id,
-                    ai_confidence: doc.confidence || 0,
-                    status: 'confirmed',
-                    created_at: new Date(),
-                    confirmed_at: new Date()
-                  });
-                }
-              });
-              
-              if (extractedCreditors.length > 0) {
-                client.final_creditor_list = extractedCreditors;
-                console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
+              if (creditorDocuments.length > 0) {
+                console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
+                creditorDocuments.forEach((doc, index) => {
+                  console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
+                  console.log(`      - Processing status: ${doc.processing_status}`);
+                  console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
+                  if (doc.extracted_data?.creditor_data) {
+                    const creditorData = doc.extracted_data.creditor_data;
+                    console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
+                  }
+                });
+                
+                console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
+                
+                // Use deduplication utility to handle duplicate creditors
+                const creditorDeduplication = require('./utils/creditorDeduplication');
+                const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+                  creditorDocuments, 
+                  'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
+                );
+                
+                // Merge with existing final_creditor_list if any
+                const existingCreditors = client.final_creditor_list || [];
+                console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
+                
+                const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+                  existingCreditors, 
+                  deduplicatedCreditors, 
+                  'highest_amount'
+                );
+                
+                client.final_creditor_list = mergedCreditors;
+                
+                console.log(`\n✅ ================================`);
+                console.log(`✅ FINAL CREDITOR LIST UPDATED`);
+                console.log(`✅ ================================`);
+                console.log(`👤 Client: ${clientId}`);
+                console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+                console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
+                console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
+                console.log(`⏰ Updated at: ${new Date().toISOString()}`);
+                
+                // Log final creditor list for monitoring
+                console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
+                mergedCreditors.forEach((creditor, index) => {
+                  console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+                  console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+                  console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+                  console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
+                  console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+                });
+                console.log(`\n`);
+              } else {
+                console.log(`⚠️ No creditor documents found in completed documents`);
               }
               
               // Trigger the processing-complete webhook asynchronously
@@ -1018,6 +1068,15 @@ app.post('/api/clients/:clientId/documents',
       
       return client;
     });
+    
+    console.log(`\n✅ ================================`);
+    console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
+    console.log(`✅ ================================`);
+    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+    console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
+    console.log(`🔄 AI processing started for all documents`);
+    console.log(`⏰ Completed at: ${new Date().toISOString()}`);
+    console.log(`\n`);
     
     res.json({
       success: true,
