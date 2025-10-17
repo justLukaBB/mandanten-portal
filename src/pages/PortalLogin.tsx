@@ -121,8 +121,8 @@ const PortalLogin: React.FC = () => {
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Header */}
-      <div className="p-5 border-b border-gray-200 flex justify-start items-center">
-        <div className="h-10">
+      <div className="px-6 py-6 border-b border-gray-100 flex justify-start items-center">
+        <div className="h-12">
           <img 
             src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" 
             alt="Scuric Logo" 
@@ -132,103 +132,109 @@ const PortalLogin: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-5">
-        <div className="max-w-md mx-auto pb-12">
+      <div className="flex-1 overflow-y-auto px-6 py-12">
+        <div className="max-w-sm mx-auto">
           {/* Welcome Section */}
-          <div className="text-center mb-18 mt-20">
-            <h1 className="text-3xl font-semibold mb-4 text-gray-900 leading-tight">
+          <div className="text-center mb-16">
+            <h1 className="text-4xl font-bold mb-6 text-gray-900 leading-tight tracking-tight">
               Willkommen im Mandanten Portal
             </h1>
-            <p className="text-lg text-gray-500">
+            <p className="text-xl text-gray-600 leading-relaxed">
               Melden Sie sich an, um fortzufahren
             </p>
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="relative">
-              <input
-                type="email"
-                id="email"
-                name="email"
-                placeholder="E-Mail-Adresse"
-                autoComplete="email"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck="false"
-                required
-                value={credentials.email}
-                onChange={handleInputChange}
-                className="w-full h-14 bg-gray-100 border border-gray-300 rounded-xl px-4 text-lg text-gray-900 transition-all duration-300 focus:outline-none focus:bg-white focus:border-gray-800 focus:ring-4 focus:ring-blue-100 focus:-translate-y-px"
-              />
-            </div>
-
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                name="password"
-                placeholder="Passwort"
-                autoComplete="current-password"
-                required
-                value={credentials.password}
-                onChange={handleInputChange}
-                className="w-full h-14 bg-gray-100 border border-gray-300 rounded-xl px-4 pr-14 text-lg text-gray-900 transition-all duration-300 focus:outline-none focus:bg-white focus:border-gray-800 focus:ring-4 focus:ring-blue-100 focus:-translate-y-px"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <EyeIcon className="h-5 w-5 text-gray-500" />
-                )}
-              </button>
-            </div>
-
-            <div className="flex items-center">
-              <label className="flex items-center gap-3 cursor-pointer">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-5">
+              <div className="relative">
                 <input
-                  type="checkbox"
-                  id="remember"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-5 h-5 text-gray-800 bg-gray-100 border-gray-300 rounded focus:ring-gray-800 focus:ring-2"
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="E-Mail-Adresse"
+                  autoComplete="email"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  required
+                  value={credentials.email}
+                  onChange={handleInputChange}
+                  className="w-full h-16 bg-gray-50 border border-gray-200 rounded-2xl px-6 text-lg text-gray-900 placeholder-gray-500 transition-all duration-300 focus:outline-none focus:bg-white focus:border-gray-400 focus:ring-4 focus:ring-gray-100 focus:shadow-sm"
                 />
-                <span className="text-gray-900 font-medium">Angemeldet bleiben</span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  placeholder="Passwort"
+                  autoComplete="current-password"
+                  required
+                  value={credentials.password}
+                  onChange={handleInputChange}
+                  className="w-full h-16 bg-gray-50 border border-gray-200 rounded-2xl px-6 pr-16 text-lg text-gray-900 placeholder-gray-500 transition-all duration-300 focus:outline-none focus:bg-white focus:border-gray-400 focus:ring-4 focus:ring-gray-100 focus:shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-6 w-6 text-gray-400" />
+                  ) : (
+                    <EyeIcon className="h-6 w-6 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center pt-2 pb-2">
+              <label className="flex items-center gap-4 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    id="remember"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-6 h-6 text-gray-800 bg-gray-50 border-2 border-gray-300 rounded-lg focus:ring-gray-500 focus:ring-2 transition-colors"
+                  />
+                </div>
+                <span className="text-gray-700 font-medium text-lg">Angemeldet bleiben</span>
               </label>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl text-base font-medium">
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading || !credentials.email.trim() || !credentials.password.trim()}
-              className="w-full h-14 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-300 hover:-translate-y-px hover:shadow-lg"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Wird geladen...
-                </div>
-              ) : (
-                'Anmelden'
-              )}
-            </button>
+            <div className="pt-4">
+              <button
+                type="submit"
+                disabled={loading || !credentials.email.trim() || !credentials.password.trim()}
+                className="w-full h-16 bg-gray-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-lg rounded-2xl transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 transform"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                    Wird geladen...
+                  </div>
+                ) : (
+                  'Anmelden'
+                )}
+              </button>
+            </div>
 
-            <div className="text-center">
+            <div className="text-center pt-6">
               <button 
                 type="button"
                 onClick={() => {
                   alert('Passwort-Wiederherstellung wurde an Ihre E-Mail gesendet.');
                 }}
-                className="text-red-600 hover:text-red-700 font-medium transition-colors bg-transparent border-none cursor-pointer"
+                className="text-red-600 hover:text-red-700 font-semibold text-lg transition-colors bg-transparent border-none cursor-pointer hover:underline"
               >
                 Passwort vergessen?
               </button>
@@ -236,39 +242,39 @@ const PortalLogin: React.FC = () => {
           </form>
 
           {/* Media Section */}
-          <div className="text-center mt-18 pt-12 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-8 font-medium">Bekannt aus:</p>
+          <div className="text-center mt-24 pt-16 border-t border-gray-100">
+            <p className="text-base text-gray-500 mb-10 font-medium">Bekannt aus:</p>
             <div className="flex justify-center">
               <img 
                 src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" 
                 alt="Bekannt aus verschiedenen Medien"
-                className="max-w-full h-auto max-h-15 object-contain opacity-70 hover:opacity-100 transition-opacity"
+                className="max-w-full h-auto max-h-16 object-contain opacity-60 hover:opacity-90 transition-opacity duration-300"
               />
             </div>
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-12 pt-12">
-            <div className="mb-6">
+          <div className="text-center mt-20 pt-16">
+            <div className="mb-8">
               <a 
                 href="https://www.schuldnerberatung-anwalt.de/impressum/" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-500 hover:text-red-600 text-sm transition-colors"
+                className="text-gray-500 hover:text-red-600 text-base font-medium transition-colors hover:underline"
               >
                 Impressum
               </a>
-              <span className="text-gray-500 mx-2">•</span>
+              <span className="text-gray-400 mx-4 text-base">•</span>
               <a 
                 href="https://www.schuldnerberatung-anwalt.de/datenschutz/" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-500 hover:text-red-600 text-sm transition-colors"
+                className="text-gray-500 hover:text-red-600 text-base font-medium transition-colors hover:underline"
               >
                 Datenschutz
               </a>
             </div>
-            <p className="text-xs text-gray-400">© 2025 Scuric. Alle Rechte vorbehalten.</p>
+            <p className="text-sm text-gray-400">© 2025 Scuric. Alle Rechte vorbehalten.</p>
           </div>
         </div>
       </div>
