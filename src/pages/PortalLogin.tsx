@@ -213,7 +213,11 @@ const PortalLogin: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || !credentials.email.trim() || !credentials.password.trim()}
-                className="w-full h-12 bg-gray-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md"
+                className={`w-full h-12 ${
+                  credentials.email.trim() && credentials.password.trim() 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-gray-900 hover:bg-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
               >
                 {loading ? (
                   <div className="flex items-center justify-center">
