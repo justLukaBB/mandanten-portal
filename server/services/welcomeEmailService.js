@@ -25,11 +25,13 @@ class WelcomeEmailService {
             const htmlBody = this.generateHTMLWelcomeEmail(userData);
 
             // Send as public comment on the main ticket
+            console.log(`🎯 WELCOME EMAIL: Using addPublicComment method (NOT side conversations)`);
             const response = await this.zendeskService.addPublicComment(ticketId, {
                 content: plainTextBody,
                 htmlContent: htmlBody,
                 tags: ['welcome-email-sent', 'portal-access']
             });
+            console.log(`🔍 WELCOME EMAIL: addPublicComment response:`, { success: response.success, method: 'public_comment' });
 
             if (response.success) {
                 console.log(`✅ Welcome email sent successfully to ${userData.email} via public comment`);
