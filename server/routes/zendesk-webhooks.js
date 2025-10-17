@@ -22,9 +22,6 @@ const conditionCheckService = new ConditionCheckService();
 // Initialize Welcome Email Service
 const welcomeEmailService = new WelcomeEmailService();
 
-// Set up service dependencies (avoid circular dependencies)
-sideConversationMonitor.setWelcomeEmailService(welcomeEmailService);
-
 // Middleware to handle Zendesk's specific JSON format
 const parseZendeskPayload = (req, res, next) => {
   console.log(
@@ -314,14 +311,14 @@ router.post(
       let sideConversationId = null;
 
       if (welcomeEmailResult.success) {
-        console.log(`✅ Welcome email sent successfully: ${welcomeEmailResult.side_conversation_id}`);
+        console.log(`✅ Welcome email sent successfully via public comment on ticket: ${welcomeEmailResult.ticket_id}`);
         welcomeEmailStatus = "sent";
-        sideConversationId = welcomeEmailResult.side_conversation_id;
+        sideConversationId = null; // Not using side conversations anymore
         
         // Update client with welcome email info
         client.welcome_email_sent = true;
         client.welcome_email_sent_at = new Date();
-        client.welcome_side_conversation_id = welcomeEmailResult.side_conversation_id;
+        client.welcome_side_conversation_id = null; // Not applicable for public comments
         
         // Add to status history
         client.status_history.push({
@@ -330,29 +327,13 @@ router.post(
           changed_by: "system",
           zendesk_ticket_id: zendesk_ticket_id,
           metadata: {
-            action: "welcome_email_sent_via_portal_link_webhook",
-            side_conversation_id: welcomeEmailResult.side_conversation_id,
+            action: "welcome_email_sent_via_public_comment",
+            method: "public_comment",
+            ticket_id: welcomeEmailResult.ticket_id,
           },
         });
         
         await client.save();
-        
-        // Start monitoring the welcome email side conversation
-        console.log(`🔄 Starting side conversation monitoring for welcome email...`);
-        
-        // Small delay to ensure side conversation is fully created
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        
-        const monitorResult = sideConversationMonitor.startMonitoringForClient(
-          client.aktenzeichen,
-          1 // Check every minute
-        );
-        
-        if (monitorResult.success) {
-          console.log(`✅ Started monitoring welcome email side conversation for ${client.aktenzeichen}`);
-        } else {
-          console.log(`⚠️ Failed to start monitoring for ${client.aktenzeichen}: ${monitorResult.message}`);
-        }
         
       } else {
         console.error(`❌ Failed to send welcome email: ${welcomeEmailResult.error}`);
@@ -361,12 +342,13 @@ router.post(
       // Return success response to Zendesk
       res.json({
         success: true,
-        message: "Portal access configured and welcome email sent",
+        message: "Portal access configured and welcome email sent via public comment",
         client_id: client.id,
         aktenzeichen: client.aktenzeichen,
         portal_status: "active",
         welcome_email_status: welcomeEmailStatus,
-        side_conversation_id: sideConversationId,
+        email_method: "public_comment",
+        ticket_id: zendesk_ticket_id,
         next_step: "Client should receive portal access email with credentials",
       });
     } catch (error) {

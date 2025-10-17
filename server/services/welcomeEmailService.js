@@ -3,19 +3,16 @@ const ZendeskService = require('./zendeskService');
 
 /**
  * Welcome Email Service
- * Handles welcome email sending via Zendesk side conversations
- * Integrates with side conversation monitoring for response tracking
+ * Handles welcome email sending via Zendesk public ticket comments
+ * Sends professional HTML welcome emails to new portal users
  */
 class WelcomeEmailService {
     constructor() {
         this.zendeskService = new ZendeskService();
-        
-        // Track welcome email side conversations for monitoring
-        this.welcomeEmailConversations = new Map(); // clientReference -> conversation data
     }
 
     /**
-     * Send welcome email to new user via side conversation
+     * Send welcome email to new user via public ticket comment
      */
     async sendWelcomeEmail(ticketId, userData) {
         try {
@@ -27,42 +24,24 @@ class WelcomeEmailService {
             const plainTextBody = this.generatePlainTextWelcomeEmail(userData);
             const htmlBody = this.generateHTMLWelcomeEmail(userData);
 
-            const response = await this.zendeskService.createSideConversation(ticketId, {
-                recipientEmail: userData.email,
-                recipientName: `${userData.firstName} ${userData.lastName}`,
-                subject: emailSubject,
-                body: plainTextBody,
-                htmlBody: htmlBody,
-                internalNote: false // This is an external email to the client
+            // Send as public comment on the main ticket
+            const response = await this.zendeskService.addPublicComment(ticketId, {
+                content: plainTextBody,
+                htmlContent: htmlBody,
+                tags: ['welcome-email-sent', 'portal-access']
             });
 
             if (response.success) {
-                // Store conversation data for monitoring
-                const conversationData = {
-                    id: uuidv4(),
-                    client_reference: userData.aktenzeichen,
-                    side_conversation_id: response.side_conversation_id,
-                    main_zendesk_ticket_id: ticketId,
-                    contact_type: 'welcome_email',
-                    contact_status: 'sent',
-                    email: userData.email,
-                    name: `${userData.firstName} ${userData.lastName}`,
-                    sent_at: new Date(),
-                    response_received: false,
-                    response_processed: false
-                };
-                
-                this.welcomeEmailConversations.set(userData.aktenzeichen, conversationData);
-                
-                console.log(`✅ Welcome email sent successfully to ${userData.email}`);
-                console.log(`📝 Side conversation ID: ${response.side_conversation_id}`);
+                console.log(`✅ Welcome email sent successfully to ${userData.email} via public comment`);
+                console.log(`📝 Ticket ID: ${ticketId}`);
                 
                 return {
                     success: true,
-                    side_conversation_id: response.side_conversation_id,
+                    ticket_id: ticketId,
                     email: userData.email,
                     subject: emailSubject,
-                    conversation_data: conversationData
+                    method: 'public_comment',
+                    comment_added: true
                 };
             } else {
                 console.error(`❌ Failed to send welcome email: ${response.error}`);
@@ -81,32 +60,6 @@ class WelcomeEmailService {
         }
     }
 
-    /**
-     * Get welcome email conversation data for a client (used by monitoring)
-     */
-    getWelcomeEmailConversation(clientReference) {
-        return this.welcomeEmailConversations.get(clientReference) || null;
-    }
-
-    /**
-     * Get all welcome email conversations (used by monitoring)
-     */
-    getAllWelcomeEmailConversations() {
-        return Array.from(this.welcomeEmailConversations.values());
-    }
-
-    /**
-     * Mark welcome email response as received
-     */
-    markResponseReceived(clientReference, responseData) {
-        const conversation = this.welcomeEmailConversations.get(clientReference);
-        if (conversation) {
-            conversation.response_received = true;
-            conversation.response_received_at = new Date();
-            conversation.response_data = responseData;
-            console.log(`✅ Welcome email response received for client ${clientReference}`);
-        }
-    }
 
     /**
      * Generate plain text welcome email

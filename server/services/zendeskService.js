@@ -396,16 +396,25 @@ class ZendeskService {
   }
 
   // Add public comment to ticket (visible to customer)
-  async addPublicComment(ticketId, { content, status = null, tags = [] }) {
+  async addPublicComment(ticketId, { content, htmlContent = null, status = null, tags = [] }) {
     try {
       console.log('💬 Adding public comment to Zendesk ticket:', ticketId);
 
+      const commentData = {
+        public: true // Public comment visible to customer
+      };
+
+      // Use html_body if HTML content is provided, otherwise use body
+      if (htmlContent) {
+        commentData.html_body = htmlContent;
+        commentData.body = content; // Fallback plain text
+      } else {
+        commentData.body = content;
+      }
+
       const updateData = {
         ticket: {
-          comment: {
-            body: content,
-            public: true // Public comment visible to customer
-          }
+          comment: commentData
         }
       };
 
