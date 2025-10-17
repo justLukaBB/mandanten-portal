@@ -271,24 +271,24 @@ export const PersonalPortal = ({
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
         <div className="flex items-center justify-between">
-          <div className="h-10 sm:h-14 flex items-center justify-center">
-            <img
-              src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
-              alt="Logo"
-              className="h-auto w-auto max-h-full max-w-[100px] sm:max-w-[140px] object-contain"
-            />
-          </div>
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <h1 className="text-lg sm:text-2xl font-bold hidden sm:block" style={{ color: customColors.primary }}>
+          <div className="flex items-center space-x-3">
+            <div className="h-8 md:h-10">
+              <img
+                src={customLogo || "https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png"}
+                alt="Logo"
+                className="h-full object-contain"
+              />
+            </div>
+            <h1 className="text-lg md:text-2xl font-semibold" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
-            <button
-              onClick={handleLogout}
-              className="text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-2 sm:px-3 rounded-full transition-colors"
-            >
-              Abmelden
-            </button>
           </div>
+          <button
+            onClick={handleLogout}
+            className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded-full transition-colors"
+          >
+            Abmelden
+          </button>
         </div>
       </header>
 
