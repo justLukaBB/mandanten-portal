@@ -269,22 +269,22 @@ export const PersonalPortal = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-5">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
         <div className="flex items-center justify-between">
-          <div className="h-14 flex items-center justify-center">
+          <div className="h-10 sm:h-14 flex items-center justify-center">
             <img
               src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
               alt="Logo"
-              className="h-auto w-auto max-h-full max-w-[140px] object-contain"
+              className="h-auto w-auto max-h-full max-w-[100px] sm:max-w-[140px] object-contain"
             />
           </div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold" style={{ color: customColors.primary }}>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <h1 className="text-lg sm:text-2xl font-bold hidden sm:block" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
             <button
               onClick={handleLogout}
-              className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded-full transition-colors"
+              className="text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-2 sm:px-3 rounded-full transition-colors"
             >
               Abmelden
             </button>
@@ -293,7 +293,7 @@ export const PersonalPortal = ({
       </header>
 
       {/* Main content */}
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Progress tracker */}
         {/* <ClientProgressTracker 
           currentPhase={client?.phase || 2} 
