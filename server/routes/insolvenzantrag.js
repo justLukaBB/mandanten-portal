@@ -318,7 +318,8 @@ async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
         const creditors = client.final_creditor_list || [];
         if (Array.isArray(creditors) && creditors.length > 0) {
             await fillAnlage6(pdfDoc, form, creditors, options);
-            await fillAnlage7(pdfDoc, form, creditors, options);
+            // Pass a clean base of the document bytes to allow creating extra Anlage 7 pages without field name collisions
+            await fillAnlage7(pdfDoc, form, creditors, { ...options, basePdfBytes: pdfBytes });
         }
 
         // ------------------- 📄 ANLAGE 7 -------------------
@@ -487,61 +488,152 @@ async function fillAnlage6(pdfDoc, form, creditors, options) {
 
 // }
 async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
-    const targetIndex = Number(options.anlage7Index ?? 25); // Page index (0-based)
-    const startFieldNumber = Number(options.anlage7Start ?? 643); // Starts from Textfeld 643
-    const maxRowsPerPage = 6; // Number of creditor blocks per page (3 left + 3 right columns)
+    // Page indices of Anlage 7
+    const firstPageIndex = Number(options.anlage7IndexFirst ?? 25);  // page 26 (3 creditors)
+    const secondPageIndex = Number(options.anlage7IndexSecond ?? 26); // page 27 (6 creditors)
 
-    // Dummy France address for now
-    // const dummyStreet = "Rue de Lyon";
-    // const dummyHouseNumber = "18B";
-    // const dummyZip = "75012";
-    // const dummyCity = "Paris";
+    // Field numbering
+    const startFieldFirst = Number(options.anlage7Start ?? 643);     // Textfeld start on page 26
+    const startFieldSecond = startFieldFirst + (11 * 3);             // Textfeld start for creditor 4 block (page 27 layout)
 
-    let pageOffset = 0;
-    let currentFieldNumber = startFieldNumber; // 👈 Track actual field number manually
+    // Counters
+    let currentFieldNumber = startFieldFirst;
+    let onSecondLikePage = false; // true when filling any page-27-like page
+    let extraAnlage7PagesInserted = 0; // number of additional page-27-like pages inserted
 
-    // Calculate total debt amount (sum of all claim_amounts)
+    // We need clean base bytes to safely clone page 27 without duplicating form field names
+    const basePdfBytes = options.basePdfBytes;
+
+    // Sum of claim amounts for percentage
     const totalDebtAmount = creditors.reduce((sum, c) => {
         const amount = parseFloat(c.claim_amount || c.amount || 0);
         return sum + (isNaN(amount) ? 0 : amount);
     }, 0);
 
-    // 🔁 Loop from 1 to 9 (inclusive)
-    for (let i = 1; i <= 9; i++) {
-        const rowInPage = (i - 1) % maxRowsPerPage;
+    // Helper: compute display row number cumulatively: 1..N
+    // Page 26 naturally shows 1..3; page 27 shows 4..9; extra pages continue 10, 11, ...
+    const getDisplayRow = (globalIndex) => globalIndex;
 
-        // ➕ Duplicate page when current page fills up
-        if (i > 1 && rowInPage === 0) {
-            const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
-            pdfDoc.addPage(dup);
-            pageOffset++;
+    for (let i = 1; i <= creditors.length; i++) {
+        // Handle pagination
+        if (i === 1) {
+            // start on page 26 (already present)
+            currentFieldNumber = startFieldFirst;
+            onSecondLikePage = false;
+        } else if (i === 4) {
+            // move to original page 27 (already present)
+            currentFieldNumber = startFieldSecond;
+            onSecondLikePage = true;
+        } else if (i > 9 && ((i - 10) % 6 === 0)) {
+            // After the first 9, for each group of up to 6 creditors, we create
+            // a temporary single-page PDF cloned from the original page 27,
+            // fill its fields, flatten the form and append the page to the main PDF.
+
+            if (!basePdfBytes) {
+                console.warn('⚠️ basePdfBytes not provided; cannot safely clone page 27 with forms. Falling back to in-place copy (may cause field collisions).');
+                const [dup] = await pdfDoc.copyPages(pdfDoc, [secondPageIndex]);
+                // Insert right after original page 27, accounting for previously inserted pages
+                const insertAt = secondPageIndex + 1 + extraAnlage7PagesInserted;
+                pdfDoc.insertPage(insertAt, dup);
+                extraAnlage7PagesInserted++;
+                currentFieldNumber = startFieldSecond;
+                onSecondLikePage = true;
+            } else {
+                // Load a full base document so we can access its form and fields properly
+                const baseDoc = await PDFDocument.load(basePdfBytes);
+                const baseForm = baseDoc.getForm();
+                let tempFieldNumber = startFieldSecond;
+
+                // Fill up to 6 creditors on baseDoc's page 27
+                const end = Math.min(i + 6 - 1, creditors.length);
+                console.log(`Anlage7: preparing extra page for creditors [${i}..${end}]`);
+                for (let k = i; k <= end; k++) {
+                    const cred = creditors[k - 1];
+                    if (!cred) continue;
+
+                    const street = cred.strasse || '';
+                    const houseNumber = cred.hausnummer || '';
+                    const zipCode = cred.plz || '';
+                    const city = cred.ort || '';
+                    const claimAmount = parseFloat(cred.claim_amount || cred.amount || 0) || 0;
+                    const percentage = totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : '0.00';
+
+                    const displayRow = k; // cumulative numbering: 10,11,... on extra pages
+                    const rows = [
+                        `${cred.name || cred.sender_name || 'Unbekannt'}`,
+                        `${street} ${houseNumber}`.trim(),
+                        `${zipCode} ${city}`.trim(),
+                        `${cred.reference_number || ''}`,
+                        `${cred.actual_creditor || ''}`,
+                    ];
+                    const finalRows = [`${displayRow}.`, ...rows];
+
+                    // Fill text rows on base form (page 27 fields)
+                    finalRows.forEach((text, idx) => {
+                        const fname = `Textfeld ${tempFieldNumber + idx}`;
+                        try {
+                            baseForm.getTextField(fname).setText(text);
+                            console.log(`Anlage7 extra page field: ${fname} = ${text}`);
+                        } catch (e) {
+                            console.warn(`Anlage7 extra page missing field: ${fname}`);
+                        }
+                    });
+
+                    // Amount and percentage fields
+                    const claimFieldIndex = tempFieldNumber + finalRows.length + 4;
+                    const percentFieldIndex = claimFieldIndex + 1;
+                    try { baseForm.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`); } catch {}
+                    try { baseForm.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`); } catch {}
+
+                    // Advance to next block start (always 12 on 27-like pages)
+                    tempFieldNumber += 12;
+                }
+
+                // Flatten all fields in baseDoc so content becomes static on that page
+                try { baseForm.flatten(); } catch {}
+
+                // Copy the now-filled page 27 from baseDoc and insert into main doc
+                const [pageToAdd] = await pdfDoc.copyPages(baseDoc, [secondPageIndex]);
+                const insertAt = secondPageIndex + 1 + extraAnlage7PagesInserted;
+                pdfDoc.insertPage(insertAt, pageToAdd);
+                console.log(`Anlage7: inserted extra page at index ${insertAt}`);
+                extraAnlage7PagesInserted++;
+
+                // Prepare counters for the next creditor after this page
+                currentFieldNumber = startFieldSecond;
+                onSecondLikePage = true;
+
+                // We already filled creditors in range [i .. end] on the extra page,
+                // so advance the loop variable to 'end' and continue.
+                i = end;
+                continue;
+            }
         }
 
         const creditor = creditors[i - 1];
         if (!creditor) continue;
 
-        let street = creditor.strasse || '';
-        let houseNumber = creditor.hausnummer || '';
-        let zipCode = creditor.plz || '';
-        let city = creditor.ort || '';
+        const street = creditor.strasse || '';
+        const houseNumber = creditor.hausnummer || '';
+        const zipCode = creditor.plz || '';
+        const city = creditor.ort || '';
 
-        const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0);
-        const percentage =
-            totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : "0.00";
+        const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0) || 0;
+        const percentage = totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : '0.00';
 
-        // 🧭 Prepare data rows
+        // Data rows
         const rows = [
-            `${creditor.name || creditor.sender_name || "Unbekannt"}`,
+            `${creditor.name || creditor.sender_name || 'Unbekannt'}`,
             `${street} ${houseNumber}`.trim(),
             `${zipCode} ${city}`.trim(),
-            `${creditor.reference_number || ""}`,
-            `${creditor.actual_creditor || ""}`,
+            `${creditor.reference_number || ''}`,
+            `${creditor.actual_creditor || ''}`,
         ];
 
-        // 🧾 Add iteration number at start from i >= 4
-        const finalRows = i >= 4 ? [`${i}.`, ...rows] : rows;
+        const displayRow = getDisplayRow(i);
+        const finalRows = displayRow >= 4 ? [`${displayRow}.`, ...rows] : rows;
 
-        // 🖋 Fill fields
+        // Fill text rows
         finalRows.forEach((text, idx) => {
             const fieldName = `Textfeld ${currentFieldNumber + idx}`;
             try {
@@ -551,24 +643,22 @@ async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
             }
         });
 
-        // Calculate indexes for claim and percentage fields dynamically
-        const claimFieldIndex = currentFieldNumber + finalRows.length + 4; // skip 4 fields (48–51)
+        // Amount and percentage fields
+        const claimFieldIndex = currentFieldNumber + finalRows.length + 4; // skip 4 fields
         const percentFieldIndex = claimFieldIndex + 1;
-
         try {
             form.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`);
         } catch {
             console.warn(`⚠️ Missing field: Textfeld ${claimFieldIndex}`);
         }
-
         try {
             form.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`);
         } catch {
             console.warn(`⚠️ Missing field: Textfeld ${percentFieldIndex}`);
         }
 
-        // 🧮 Increment field number for next creditor
-        const fieldGap = i >= 4 ? 12 : 11;
+        // Advance to next block start
+        const fieldGap = displayRow >= 4 ? 12 : 11;
         currentFieldNumber += fieldGap;
     }
 }
