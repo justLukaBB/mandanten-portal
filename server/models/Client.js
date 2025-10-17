@@ -175,6 +175,11 @@ const clientSchema = new mongoose.Schema({
   session_token: String,
   last_login: Date,
   
+  // Welcome email
+  welcome_email_sent: { type: Boolean, default: false },
+  welcome_email_sent_at: Date,
+  welcome_side_conversation_id: String,
+  
   // Zendesk integration
   zendesk_user_id: String,
   zendesk_ticket_id: String,
