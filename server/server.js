@@ -789,7 +789,7 @@ app.post('/api/clients/:clientId/documents',
             if (existingDoc) {
               isDuplicate = true;
               duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
-              documentStatus = 'duplicate_detected';
+              documentStatus = 'duplicate';
             }
           }
           
@@ -2156,7 +2156,7 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
     }
     
     // Validate the new status
-    const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate_detected'];
+    const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate'];
     if (!validStatuses.includes(document_status)) {
       return res.status(400).json({ error: 'Invalid document status' });
     }
