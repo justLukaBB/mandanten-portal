@@ -293,19 +293,24 @@ class ZendeskService {
         }
       }
       
+      // Zendesk Side Conversation API payload structure
       const sideConversationData = {
         message: {
+          subject: subject,
+          body: body,
           to: [
             {
               email: recipientEmail,
               name: recipientName
             }
-          ],
-          subject: subject,
-          body: body,
-          html_body: htmlBody || body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          ]
         }
       };
+      
+      // Add HTML body if provided (this will be processed by Zendesk)
+      if (htmlBody) {
+        sideConversationData.message.html_body = htmlBody;
+      }
 
       console.log(`📤 Creating side conversation with data:`, {
         ticketId,
