@@ -6118,6 +6118,69 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
   }
 });
 
+// Submit personal data from client portal (client-accessible endpoint)
+app.post('/api/clients/:clientId/address', authenticateClient, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { city, house_number, phone, street, zip_code } = req.body;
+    
+    // Get the client to verify authentication
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Verify that the authenticated client matches the requested client
+    // Check against both id and aktenzeichen fields
+    const isAuthorized = req.clientId === client.id || 
+                        req.clientId === client.aktenzeichen || 
+                        req.clientId === clientId;
+    
+    if (!isAuthorized) {
+      console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
+      return res.status(403).json({ error: 'Access denied - client ID mismatch' });
+    }
+    
+    // Validate required parameters
+    if (!city || !house_number || !street || !zip_code) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: city, house number, street and zip code' 
+      });
+    }
+    
+    // Find and update client using the safe helper
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      client.address = `${street} ${house_number}, ${zip_code} ${city}`.trim();
+      client.ort = city;
+      client.plz = zip_code;
+      client.hausnummer = house_number;
+      client.strasse = street;
+      client.phone = phone;
+
+      return client;
+    });
+    
+    if (!updatedClient) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log(`✅ Personal data saved for ${updatedClient.aktenzeichen}:`);
+    
+    res.json({
+      success: true,
+      client_id: updatedClient.id,
+      aktenzeichen: updatedClient.aktenzeichen,
+    });
+    
+  } catch (error) {
+    console.error('❌ Error saving client personal data:', error.message);
+    res.status(500).json({
+      error: 'Failed to save personal data',
+      details: error.message
+    });
+  }
+});
+
 // Reset client data endpoint (client-accessible endpoint)
 app.post('/api/clients/:clientId/reset-financial-data', authenticateClient, async (req, res) => {
   try {

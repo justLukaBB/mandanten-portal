@@ -9,6 +9,7 @@ import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import api from '../config/api';
+import ClientAddressForm from '../components/ClientAddressForm';
 
 /**
  * Personal/Client Portal Function Component
@@ -47,6 +48,7 @@ export const PersonalPortal = ({
   const [creditorConfirmationData, setCreditorConfirmationData] = useState<any>(null);
   const [showingCreditorConfirmation, setShowingCreditorConfirmation] = useState(false);
   const [showingFinancialForm, setShowingFinancialForm] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
 
@@ -101,9 +103,9 @@ export const PersonalPortal = ({
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
             creditorResponse.data.workflow_status === 'creditor_review' ||
-            (clientData.first_payment_received && 
-             clientData.seven_day_review_triggered === true && 
-             clientData.current_status === 'creditor_review')
+            (clientData.first_payment_received &&
+              clientData.seven_day_review_triggered === true &&
+              clientData.current_status === 'creditor_review')
           ) &&
           !creditorResponse.data.client_confirmed;
 
@@ -133,9 +135,18 @@ export const PersonalPortal = ({
             responseReceived: true
           });
 
+          // setShowAddressForm(!responseData.)
+
           setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
           setFinancialDataSubmitted(alreadySubmitted);
           setCreditorResponsePeriod(periodInfo);
+
+          const clientHasAddress = Boolean(clientData?.address);
+          const shouldShowAddressForm =
+            (shouldShowFinancialForm && !alreadySubmitted && !clientHasAddress) ||
+            (alreadySubmitted && !clientHasAddress);
+
+          setShowAddressForm(shouldShowAddressForm);
         } else {
           console.warn('Invalid financial form status response structure');
           setShowingFinancialForm(false);
@@ -254,7 +265,7 @@ export const PersonalPortal = ({
           >
             Erneut versuchen
           </button>
-            <button
+          <button
             onClick={handleLogout}
             className="px-4 py-2 text-white rounded-lg ms-1"
             style={{ backgroundColor: customColors.primary }}
@@ -352,12 +363,12 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {client?.client_confirmed_creditors 
-                  ? 'Gläubigerliste bestätigt' 
+                {client?.client_confirmed_creditors
+                  ? 'Gläubigerliste bestätigt'
                   : 'Dokumentensammlung abgeschlossen'}
               </h3>
               <p className="text-gray-600 mb-4">
-                {client?.client_confirmed_creditors 
+                {client?.client_confirmed_creditors
                   ? 'Sie haben Ihre Gläubigerliste bestätigt. Weitere Dokumenten-Uploads sind nicht mehr möglich.'
                   : 'Der Workflow ist abgeschlossen. Die Dokumentensammlung ist beendet.'}
               </p>
@@ -424,11 +435,23 @@ export const PersonalPortal = ({
 
         {/* Financial Data Form - shows after 30-day creditor response period */}
         {showingFinancialForm && (
-          <FinancialDataForm
-            clientId={clientId!}
-            onFormSubmitted={handleFinancialFormSubmitted}
-            customColors={customColors}
-          />
+          <>
+            <FinancialDataForm
+              clientId={clientId!}
+              onFormSubmitted={handleFinancialFormSubmitted}
+              customColors={customColors}
+            />
+            
+          </>
+        )} 
+
+        {showAddressForm && (
+            <ClientAddressForm
+              clientId={clientId!}
+              client={client}
+              customColors={customColors}
+              onFormSubmitted={() => console.log('✅ Address form submitted')}
+            />
         )}
 
         {/* Financial Data Submitted Status */}
