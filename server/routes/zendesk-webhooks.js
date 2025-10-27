@@ -294,50 +294,53 @@ router.post(
         updated_at: client.updated_at,
       });
 
-      // Send welcome email via side conversation
-      console.log(`📧 Sending welcome email to new user: ${email}`);
+      // DEACTIVATED: Send welcome email via side conversation
+      // console.log(`📧 Sending welcome email to new user: ${email}`);
       
-      const welcomeEmailResult = await welcomeEmailService.sendWelcomeEmail(
-        zendesk_ticket_id,
-        {
-          email: email,
-          firstName: firstName,
-          lastName: lastName,
-          aktenzeichen: aktenzeichen,
-        }
-      );
+      // const welcomeEmailResult = await welcomeEmailService.sendWelcomeEmail(
+      //   zendesk_ticket_id,
+      //   {
+      //     email: email,
+      //     firstName: firstName,
+      //     lastName: lastName,
+      //     aktenzeichen: aktenzeichen,
+      //   }
+      // );
 
-      let welcomeEmailStatus = "not_sent";
+      let welcomeEmailStatus = "not_sent"; // Always not_sent since deactivated
       let sideConversationId = null;
 
-      if (welcomeEmailResult.success) {
-        console.log(`✅ Welcome email sent successfully via public comment on ticket: ${welcomeEmailResult.ticket_id}`);
-        welcomeEmailStatus = "sent";
-        sideConversationId = null; // Not using side conversations anymore
-        
-        // Update client with welcome email info
-        client.welcome_email_sent = true;
-        client.welcome_email_sent_at = new Date();
-        client.welcome_side_conversation_id = null; // Not applicable for public comments
-        
-        // Add to status history
-        client.status_history.push({
-          id: uuidv4(),
-          status: "welcome_email_sent",
-          changed_by: "system",
-          zendesk_ticket_id: zendesk_ticket_id,
-          metadata: {
-            action: "welcome_email_sent_via_public_comment",
-            method: "public_comment",
-            ticket_id: welcomeEmailResult.ticket_id,
-          },
-        });
-        
-        await client.save();
-        
-      } else {
-        console.error(`❌ Failed to send welcome email: ${welcomeEmailResult.error}`);
-      }
+      // DEACTIVATED: Welcome email sending logic
+      // if (welcomeEmailResult.success) {
+      //   console.log(`✅ Welcome email sent successfully via public comment on ticket: ${welcomeEmailResult.ticket_id}`);
+      //   welcomeEmailStatus = "sent";
+      //   sideConversationId = null; // Not using side conversations anymore
+      //   
+      //   // Update client with welcome email info
+      //   client.welcome_email_sent = true;
+      //   client.welcome_email_sent_at = new Date();
+      //   client.welcome_side_conversation_id = null; // Not applicable for public comments
+      //   
+      //   // Add to status history
+      //   client.status_history.push({
+      //     id: uuidv4(),
+      //     status: "welcome_email_sent",
+      //     changed_by: "system",
+      //     zendesk_ticket_id: zendesk_ticket_id,
+      //     metadata: {
+      //       action: "welcome_email_sent_via_public_comment",
+      //       method: "public_comment",
+      //       ticket_id: welcomeEmailResult.ticket_id,
+      //     },
+      //   });
+      //   
+      //   await client.save();
+      //   
+      // } else {
+      //   console.error(`❌ Failed to send welcome email: ${welcomeEmailResult.error}`);
+      // }
+      
+      console.log(`ℹ️ Welcome email system is DEACTIVATED - no email will be sent to ${email}`);
 
       // Return success response to Zendesk
       res.json({
