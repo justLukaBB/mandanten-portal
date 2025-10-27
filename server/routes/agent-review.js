@@ -228,24 +228,23 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
       const isCreditorDocument = doc.is_creditor_document === true;
       const alreadyReviewed = doc.manually_reviewed === true;
       
+      const needsReview = !alreadyReviewed && (manualReviewRequired || 
+        (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD));
+      
       // Debug logging for each document
       console.log(`📄 Document ${doc.name || doc.id}:`, {
         is_creditor_document: isCreditorDocument,
         confidence: documentConfidence,
         manual_review_required: manualReviewRequired,
         manually_reviewed: alreadyReviewed,
-        needsReview: isCreditorDocument && !alreadyReviewed && (manualReviewRequired || documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
+        needsReview: needsReview
       });
       
       // Include if:
-      // 1. It's a creditor document AND
-      // 2. Not already manually reviewed AND
-      // 3. Either manual review is explicitly required OR document confidence is low
-      return (
-        isCreditorDocument && 
-        !alreadyReviewed &&
-        (manualReviewRequired || documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
-      );
+      // 1. Not already manually reviewed AND
+      // 2. Either manual review is explicitly required OR 
+      //    (it's a creditor document AND document confidence is low)
+      return needsReview;
     });
 
     // Get creditors that need review
