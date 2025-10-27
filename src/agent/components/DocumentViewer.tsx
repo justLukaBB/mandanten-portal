@@ -49,7 +49,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       
       // First get document metadata
       console.log(`📄 Loading document: ${document.id} for client: ${clientId}`);
-      const metadataResponse = await fetch(`${API_BASE_URL}/agent-review/${clientId}/document/${document.id}`, {
+      const metadataResponse = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -63,7 +63,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       const metadata = await metadataResponse.json();
       
       // Create document URL for secure access
-      const fileUrl = `${API_BASE_URL}/agent-review/${clientId}/document/${document.id}/file`;
+      const fileUrl = `${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}/file`;
       
       // Add auth header by creating a blob URL
       const fileResponse = await fetch(fileUrl, {

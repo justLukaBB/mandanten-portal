@@ -263,14 +263,16 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragOver
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          showingCreditorConfirmation ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+        } ${isDragOver
             ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
           }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onDragOver={showingCreditorConfirmation ? undefined : handleDragOver}
+        onDragLeave={showingCreditorConfirmation ? undefined : handleDragLeave}
+        onDrop={showingCreditorConfirmation ? undefined : handleDrop}
+        onClick={() => !showingCreditorConfirmation && fileInputRef.current?.click()}
       >
         <CloudArrowUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <p className="text-sm text-gray-600 mb-2">
