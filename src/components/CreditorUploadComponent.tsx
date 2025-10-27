@@ -263,23 +263,21 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragOver
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragOver
             ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
       >
         <CloudArrowUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <p className="text-sm text-gray-600 mb-2">
           Dateien hierher ziehen oder{' '}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="text-red-800 hover:text-blue-700 font-medium"
-          >
-            durchsuchen
-          </button>
+          <span className="text-red-800 font-medium">
+            hier klicken zum Durchsuchen
+          </span>
         </p>
         <p className="text-xs text-gray-500">
           Unterstützte Formate: PDF, JPG, PNG, DOC, DOCX (max. 10MB)
