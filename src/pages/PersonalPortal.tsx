@@ -491,40 +491,42 @@ export const PersonalPortal = ({
 
 
 
-        {/* Rating prompt */}
-        <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start flex-1">
-              <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
-                style={{ backgroundColor: `${customColors.primary}10` }}>
-                <img
-                  src="https://www.provenexpert.com/favicon.ico"
-                  alt="ProvenExpert"
-                  className="h-6 w-6 object-contain"
-                />
+        {/* Rating prompt - only show when NOT showing creditor confirmation */}
+        {!showingCreditorConfirmation && (
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start flex-1">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
+                  style={{ backgroundColor: `${customColors.primary}10` }}>
+                  <img
+                    src="https://www.provenexpert.com/favicon.ico"
+                    alt="ProvenExpert"
+                    className="h-6 w-6 object-contain"
+                  />
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900 text-sm">Ihre Erfahrung zählt</h4>
+                  <p className="text-gray-600 text-xs mt-1">
+                    Mit Ihrer Bewertung helfen Sie uns, unseren Service kontinuierlich zu verbessern.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-medium text-gray-900 text-sm">Ihre Erfahrung zählt</h4>
-                <p className="text-gray-600 text-xs mt-1">
-                  Mit Ihrer Bewertung helfen Sie uns, unseren Service kontinuierlich zu verbessern.
-                </p>
-              </div>
+              <a
+                href="https://www.provenexpert.com/rechtsanwalt-thomas-scuric/9298/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
+                style={{
+                  backgroundColor: '#047857',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#065f46'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+              >
+                Jetzt bewerten
+              </a>
             </div>
-            <a
-              href="https://www.provenexpert.com/rechtsanwalt-thomas-scuric/9298/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
-              style={{
-                backgroundColor: '#047857',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#065f46'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-            >
-              Jetzt bewerten
-            </a>
           </div>
-        </div>
+        )}
 
         {/* Footer note */}
         <div className="text-center text-xs text-gray-500 pt-4 pb-16">
