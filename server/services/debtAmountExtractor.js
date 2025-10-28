@@ -125,7 +125,7 @@ ${emailBody.slice(0, 2000)}
 Extrahieren Sie die aktuelle Gesamtforderung als JSON:`;
 
             const response = await axios.post(this.claudeApiUrl, {
-                model: 'claude-3-5-sonnet-20241022',
+                model: 'claude-3-5-sonnet-20240620',
                 max_tokens: 1000,
                 temperature: 0.1,
                 messages: [{
