@@ -1054,15 +1054,18 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     const uploadsDir = path.join(__dirname, '../uploads');
     let filePath;
     
-    // Try different possible paths (similar to client route)
+    // Try different possible paths - prioritize stored filename from multer
     const possiblePaths = [
-      // First try with filename from document (most reliable)
-      path.join(uploadsDir, clientId, document.filename || document.name),
-      path.join(uploadsDir, client.aktenzeichen, document.filename || document.name),
-      // Then try with document ID and inferred extension
+      // Most reliable: stored filename from multer (UUID with extension)
+      path.join(uploadsDir, clientId, document.filename),
+      path.join(uploadsDir, client.aktenzeichen, document.filename),
+      // Fallback: document name as stored
+      path.join(uploadsDir, clientId, document.name),
+      path.join(uploadsDir, client.aktenzeichen, document.name),
+      // Last resort: try with document ID and inferred extension
       path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
       path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-    ];
+    ].filter(p => p && !p.includes('undefined')); // Filter out undefined paths
     
     console.log(`🔍 Agent document loading for ${documentId}:`, {
       documentId,
