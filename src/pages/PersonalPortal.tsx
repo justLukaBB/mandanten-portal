@@ -521,11 +521,10 @@ export const PersonalPortal = ({
               <div className="flex items-start flex-1">
                 <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
                   style={{ backgroundColor: `${customColors.primary}10` }}>
-                  <img
-                    src="https://www.provenexpert.com/favicon.ico"
-                    alt="ProvenExpert"
-                    className="h-6 w-6 object-contain"
-                  />
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FFA500"/>
+                    <circle cx="12" cy="12" r="8" stroke="#FFA500" strokeWidth="2" fill="none"/>
+                  </svg>
                 </div>
                 <div>
                   <h4 className="font-medium text-gray-900 text-sm">Ihre Erfahrung zählt</h4>
