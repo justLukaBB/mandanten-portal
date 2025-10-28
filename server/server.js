@@ -1343,7 +1343,10 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     }
     
     // Check if agent has approved (required before client can see creditors)
-    if (!client.admin_approved) {
+    // Auto-approve for cases where 7-day review has been triggered and payment received
+    const isAutoApproved = client.first_payment_received && client.seven_day_review_triggered && status === 'creditor_review';
+    
+    if (!client.admin_approved && !isAutoApproved) {
       return res.json({
         workflow_status: status,
         creditors: [],
@@ -1354,7 +1357,9 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     }
     
     // If agent approved and status is awaiting_client_confirmation, show creditors
-    if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed') {
+    // Also include creditor_review status when 7-day review has been triggered and payment received
+    if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
+        (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
       return res.json({
         workflow_status: status,
         creditors: client.final_creditor_list || [],
