@@ -1086,7 +1086,6 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     console.log(`📁 Trying file paths:`, possiblePaths);
     
     // Debug: List actual files in upload directories
-    const fs = require('fs');
     try {
       const clientUploadDir = path.join(uploadsDir, clientId);
       const aktenzeichenUploadDir = path.join(uploadsDir, client.aktenzeichen);
