@@ -142,7 +142,7 @@ WICHTIG:
       console.log('=== SENDING REQUEST TO CLAUDE API ===');
       
       const response = await this.client.messages.create({
-        model: 'claude-3-5-sonnet-20240620',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 2000,
         temperature: 0.2, // Optimized for both classification and data extraction
         messages: [
