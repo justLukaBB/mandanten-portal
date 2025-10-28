@@ -1080,9 +1080,22 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
       aktenzeichen: client.aktenzeichen,
       filename: document.filename,
       type: document.type,
-      name: document.name
+      name: document.name,
+      documentKeys: Object.keys(document)
     });
     console.log(`📁 Trying file paths:`, possiblePaths);
+    
+    // Debug: List actual files in upload directories
+    const fs = require('fs');
+    try {
+      const clientUploadDir = path.join(uploadsDir, clientId);
+      const aktenzeichenUploadDir = path.join(uploadsDir, client.aktenzeichen);
+      
+      console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
+      console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');
+    } catch (debugError) {
+      console.log(`⚠️ Debug directory listing failed:`, debugError.message);
+    }
 
     for (const possiblePath of possiblePaths) {
       console.log(`🔍 Checking path: ${possiblePath} - exists: ${fs.existsSync(possiblePath)}`);
@@ -1096,16 +1109,47 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     if (!filePath || !fs.existsSync(filePath)) {
       console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
       
-      // For test scenarios, serve a mock PDF
-      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
+      // Last resort: search for any file containing the document ID
+      try {
+        const searchDirs = [
+          path.join(uploadsDir, clientId),
+          path.join(uploadsDir, client.aktenzeichen)
+        ];
+        
+        for (const searchDir of searchDirs) {
+          if (fs.existsSync(searchDir)) {
+            const files = fs.readdirSync(searchDir);
+            console.log(`🔍 Searching for files containing '${documentId}' in ${searchDir}:`, files);
+            
+            // Look for files that start with the document ID
+            const matchingFile = files.find(file => 
+              file.startsWith(documentId) || 
+              file.includes(documentId.substring(0, 8)) // partial match
+            );
+            
+            if (matchingFile) {
+              filePath = path.join(searchDir, matchingFile);
+              console.log(`✅ Found matching file via search: ${filePath}`);
+              break;
+            }
+          }
+        }
+      } catch (searchError) {
+        console.log(`⚠️ File search failed:`, searchError.message);
+      }
+      
+      // If still not found, check for test scenarios
+      if (!filePath && client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
         console.log(`📋 Serving mock PDF for test document ${document.name}`);
         return serveMockPDF(res, document.name);
       }
       
-      return res.status(404).json({
-        error: 'Document file not found on disk',
-        document_id: documentId
-      });
+      if (!filePath) {
+        return res.status(404).json({
+          error: 'Document file not found on disk',
+          document_id: documentId
+        });
+      }
     }
 
     // Log access for security auditing
