@@ -1014,7 +1014,9 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     const path = require('path');
 
     // Verify agent has access to this client
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({
+      $or: [{ _id: clientId }, { aktenzeichen: clientId }, { id: clientId }]
+    });
     
     if (!client) {
       return res.status(404).json({
@@ -1037,17 +1039,31 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     const uploadsDir = path.join(__dirname, '../uploads');
     let filePath;
     
-    // Try different possible paths
+    // Try different possible paths (similar to client route)
     const possiblePaths = [
-      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
+      // First try with filename from document (most reliable)
+      path.join(uploadsDir, clientId, document.filename || document.name),
+      path.join(uploadsDir, client.aktenzeichen, document.filename || document.name),
+      // Then try with document ID and inferred extension
       path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, client.aktenzeichen, document.filename),
-      path.join(uploadsDir, clientId, document.filename),
+      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
     ];
+    
+    console.log(`🔍 Agent document loading for ${documentId}:`, {
+      documentId,
+      clientId,
+      aktenzeichen: client.aktenzeichen,
+      filename: document.filename,
+      type: document.type,
+      name: document.name
+    });
+    console.log(`📁 Trying file paths:`, possiblePaths);
 
     for (const possiblePath of possiblePaths) {
+      console.log(`🔍 Checking path: ${possiblePath} - exists: ${fs.existsSync(possiblePath)}`);
       if (fs.existsSync(possiblePath)) {
         filePath = possiblePath;
+        console.log(`✅ Found file at: ${filePath}`);
         break;
       }
     }
