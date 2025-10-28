@@ -1014,9 +1014,24 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     const path = require('path');
 
     // Verify agent has access to this client
-    const client = await Client.findOne({
-      $or: [{ _id: clientId }, { aktenzeichen: clientId }, { id: clientId }]
-    });
+    // Handle both ObjectId format and UUID/string format
+    let clientQuery;
+    if (clientId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+      // It's a UUID, search by id or aktenzeichen
+      clientQuery = { $or: [{ id: clientId }, { aktenzeichen: clientId }] };
+    } else {
+      // It's either ObjectId or aktenzeichen
+      clientQuery = { $or: [{ _id: clientId }, { aktenzeichen: clientId }, { id: clientId }] };
+    }
+    
+    console.log(`🔍 Looking for client with ID: ${clientId}, using query:`, clientQuery);
+    const client = await Client.findOne(clientQuery);
+    
+    if (!client) {
+      console.error(`❌ Client not found for ID: ${clientId}`);
+    } else {
+      console.log(`✅ Found client: ${client.aktenzeichen || client.id}`);
+    }
     
     if (!client) {
       return res.status(404).json({
