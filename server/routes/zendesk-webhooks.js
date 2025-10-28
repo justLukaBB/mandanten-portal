@@ -60,6 +60,14 @@ router.post(
   async (req, res) => {
     try {
       console.log("🔗 Zendesk Webhook: Portal-Link-Sent received", req.body);
+      console.log("🔍 Portal-Link-Sent webhook triggered details:", {
+        userAgent: req.headers['user-agent'],
+        sourceIP: req.ip,
+        timestamp: new Date().toISOString(),
+        triggeredBy: req.body.trigger_id || req.body.automation_id || 'manual',
+        webhookSource: req.headers['x-zendesk-webhook-signature'] ? 'zendesk' : 'external',
+        hasZendeskFormat: !!(req.body.ticket && req.body.ticket.requester)
+      });
 
       // Handle both direct format and Zendesk webhook format
       let email,
@@ -140,9 +148,17 @@ router.post(
             zendesk_user_id: zendesk_user_id,
             portal_link_sent: true,
             portal_link_sent_at: new Date(),
-            current_status: "portal_access_sent",
             updated_at: new Date(),
           };
+
+          // Don't override current_status if client is already in a more advanced status
+          const advancedStatuses = ['awaiting_client_confirmation', 'client_confirmation', 'creditor_review', 'creditor_contact_initiated', 'creditor_contact_active', 'settlement_documents_generated', 'settlement_plan_sent_to_creditors', 'completed'];
+          if (!advancedStatuses.includes(client.current_status)) {
+            console.log(`⚠️ Status would be reset from ${client.current_status} to portal_access_sent for client ${client.aktenzeichen} - ALLOWING because not in advanced status`);
+            updateData.current_status = "portal_access_sent";
+          } else {
+            console.log(`✅ Status protection: Client ${client.aktenzeichen} stays at ${client.current_status} (advanced status)`);
+          }
 
           // Update address and geburtstag if provided
           if (address) updateData.address = address;
@@ -192,7 +208,14 @@ router.post(
           client.zendesk_user_id = zendesk_user_id;
           client.portal_link_sent = true;
           client.portal_link_sent_at = new Date();
-          client.current_status = "portal_access_sent";
+          // Don't override current_status if client is already in a more advanced status
+          const advancedStatuses = ['awaiting_client_confirmation', 'client_confirmation', 'creditor_review', 'creditor_contact_initiated', 'creditor_contact_active', 'settlement_documents_generated', 'settlement_plan_sent_to_creditors', 'completed'];
+          if (!advancedStatuses.includes(client.current_status)) {
+            console.log(`⚠️ FALLBACK: Status would be reset from ${client.current_status} to portal_access_sent for client ${client.aktenzeichen} - ALLOWING because not in advanced status`);
+            client.current_status = "portal_access_sent";
+          } else {
+            console.log(`✅ FALLBACK: Status protection: Client ${client.aktenzeichen} stays at ${client.current_status} (advanced status)`);
+          }
           client.updated_at = new Date();
           if (address) client.address = address;
           if (geburtstag) client.geburtstag = geburtstag;

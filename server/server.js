@@ -1331,6 +1331,17 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     // Check current_status (new field) or workflow_status (legacy field)
     const status = client.current_status || client.workflow_status;
     
+    console.log(`🔍 Creditor confirmation check for ${client.aktenzeichen}:`, {
+      current_status: client.current_status,
+      workflow_status: client.workflow_status,
+      admin_approved: client.admin_approved,
+      client_confirmed_creditors: client.client_confirmed_creditors,
+      first_payment_received: client.first_payment_received,
+      seven_day_review_triggered: client.seven_day_review_triggered,
+      creditors_count: (client.final_creditor_list || []).length,
+      status: status
+    });
+    
     // For new clients, return empty state
     if (status === 'portal_access_sent' || status === 'created') {
       return res.json({

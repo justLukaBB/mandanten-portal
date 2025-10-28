@@ -93,6 +93,7 @@ export const PersonalPortal = ({
       // Check for creditor confirmation status
       try {
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
+        console.log('🔍 Creditor confirmation API response:', creditorResponse.data);
         setCreditorConfirmationData(creditorResponse.data);
 
         // Show creditor confirmation only after 7-day review is triggered or explicitly in review status
@@ -108,6 +109,13 @@ export const PersonalPortal = ({
               clientData.current_status === 'creditor_review')
           ) &&
           !creditorResponse.data.client_confirmed;
+
+        console.log('🎯 Should show creditor confirmation:', shouldShowCreditorConfirmation, {
+          workflow_status: creditorResponse.data?.workflow_status,
+          client_confirmed: creditorResponse.data?.client_confirmed,
+          current_status: clientData.current_status,
+          admin_approved: clientData.admin_approved
+        });
 
         setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
       } catch (creditorErr) {
@@ -215,6 +223,20 @@ export const PersonalPortal = ({
       fetchClientData();
     }
   }, [clientId]);
+
+  // Add polling to check for status updates
+  useEffect(() => {
+    if (!clientId) return;
+    
+    // Poll every 30 seconds when creditor confirmation or financial form is not showing
+    const interval = setInterval(() => {
+      if (!showingCreditorConfirmation && !showingFinancialForm) {
+        fetchClientData();
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [clientId, showingCreditorConfirmation, showingFinancialForm]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
