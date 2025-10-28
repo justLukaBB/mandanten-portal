@@ -514,7 +514,8 @@ export const PersonalPortal = ({
 
 
         {/* Rating prompt - only show when NOT showing creditor confirmation */}
-        {!showingCreditorConfirmation && (
+        {console.log('🎯 ProvenExpert display check:', { showingCreditorConfirmation, showingFinancialForm, clientConfirmed: client?.client_confirmed_creditors })}
+        {!showingCreditorConfirmation && !showingFinancialForm && (
           <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
             <div className="flex items-center justify-between">
               <div className="flex items-start flex-1">
