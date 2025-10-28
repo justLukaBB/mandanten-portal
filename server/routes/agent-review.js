@@ -1054,18 +1054,25 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     const uploadsDir = path.join(__dirname, '../uploads');
     let filePath;
     
-    // Try different possible paths - prioritize stored filename from multer
-    const possiblePaths = [
-      // Most reliable: stored filename from multer (UUID with extension)
-      path.join(uploadsDir, clientId, document.filename),
-      path.join(uploadsDir, client.aktenzeichen, document.filename),
-      // Fallback: document name as stored
-      path.join(uploadsDir, clientId, document.name),
-      path.join(uploadsDir, client.aktenzeichen, document.name),
-      // Last resort: try with document ID and inferred extension
-      path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-    ].filter(p => p && !p.includes('undefined')); // Filter out undefined paths
+    // Build possible paths with proper null checking
+    const possiblePaths = [];
+    
+    // Most reliable: stored filename from multer (UUID with extension)
+    if (document.filename) {
+      possiblePaths.push(path.join(uploadsDir, clientId, document.filename));
+      possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, document.filename));
+    }
+    
+    // Fallback: document name as stored
+    if (document.name) {
+      possiblePaths.push(path.join(uploadsDir, clientId, document.name));
+      possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, document.name));
+    }
+    
+    // Last resort: try with document ID and inferred extension
+    const extension = document.type?.split('/')[1] || 'pdf';
+    possiblePaths.push(path.join(uploadsDir, clientId, `${documentId}.${extension}`));
+    possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, `${documentId}.${extension}`));
     
     console.log(`🔍 Agent document loading for ${documentId}:`, {
       documentId,
