@@ -1142,9 +1142,14 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
                 
                 if (docIndex >= 0 && docIndex < sortedFiles.length) {
                   // Get the file at the same index position
-                  filePath = path.join(searchDir, sortedFiles[docIndex]);
-                  console.log(`✅ Found file by index mapping: Document_${docIndex + 1} -> ${sortedFiles[docIndex]}`);
-                  break;
+                  const mappedPath = path.join(searchDir, sortedFiles[docIndex]);
+                  if (fs.existsSync(mappedPath)) {
+                    filePath = mappedPath;
+                    console.log(`✅ Found file by index mapping: Document_${docIndex + 1} -> ${sortedFiles[docIndex]}`);
+                    break;
+                  } else {
+                    console.log(`❌ Index mapped file does not exist: ${mappedPath}`);
+                  }
                 }
               }
             }
@@ -1172,7 +1177,21 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     console.log(`📄 Agent ${req.agentUsername} accessing document ${documentId} for client ${client.aktenzeichen}`);
 
     // Set appropriate headers
-    const mimeType = document.type || 'application/pdf';
+    // Determine mime type from actual file if type is missing
+    let mimeType = document.type || 'application/pdf';
+    if (!document.type && filePath) {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.pdf': 'application/pdf',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      };
+      mimeType = mimeTypes[ext] || 'application/octet-stream';
+    }
+    
     const filename = document.filename || document.name || `document_${documentId}.pdf`;
     
     res.setHeader('Content-Type', mimeType);
