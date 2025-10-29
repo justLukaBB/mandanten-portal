@@ -1131,6 +1131,23 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
               console.log(`✅ Found matching file via search: ${filePath}`);
               break;
             }
+            
+            // If no match by ID, try to match by document position/index
+            if (!filePath && document.name) {
+              const match = document.name.match(/Document_(\d+)_/);
+              if (match) {
+                const docIndex = parseInt(match[1]) - 1; // Convert to 0-based index
+                const sortedFiles = files.sort(); // Sort files to ensure consistent order
+                console.log(`📑 Trying to match by document index ${docIndex} in sorted files:`, sortedFiles);
+                
+                if (docIndex >= 0 && docIndex < sortedFiles.length) {
+                  // Get the file at the same index position
+                  filePath = path.join(searchDir, sortedFiles[docIndex]);
+                  console.log(`✅ Found file by index mapping: Document_${docIndex + 1} -> ${sortedFiles[docIndex]}`);
+                  break;
+                }
+              }
+            }
           }
         }
       } catch (searchError) {
