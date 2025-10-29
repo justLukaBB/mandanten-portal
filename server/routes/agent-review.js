@@ -1085,13 +1085,39 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     });
     console.log(`📁 Trying file paths:`, possiblePaths);
     
-    // Debug: List actual files in upload directories
+    // Debug: List actual files in upload directories and check root uploads dir
     try {
       const clientUploadDir = path.join(uploadsDir, clientId);
       const aktenzeichenUploadDir = path.join(uploadsDir, client.aktenzeichen);
       
       console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
       console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');
+      
+      // Check if uploads directory exists and list all subdirectories
+      if (fs.existsSync(uploadsDir)) {
+        const allDirs = fs.readdirSync(uploadsDir).filter(item => {
+          const itemPath = path.join(uploadsDir, item);
+          return fs.statSync(itemPath).isDirectory();
+        });
+        console.log(`📁 All directories in ${uploadsDir}:`, allDirs.slice(0, 10)); // Show first 10
+        
+        // Check if any directory contains files for this client
+        for (const dir of allDirs) {
+          const dirPath = path.join(uploadsDir, dir);
+          const files = fs.readdirSync(dirPath);
+          if (files.length > 0) {
+            console.log(`📂 Found non-empty directory ${dir} with ${files.length} files`);
+            // Add this directory to possible paths if it's not already there
+            if (!possiblePaths.some(p => p.includes(dir))) {
+              possiblePaths.push(path.join(dirPath, document.name));
+              possiblePaths.push(path.join(dirPath, `${documentId}.pdf`));
+              possiblePaths.push(path.join(dirPath, `${documentId}.png`));
+            }
+          }
+        }
+      } else {
+        console.log(`❌ Upload directory does not exist: ${uploadsDir}`);
+      }
     } catch (debugError) {
       console.log(`⚠️ Debug directory listing failed:`, debugError.message);
     }
@@ -1132,23 +1158,47 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
               break;
             }
             
-            // If no match by ID, try to match by document position/index
+            // If no match by ID, try to match by document upload order
             if (!filePath && document.name) {
               const match = document.name.match(/Document_(\d+)_/);
               if (match) {
                 const docIndex = parseInt(match[1]) - 1; // Convert to 0-based index
-                const sortedFiles = files.sort(); // Sort files to ensure consistent order
-                console.log(`📑 Trying to match by document index ${docIndex} in sorted files:`, sortedFiles);
                 
-                if (docIndex >= 0 && docIndex < sortedFiles.length) {
-                  // Get the file at the same index position
-                  const mappedPath = path.join(searchDir, sortedFiles[docIndex]);
+                // Get all documents for this client and sort by upload time
+                const allDocuments = client.documents || [];
+                const sortedDocuments = allDocuments
+                  .filter(doc => doc.uploadedAt) // Only documents with upload time
+                  .sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt));
+                
+                // Find current document position in upload order
+                const currentDocUploadTime = document.uploadedAt;
+                let actualIndex = -1;
+                if (currentDocUploadTime) {
+                  actualIndex = sortedDocuments.findIndex(doc => doc.uploadedAt === currentDocUploadTime);
+                } else {
+                  // Fallback to document index if no upload time
+                  actualIndex = docIndex;
+                }
+                
+                // Sort files by modification time to match upload order
+                const filesWithStats = files.map(file => {
+                  const filePath = path.join(searchDir, file);
+                  const stats = fs.statSync(filePath);
+                  return { name: file, mtime: stats.mtime };
+                }).sort((a, b) => a.mtime - b.mtime);
+                
+                const sortedFiles = filesWithStats.map(f => f.name);
+                console.log(`📑 Trying to match document ${actualIndex} by upload order in files:`, sortedFiles);
+                
+                if (actualIndex >= 0 && actualIndex < sortedFiles.length) {
+                  // Get the file at the same position in upload order
+                  const mappedPath = path.join(searchDir, sortedFiles[actualIndex]);
                   if (fs.existsSync(mappedPath)) {
                     filePath = mappedPath;
-                    console.log(`✅ Found file by index mapping: Document_${docIndex + 1} -> ${sortedFiles[docIndex]}`);
+                    console.log(`✅ Found file by upload order mapping: Document_${docIndex + 1} (upload #${actualIndex + 1}) -> ${sortedFiles[actualIndex]}`);
                     break;
                   } else {
-                    console.log(`❌ Index mapped file does not exist: ${mappedPath}`);
+                    console.log(`❌ Upload order mapped file does not exist: ${mappedPath}`);
                   }
                 }
               }

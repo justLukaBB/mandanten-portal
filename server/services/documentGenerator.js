@@ -3084,7 +3084,8 @@ class DocumentGenerator {
             if (locationPart) parts.push(locationPart);
         }
         
-        return parts.length > 0 ? parts.join(', ') : null;
+        // Join with newline to put PLZ and city on separate line
+        return parts.length > 0 ? parts.join('\n') : null;
     }
 }
 

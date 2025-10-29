@@ -226,9 +226,9 @@ class NullplanCreditorLetterGenerator {
         const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address
+        // Build creditor address - street on first line, PLZ and city on second line
         const creditorAddress = creditor.address || 
-            `${creditor.creditor_street || ''}, ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+            `${creditor.creditor_street || ''}\n${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
             'Gläubiger Adresse';
 
         const replacements = {
