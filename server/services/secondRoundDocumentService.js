@@ -341,7 +341,8 @@ class SecondRoundDocumentService {
         if (creditor.creditor_city) cityPart.push(creditor.creditor_city);
         if (cityPart.length > 0) parts.push(cityPart.join(' '));
         
-        return parts.length > 0 ? parts.join(', ') : 'Adresse nicht verfügbar';
+        // Join with newline to put PLZ and city on separate line
+        return parts.length > 0 ? parts.join('\n') : 'Adresse nicht verfügbar';
     }
 
     /**

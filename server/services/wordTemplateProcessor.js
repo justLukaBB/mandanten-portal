@@ -620,13 +620,13 @@ class WordTemplateProcessor {
             currentCreditor: firstCreditor ? {
                 name: firstCreditor.name || firstCreditor.creditor_name || 'Gläubiger',
                 address: firstCreditor.address || 
-                        `${firstCreditor.creditor_street || ''}, ${firstCreditor.creditor_postal_code || ''} ${firstCreditor.creditor_city || ''}`.trim() ||
+                        `${firstCreditor.creditor_street || ''}\n${firstCreditor.creditor_postal_code || ''} ${firstCreditor.creditor_city || ''}`.trim() ||
                         'Gläubiger Adresse',
                 reference: firstCreditor.reference_number || '',
                 amount: firstCreditor.final_amount || firstCreditor.amount || firstCreditor.debt_amount || 0
             } : {
                 name: 'Test Gläubiger',
-                address: 'Musterstraße 1, 12345 Musterstadt',
+                address: 'Musterstraße 1\n12345 Musterstadt',
                 reference: '123456',
                 amount: 5000
             }
