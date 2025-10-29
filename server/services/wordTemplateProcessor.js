@@ -321,7 +321,7 @@ class WordTemplateProcessor {
             // Address
             '"Adresse Mandant"': clientData.address,
             '"Straße"': clientData.street,
-            '"PLZ Ort"': `${clientData.postalCode} ${clientData.city}`,
+            '"PLZ Ort"': `${clientData.postalCode}\n${clientData.city}`,
             
             // Financial Information
             '"Gesamtschulden"': this.formatGermanCurrency(clientData.totalDebt),

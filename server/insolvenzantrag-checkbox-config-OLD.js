@@ -108,7 +108,7 @@ const INSOLVENZANTRAG_CONFIG = {
       "Textfeld 2": "clientData.streetAddress", // Full street address
       "Textfeld 25": "clientData.street",       // Street name only
       "Textfeld 28": "clientData.houseNumber",  // House number only
-      "Textfeld 3": "clientData.postalCode + ' ' + clientData.city", // Full postal address
+      "Textfeld 3": "clientData.postalCode + '\\n' + clientData.city", // Full postal address
       "Textfeld 31": "clientData.postalCode",   // Postal code only
       "Textfeld 26": "clientData.city",         // City name
       "Textfeld 37": "clientData.city",         // City name (duplicate)
