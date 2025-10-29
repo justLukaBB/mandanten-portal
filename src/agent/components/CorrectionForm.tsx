@@ -85,6 +85,7 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
       notes: formData.notes.trim()
     };
     
+    console.log('📤 CorrectionForm sending corrections:', corrections);
     onSave(corrections);
   };
 
