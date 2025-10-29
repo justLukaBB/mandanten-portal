@@ -61,6 +61,12 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       }
 
       const metadata = await metadataResponse.json();
+      console.log('📄 Document metadata received:', metadata);
+      
+      // Update document object with metadata if available
+      if (metadata.success && metadata.document) {
+        Object.assign(document, metadata.document);
+      }
       
       // Create document URL for secure access
       const fileUrl = `${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}/file`;
@@ -77,6 +83,13 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       }
 
       const blob = await fileResponse.blob();
+      console.log('📄 File blob received:', { type: blob.type, size: blob.size });
+      
+      // Update document type from blob if not already set
+      if (!document.type && blob.type) {
+        document.type = blob.type;
+      }
+      
       const url = URL.createObjectURL(blob);
       setDocumentUrl(url);
 
@@ -100,8 +113,29 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     setZoom(1);
   };
 
-  const isPDF = document.type?.includes('pdf') || document.name?.toLowerCase().endsWith('.pdf');
-  const isImage = document.type?.includes('image') || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(document.name || '');
+  // Enhanced type detection from multiple sources
+  const detectFileType = () => {
+    // Check document.type first
+    if (document.type?.includes('pdf')) return { isPDF: true, isImage: false };
+    if (document.type?.includes('image')) return { isPDF: false, isImage: true };
+    
+    // Check file extensions from document name
+    const fileName = document.filename || document.name || '';
+    const lowerName = fileName.toLowerCase();
+    
+    if (lowerName.endsWith('.pdf')) return { isPDF: true, isImage: false };
+    if (/\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(lowerName)) return { isPDF: false, isImage: true };
+    
+    // Check blob content type if available
+    if (documentUrl) {
+      // For blob URLs, we can't directly check content type, but we can infer from successful loading
+      return { isPDF: false, isImage: true }; // Default to image for display
+    }
+    
+    return { isPDF: false, isImage: false };
+  };
+  
+  const { isPDF, isImage } = detectFileType();
 
   if (loading) {
     return (
