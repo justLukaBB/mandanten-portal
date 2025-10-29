@@ -1085,13 +1085,39 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     });
     console.log(`📁 Trying file paths:`, possiblePaths);
     
-    // Debug: List actual files in upload directories
+    // Debug: List actual files in upload directories and check root uploads dir
     try {
       const clientUploadDir = path.join(uploadsDir, clientId);
       const aktenzeichenUploadDir = path.join(uploadsDir, client.aktenzeichen);
       
       console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
       console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');
+      
+      // Check if uploads directory exists and list all subdirectories
+      if (fs.existsSync(uploadsDir)) {
+        const allDirs = fs.readdirSync(uploadsDir).filter(item => {
+          const itemPath = path.join(uploadsDir, item);
+          return fs.statSync(itemPath).isDirectory();
+        });
+        console.log(`📁 All directories in ${uploadsDir}:`, allDirs.slice(0, 10)); // Show first 10
+        
+        // Check if any directory contains files for this client
+        for (const dir of allDirs) {
+          const dirPath = path.join(uploadsDir, dir);
+          const files = fs.readdirSync(dirPath);
+          if (files.length > 0) {
+            console.log(`📂 Found non-empty directory ${dir} with ${files.length} files`);
+            // Add this directory to possible paths if it's not already there
+            if (!possiblePaths.some(p => p.includes(dir))) {
+              possiblePaths.push(path.join(dirPath, document.name));
+              possiblePaths.push(path.join(dirPath, `${documentId}.pdf`));
+              possiblePaths.push(path.join(dirPath, `${documentId}.png`));
+            }
+          }
+        }
+      } else {
+        console.log(`❌ Upload directory does not exist: ${uploadsDir}`);
+      }
     } catch (debugError) {
       console.log(`⚠️ Debug directory listing failed:`, debugError.message);
     }
