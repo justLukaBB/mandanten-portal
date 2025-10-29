@@ -1170,15 +1170,11 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
                   .filter(doc => doc.uploadedAt) // Only documents with upload time
                   .sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt));
                 
-                // Find current document position in upload order
-                const currentDocUploadTime = document.uploadedAt;
-                let actualIndex = -1;
-                if (currentDocUploadTime) {
-                  actualIndex = sortedDocuments.findIndex(doc => doc.uploadedAt === currentDocUploadTime);
-                } else {
-                  // Fallback to document index if no upload time
-                  actualIndex = docIndex;
-                }
+                // Use document index directly (Document_1 = index 0, Document_2 = index 1, etc.)
+                // This is more reliable than upload time which can be inconsistent
+                let actualIndex = docIndex;
+                
+                console.log(`📋 Document mapping: ${document.name} -> index ${actualIndex}`);
                 
                 // Sort files by modification time to match upload order
                 const filesWithStats = files.map(file => {
