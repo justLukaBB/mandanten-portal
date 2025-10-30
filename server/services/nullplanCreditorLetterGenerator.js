@@ -227,8 +227,9 @@ class NullplanCreditorLetterGenerator {
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
         // Build creditor address - street on first line, PLZ and city on second line
+        // Use Word XML line break instead of \n for proper formatting
         const creditorAddress = creditor.address || 
-            `${creditor.creditor_street || ''}\n${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+            `${creditor.creditor_street || ''}<w:br/>${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
             'Gläubiger Adresse';
 
         const replacements = {
