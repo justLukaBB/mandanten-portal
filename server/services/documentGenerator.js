@@ -150,8 +150,8 @@ class DocumentGenerator {
                         spacing: { after: 600 }
                     }),
 
-                    // Creditor Table
-                    await this.createCreditorTable(calculationResult.creditor_payments, settlementData),
+                    // Creditor Table - check if it's a Nullplan (no monthly payment)
+                    await this.createCreditorTableForPlan(calculationResult.creditor_payments, settlementData),
 
                     // Spacing after table
                     new Paragraph({
@@ -250,6 +250,205 @@ class DocumentGenerator {
 
         console.log(`✅ Document structure created for ${clientData.name}`);
         return doc;
+    }
+
+    /**
+     * Create creditor table for settlement plan - detects Nullplan vs. regular plan
+     */
+    async createCreditorTableForPlan(creditorPayments, settlementData) {
+        // Check if this is a Nullplan (no monthly payment or payment is 0)
+        const monthlyPayment = settlementData.monthly_payment || 0;
+        const isNullplan = monthlyPayment === 0;
+        
+        if (isNullplan) {
+            console.log('📋 Creating Nullplan table (ohne pfändbares Einkommen)');
+            return await this.createSimpleCreditorTable(creditorPayments);
+        } else {
+            console.log('📋 Creating regular settlement plan table (mit pfändbarem Einkommen)');
+            return await this.createCreditorTable(creditorPayments, settlementData);
+        }
+    }
+
+    /**
+     * Create simple creditor table for Nullplan (ohne pfändbares Einkommen)
+     */
+    async createSimpleCreditorTable(creditorPayments) {
+        // Calculate total debt
+        const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
+
+        const tableRows = [
+            // Header Row - simplified for Nullplan
+            new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Nr.", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 8, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 40, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Forderung", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 20, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Quote von Gesamtverschuldung", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 20, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "mtl.", bold: true, size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        shading: { fill: "D9D9FF" },
+                        borders: this.createTableBorders()
+                    })
+                ]
+            })
+        ];
+
+        // Data Rows for Nullplan
+        creditorPayments.forEach((creditor, index) => {
+            const debtAmount = creditor.debt_amount || 0;
+            const debtPercentage = totalDebt > 0 ? (debtAmount / totalDebt) * 100 : 0;
+            
+            tableRows.push(
+                new TableRow({
+                    children: [
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
+                                alignment: AlignmentType.CENTER
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ 
+                                    text: creditor.creditor_name || creditor.name || 'N/A', 
+                                    size: 16 
+                                })],
+                                alignment: AlignmentType.LEFT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ 
+                                    text: this.formatCurrency(debtAmount), 
+                                    size: 16 
+                                })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ 
+                                    text: this.formatPercentage(debtPercentage), 
+                                    size: 16 
+                                })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        }),
+                        new TableCell({
+                            children: [new Paragraph({ 
+                                children: [new TextRun({ 
+                                    text: "0,00", 
+                                    size: 16,
+                                    bold: true 
+                                })],
+                                alignment: AlignmentType.RIGHT
+                            })],
+                            borders: this.createTableBorders()
+                        })
+                    ]
+                })
+            );
+        });
+
+        // Total Row
+        tableRows.push(
+            new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "", size: 16 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "Summe", bold: true, size: 16 })],
+                            alignment: AlignmentType.LEFT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ 
+                                text: this.formatCurrency(totalDebt), 
+                                bold: true, 
+                                size: 16 
+                            })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ 
+                                text: "100,00%", 
+                                bold: true, 
+                                size: 16 
+                            })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: "", size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    })
+                ]
+            })
+        );
+
+        return new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: tableRows,
+            float: {
+                horizontalAnchor: HorizontalPositionAlign.CENTER,
+                verticalAnchor: VerticalPositionAlign.TOP,
+            }
+        });
     }
 
     /**
@@ -2136,7 +2335,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: "mittlerweile liegen uns alle relevanten Daten vor, so dass wir Ihnen nun einen außergerichtlichen Einigungsvorschlag unterbreiten können:",
+                                text: "mittlerweile liegen uns alle relevanten Daten vor, sodass wir Ihnen nun einen außergerichtlichen Einigungsvorschlag unterbreiten können:",
                                 size: 18
                             })
                         ],

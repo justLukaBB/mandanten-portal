@@ -114,6 +114,7 @@ class NullplanTemplateGenerator {
         const maritalStatus = this.getMaritalStatusText(clientData.family_info?.marital_status);
         const income = clientData.financial_data?.monthly_net_income || 0;
         const aktenzeichen = clientData.aktenzeichen || 'XXX/XX';
+        const clientGender = clientData.personal_info?.gender || clientData.gender || 'unknown';
 
         // Build creditor address
         const creditorName = targetCreditor.creditor_name || 'Gläubiger';
@@ -196,7 +197,7 @@ class NullplanTemplateGenerator {
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: 'mittlerweile liegen uns alle relevanten Daten vor, so dass wir Ihnen nun einen außergerichtlichen Einigungsvorschlag unterbreiten können:',
+                        text: 'mittlerweile liegen uns alle relevanten Daten vor, sodass wir Ihnen nun einen außergerichtlichen Einigungsvorschlag unterbreiten können:',
                         size: 22
                     })
                 ],
@@ -229,7 +230,7 @@ class NullplanTemplateGenerator {
             new Paragraph({
                 children: [
                     new TextRun({
-                        text: `Sie ist am ${birthDate} geboren und ${maritalStatus}. ${fullName} verfügt über Einkommen aus Erwerbstätigkeit von ${this.formatCurrency(income)}.`,
+                        text: `${this.getGenderPronoun(clientGender)} ist am ${birthDate} geboren und ${maritalStatus}. ${fullName} verfügt über Einkommen aus Erwerbstätigkeit von ${this.formatCurrency(income)}.`,
                         size: 22
                     })
                 ],
@@ -663,6 +664,21 @@ class NullplanTemplateGenerator {
             'widowed': 'verwitwet'
         };
         return statusMap[status] || 'ledig';
+    }
+
+    /**
+     * Helper: Get gender-appropriate pronoun in German
+     */
+    getGenderPronoun(gender) {
+        if (!gender) return 'Er/Sie';
+        
+        const normalizedGender = gender.toLowerCase();
+        if (normalizedGender === 'female' || normalizedGender === 'f' || normalizedGender === 'weiblich') {
+            return 'Sie';
+        } else if (normalizedGender === 'male' || normalizedGender === 'm' || normalizedGender === 'männlich') {
+            return 'Er';
+        }
+        return 'Er/Sie'; // fallback for unknown gender
     }
 }
 
