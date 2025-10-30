@@ -110,7 +110,20 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
   const confidenceColor = confidence >= 0.8 ? 'text-green-600' : confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
   const confidenceIcon = confidence >= 0.8 ? CheckIcon : confidence >= 0.5 ? ExclamationTriangleIcon : XMarkIcon;
 
-  const isFormValid = formData.sender_name.trim() && formData.claim_amount.trim() && !isNaN(parseFloat(formData.claim_amount));
+  // Form is valid if we have at least a sender name and a valid claim amount
+  const isFormValid = formData.sender_name.trim().length > 0 && 
+                      formData.claim_amount.trim().length > 0 && 
+                      !isNaN(parseFloat(formData.claim_amount)) &&
+                      parseFloat(formData.claim_amount) >= 0;
+  
+  // Debug log for form validation
+  console.log('📋 Form validation:', {
+    sender_name: formData.sender_name,
+    claim_amount: formData.claim_amount,
+    isFormValid,
+    disabled,
+    buttonDisabled: disabled || !isFormValid
+  });
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${className}`}>
