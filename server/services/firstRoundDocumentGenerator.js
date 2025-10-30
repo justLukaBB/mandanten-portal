@@ -89,6 +89,9 @@ class FirstRoundDocumentGenerator {
             // Render the document with the data
             doc.render(templateData);
 
+            // Fix German hyphenation issues in the rendered document
+            this.fixDocumentHyphenation(doc);
+
             // Generate the output buffer
             const outputBuffer = doc.getZip().generate({
                 type: 'nodebuffer',
@@ -140,45 +143,147 @@ class FirstRoundDocumentGenerator {
                 year: 'numeric'
             });
         };
+    }
 
-        // Parse and format client address for proper line breaks
-        const formatClientAddress = (clientData) => {
-            // Priority 1: Use structured address fields if available
-            if (clientData.street && clientData.zipCode && clientData.city) {
-                const streetLine = clientData.houseNumber ? 
-                    `${clientData.street} ${clientData.houseNumber}` : 
-                    clientData.street;
-                return `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
+    /**
+     * Fix German hyphenation issues in the rendered Word document
+     */
+    fixDocumentHyphenation(doc) {
+        try {
+            // Get the document XML
+            const zip = doc.getZip();
+            let documentXml = zip.files['word/document.xml'].asText();
+            
+            // Define hyphenation fixes
+            const hyphenationFixes = {
+                'Eini-gungsversuchs': 'Einigungsversuchs',
+                'Eini- gungsversuchs': 'Einigungsversuchs', 
+                'die-sem': 'diesem',
+                'die- sem': 'diesem',
+                'Da-ten': 'Daten',
+                'Da- ten': 'Daten',
+                'gebe-ten': 'gebeten',
+                'gebe- ten': 'gebeten',
+                'Ange-le-genheit': 'Angelegenheit',
+                'Ange- le- genheit': 'Angelegenheit',
+                'Her-ausrechnung': 'Herausrechnung',
+                'Her- ausrechnung': 'Herausrechnung',
+                'Vollstreckungsmaß-nahmen': 'Vollstreckungsmaßnahmen',
+                'Vollstreckungsmaß- nahmen': 'Vollstreckungsmaßnahmen',
+                'Verbraucherinsolvenz-verfahrens': 'Verbraucherinsolvenzverfahrens',
+                'Verbraucherinsolvenz- verfahrens': 'Verbraucherinsolvenzverfahrens',
+                'Schuldnerin/Der': 'Schuldnerin/den',
+                'Schuldner/in': 'Schuldner/die Schuldnerin'
+            };
+            
+            // Apply fixes
+            for (const [broken, fixed] of Object.entries(hyphenationFixes)) {
+                const regex = new RegExp(broken.replace(/[-\s]/g, '[-\\s]*'), 'gi');
+                documentXml = documentXml.replace(regex, fixed);
             }
             
-            // Priority 2: Parse address string if structured fields not available
-            const address = clientData.address;
-            if (!address) return "Adresse nicht verfügbar";
+            // Update the document XML
+            zip.file('word/document.xml', documentXml);
             
-            // Try to parse address string into components
-            // Pattern: "Street number, postal_code city"
-            const addressParts = address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
-            if (addressParts) {
-                const street = addressParts[1];
-                const houseNumber = addressParts[2];
-                const zipCode = addressParts[3];
-                const city = addressParts[4];
-                
-                // Format with line break between street+number and postal code+city
-                return `${street} ${houseNumber}\n${zipCode} ${city}`;
+            console.log('✅ Fixed German hyphenation issues in document');
+            
+        } catch (error) {
+            console.error('⚠️ Warning: Could not fix hyphenation issues:', error.message);
+            // Don't throw error - document generation should continue
+        }
+    }
+
+    /**
+     * Parse and format client address for proper line breaks
+     */
+    formatClientAddress(clientData) {
+        console.log('🏠 Formatting client address:', JSON.stringify(clientData, null, 2));
+        
+        // Priority 1: Use structured address fields if available
+        if (clientData.street && clientData.zipCode && clientData.city) {
+            const streetLine = clientData.houseNumber ? 
+                `${clientData.street} ${clientData.houseNumber}` : 
+                clientData.street;
+            const formatted = `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
+            console.log('✅ Used structured address fields:', formatted);
+            return formatted;
+        }
+        
+        // Priority 2: Parse address string if structured fields not available
+        const address = clientData.address;
+        if (!address) {
+            console.log('❌ No address found in clientData');
+            return "Adresse nicht verfügbar";
+        }
+        
+        console.log('📍 Parsing address string:', address);
+        
+        // Try to parse address string into components
+        // Pattern: "Street number, postal_code city"
+        const addressParts = address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+        if (addressParts) {
+            const street = addressParts[1];
+            const houseNumber = addressParts[2];
+            const zipCode = addressParts[3];
+            const city = addressParts[4];
+            
+            // Format with line break between street+number and postal code+city
+            const formatted = `${street} ${houseNumber}\n${zipCode} ${city}`;
+            console.log('✅ Parsed with regex pattern:', formatted);
+            return formatted;
+        }
+        
+        // If parsing fails, try simpler pattern: look for comma separator
+        if (address.includes(',')) {
+            const parts = address.split(',').map(part => part.trim());
+            if (parts.length === 2) {
+                // Assume first part is street, second is postal code + city
+                const formatted = `${parts[0]}\n${parts[1]}`;
+                console.log('✅ Parsed with comma separator:', formatted);
+                return formatted;
             }
-            
-            // If parsing fails, try simpler pattern: look for comma separator
-            if (address.includes(',')) {
-                const parts = address.split(',').map(part => part.trim());
-                if (parts.length === 2) {
-                    // Assume first part is street, second is postal code + city
-                    return `${parts[0]}\n${parts[1]}`;
-                }
+        }
+        
+        // Try to split by space and look for postal code pattern
+        const words = address.split(/\s+/);
+        let postalCodeIndex = -1;
+        
+        // Look for 5-digit postal code
+        for (let i = 0; i < words.length; i++) {
+            if (/^\d{5}$/.test(words[i])) {
+                postalCodeIndex = i;
+                break;
             }
-            
-            // Fallback: return address as-is
-            return address;
+        }
+        
+        if (postalCodeIndex > 0 && postalCodeIndex < words.length - 1) {
+            // Found postal code, split address
+            const streetPart = words.slice(0, postalCodeIndex).join(' ');
+            const cityPart = words.slice(postalCodeIndex).join(' ');
+            const formatted = `${streetPart}\n${cityPart}`;
+            console.log('✅ Parsed by finding postal code:', formatted);
+            return formatted;
+        }
+        
+        // Fallback: return address as-is
+        console.log('⚠️ Could not parse address, returning as-is:', address);
+        return address;
+    }
+
+    /**
+     * Prepare template data for Word document
+     */
+    prepareTemplateData(clientData, creditor) {
+        const today = new Date();
+        const responseDate = new Date();
+        responseDate.setDate(today.getDate() + 14); // 14 days from today
+
+        const formatGermanDate = (date) => {
+            return date.toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
         };
 
         return {
@@ -203,7 +308,7 @@ class FirstRoundDocumentGenerator {
             "Geburtstag": clientData.birthdate || 
                 clientData.dateOfBirth || 
                 "Nicht verfügbar",
-            "Adresse": formatClientAddress(clientData),
+            "Adresse": this.formatClientAddress(clientData),
             "Aktenzeichen des Mandanten": clientData.reference,
 
             // Dates
