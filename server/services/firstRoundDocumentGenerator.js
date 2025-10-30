@@ -141,6 +141,46 @@ class FirstRoundDocumentGenerator {
             });
         };
 
+        // Parse and format client address for proper line breaks
+        const formatClientAddress = (clientData) => {
+            // Priority 1: Use structured address fields if available
+            if (clientData.street && clientData.zipCode && clientData.city) {
+                const streetLine = clientData.houseNumber ? 
+                    `${clientData.street} ${clientData.houseNumber}` : 
+                    clientData.street;
+                return `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
+            }
+            
+            // Priority 2: Parse address string if structured fields not available
+            const address = clientData.address;
+            if (!address) return "Adresse nicht verfügbar";
+            
+            // Try to parse address string into components
+            // Pattern: "Street number, postal_code city"
+            const addressParts = address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+            if (addressParts) {
+                const street = addressParts[1];
+                const houseNumber = addressParts[2];
+                const zipCode = addressParts[3];
+                const city = addressParts[4];
+                
+                // Format with line break between street+number and postal code+city
+                return `${street} ${houseNumber}\n${zipCode} ${city}`;
+            }
+            
+            // If parsing fails, try simpler pattern: look for comma separator
+            if (address.includes(',')) {
+                const parts = address.split(',').map(part => part.trim());
+                if (parts.length === 2) {
+                    // Assume first part is street, second is postal code + city
+                    return `${parts[0]}\n${parts[1]}`;
+                }
+            }
+            
+            // Fallback: return address as-is
+            return address;
+        };
+
         return {
             // Creditor information
             "Adresse des Creditors": creditor.creditor_address || 
@@ -163,7 +203,7 @@ class FirstRoundDocumentGenerator {
             "Geburtstag": clientData.birthdate || 
                 clientData.dateOfBirth || 
                 "Nicht verfügbar",
-            "Adresse": clientData.address || "Adresse nicht verfügbar",
+            "Adresse": formatClientAddress(clientData),
             "Aktenzeichen des Mandanten": clientData.reference,
 
             // Dates
