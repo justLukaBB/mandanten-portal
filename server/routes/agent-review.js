@@ -444,17 +444,23 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         console.log(`✅ Created new creditor for document ${document_id}`);
       }
     } else if (action === 'skip') {
-      // Mark as skipped
+      // Remove creditor from list when skipped (document is not a creditor document)
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
-        Object.assign(creditors[creditorIndex], {
-          status: 'rejected', // Mark as rejected when skipped
-          manually_reviewed: true,
-          reviewed_by: req.agentId,
-          reviewed_at: new Date(),
-          review_action: 'skipped'
-        });
+        // Remove the creditor completely from the list
+        creditors.splice(creditorIndex, 1);
+        console.log(`❌ Removed creditor from list for document ${document_id} - marked as non-creditor document`);
+      } else {
+        console.log(`⏭️ No creditor found to remove for document ${document_id} - document correctly identified as non-creditor`);
       }
-      console.log(`⏭️ Skipped review for document ${document_id}`);
+      
+      // Also mark the document as not a creditor document
+      document.is_creditor_document = false;
+      document.manually_reviewed = true;
+      document.reviewed_by = req.agentId;
+      document.reviewed_at = new Date();
+      document.review_action = 'skipped_not_creditor';
+      
+      console.log(`⏭️ Document ${document_id} marked as non-creditor document`);
     } else if (action === 'confirm') {
       // Confirm AI extraction is correct
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
