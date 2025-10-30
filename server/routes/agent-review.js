@@ -404,6 +404,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         Object.assign(creditors[creditorIndex], {
           sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || creditors[creditorIndex].sender_email || '',
+          sender_address: corrections.sender_address || creditors[creditorIndex].sender_address || '',
           reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
           claim_amount: corrections.claim_amount ? parseFloat(corrections.claim_amount) : (creditors[creditorIndex].claim_amount || 0),
           confidence: 1.0, // Manual correction = 100% confidence
@@ -428,6 +429,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           source_document: document.name,
           sender_name: corrections.sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || '',
+          sender_address: corrections.sender_address || '',
           reference_number: corrections.reference_number || '',
           claim_amount: isNaN(claimAmount) ? 0 : claimAmount,
           confidence: 1.0, // Manual entry = 100% confidence
