@@ -151,7 +151,7 @@ class DocumentGenerator {
                     }),
 
                     // Creditor Table - check if it's a Nullplan (no monthly payment)
-                    await this.createCreditorTableForPlan(calculationResult.creditor_payments, settlementData),
+                    await this.createCreditorTableForPlan(settlementData.creditor_payments, settlementData),
 
                     // Spacing after table
                     new Paragraph({
@@ -179,7 +179,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `\n\nGesamtsumme aller Forderungen: ${this.formatCurrency(calculationResult.total_debt)}`,
+                                text: `\n\nGesamtsumme aller Forderungen: ${this.formatCurrency(settlementData.total_debt)}`,
                                 bold: true,
                                 size: 18
                             })
@@ -201,7 +201,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(calculationResult.total_payment_amount)}`,
+                                text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(settlementData.total_payment_amount)}`,
                                 bold: true,
                                 size: 18
                             })
@@ -212,7 +212,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Durchschnittliche Quote: ${calculationResult.average_quota_percentage.toFixed(2)}%`,
+                                text: `Durchschnittliche Quote: ${settlementData.average_quota_percentage ? settlementData.average_quota_percentage.toFixed(2) : '0.00'}%`,
                                 bold: true,
                                 size: 18
                             })
