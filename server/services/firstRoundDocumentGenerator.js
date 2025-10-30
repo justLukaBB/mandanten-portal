@@ -197,17 +197,26 @@ class FirstRoundDocumentGenerator {
      * Parse and format client address for proper line breaks
      */
     formatClientAddress(clientData) {
+        console.log('🏠 Formatting client address:', JSON.stringify(clientData, null, 2));
+        
         // Priority 1: Use structured address fields if available
         if (clientData.street && clientData.zipCode && clientData.city) {
             const streetLine = clientData.houseNumber ? 
                 `${clientData.street} ${clientData.houseNumber}` : 
                 clientData.street;
-            return `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
+            const formatted = `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
+            console.log('✅ Used structured address fields:', formatted);
+            return formatted;
         }
         
         // Priority 2: Parse address string if structured fields not available
         const address = clientData.address;
-        if (!address) return "Adresse nicht verfügbar";
+        if (!address) {
+            console.log('❌ No address found in clientData');
+            return "Adresse nicht verfügbar";
+        }
+        
+        console.log('📍 Parsing address string:', address);
         
         // Try to parse address string into components
         // Pattern: "Street number, postal_code city"
@@ -219,7 +228,9 @@ class FirstRoundDocumentGenerator {
             const city = addressParts[4];
             
             // Format with line break between street+number and postal code+city
-            return `${street} ${houseNumber}\n${zipCode} ${city}`;
+            const formatted = `${street} ${houseNumber}\n${zipCode} ${city}`;
+            console.log('✅ Parsed with regex pattern:', formatted);
+            return formatted;
         }
         
         // If parsing fails, try simpler pattern: look for comma separator
@@ -227,11 +238,35 @@ class FirstRoundDocumentGenerator {
             const parts = address.split(',').map(part => part.trim());
             if (parts.length === 2) {
                 // Assume first part is street, second is postal code + city
-                return `${parts[0]}\n${parts[1]}`;
+                const formatted = `${parts[0]}\n${parts[1]}`;
+                console.log('✅ Parsed with comma separator:', formatted);
+                return formatted;
             }
         }
         
+        // Try to split by space and look for postal code pattern
+        const words = address.split(/\s+/);
+        let postalCodeIndex = -1;
+        
+        // Look for 5-digit postal code
+        for (let i = 0; i < words.length; i++) {
+            if (/^\d{5}$/.test(words[i])) {
+                postalCodeIndex = i;
+                break;
+            }
+        }
+        
+        if (postalCodeIndex > 0 && postalCodeIndex < words.length - 1) {
+            // Found postal code, split address
+            const streetPart = words.slice(0, postalCodeIndex).join(' ');
+            const cityPart = words.slice(postalCodeIndex).join(' ');
+            const formatted = `${streetPart}\n${cityPart}`;
+            console.log('✅ Parsed by finding postal code:', formatted);
+            return formatted;
+        }
+        
         // Fallback: return address as-is
+        console.log('⚠️ Could not parse address, returning as-is:', address);
         return address;
     }
 
@@ -239,9 +274,16 @@ class FirstRoundDocumentGenerator {
      * Prepare template data for Word document
      */
     prepareTemplateData(clientData, creditor) {
-        // Parse and format client address for proper line breaks
-        const formatClientAddress = (clientData) => {
-            return this.formatClientAddress(clientData);
+        const today = new Date();
+        const responseDate = new Date();
+        responseDate.setDate(today.getDate() + 14); // 14 days from today
+
+        const formatGermanDate = (date) => {
+            return date.toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
         };
 
         return {
@@ -266,7 +308,7 @@ class FirstRoundDocumentGenerator {
             "Geburtstag": clientData.birthdate || 
                 clientData.dateOfBirth || 
                 "Nicht verfügbar",
-            "Adresse": formatClientAddress(clientData),
+            "Adresse": this.formatClientAddress(clientData),
             "Aktenzeichen des Mandanten": clientData.reference,
 
             // Dates
