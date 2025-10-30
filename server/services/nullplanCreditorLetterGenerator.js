@@ -152,7 +152,7 @@ class NullplanCreditorLetterGenerator {
                 "Forderungssumme", 
                 "Quote des Gläubigers",
                 "Forderungsnummer in der Forderungsliste",
-                "Gläuibgeranzahl",
+                "Gläubigeranzahl",
                 "Einkommen",
                 "Geburtstag",
                 "Familienstand"
@@ -239,7 +239,7 @@ class NullplanCreditorLetterGenerator {
             "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
             "Aktenzeichen der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
             "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
-            "Gläuibgeranzahl": totalCreditors.toString(),
+            "Gläubigeranzahl": totalCreditors.toString(),
             
             // Client variables
             "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
