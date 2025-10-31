@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * Nullplan Creditor Letter Generator
@@ -227,9 +228,13 @@ class NullplanCreditorLetterGenerator {
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
         // Build creditor address - street on first line, PLZ and city on second line
-        const creditorAddress = creditor.address || 
-            `${creditor.creditor_street || ''}\n${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
-            'Gläubiger Adresse';
+        // Get raw address from creditor data
+        let rawAddress = creditor.address || 
+            `${creditor.creditor_street || ''} ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+            '';
+        
+        // Format address using utility (handles various input formats)
+        const creditorAddress = rawAddress ? formatAddress(rawAddress) : 'Gläubiger Adresse';
 
         const replacements = {
             // EXACT variables from template analysis

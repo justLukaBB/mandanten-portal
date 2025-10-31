@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const Docxtemplater = require('docxtemplater');
 const PizZip = require('pizzip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * First Round Document Generator
@@ -216,58 +217,24 @@ class FirstRoundDocumentGenerator {
             return "Adresse nicht verfügbar";
         }
         
-        console.log('📍 Parsing address string:', address);
+        // Use the shared formatAddress utility
+        return formatAddress(address);
+    }
+    
+    /**
+     * Format creditor address using the same logic as client address
+     */
+    formatCreditorAddress(creditor) {
+        const address = creditor.creditor_address || 
+                       creditor.address || 
+                       creditor.sender_address || 
+                       null;
         
-        // Try to parse address string into components
-        // Pattern: "Street number, postal_code city"
-        const addressParts = address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
-        if (addressParts) {
-            const street = addressParts[1];
-            const houseNumber = addressParts[2];
-            const zipCode = addressParts[3];
-            const city = addressParts[4];
-            
-            // Format with line break between street+number and postal code+city
-            const formatted = `${street} ${houseNumber}\n${zipCode} ${city}`;
-            console.log('✅ Parsed with regex pattern:', formatted);
-            return formatted;
+        if (!address) {
+            return "Adresse nicht verfügbar";
         }
         
-        // If parsing fails, try simpler pattern: look for comma separator
-        if (address.includes(',')) {
-            const parts = address.split(',').map(part => part.trim());
-            if (parts.length === 2) {
-                // Assume first part is street, second is postal code + city
-                const formatted = `${parts[0]}\n${parts[1]}`;
-                console.log('✅ Parsed with comma separator:', formatted);
-                return formatted;
-            }
-        }
-        
-        // Try to split by space and look for postal code pattern
-        const words = address.split(/\s+/);
-        let postalCodeIndex = -1;
-        
-        // Look for 5-digit postal code
-        for (let i = 0; i < words.length; i++) {
-            if (/^\d{5}$/.test(words[i])) {
-                postalCodeIndex = i;
-                break;
-            }
-        }
-        
-        if (postalCodeIndex > 0 && postalCodeIndex < words.length - 1) {
-            // Found postal code, split address
-            const streetPart = words.slice(0, postalCodeIndex).join(' ');
-            const cityPart = words.slice(postalCodeIndex).join(' ');
-            const formatted = `${streetPart}\n${cityPart}`;
-            console.log('✅ Parsed by finding postal code:', formatted);
-            return formatted;
-        }
-        
-        // Fallback: return address as-is
-        console.log('⚠️ Could not parse address, returning as-is:', address);
-        return address;
+        return formatAddress(address);
     }
 
     /**
@@ -288,10 +255,7 @@ class FirstRoundDocumentGenerator {
 
         return {
             // Creditor information
-            "Adresse des Creditors": creditor.creditor_address || 
-                creditor.address || 
-                creditor.sender_address || 
-                "Adresse nicht verfügbar",
+            "Adresse des Creditors": this.formatCreditorAddress(creditor),
             
             "Creditor": creditor.creditor_name || 
                 creditor.sender_name || 
