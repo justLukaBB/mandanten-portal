@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * Robust Nullplan Template Processor
@@ -246,11 +247,11 @@ class RobustNullplanProcessor {
         
         // Priority order based on actual database schema
         if (creditor.sender_address && creditor.sender_address.trim()) {
-            creditorAddress = creditor.sender_address.trim();
+            creditorAddress = formatAddress(creditor.sender_address.trim());
         } else if (creditor.address && creditor.address.trim()) {
-            creditorAddress = creditor.address.trim();
+            creditorAddress = formatAddress(creditor.address.trim());
         } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
-            creditorAddress = creditor.creditor_address.trim();
+            creditorAddress = formatAddress(creditor.creditor_address.trim());
         } else {
             // Build from individual parts as fallback
             const parts = [];
@@ -262,7 +263,8 @@ class RobustNullplanProcessor {
                 parts.push(`${creditor.creditor_postal_code || creditor.sender_postal_code} ${city}`.trim());
             }
             
-            creditorAddress = parts.filter(p => p && p.trim()).join(', ');
+            const builtAddress = parts.filter(p => p && p.trim()).join(' ');
+            creditorAddress = builtAddress ? formatAddress(builtAddress) : '';
         }
         
         // Final fallback
