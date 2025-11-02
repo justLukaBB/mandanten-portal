@@ -294,7 +294,11 @@ const clientSchema = new mongoose.Schema({
   
   // Settlement plan tracking
   settlement_plan_sent_at: Date,
-  
+
+  // Financial data reminder email tracking (sent after 30-day simulation)
+  financial_data_reminder_sent_at: Date,
+  financial_data_reminder_side_conversation_id: String,
+
   // Financial data for Schuldenbereinigungsplan (client input after 30-day creditor response period)
   financial_data: {
     monthly_net_income: Number, // Monthly net income in euros

@@ -429,8 +429,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       const result = await response.json();
       
       if (result.success) {
-        alert(`✅ 30-Day Simulation erfolgreich!\n\n${result.message}\n\nStatus: ${result.new_status || 'N/A'}`);
-        
+        const emailStatus = result.email_sent
+          ? `\n\n📧 E-Mail versendet an: ${user?.email}\n✅ Client wurde benachrichtigt`
+          : result.email_details?.skipped
+            ? '\n\n⚠️ E-Mail übersprungen (fehlende Daten)'
+            : `\n\n⚠️ E-Mail-Versand fehlgeschlagen: ${result.email_details?.error || 'Unbekannter Fehler'}`;
+
+        alert(`✅ 30-Day Simulation erfolgreich!\n\n${result.message}${emailStatus}\n\nGläubiger: ${result.creditor_count || 'N/A'}\nGesamtschuld: €${result.total_debt?.toFixed(2) || 'N/A'}`);
+
         // Refresh user data to show updated status
         await fetchUserDetails();
         
