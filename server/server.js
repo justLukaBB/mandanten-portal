@@ -33,12 +33,16 @@ const SettlementResponseMonitor = require('./services/settlementResponseMonitor'
 const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
+const FinancialDataReminderService = require('./services/financialDataReminderService');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
 
 // Initialize global settlement response monitor
 const globalSettlementResponseMonitor = new SettlementResponseMonitor();
+
+// Initialize financial data reminder service
+const financialDataReminderService = new FinancialDataReminderService();
 
 const app = express();
 const PORT = config.PORT;
@@ -5022,10 +5026,55 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     });
     
     console.log(`🎯 Financial data form activated for ${finalUpdatedClient.aktenzeichen} - form should be available in client portal`);
-    
+
+    // Send financial data reminder email to client
+    let emailResult = null;
+    if (finalUpdatedClient.zendesk_ticket_id && finalUpdatedClient.email) {
+      try {
+        console.log(`📧 Sending financial data reminder email to ${finalUpdatedClient.email}...`);
+
+        emailResult = await financialDataReminderService.sendReminder(
+          finalUpdatedClient.zendesk_ticket_id,
+          {
+            firstName: finalUpdatedClient.firstName,
+            lastName: finalUpdatedClient.lastName,
+            email: finalUpdatedClient.email,
+            aktenzeichen: finalUpdatedClient.aktenzeichen
+          }
+        );
+
+        if (emailResult.success) {
+          console.log(`✅ Financial data reminder email sent successfully`);
+
+          // Update client with email tracking information
+          await safeClientUpdate(clientId, async (client) => {
+            client.financial_data_reminder_sent_at = new Date();
+            if (emailResult.side_conversation_id) {
+              client.financial_data_reminder_side_conversation_id = emailResult.side_conversation_id;
+            }
+            return client;
+          });
+        } else {
+          console.error(`⚠️ Failed to send financial data reminder email: ${emailResult.error}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Error sending financial data reminder email:`, emailError);
+        emailResult = { success: false, error: emailError.message };
+      }
+    } else {
+      console.log(`⚠️ Skipping email - missing ticket ID or email address`);
+      emailResult = {
+        success: false,
+        error: 'Missing zendesk_ticket_id or email address',
+        skipped: true
+      };
+    }
+
     res.json({
       success: true,
-      message: `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.`,
+      message: `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.${emailResult?.success ? ' Email reminder sent to client.' : ''}`,
+      email_sent: emailResult?.success || false,
+      email_details: emailResult || null,
       client_id: finalUpdatedClient.id,
       aktenzeichen: finalUpdatedClient.aktenzeichen,
       creditor_count: creditorCalculationTable.length,
