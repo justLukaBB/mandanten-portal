@@ -209,11 +209,28 @@ class RobustNullplanTableGenerator {
                 
                 // Find the pattern for this row number and replace the "Test 1" placeholders
                 // Note: "Test " and "1" are in separate <w:t> tags with XML tags between them
+                // Example: <w:t>Test </w:t></w:r><w:r><w:rPr><w:spacing w:val="-10"/></w:rPr><w:t>1</w:t>
                 const rowPattern = new RegExp(`(<w:tr[^>]*>[\\s\\S]*?<w:t>${creditorNum}<\\/w:t>[\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>`);
 
+                const beforeReplace = result;
                 result = result.replace(rowPattern, `$1<w:t>${creditorName}</w:t>$2<w:t>${this.formatGermanCurrencyNoSymbol(creditorAmount)}</w:t>$3<w:t>${creditorQuote.toFixed(2).replace('.', ',')}%</w:t>`);
-                
-                console.log(`✓ [ROBUST] Populated row ${creditorNum}: ${creditorName} - ${this.formatGermanCurrencyNoSymbol(creditorAmount)} - ${creditorQuote.toFixed(2).replace('.', ',')}%`);
+
+                if (beforeReplace === result) {
+                    console.log(`❌ [ROBUST] Row ${creditorNum} pattern DID NOT MATCH - no replacement made!`);
+                    console.log(`   Looking for: <w:t>${creditorNum}</w:t> followed by 3x "Test 1" patterns`);
+                    // Check if we can find the row number at all
+                    if (result.includes(`<w:t>${creditorNum}</w:t>`)) {
+                        console.log(`   ✓ Found row number ${creditorNum} in document`);
+                        // Extract sample around the row number to help debug
+                        const idx = result.indexOf(`<w:t>${creditorNum}</w:t>`);
+                        const sample = result.substring(Math.max(0, idx - 50), Math.min(result.length, idx + 800));
+                        console.log(`   📋 XML sample (first 600 chars):`, sample.substring(0, 600).replace(/\n/g, ' '));
+                    } else {
+                        console.log(`   ✗ Row number ${creditorNum} not found in document at all!`);
+                    }
+                } else {
+                    console.log(`✓ [ROBUST] Populated row ${creditorNum}: ${creditorName} - ${this.formatGermanCurrencyNoSymbol(creditorAmount)} - ${creditorQuote.toFixed(2).replace('.', ',')}%`);
+                }
             });
             
             // Remove rows that weren't populated (rows beyond the number of creditors)
