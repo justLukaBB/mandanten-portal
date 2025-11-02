@@ -522,7 +522,7 @@ export const PersonalPortal = ({
                 <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
                   style={{ backgroundColor: `${customColors.primary}10` }}>
                   <img
-                    src="https://weltweiser.de/wp-content/uploads/2022/07/proven-expert.png"
+                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcScrdZFEQl9j7KOcSgMblfjShrLXN6EWUbepw&s"
                     alt="ProvenExpert"
                     className="h-6 w-6 object-contain"
                   />
