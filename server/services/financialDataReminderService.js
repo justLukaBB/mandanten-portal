@@ -158,175 +158,188 @@ Rechtsanwalt
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nächster Schritt: Ihre Finanzdaten</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f4;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f4f4; padding: 20px 0;">
-        <tr>
-            <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+<body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
 
-                    <!-- Header with Logo -->
+        <!-- Header -->
+        <div style="padding: 16px 20px; border-bottom: 1px solid #e5e7eb;">
+            <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Scuric Logo" style="height: 40px; display: block;">
+        </div>
+
+        <!-- Main Content -->
+        <div style="padding: 24px 20px;">
+
+            <!-- Title Section -->
+            <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="font-size: 28px; font-weight: 600; color: #111827; margin: 0 0 12px 0;">Nächster Schritt: Ihre Finanzdaten</h1>
+                <p style="font-size: 16px; color: #6b7280; margin: 0;">Wir benötigen noch einige Informationen von Ihnen</p>
+            </div>
+
+            <!-- Greeting -->
+            <p style="font-size: 15px; color: #374151; line-height: 1.6; margin: 0 0 20px 0;">
+                Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,<br><br>
+                wir machen jetzt mit Ihrem Fall weiter und benötigen für die Erstellung Ihres Schuldenbereinigungsplans noch einige wichtige Informationen von Ihnen.
+            </p>
+
+            <!-- Login Credentials Box -->
+            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                <div style="font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 8px;">🔐 Ihre Zugangsdaten</div>
+                <table style="width: 100%; border-collapse: collapse;">
                     <tr>
-                        <td style="background-color: #c41e3a; padding: 30px; text-align: center;">
-                            <img src="https://www.scuric.de/wp-content/uploads/2023/01/scuric-logo-white.png" alt="Scuric Rechtsanwälte" style="max-width: 200px; height: auto;">
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-weight: 500; color: #374151; font-size: 14px;">Portal-Link:</td>
+                        <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-family: monospace;">
+                            <a href="${portalLink}" style="color: #dc2626; text-decoration: none;">mandanten-portal.onrender.com/login</a>
                         </td>
                     </tr>
-
-                    <!-- Main Content -->
                     <tr>
-                        <td style="padding: 40px 30px;">
-
-                            <h1 style="color: #333333; font-size: 24px; margin: 0 0 20px 0; font-weight: bold;">
-                                Nächster Schritt: Ihre Finanzdaten
-                            </h1>
-
-                            <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,
-                            </p>
-
-                            <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-                                wir machen jetzt mit Ihrem Fall weiter und benötigen für die Erstellung Ihres Schuldenbereinigungsplans noch einige wichtige Informationen von Ihnen.
-                            </p>
-
-                            <!-- Info Box -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8f9fa; border-left: 4px solid #c41e3a; margin: 25px 0;">
-                                <tr>
-                                    <td style="padding: 20px;">
-                                        <h2 style="color: #c41e3a; font-size: 18px; margin: 0 0 10px 0; font-weight: bold;">
-                                            📊 Bitte ergänzen Sie Ihre Finanzdaten
-                                        </h2>
-                                        <p style="color: #666666; font-size: 15px; line-height: 1.6; margin: 0;">
-                                            Loggen Sie sich in Ihr Mandantenportal ein und tragen Sie die folgenden Informationen ein.
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- CTA Button -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 30px 0;">
-                                <tr>
-                                    <td align="center">
-                                        <a href="${portalLink}" style="display: inline-block; background-color: #28a745; color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                                            Zum Mandantenportal
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- Required Information Box -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fff9e6; border: 1px solid #ffd966; border-radius: 8px; margin: 25px 0;">
-                                <tr>
-                                    <td style="padding: 20px;">
-                                        <h3 style="color: #856404; font-size: 16px; margin: 0 0 15px 0; font-weight: bold;">
-                                            📝 Benötigte Informationen:
-                                        </h3>
-                                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                            <tr>
-                                                <td style="padding: 5px 0; color: #856404; font-size: 14px;">
-                                                    ✓ Monatliches Nettoeinkommen
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 5px 0; color: #856404; font-size: 14px;">
-                                                    ✓ Familienstand
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 5px 0; color: #856404; font-size: 14px;">
-                                                    ✓ Anzahl unterhaltsberechtigter Personen
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- Login Credentials Box -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5; border-radius: 8px; margin: 25px 0;">
-                                <tr>
-                                    <td style="padding: 20px;">
-                                        <h4 style="color: #333333; font-size: 14px; margin: 0 0 15px 0; font-weight: bold;">
-                                            🔑 Ihre Login-Daten:
-                                        </h4>
-                                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                            <tr>
-                                                <td style="padding: 8px 15px; background-color: #ffffff; border: 1px solid #e0e0e0;">
-                                                    <strong style="color: #666666; font-size: 13px;">E-Mail:</strong>
-                                                </td>
-                                                <td style="padding: 8px 15px; background-color: #ffffff; border: 1px solid #e0e0e0;">
-                                                    <span style="color: #333333; font-size: 13px;">${email}</span>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 8px 15px; background-color: #ffffff; border: 1px solid #e0e0e0;">
-                                                    <strong style="color: #666666; font-size: 13px;">Aktenzeichen:</strong>
-                                                </td>
-                                                <td style="padding: 8px 15px; background-color: #ffffff; border: 1px solid #e0e0e0;">
-                                                    <span style="color: #333333; font-size: 13px;">${aktenzeichen}</span>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- Important Note -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #e8eaf6; border-radius: 8px; margin: 25px 0;">
-                                <tr>
-                                    <td style="padding: 15px 20px;">
-                                        <p style="color: #5f6368; font-size: 14px; margin: 0; line-height: 1.5;">
-                                            ⏰ <strong>Wichtig:</strong> Diese Informationen sind notwendig, damit wir Ihren Schuldenbereinigungsplan erstellen und Ihre Insolvenz erfolgreich durchführen können.
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <p style="color: #666666; font-size: 15px; line-height: 1.6; margin: 30px 0 10px 0;">
-                                Bei Fragen stehen wir Ihnen gerne zur Verfügung.
-                            </p>
-
-                            <p style="color: #666666; font-size: 15px; line-height: 1.6; margin: 10px 0 0 0;">
-                                Mit freundlichen Grüßen<br>
-                                <strong style="color: #333333;">Ihr Team von Scuric Rechtsanwälte</strong>
-                            </p>
-
-                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-weight: 500; color: #374151; font-size: 14px;">Login-E-Mail:</td>
+                        <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-family: monospace;">${email}</td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
-                        <td style="background-color: #2c2c2c; padding: 30px; color: #ffffff;">
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                    <td style="text-align: center; padding-bottom: 20px;">
-                                        <strong style="font-size: 16px; color: #ffffff;">Kanzlei Scuric</strong><br>
-                                        <span style="font-size: 13px; color: #cccccc;">Rechtsanwälte</span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: center; font-size: 12px; color: #cccccc; line-height: 1.6;">
-                                        <p style="margin: 5px 0;">📍 Musterstraße 123, 12345 Musterstadt</p>
-                                        <p style="margin: 5px 0;">📞 Tel: +49 (0) 123 456789</p>
-                                        <p style="margin: 5px 0;">📧 E-Mail: info@scuric.de</p>
-                                        <p style="margin: 15px 0 5px 0;">
-                                            <a href="https://www.scuric.de" style="color: #c41e3a; text-decoration: none;">www.scuric.de</a>
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: center; padding-top: 20px; font-size: 11px; color: #999999; border-top: 1px solid #444444;">
-                                        <p style="margin: 10px 0;">
-                                            Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht direkt auf diese E-Mail.
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
+                        <td style="padding: 10px 0; font-weight: 500; color: #374151; font-size: 14px;">Aktenzeichen:</td>
+                        <td style="padding: 10px 0 10px 16px; color: #111827; font-size: 14px; font-family: monospace;">${aktenzeichen}</td>
                     </tr>
-
                 </table>
-            </td>
-        </tr>
-    </table>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 24px 0;">
+                <a href="${portalLink}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 500; font-size: 16px;">Jetzt anmelden</a>
+            </div>
+
+            <!-- Instructions -->
+            <h2 style="font-size: 18px; font-weight: 600; color: #111827; margin: 24px 0 16px 0;">So ergänzen Sie Ihre Daten</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">1</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Öffnen Sie den oben genannten Portal-Link</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">2</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Melden Sie sich mit Ihrer E-Mail-Adresse und Ihrem Passwort an</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">3</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Navigieren Sie zum Bereich "Finanzdaten" im Portal</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">4</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Tragen Sie die benötigten Informationen ein und speichern Sie</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- Required Information -->
+            <h2 style="font-size: 18px; font-weight: 600; color: #111827; margin: 24px 0 16px 0;">📊 Bitte ergänzen Sie folgende Informationen</h2>
+            <table style="width: 100%;">
+                <tr>
+                    <td>
+                        <div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;">
+                            <span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">✓</span> Monatliches Nettoeinkommen
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;">
+                            <span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">✓</span> Familienstand
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;">
+                            <span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">✓</span> Anzahl unterhaltsberechtigter Personen
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- Important Note -->
+            <div style="background-color: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 14px; color: #1e40af;">
+                <strong>Wichtig:</strong> Diese Informationen sind notwendig, damit wir Ihren Schuldenbereinigungsplan erstellen und Ihre Insolvenz erfolgreich durchführen können.
+            </div>
+
+            <!-- Closing -->
+            <p style="margin-top: 24px; color: #6b7280; font-size: 14px;">
+                Bei Fragen stehe ich Ihnen selbstverständlich gerne zur Verfügung.
+            </p>
+
+            <!-- Footer with Contact Info -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #1a1a1a;">
+                <p style="margin: 0 0 12px;">
+                    <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwalt" style="display: block; max-width: 300px; height: auto;">
+                </p>
+                <p style="margin: 0 0 4px; color: #961919; font-weight: bold;">Rechtsanwaltskanzlei Thomas Scuric</p>
+                <p style="margin: 0 0 8px; color: #1f497d;">
+                    Bongardstraße 33<br>
+                    44787 Bochum
+                </p>
+                <p style="margin: 0 0 12px; color: #1f497d;">
+                    Fon: 0234 913 681 0<br>
+                    Fax: 0234 913 681 29<br>
+                    E-Mail: <a href="mailto:kontakt@schuldnerberatung-anwalt.de" style="color: #0563c1; text-decoration: none;">kontakt@schuldnerberatung-anwalt.de</a>
+                </p>
+                <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #a6a6a6;">
+                    Der Inhalt dieser E-Mail ist vertraulich und ausschließlich für den bezeichneten Adressaten bestimmt. Wenn Sie nicht der vorgesehene Adressat dieser E-Mail oder dessen Vertreter sein sollten, so beachten Sie bitte, daß jede Form der Kenntnisnahme, Veröffentlichung, Vervielfältigung oder Weitergabe des Inhalts dieser E-Mail unzulässig ist. Wir bitten Sie, sich in diesem Fall mit dem Absender der E-Mail in Verbindung zu setzen. Aussagen gegenüber dem Adressaten unterliegen den Regelungen des zugrundeliegenden Auftrags, insbesondere den Allgemeinen Auftragsbedingungen. Wir möchten Sie außerdem darauf hinweisen, daß die Kommunikation per E-Mail über das Internet unsicher ist, da für unberechtigte Dritte grundsätzlich die Möglichkeit der Kenntnisnahme und Manipulation besteht.<br><br>
+                    Wir weisen Sie auf unsere aktuelle <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #a0191d; text-decoration: underline;" target="_blank">Datenschutzerklärung</a> hin.
+                </p>
+            </div>
+
+            <!-- Media Section -->
+            <div style="text-align: center; margin-top: 48px; padding-top: 32px; border-top: 1px solid #e5e7eb;">
+                <p style="font-size: 13px; color: #6b7280; font-weight: 500; margin: 0 0 20px 0;">Bekannt aus:</p>
+                <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" alt="Bekannt aus verschiedenen Medien" style="max-width: 100%; height: auto; max-height: 48px; opacity: 0.6;">
+            </div>
+
+            <!-- Legal Links -->
+            <div style="text-align: center; margin-top: 32px; padding-top: 24px;">
+                <div style="margin-bottom: 12px;">
+                    <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Impressum</a>
+                    <span style="color: #9ca3af; margin: 0 12px;">•</span>
+                    <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Datenschutz</a>
+                </div>
+                <p style="font-size: 12px; color: #9ca3af; margin: 0;">© 2025 Scuric. Alle Rechte vorbehalten.</p>
+            </div>
+
+            <!-- Auto-generated Notice -->
+            <div style="font-size: 11px; color: #9ca3af; margin-top: 24px; padding: 12px; background-color: #f9fafb; border-radius: 6px;">
+                📎 Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht direkt auf diese Nachricht.
+            </div>
+
+        </div>
+    </div>
 </body>
 </html>
         `.trim();
