@@ -522,7 +522,7 @@ export const PersonalPortal = ({
                 <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
                   style={{ backgroundColor: `${customColors.primary}10` }}>
                   <img
-                    src="https://images.squarespace-cdn.com/content/v1/6404b3bc483c0c365f82d04e/cc591845-9d6f-46c4-89f8-8f635d0fcf8a/2.png"
+                    src="https://cdn.brandfetch.io/idk-hgfUQ2/w/400/h/400/theme/dark/icon.jpeg?c=1dxbfHSJFAPEGdCLU4o5B"
                     alt="ProvenExpert"
                     className="h-10 w-10 object-cover rounded-full"
                   />
