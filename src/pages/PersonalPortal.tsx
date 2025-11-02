@@ -524,7 +524,7 @@ export const PersonalPortal = ({
                   <img
                     src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRbdp_xAu228AiewJXWx7Y8WRyaZzuVGSiVGA&s"
                     alt="ProvenExpert"
-                    className="h-6 w-6 object-contain"
+                    className="h-10 w-10 object-cover rounded-full"
                   />
                 </div>
                 <div>
