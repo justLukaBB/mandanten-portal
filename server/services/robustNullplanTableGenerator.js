@@ -208,8 +208,9 @@ class RobustNullplanTableGenerator {
                 // Each row has 3 "Test 1" occurrences for: creditor name, amount, quote
                 
                 // Find the pattern for this row number and replace the "Test 1" placeholders
-                const rowPattern = new RegExp(`(<w:tr[^>]*>[\\s\\S]*?<w:t>${creditorNum}<\\/w:t>[\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>\\s*<w:t>1<\\/w:t>`);
-                
+                // Note: "Test " and "1" are in separate <w:t> tags with XML tags between them
+                const rowPattern = new RegExp(`(<w:tr[^>]*>[\\s\\S]*?<w:t>${creditorNum}<\\/w:t>[\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>([\\s\\S]*?)<w:t>Test <\\/w:t>[\\s\\S]*?<w:t>1<\\/w:t>`);
+
                 result = result.replace(rowPattern, `$1<w:t>${creditorName}</w:t>$2<w:t>${this.formatGermanCurrencyNoSymbol(creditorAmount)}</w:t>$3<w:t>${creditorQuote.toFixed(2).replace('.', ',')}%</w:t>`);
                 
                 console.log(`✓ [ROBUST] Populated row ${creditorNum}: ${creditorName} - ${this.formatGermanCurrencyNoSymbol(creditorAmount)} - ${creditorQuote.toFixed(2).replace('.', ',')}%`);
