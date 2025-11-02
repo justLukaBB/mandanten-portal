@@ -278,29 +278,29 @@ class DocumentGenerator {
         const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
 
         const tableRows = [
-            // Header Row - simplified for Nullplan
+            // Header Row - simplified for Nullplan (4 columns only)
             new TableRow({
                 children: [
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "Nr.", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 8, type: WidthType.PERCENTAGE },
+                        width: { size: 10, type: WidthType.PERCENTAGE },
                         shading: { fill: "D9D9FF" },
                         borders: this.createTableBorders()
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "Gläubiger", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 40, type: WidthType.PERCENTAGE },
+                        width: { size: 45, type: WidthType.PERCENTAGE },
                         shading: { fill: "D9D9FF" },
                         borders: this.createTableBorders()
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "Forderung", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
@@ -309,20 +309,11 @@ class DocumentGenerator {
                         borders: this.createTableBorders()
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "Quote von Gesamtverschuldung", bold: true, size: 18 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        width: { size: 20, type: WidthType.PERCENTAGE },
-                        shading: { fill: "D9D9FF" },
-                        borders: this.createTableBorders()
-                    }),
-                    new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ text: "mtl.", bold: true, size: 18 })],
-                            alignment: AlignmentType.CENTER
-                        })],
-                        width: { size: 12, type: WidthType.PERCENTAGE },
+                        width: { size: 25, type: WidthType.PERCENTAGE },
                         shading: { fill: "D9D9FF" },
                         borders: this.createTableBorders()
                     })
@@ -339,48 +330,37 @@ class DocumentGenerator {
                 new TableRow({
                     children: [
                         new TableCell({
-                            children: [new Paragraph({ 
+                            children: [new Paragraph({
                                 children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
                                 alignment: AlignmentType.CENTER
                             })],
                             borders: this.createTableBorders()
                         }),
                         new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ 
-                                    text: creditor.creditor_name || creditor.name || 'N/A', 
-                                    size: 16 
+                            children: [new Paragraph({
+                                children: [new TextRun({
+                                    text: creditor.creditor_name || creditor.name || 'N/A',
+                                    size: 16
                                 })],
                                 alignment: AlignmentType.LEFT
                             })],
                             borders: this.createTableBorders()
                         }),
                         new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ 
-                                    text: this.formatCurrency(debtAmount), 
-                                    size: 16 
+                            children: [new Paragraph({
+                                children: [new TextRun({
+                                    text: this.formatCurrency(debtAmount),
+                                    size: 16
                                 })],
                                 alignment: AlignmentType.RIGHT
                             })],
                             borders: this.createTableBorders()
                         }),
                         new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ 
-                                    text: this.formatPercentage(debtPercentage), 
-                                    size: 16 
-                                })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ 
-                                    text: "0,00", 
-                                    size: 16,
-                                    bold: true 
+                            children: [new Paragraph({
+                                children: [new TextRun({
+                                    text: this.formatPercentage(debtPercentage),
+                                    size: 16
                                 })],
                                 alignment: AlignmentType.RIGHT
                             })],
@@ -396,47 +376,44 @@ class DocumentGenerator {
             new TableRow({
                 children: [
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "", size: 16 })],
                             alignment: AlignmentType.CENTER
                         })],
-                        borders: this.createTableBorders()
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
+                        children: [new Paragraph({
                             children: [new TextRun({ text: "Summe", bold: true, size: 16 })],
                             alignment: AlignmentType.LEFT
                         })],
-                        borders: this.createTableBorders()
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ 
-                                text: this.formatCurrency(totalDebt), 
-                                bold: true, 
-                                size: 16 
+                        children: [new Paragraph({
+                            children: [new TextRun({
+                                text: this.formatCurrency(totalDebt),
+                                bold: true,
+                                size: 16
                             })],
                             alignment: AlignmentType.RIGHT
                         })],
-                        borders: this.createTableBorders()
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     }),
                     new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ 
-                                text: "100,00%", 
-                                bold: true, 
-                                size: 16 
+                        children: [new Paragraph({
+                            children: [new TextRun({
+                                text: "100,00%",
+                                bold: true,
+                                size: 16
                             })],
                             alignment: AlignmentType.RIGHT
                         })],
-                        borders: this.createTableBorders()
-                    }),
-                    new TableCell({
-                        children: [new Paragraph({ 
-                            children: [new TextRun({ text: "", size: 16 })],
-                            alignment: AlignmentType.RIGHT
-                        })],
-                        borders: this.createTableBorders()
+                        borders: this.createTableBorders(),
+                        shading: { fill: "E8E8E8" }
                     })
                 ]
             })
