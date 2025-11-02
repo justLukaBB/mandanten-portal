@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * New Word Template Processor for "Template Word Pfändbares Einkommen"
@@ -195,11 +196,14 @@ class NewWordTemplateProcessor {
                     if (variable === "Name des Gläubigers") {
                         actualValue = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
                     } else if (variable === "Adresse des Creditors") {
-                        actualValue = creditorData?.address || "Adresse nicht verfügbar";
+                        // Format address and replace line breaks with Word XML breaks
+                        const rawAddress = creditorData?.address || '';
+                        const formattedAddress = rawAddress ? formatAddress(rawAddress) : 'Adresse nicht verfügbar';
+                        actualValue = formattedAddress.replace(/\n/g, '<w:br/>');
                     } else {
                         actualValue = replacements[variable] || placeholder;
                     }
-                    
+
                     processedXml = processedXml.replace(pattern, actualValue);
                     console.log(`✅ Replaced split XML pattern "${variable}" with "${actualValue}"`);
                     totalReplacements++;
@@ -534,7 +538,7 @@ class NewWordTemplateProcessor {
                 "Immer der erste in 3 Monaten": this.formatDate(paymentStartDate),
                 
                 // Creditor info
-                "Adresse des Creditors": creditorData?.address || "Adresse nicht verfügbar",
+                "Adresse des Creditors": creditorData?.address ? formatAddress(creditorData.address).replace(/\n/g, '<w:br/>') : "Adresse nicht verfügbar",
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Name des Gläubigers": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Gläubiger Name": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
@@ -677,7 +681,7 @@ class NewWordTemplateProcessor {
 
         // Template Variables - based on actual template analysis
         // REAL VARIABLES from the document (not placeholders!)
-        replacements["Adresse des Creditors"] = creditorData?.address || "Gläubiger Adresse";
+        replacements["Adresse des Creditors"] = creditorData?.address ? formatAddress(creditorData.address).replace(/\n/g, '<w:br/>') : "Gläubiger Adresse";
         replacements["Name des Creditors"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
         replacements["Creditor"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
         replacements["Gläubiger"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";

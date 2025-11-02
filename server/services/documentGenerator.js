@@ -12,6 +12,7 @@ try {
 
 const fs = require('fs').promises;
 const path = require('path');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * Document Generator Service
@@ -1285,20 +1286,21 @@ class DocumentGenerator {
      */
     formatCreditorInfo(creditor) {
         const lines = [];
-        
+
         if (creditor.creditor_name) {
             lines.push(creditor.creditor_name);
         }
-        
+
         if (creditor.creditor_address) {
-            const addressLines = creditor.creditor_address.split('\n');
+            const formattedAddress = formatAddress(creditor.creditor_address);
+            const addressLines = formattedAddress.split('\n');
             lines.push(...addressLines);
         }
-        
+
         if (creditor.creditor_email) {
             lines.push(`E-Mail: ${creditor.creditor_email}`);
         }
-        
+
         return lines.join('\n');
     }
 
@@ -1357,7 +1359,7 @@ class DocumentGenerator {
                 // Use creditor calculation table if available (more complete data)
                 creditorData = client.creditor_calculation_table.map(creditor => ({
                     creditor_name: creditor.name,
-                    creditor_address: creditor.address,
+                    creditor_address: creditor.address ? formatAddress(creditor.address) : '',
                     creditor_email: creditor.email,
                     creditor_reference: creditor.reference_number,
                     debt_amount: creditor.final_amount,
@@ -1379,7 +1381,7 @@ class DocumentGenerator {
                     .filter(creditor => creditor.status === 'confirmed')
                     .map(creditor => ({
                         creditor_name: creditor.sender_name,
-                        creditor_address: creditor.sender_address,
+                        creditor_address: creditor.sender_address ? formatAddress(creditor.sender_address) : '',
                         creditor_email: creditor.sender_email,
                         creditor_reference: creditor.reference_number,
                         debt_amount: creditor.claim_amount || 0,
@@ -1865,7 +1867,8 @@ class DocumentGenerator {
                         creditor_name: creditor.name || creditor.creditor_name,
                         name: creditor.name || creditor.creditor_name,
                         debt_amount: creditor.final_amount || creditor.debt_amount || creditor.amount,
-                        address: creditor.address || creditor.creditor_address || 
+                        address: (creditor.address && formatAddress(creditor.address)) ||
+                               (creditor.creditor_address && formatAddress(creditor.creditor_address)) ||
                                this.buildCreditorAddress(creditor) ||
                                'Gläubiger Adresse nicht verfügbar',
                         aktenzeichen: creditor.reference_number || creditor.creditor_reference || creditor.aktenzeichen || `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
@@ -3187,7 +3190,7 @@ class DocumentGenerator {
                 // Use creditor calculation table if available
                 creditorData = client.creditor_calculation_table.map(creditor => ({
                     creditor_name: creditor.name,
-                    creditor_address: creditor.address,
+                    creditor_address: creditor.address ? formatAddress(creditor.address) : '',
                     creditor_email: creditor.email,
                     creditor_reference: creditor.reference_number,
                     debt_amount: creditor.final_amount,
@@ -3208,7 +3211,7 @@ class DocumentGenerator {
                     .filter(creditor => creditor.status === 'confirmed')
                     .map(creditor => ({
                         creditor_name: creditor.sender_name,
-                        creditor_address: creditor.sender_address,
+                        creditor_address: creditor.sender_address ? formatAddress(creditor.sender_address) : '',
                         creditor_email: creditor.sender_email,
                         creditor_reference: creditor.reference_number,
                         debt_amount: creditor.claim_amount || 0,
