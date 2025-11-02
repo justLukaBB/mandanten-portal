@@ -244,7 +244,7 @@ class RobustNullplanProcessor {
         
         // Build creditor address using correct field mapping (sender_address is primary)
         let creditorAddress = '';
-        
+
         // Priority order based on actual database schema
         if (creditor.sender_address && creditor.sender_address.trim()) {
             creditorAddress = formatAddress(creditor.sender_address.trim());
@@ -262,11 +262,11 @@ class RobustNullplanProcessor {
                 const city = creditor.creditor_city || creditor.sender_city || '';
                 parts.push(`${creditor.creditor_postal_code || creditor.sender_postal_code} ${city}`.trim());
             }
-            
+
             const builtAddress = parts.filter(p => p && p.trim()).join(' ');
             creditorAddress = builtAddress ? formatAddress(builtAddress) : '';
         }
-        
+
         // Final fallback
         if (!creditorAddress || creditorAddress === ',' || creditorAddress === '') {
             creditorAddress = `${creditor.sender_name || creditor.name || creditor.creditor_name || 'Gläubiger'}\nAdresse nicht verfügbar`;

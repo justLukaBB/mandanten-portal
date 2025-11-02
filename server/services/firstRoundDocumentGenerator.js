@@ -198,42 +198,38 @@ class FirstRoundDocumentGenerator {
      * Parse and format client address for proper line breaks
      */
     formatClientAddress(clientData) {
-        console.log('🏠 Formatting client address:', JSON.stringify(clientData, null, 2));
-        
         // Priority 1: Use structured address fields if available
         if (clientData.street && clientData.zipCode && clientData.city) {
-            const streetLine = clientData.houseNumber ? 
-                `${clientData.street} ${clientData.houseNumber}` : 
+            const streetLine = clientData.houseNumber ?
+                `${clientData.street} ${clientData.houseNumber}` :
                 clientData.street;
-            const formatted = `${streetLine}\n${clientData.zipCode} ${clientData.city}`;
-            console.log('✅ Used structured address fields:', formatted);
-            return formatted;
+            const address = `${streetLine} ${clientData.zipCode} ${clientData.city}`;
+            return formatAddress(address);
         }
-        
-        // Priority 2: Parse address string if structured fields not available
+
+        // Priority 2: Use address string
         const address = clientData.address;
         if (!address) {
-            console.log('❌ No address found in clientData');
             return "Adresse nicht verfügbar";
         }
-        
+
         // Use the shared formatAddress utility
         return formatAddress(address);
     }
-    
+
     /**
      * Format creditor address using the same logic as client address
      */
     formatCreditorAddress(creditor) {
-        const address = creditor.creditor_address || 
-                       creditor.address || 
-                       creditor.sender_address || 
+        const address = creditor.creditor_address ||
+                       creditor.address ||
+                       creditor.sender_address ||
                        null;
-        
+
         if (!address) {
             return "Adresse nicht verfügbar";
         }
-        
+
         return formatAddress(address);
     }
 
@@ -256,7 +252,7 @@ class FirstRoundDocumentGenerator {
         return {
             // Creditor information
             "Adresse des Creditors": this.formatCreditorAddress(creditor),
-            
+
             "Creditor": creditor.creditor_name || 
                 creditor.sender_name || 
                 "Unbekannter Gläubiger",
