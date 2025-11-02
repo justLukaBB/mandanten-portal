@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { PDFDocument, StandardFonts } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, PDFName, PDFBool } = require('pdf-lib');
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
@@ -314,19 +314,17 @@ async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();
 
-        // ------------------- 📄 ANLAGE 6 -------------------
+        // ------------------- 💰 FINANCIAL DATA -------------------
+        if (client.financial_data) {
+            await fillFinancialData(pdfDoc, form, client.financial_data, options);
+        }
+
         const creditors = client.final_creditor_list || [];
         if (Array.isArray(creditors) && creditors.length > 0) {
             await fillAnlage6(pdfDoc, form, creditors, options);
             // Pass a clean base of the document bytes to allow creating extra Anlage 7 pages without field name collisions
             await fillAnlage7(pdfDoc, form, creditors, { ...options, basePdfBytes: pdfBytes });
         }
-
-        // ------------------- 📄 ANLAGE 7 -------------------
-        // const relatedPersons = client.related_persons || []; // 👈 use another dataset here
-        // if (Array.isArray(relatedPersons) && relatedPersons.length > 0) {
-        //   await fillAnlage7(pdfDoc, form, relatedPersons, options);
-        // }
 
         return await pdfDoc.save();
     } catch (err) {
@@ -582,15 +580,15 @@ async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
                     // Amount and percentage fields
                     const claimFieldIndex = tempFieldNumber + finalRows.length + 4;
                     const percentFieldIndex = claimFieldIndex + 1;
-                    try { baseForm.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`); } catch {}
-                    try { baseForm.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`); } catch {}
+                    try { baseForm.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`); } catch { }
+                    try { baseForm.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`); } catch { }
 
                     // Advance to next block start (always 12 on 27-like pages)
                     tempFieldNumber += 12;
                 }
 
                 // Flatten all fields in baseDoc so content becomes static on that page
-                try { baseForm.flatten(); } catch {}
+                try { baseForm.flatten(); } catch { }
 
                 // Copy the now-filled page 27 from baseDoc and insert into main doc
                 const [pageToAdd] = await pdfDoc.copyPages(baseDoc, [secondPageIndex]);
@@ -613,10 +611,21 @@ async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
         const creditor = creditors[i - 1];
         if (!creditor) continue;
 
-        const street = creditor.strasse || '';
-        const houseNumber = creditor.hausnummer || '';
-        const zipCode = creditor.plz || '';
-        const city = creditor.ort || '';
+        let street = '', houseNumber = '', zipCode = '', city = '';
+
+        if (creditor?.sender_address) {
+            const addressParts = creditor.sender_address.match(
+                /^(.+?)\s+(\d+[a-zA-Z\-\/]*),?\s*(\d{5})\s+(.+)$/
+            );
+
+            if (addressParts) {
+                street = addressParts[1].trim();
+                houseNumber = addressParts[2].trim();
+                zipCode = addressParts[3].trim();
+                city = addressParts[4].trim();
+            }
+        }
+
 
         const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0) || 0;
         const percentage = totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : '0.00';
@@ -660,6 +669,191 @@ async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
         // Advance to next block start
         const fieldGap = displayRow >= 4 ? 12 : 11;
         currentFieldNumber += fieldGap;
+    }
+}
+
+async function fillFinancialData(pdfDoc, form, financialData = {}, options = {}) {
+    const targetIndex = Number(options.financialPageIndex ?? 3); // page 4 (0-based index = 3)
+    const targetPage = pdfDoc.getPage(targetIndex); // ensure page is loaded and keep ref
+
+    if (!financialData || typeof financialData !== 'object') {
+        console.warn("⚠️ No financial data found on client.financial_data");
+        return;
+    }
+
+    console.log(`📄 Filling financial data on page index ${targetIndex}`);
+
+    // Helper: normalize children count from various possible keys
+    const getChildrenCount = () => {
+        const candidates = [
+            financialData.number_of_children,
+            financialData.kinder_anzahl,
+            financialData.children,
+            financialData.dependent_children_count
+        ];
+        for (const v of candidates) {
+            const n = Number(v);
+            if (!isNaN(n) && n >= 0) return n;
+        }
+        return 0;
+    };
+
+    const childrenCount = getChildrenCount();
+
+    // --- Fill Textfeld 46 ---
+    try {
+        const field46 = form.getTextField('Textfeld 46');
+        if (field46) {
+            field46.setText(childrenCount > 0 ? String(childrenCount) : '');
+            console.log(`✅ Filled Textfeld 46 with "${childrenCount}"`);
+        }
+    } catch (err) {
+        console.error('❌ Error filling Textfeld 46:', err.message);
+    }
+
+
+    // --- Handle Kontrollkästchen 23 (seven checkboxes for marital status) ---
+    // try {
+    //   const status = 5;
+    //   const field23 = form.getFieldMaybe('Kontrollkästchen 23') || form.getCheckBox('Kontrollkästchen 23');
+
+    //   if (!field23) {
+    //     console.warn('⚠️ Kontrollkästchen 23 not found');
+    //   } else {
+    //     const acroField = field23.acroField;
+    //     const widgets = acroField.getWidgets() || [];
+    //     console.log(`🧩 Kontrollkästchen 23 has ${widgets.length} widget(s)`);
+
+    //     // Uncheck all first
+    //     for (const widget of widgets) {
+    //       try { widget.setAppearanceState(PDFName.of('Off')); } catch {}
+    //     }
+
+    //     // Determine which one to check (1 → first, 2 → second, etc.)
+    //     const targetWidgetIndex = status > 0 && status <= widgets.length ? status - 1 : -1;
+
+    //     if (targetWidgetIndex >= 0) {
+    //       const targetWidget = widgets[targetWidgetIndex];
+    //       const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
+    //       for (const state of possibleOnStates) {
+    //         try {
+    //           targetWidget.setAppearanceState(PDFName.of(state));
+    //           acroField.setValue(PDFName.of(state));
+    //           console.log(`✅ Checked Kontrollkästchen 23 [${targetWidgetIndex + 1}] for marital_status=${status}`);
+    //           break;
+    //         } catch {}
+    //       }
+    //     } else {
+    //       console.warn(`⚠️ Invalid marital_status=${status}, no checkbox checked for Kontrollkästchen 23`);
+    //     }
+    //   }
+    // } catch (err) {
+    //   console.error('❌ Error handling Kontrollkästchen 23 logic:', err.message);
+    // }
+
+    // --- Handle Kontrollkästchen 23 (seven checkboxes for marital status) ---
+    try {
+        // Normalize the marital status text
+        const maritalStatus = (financialData.marital_status || '').toString().toLowerCase().trim();
+
+        // Map both German and English terms to checkbox positions (1–7)
+        const statusMap = {
+            'ledig': 1, 'single': 1,
+            'verheiratet': 2, 'married': 2,
+            'eingetragene lebenspartnerschaft': 3, 'registered partnership': 3,
+            'geschieden': 4, 'divorced': 4,
+            'getrennt lebend': 5, 'separated': 5,
+            'verwitwet': 6, 'widowed': 6,
+            'beendet seit': 7, 'partnership ended': 7,
+        };
+
+        // Try to find matching key (also works if it includes “seit” etc.)
+        let matchedKey = Object.keys(statusMap).find(k => maritalStatus.startsWith(k));
+        const status = matchedKey ? statusMap[matchedKey] : 0;
+
+        const field23 = form.getFieldMaybe('Kontrollkästchen 23') || form.getCheckBox('Kontrollkästchen 23');
+
+        if (!field23) {
+            console.warn('⚠️ Kontrollkästchen 23 not found');
+        } else {
+            const acroField = field23.acroField;
+            const widgets = acroField.getWidgets() || [];
+            console.log(`🧩 Kontrollkästchen 23 has ${widgets.length} widget(s)`);
+
+            // Uncheck all first
+            for (const widget of widgets) {
+                try { widget.setAppearanceState(PDFName.of('Off')); } catch { }
+            }
+
+            // Determine which one to check (1 → first, 2 → second, etc.)
+            const targetWidgetIndex = status > 0 && status <= widgets.length ? status - 1 : -1;
+
+            if (targetWidgetIndex >= 0) {
+                const targetWidget = widgets[targetWidgetIndex];
+                const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
+                for (const state of possibleOnStates) {
+                    try {
+                        targetWidget.setAppearanceState(PDFName.of(state));
+                        acroField.setValue(PDFName.of(state));
+                        console.log(`✅ Checked Kontrollkästchen 23 [${targetWidgetIndex + 1}] for marital_status="${maritalStatus}"`);
+                        break;
+                    } catch { }
+                }
+            } else {
+                console.warn(`⚠️ Unknown marital_status="${maritalStatus}", no checkbox checked for Kontrollkästchen 23`);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error handling Kontrollkästchen 23 logic:', err.message);
+    }
+
+
+
+    // --- Handle Kontrollkästchen 24 (two checkboxes) ---
+    try {
+        const field24 = form.getFieldMaybe('Kontrollkästchen 24') || form.getCheckBox('Kontrollkästchen 24');
+        if (!field24) {
+            console.warn('⚠️ Kontrollkästchen 24 not found');
+        } else {
+            const acroField = field24.acroField;
+            const widgets = acroField.getWidgets() || [];
+            console.log(`🧩 Kontrollkästchen 24 has ${widgets.length} widget(s)`);
+
+            // Uncheck all first
+            for (const widget of widgets) {
+                try { widget.setAppearanceState(PDFName.of('Off')); } catch { }
+            }
+
+            // Decide which one to check: 0 = first, 1 = second
+            const targetWidgetIndex = childrenCount > 0 ? 1 : 0;
+            const targetWidget = widgets[targetWidgetIndex];
+            if (targetWidget) {
+                const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
+                for (const state of possibleOnStates) {
+                    try {
+                        targetWidget.setAppearanceState(PDFName.of(state));
+                        acroField.setValue(PDFName.of(state)); // update the field value too
+                        console.log(`✅ Checked Kontrollkästchen 24 [${targetWidgetIndex + 1}] (${state})`);
+                        break;
+                    } catch { }
+                }
+            } else {
+                console.warn(`⚠️ Could not find widget index ${targetWidgetIndex} for Kontrollkästchen 24`);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error handling Kontrollkästchen 24 logic:', err.message);
+    }
+
+
+
+    // --- Regenerate appearances ---
+    try {
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        form.updateFieldAppearances(font);
+        console.log('🖼️ Updated field appearances');
+    } catch (err) {
+        console.warn(`⚠️ Could not regenerate field appearances: ${err.message}`);
     }
 }
 
