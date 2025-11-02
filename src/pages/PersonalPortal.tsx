@@ -522,7 +522,7 @@ export const PersonalPortal = ({
                 <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
                   style={{ backgroundColor: `${customColors.primary}10` }}>
                   <img
-                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRbdp_xAu228AiewJXWx7Y8WRyaZzuVGSiVGA&s"
+                    src="https://reviewfox.de/wp-content/uploads/2022/11/provenexpert-icon.png"
                     alt="ProvenExpert"
                     className="h-10 w-10 object-cover rounded-full"
                   />
