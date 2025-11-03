@@ -86,25 +86,48 @@ class DocumentGenerator {
         paymentStartDate.setDate(1);
 
         // Validate and prepare creditor payments data
-        const creditorPayments = settlementData.creditor_payments || [];
+   // ✅ Validate and prepare creditor payments data (with full fallback chain)
+let creditorPayments = settlementData.creditor_payments || [];
+
+if (!creditorPayments?.length) {
+  console.warn('⚠️ No creditor_payments found in settlementData, checking settlementData.creditors...');
+  
+  if (settlementData.creditors?.length) {
+    console.log(`📊 Found ${settlementData.creditors.length} creditors in settlementData.creditors`);
+    creditorPayments = settlementData.creditors.map(c => ({
+      creditor_name: c.sender_name || c.creditor_name || 'Unknown Creditor',
+      debt_amount: c.claim_amount || c.debt_amount || 0
+    }));
+  } else if (clientData.final_creditor_list?.length) {
+    console.log(`📊 Using clientData.final_creditor_list with ${clientData.final_creditor_list.length} creditors`);
+    creditorPayments = clientData.final_creditor_list.map(c => ({
+      creditor_name: c.sender_name || c.actual_creditor || 'Unknown Creditor',
+      debt_amount: c.claim_amount || c.debt_amount || 0
+    }));
+  } else {
+    console.error('❌ No creditor data found in settlementData or clientData!');
+    throw new Error('No creditor data available to build Schuldenbereinigungsplan table');
+  }
+}
+
+// ✅ Compute derived payment values if not already provided
+const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
+const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
+const duration = settlementData.duration_months || 36;
+
+creditorPayments = creditorPayments.map(c => ({
+  creditor_name: c.creditor_name,
+  debt_amount: c.debt_amount || 0,
+  payment_percentage: totalDebt > 0 ? ((c.debt_amount || 0) / totalDebt) * 100 : 0,
+  monthly_payment: totalDebt > 0 ? (monthlyBudget * ((c.debt_amount || 0) / totalDebt)) : 0
+}));
+
+console.log(`✅ Final creditorPayments prepared: ${creditorPayments.length} entries`);
+if (creditorPayments.length > 0) {
+  console.log('📋 Example creditor:', creditorPayments[0]);
+}
+
         
-        if (!creditorPayments || creditorPayments.length === 0) {
-            console.warn('⚠️ No creditor_payments found in settlementData, checking alternative sources...');
-            // Try to get from creditors array
-            if (settlementData.creditors && settlementData.creditors.length > 0) {
-                console.log(`📊 Found ${settlementData.creditors.length} creditors in settlementData.creditors, converting to creditor_payments format...`);
-                const totalDebt = settlementData.creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-                const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
-                const duration = settlementData.duration_months || 36;
-                
-                creditorPayments.push(...settlementData.creditors.map(creditor => ({
-                    creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
-                    debt_amount: creditor.claim_amount || 0,
-                    payment_percentage: totalDebt > 0 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
-                    monthly_payment: totalDebt > 0 ? (monthlyBudget * ((creditor.claim_amount || 0) / totalDebt)) : 0
-                })));
-            }
-        }
         
         console.log(`📊 Creating creditor table with ${creditorPayments.length} creditors`);
         if (creditorPayments.length > 0) {
