@@ -3322,19 +3322,19 @@ class DocumentGenerator {
             
             if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
                 // Use creditor calculation table if available
-                creditorData = client.creditor_calculation_table.map(creditor => ({
-                    creditor_name: creditor.name,
+                creditorData = client.creditor_calculation_table.map((creditor, index) => ({
+                    creditor_name: creditor.name || creditor.creditor_name || creditor.sender_name || `Gläubiger ${index + 1}`,
                     creditor_address: creditor.address ? formatAddress(creditor.address) : '',
-                    creditor_email: creditor.email,
-                    creditor_reference: creditor.reference_number,
-                    debt_amount: creditor.final_amount,
+                    creditor_email: creditor.email || creditor.creditor_email || creditor.sender_email || '',
+                    creditor_reference: creditor.reference_number || creditor.creditor_reference || '',
+                    debt_amount: creditor.final_amount || creditor.original_amount || creditor.debt_amount || creditor.amount || creditor.claim_amount || 0,
                     debt_reason: '',
                     remarks: creditor.contact_status === 'responded' ? 'Antwort erhalten' : 
                              creditor.contact_status === 'no_response' ? 'Keine Antwort' : 
                              'E-Mail fehlgeschlagen',
-                    is_representative: creditor.is_representative,
+                    is_representative: creditor.is_representative || false,
                     representative_info: creditor.is_representative ? {
-                        name: creditor.actual_creditor,
+                        name: creditor.actual_creditor || creditor.name || '',
                         address: '',
                         email: ''
                     } : null
@@ -3343,17 +3343,17 @@ class DocumentGenerator {
                 // Fallback to final_creditor_list
                 creditorData = client.final_creditor_list
                     .filter(creditor => creditor.status === 'confirmed')
-                    .map(creditor => ({
-                        creditor_name: creditor.sender_name,
-                        creditor_address: creditor.sender_address ? formatAddress(creditor.sender_address) : '',
-                        creditor_email: creditor.sender_email,
-                        creditor_reference: creditor.reference_number,
-                        debt_amount: creditor.claim_amount || 0,
+                    .map((creditor, index) => ({
+                        creditor_name: creditor.sender_name || creditor.creditor_name || creditor.name || `Gläubiger ${index + 1}`,
+                        creditor_address: creditor.sender_address || creditor.creditor_address || creditor.address ? formatAddress(creditor.sender_address || creditor.creditor_address || creditor.address) : '',
+                        creditor_email: creditor.sender_email || creditor.creditor_email || creditor.email || '',
+                        creditor_reference: creditor.reference_number || creditor.creditor_reference || '',
+                        debt_amount: creditor.claim_amount || creditor.final_amount || creditor.original_amount || creditor.debt_amount || creditor.amount || 0,
                         debt_reason: '',
                         remarks: '',
                         is_representative: creditor.is_representative || false,
                         representative_info: creditor.is_representative ? {
-                            name: creditor.actual_creditor,
+                            name: creditor.actual_creditor || creditor.sender_name || creditor.creditor_name || '',
                             address: '',
                             email: ''
                         } : null

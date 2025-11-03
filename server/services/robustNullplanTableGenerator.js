@@ -143,10 +143,84 @@ class RobustNullplanTableGenerator {
             console.log('═══════════════════════════════════════════════════════════════');
             console.log('🔄 [ROBUST] STARTING TABLE ROW POPULATION');
             console.log('═══════════════════════════════════════════════════════════════');
-            console.log('🔄 [ROBUST] Populating table rows with creditor data...');
+            console.log('');
+            console.log('📊 [ROBUST] DATA BEFORE TABLE INSERTION:');
+            console.log('═══════════════════════════════════════════════════════════════');
+            console.log(`   👥 Number of creditors: ${creditorData?.length || 0}`);
+            console.log('');
+            
+            if (creditorData && creditorData.length > 0) {
+                console.log('   📊#$$$###@@@@@ Creditor data before table insertion ok ok ok:',creditorData ? JSON.stringify(creditorData, null, 10) : 'NO DATA');
+                creditorData.forEach((creditor, idx) => {
+                    const creditorNum = idx + 1;
+                    const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+                    const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
+                    const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                    
+                    console.log(`   📋 Creditor ${creditorNum} (BEFORE):`);
+                    console.log(`      ┌─ Raw Data:`);
+                    console.log(`      │  * creditor_name field: "${creditor.creditor_name || 'NOT SET'}"`);
+                    console.log(`      │  * name field: "${creditor.name || 'NOT SET'}"`);
+                    console.log(`      │  * sender_name field: "${creditor.sender_name || 'NOT SET'}"`);
+                    console.log(`      │  * debt_amount field: ${creditor.debt_amount || 'NOT SET'}`);
+                    console.log(`      │  * final_amount field: ${creditor.final_amount || 'NOT SET'}`);
+                    console.log(`      │  * original_amount field: ${creditor.original_amount || 'NOT SET'}`);
+                    console.log(`      │  * amount field: ${creditor.amount || 'NOT SET'}`);
+                    console.log(`      │  * claim_amount field: ${creditor.claim_amount || 'NOT SET'}`);
+                    console.log(`      └─ Extracted/Calculated:`);
+                    console.log(`         • Creditor Name: "${creditorName}"`);
+                    console.log(`         • Debt Amount: ${creditorAmount} EUR → "${formattedAmount}"`);
+                    console.log(`         • Full creditor object: ${JSON.stringify(creditor, null, 10)}`);
+                    console.log('');
+                });
+            } else {
+                console.log('   ⚠️ WARNING: No creditor data to insert into table!');
+                console.log('');
+            }
+            
             console.log(`   📊 XML length before population: ${processedXml.length} characters`);
+            console.log('');
+            
+            // Populate table rows
             processedXml = this.populateTableRows(processedXml, creditorData);
+            
+            console.log('');
+            console.log('═══════════════════════════════════════════════════════════════');
+            console.log('📊 [ROBUST] DATA AFTER TABLE INSERTION:');
+            console.log('═══════════════════════════════════════════════════════════════');
             console.log(`   📊 XML length after population: ${processedXml.length} characters`);
+            console.log(`   📊 XML length change: ${processedXml.length - documentXml.length} characters`);
+            console.log('');
+            
+            // Verify what was actually inserted
+            if (creditorData && creditorData.length > 0) {
+                creditorData.forEach((creditor, idx) => {
+                    const creditorNum = idx + 1;
+                    const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+                    const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
+                    const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                    
+                    // Calculate quote for verification
+                    const totalDebt = creditorData.reduce((sum, c) => {
+                        return sum + (c.debt_amount || c.final_amount || c.original_amount || c.amount || c.claim_amount || 0);
+                    }, 0);
+                    const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+                    const formattedQuote = `${creditorQuote.toFixed(2).replace('.', ',')}%`;
+                    
+                    const nameInResult = processedXml.includes(creditorName);
+                    const amountInResult = processedXml.includes(formattedAmount);
+                    const quoteInResult = processedXml.includes(formattedQuote);
+                    
+                    console.log(`   ✅ Creditor ${creditorNum} (AFTER - in XML):`);
+                    console.log(`      ┌─ Inserted Data:`);
+                    console.log(`      │  • Creditor Name: "${creditorName}" → ${nameInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
+                    console.log(`      │  • Debt Amount: "${formattedAmount}" → ${amountInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
+                    console.log(`      │  • Quote: "${formattedQuote}" → ${quoteInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
+                    console.log(`      └─ Verification: ${nameInResult && amountInResult && quoteInResult ? '✅ ALL DATA PRESENT' : '❌ SOME DATA MISSING'}`);
+                    console.log('');
+                });
+            }
+            
             console.log('✅ [ROBUST] Table row population completed');
             console.log('');
 
@@ -283,7 +357,8 @@ class RobustNullplanTableGenerator {
             // Calculate total debt for quotas
             console.log('💰 [ROBUST] Calculating total debt for quota calculations...');
             const totalDebt = creditorData.reduce((sum, creditor, idx) => {
-                const debt = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+                // Use same fallback chain as in creditorAmount extraction
+                const debt = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
                 console.log(`   Creditor ${idx + 1}: ${debt} EUR (running total: ${sum + debt})`);
                 return sum + debt;
             }, 0);
@@ -318,8 +393,11 @@ class RobustNullplanTableGenerator {
                 console.log(`📋 [ROBUST] Extracting data for row ${creditorNum}:`);
                 console.log(`   Raw creditor object: ${JSON.stringify(creditor, null, 6)}`);
                 
+                // Extract creditor name with complete fallback chain
                 const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
-                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+                
+                // Extract debt amount with complete fallback chain (matches total debt calculation)
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
                 const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
                 
                 console.log(`   ✅ Extracted values:`);
@@ -567,25 +645,55 @@ class RobustNullplanTableGenerator {
             console.log('');
             
             // VERIFICATION: Check if creditor data actually appears in the result
-            console.log('🔍 [ROBUST] VERIFYING REPLACEMENT SUCCESS...');
+            console.log('');
+            console.log('═══════════════════════════════════════════════════════════════');
+            console.log('🔍 [ROBUST] FINAL VERIFICATION - DATA IN RESULT XML');
+            console.log('═══════════════════════════════════════════════════════════════');
             let verificationPassed = true;
+            
             creditorData.forEach((creditor, idx) => {
                 const creditorNum = idx + 1;
                 const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || '';
-                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
                 const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                
+                // Calculate quote
+                const totalDebt = creditorData.reduce((sum, c) => {
+                    return sum + (c.debt_amount || c.final_amount || c.original_amount || c.amount || c.claim_amount || 0);
+                }, 0);
+                const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+                const formattedQuote = `${creditorQuote.toFixed(2).replace('.', ',')}%`;
                 
                 const nameInResult = result.includes(creditorName);
                 const amountInResult = result.includes(formattedAmount);
+                const quoteInResult = result.includes(formattedQuote);
                 
-                console.log(`   Creditor ${creditorNum}:`);
-                console.log(`      Name "${creditorName}" in result: ${nameInResult ? '✅ YES' : '❌ NO'}`);
-                console.log(`      Amount "${formattedAmount}" in result: ${amountInResult ? '✅ YES' : '❌ NO'}`);
+                console.log(`   🔍 Creditor ${creditorNum} Verification:`);
+                console.log(`      ┌─ Expected in XML:`);
+                console.log(`      │  • Name: "${creditorName}"`);
+                console.log(`      │  • Amount: "${formattedAmount}"`);
+                console.log(`      │  • Quote: "${formattedQuote}"`);
+                console.log(`      └─ Found in XML:`);
+                console.log(`         • Name: ${nameInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
+                console.log(`         • Amount: ${amountInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
+                console.log(`         • Quote: ${quoteInResult ? '✅ FOUND' : '❌ NOT FOUND'}`);
                 
-                if (!nameInResult || !amountInResult) {
+                if (!nameInResult || !amountInResult || !quoteInResult) {
                     verificationPassed = false;
-                    console.log(`      ⚠️ CREDITOR ${creditorNum} DATA MISSING IN RESULT!`);
+                    console.log(`      ⚠️ CREDITOR ${creditorNum} DATA MISSING IN RESULT XML!`);
+                    if (!nameInResult) {
+                        console.log(`         → Name "${creditorName}" not found in XML`);
+                    }
+                    if (!amountInResult) {
+                        console.log(`         → Amount "${formattedAmount}" not found in XML`);
+                    }
+                    if (!quoteInResult) {
+                        console.log(`         → Quote "${formattedQuote}" not found in XML`);
+                    }
+                } else {
+                    console.log(`      ✅ All data for Creditor ${creditorNum} found in XML`);
                 }
+                console.log('');
             });
             
             if (verificationPassed) {
