@@ -5741,7 +5741,9 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     client.calculated_settlement_plan = settlementPlan;
     
     // Generate document based on plan type
-    console.log(`📄 Generating ${planType === 'nullplan' ? 'Nullplan' : 'Schuldenbereinigungsplan'} for ${client.aktenzeichen}...`);
+    console.log(`📄 [DOCUMENT GENERATION] Plan Type: ${planType} for ${client.aktenzeichen}`);
+    console.log(`📄 [DOCUMENT GENERATION] Monthly Payment: ${garnishmentResult.garnishableAmount} EUR`);
+    console.log(`📄 [DOCUMENT GENERATION] Is Nullplan: ${planType === 'nullplan' ? 'YES → generateNullplanDocuments()' : 'NO → generateSchuldenbereinigungsplan()'}`);
     
     // Prepare client data for document generation
     const clientData = {
@@ -5752,6 +5754,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     let settlementResult;
     if (planType === 'nullplan') {
+      console.log(`📄 [DOCUMENT GENERATION] Calling generateNullplanDocuments()...`);
       // Generate Nullplan document for clients with no garnishable income
       settlementResult = await documentGenerator.generateNullplanDocuments(client.aktenzeichen);
       
@@ -5848,11 +5851,22 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       }
     } else {
       // Generate Schuldenbereinigungsplan document for clients with garnishable income
+      console.log(`📄 [DOCUMENT GENERATION] Calling generateSchuldenbereinigungsplan()...`);
+      console.log(`📄 [DOCUMENT GENERATION] Client Data: ${JSON.stringify(clientData)}`);
+      console.log(`📄 [DOCUMENT GENERATION] Settlement Plan: ${JSON.stringify({
+        plan_type: settlementPlan.plan_type,
+        monthly_payment: settlementPlan.monthly_payment,
+        creditors: settlementPlan.creditors?.length || 0,
+        creditor_payments: settlementPlan.creditor_payments?.length || 0
+      })}`);
+      
       settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
         clientData,
         settlementPlan,
         settlementPlan // calculation result is part of settlement data
       );
+      
+      console.log(`📄 [DOCUMENT GENERATION] generateSchuldenbereinigungsplan() result: ${settlementResult.success ? 'SUCCESS' : 'FAILED'}`);
       
       if (settlementResult.success) {
         console.log(`✅ Generated settlement plan: ${settlementResult.document_info.filename}`);

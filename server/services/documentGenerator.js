@@ -36,10 +36,13 @@ class DocumentGenerator {
         }
 
         try {
-            console.log(`📄 Generating Schuldenbereinigungsplan for ${clientData.name}...`);
+            console.log(`📄 [generateSchuldenbereinigungsplan] Called for ${clientData.name} (${clientData.reference})`);
+            console.log(`📄 [generateSchuldenbereinigungsplan] Calling createSchuldenbereinigungsplanDocument()...`);
 
             // Generate the document
             const doc = await this.createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult);
+            
+            console.log(`📄 [generateSchuldenbereinigungsplan] createSchuldenbereinigungsplanDocument() returned: ${doc ? 'SUCCESS' : 'NULL'}`);
 
             // Save the document
             const result = await this.saveDocument(doc, clientData.reference);
@@ -95,24 +98,17 @@ class DocumentGenerator {
         paymentStartDate.setDate(1);
 
         // Validate and prepare creditor payments data
-        console.log('');
-        console.log('═══════════════════════════════════════════════════════════════');
-        console.log('📊 [SCHULDENBEREINIGUNGSPLAN] CREDITOR DATA VALIDATION');
-        console.log('═══════════════════════════════════════════════════════════════');
-        console.log(`📥 Input settlementData keys: ${Object.keys(settlementData || {}).join(', ')}`);
-        console.log(`📥 settlementData.creditor_payments: ${settlementData.creditor_payments ? `${settlementData.creditor_payments.length} items` : 'undefined/null'}`);
-        console.log(`📥 settlementData.creditors: ${settlementData.creditors ? `${settlementData.creditors.length} items` : 'undefined/null'}`);
-        console.log(`📥 clientData.final_creditor_list: ${clientData.final_creditor_list ? `${clientData.final_creditor_list.length} items` : 'undefined/null'}`);
+        console.log(`📊 [SCHULDENBEREINIGUNGSPLAN] Validating creditor data...`);
+        console.log(`📥 settlementData.creditor_payments: ${settlementData.creditor_payments ? `${settlementData.creditor_payments.length} items` : 'MISSING'}`);
+        console.log(`📥 settlementData.creditors: ${settlementData.creditors ? `${settlementData.creditors.length} items` : 'MISSING'}`);
         
         let creditorPayments = settlementData.creditor_payments || [];
         
-        console.log(`📊 Initial creditorPayments length: ${creditorPayments.length}`);
-        
         if (!creditorPayments || creditorPayments.length === 0) {
-            console.warn('⚠️ No creditor_payments found in settlementData, checking alternative sources...');
+            console.warn('⚠️ No creditor_payments found, checking alternative sources...');
             // Try to get from creditors array
             if (settlementData.creditors && settlementData.creditors.length > 0) {
-                console.log(`📊 Found ${settlementData.creditors.length} creditors in settlementData.creditors, converting to creditor_payments format...`);
+                console.log(`✅ Using settlementData.creditors (${settlementData.creditors.length} creditors)`);
                 const totalDebt = settlementData.creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
                 const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
                 const duration = settlementData.duration_months || 36;
@@ -123,9 +119,8 @@ class DocumentGenerator {
                     payment_percentage: totalDebt > 0 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
                     monthly_payment: totalDebt > 0 ? (monthlyBudget * ((creditor.claim_amount || 0) / totalDebt)) : 0
                 }));
-                console.log(`✅ Converted ${creditorPayments.length} creditors to creditor_payments format`);
             } else if (clientData.final_creditor_list && clientData.final_creditor_list.length > 0) {
-                console.log(`📊 Using clientData.final_creditor_list with ${clientData.final_creditor_list.length} creditors`);
+                console.log(`✅ Using clientData.final_creditor_list (${clientData.final_creditor_list.length} creditors)`);
                 const totalDebt = clientData.final_creditor_list.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
                 const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
                 const duration = settlementData.duration_months || 36;
@@ -136,43 +131,21 @@ class DocumentGenerator {
                     payment_percentage: totalDebt > 0 ? ((creditor.claim_amount || creditor.debt_amount || 0) / totalDebt) * 100 : 0,
                     monthly_payment: totalDebt > 0 ? (monthlyBudget * ((creditor.claim_amount || creditor.debt_amount || 0) / totalDebt)) : 0
                 }));
-                console.log(`✅ Converted ${creditorPayments.length} creditors from final_creditor_list`);
             } else {
                 console.error('❌ ERROR: No creditor data found in any source!');
-                console.error(`   - settlementData.creditor_payments: ${settlementData.creditor_payments?.length || 0}`);
-                console.error(`   - settlementData.creditors: ${settlementData.creditors?.length || 0}`);
-                console.error(`   - clientData.final_creditor_list: ${clientData.final_creditor_list?.length || 0}`);
                 throw new Error('No creditor payments data available for Schuldenbereinigungsplan table generation');
             }
         }
         
-        console.log(`✅ Final creditorPayments prepared: ${creditorPayments.length} entries`);
+        console.log(`✅ CreditorPayments ready: ${creditorPayments.length} creditors`);
         if (creditorPayments.length > 0) {
-            console.log(`📋 Sample creditor data: ${JSON.stringify(creditorPayments[0], null, 2)}`);
-            creditorPayments.forEach((cp, idx) => {
-                console.log(`   ${idx + 1}. ${cp.creditor_name}: ${cp.debt_amount} EUR`);
-            });
-        } else {
-            console.error('❌ ERROR: No creditor payments data available for table generation!');
-            throw new Error('No creditor payments data available for Schuldenbereinigungsplan table generation');
+            console.log(`📋 First creditor: ${creditorPayments[0].creditor_name} - ${creditorPayments[0].debt_amount} EUR`);
         }
-        console.log('═══════════════════════════════════════════════════════════════');
-        console.log('');
 
         // Generate the creditor table BEFORE creating the document (fix async issue)
-        console.log('🔄 Generating creditor table...');
+        console.log(`🔄 Creating creditor table with ${creditorPayments.length} creditors...`);
         const creditorTable = await this.createCreditorTableForPlan(creditorPayments, settlementData);
-        console.log(`✅ Creditor table generated: ${creditorTable ? 'SUCCESS' : 'FAILED'}`);
-        if (creditorTable) {
-            console.log(`📊 Table type: ${creditorTable.constructor?.name || typeof creditorTable}`);
-            console.log(`📊 Table has rows: ${creditorTable.rows ? creditorTable.rows.length : 'N/A'} rows`);
-        }
-        console.log('');
-
-        // Determine plan type (Nullplan vs Ratenplan) for document content
-        const monthlyPayment = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
-        const isNullplan = monthlyPayment === 0 || monthlyPayment < 1;
-        const planType = isNullplan ? "Quotenplan" : "Ratenplan";
+        console.log(`✅ Creditor table: ${creditorTable ? `${creditorTable.rows?.length || 0} rows` : 'FAILED'}`);
 
         const doc = new Document({
             ...this.documentOptions,
@@ -209,12 +182,10 @@ class DocumentGenerator {
                     }),
 
                     // Quota Plan Information - matching screenshot format  
-                    // For Nullplan, show "Quotenplan" (no monthly payments)
-                    // For regular plans, show "Ratenplan" (with monthly payments)
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: planType,
+                                text: "Quotenplan",
                                 bold: true,
                                 size: 20
                             }),
@@ -288,31 +259,27 @@ class DocumentGenerator {
                         spacing: { after: 200 }
                     }),
 
-                    // Only show monthly payment and total payment for non-Nullplan cases
-                    // isNullplan is already determined above
-                    ...(!isNullplan ? [
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
-                                    bold: true,
-                                    size: 18
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        }),
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
 
-                        new Paragraph({
-                            children: [
-                                new TextRun({
-                                    text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(settlementData.total_payment_amount)}`,
-                                    bold: true,
-                                    size: 18
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        })
-                    ] : []),
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(settlementData.total_payment_amount)}`,
+                                bold: true,
+                                size: 18
+                            })
+                        ],
+                        spacing: { after: 200 }
+                    }),
 
                     new Paragraph({
                         children: [
@@ -397,23 +364,21 @@ class DocumentGenerator {
      * Create creditor table for settlement plan - detects Nullplan vs. regular plan
      */
     async createCreditorTableForPlan(creditorPayments, settlementData) {
-        console.log(`📊 createCreditorTableForPlan called with ${creditorPayments?.length || 0} creditors`);
-        
         if (!creditorPayments || creditorPayments.length === 0) {
             console.error('❌ ERROR: createCreditorTableForPlan called with empty creditorPayments!');
             throw new Error('Cannot create creditor table: creditorPayments is empty or undefined');
         }
         
-        // Check if this is a Nullplan (no monthly payment or payment is 0)
         const monthlyPayment = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
         const isNullplan = monthlyPayment === 0 || monthlyPayment < 1;
         
         if (isNullplan) {
-            console.log('📋 Creating Nullplan table (ohne pfändbares Einkommen)');
+            console.log('⚠️ WARNING: Nullplan detected in createSchuldenbereinigungsplanDocument!');
             return await this.createSimpleCreditorTable(creditorPayments);
         } else {
-            console.log('📋 Creating regular settlement plan table (mit pfändbarem Einkommen)');
-            return await this.createCreditorTable(creditorPayments, settlementData);
+            const table = await this.createCreditorTable(creditorPayments, settlementData);
+            console.log(`✅ Table created: ${table?.rows?.length || 0} rows`);
+            return table;
         }
     }
 
@@ -566,7 +531,7 @@ class DocumentGenerator {
             })
         );
 
-        return new Table({
+        const table = new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: tableRows,
             float: {
@@ -574,27 +539,22 @@ class DocumentGenerator {
                 verticalAnchor: VerticalPositionAlign.TOP,
             }
         });
+        
+        return table;
     }
 
     /**
      * Create the creditor table with correct German debt restructuring table specifications
      */
     async createCreditorTable(creditorPayments, settlementData) {
-        console.log(`📊 createCreditorTable called with ${creditorPayments?.length || 0} creditors`);
-        
         if (!creditorPayments || creditorPayments.length === 0) {
-            console.error('❌ ERROR: createCreditorTable called with empty or undefined creditorPayments!');
+            console.error('❌ ERROR: createCreditorTable called with empty creditorPayments!');
             throw new Error('Cannot create creditor table: creditorPayments is empty or undefined');
         }
         
-        console.log(`📋 Sample creditor payment: ${JSON.stringify(creditorPayments[0])}`);
-        
-        // Calculate totals for the plan
         const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
         const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
         const duration = settlementData.duration_months || 36;
-        
-        console.log(`💰 Total debt: ${totalDebt}, Monthly budget: ${monthlyBudget}, Duration: ${duration} months`);
 
         const tableRows = [
             // Header Row - exactly 7 columns as specified
@@ -3386,66 +3346,11 @@ class DocumentGenerator {
             // Generate Forderungsübersicht
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
-            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan) using dynamic DocumentGenerator
+            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan) using ROBUST generator
             console.log('📊 Generating Nullplan quota table instead of standard Schuldenbereinigungsplan...');
-            console.log('📄 Using dynamic DocumentGenerator (docx library) for Schuldenbereinigungsplan...');
-            
-            // Build settlementData for Nullplan
-            const totalDebt = creditorData.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
-            const monthlyBudget = 0; // Nullplan has no monthly payment
-            const durationMonths = client.financial_data?.settlement_duration_months || 36;
-            
-            // Convert creditorData to creditor_payments format
-            const creditorPayments = creditorData.map(creditor => ({
-                creditor_name: creditor.creditor_name || creditor.name || 'Unknown Creditor',
-                debt_amount: creditor.debt_amount || 0,
-                payment_percentage: totalDebt > 0 ? ((creditor.debt_amount || 0) / totalDebt) * 100 : 0,
-                monthly_payment: 0 // Nullplan has no monthly payment
-            }));
-            
-            const settlementData = {
-                monthly_payment: 0,
-                garnishable_amount: 0,
-                total_debt: totalDebt,
-                total_payment_amount: 0, // Nullplan: no payments
-                duration_months: durationMonths,
-                average_quota_percentage: totalDebt > 0 ? 100 : 0,
-                creditor_payments: creditorPayments,
-                creditors: creditorData // Also include raw creditor data for fallback
-            };
-            
-            // Calculate result for Nullplan (not used for calculations, but needed for structure)
-            const calculationResult = {
-                totalDebt: totalDebt,
-                monthlyPayment: 0,
-                totalPaymentAmount: 0,
-                durationMonths: durationMonths,
-                averageQuota: totalDebt > 0 ? 100 : 0
-            };
-            
-            console.log(`📊 Prepared settlementData for Nullplan:`);
-            console.log(`   - Total debt: ${totalDebt} EUR`);
-            console.log(`   - Monthly payment: 0 EUR (Nullplan)`);
-            console.log(`   - Duration: ${durationMonths} months`);
-            console.log(`   - Creditor payments: ${creditorPayments.length} creditors`);
-            
-            // Generate the document using dynamic DocumentGenerator
-            const doc = await this.createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult);
-            
-            // Save the document
-            const saveResult = await this.saveDocument(doc, clientData.reference);
-            
-            console.log(`✅ Schuldenbereinigungsplan generated successfully`);
-            console.log(`📁 File: ${saveResult.filename} (${Math.round(saveResult.size / 1024)} KB)`);
-            
-            const nullplanTableResult = {
-                success: true,
-                filename: saveResult.filename,
-                path: saveResult.path,
-                size: saveResult.size,
-                client_reference: clientReference,
-                generated_at: new Date().toISOString()
-            };
+            const RobustNullplanTableGenerator = require('./robustNullplanTableGenerator');
+            const tableGenerator = new RobustNullplanTableGenerator();
+            const nullplanTableResult = await tableGenerator.generateNullplanTable(clientData, creditorData);
 
             return {
                 success: true,
