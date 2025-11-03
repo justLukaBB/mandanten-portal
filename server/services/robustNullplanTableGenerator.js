@@ -376,102 +376,162 @@ class RobustNullplanTableGenerator {
                     
                     // Helper function to replace text content in all <w:t> nodes while preserving structure
                     const replaceTextInCell = (cellXml, newText) => {
-                        // Strategy: Find all runs that contain placeholder text ("Test", numbers, empty, etc.)
-                        // and replace them with our new text, combining multiple runs into one
+                        // DIRECT APPROACH: Replace ALL placeholder text in the cell with our new text
+                        // Handles "Test", "Test 1", "1", empty strings, etc.
                         
-                        let replaced; // Declare once at the top
+                        let replaced = cellXml;
+                        let hasReplacement = false;
                         
-                        // First, check if the cell contains placeholder text
-                        const hasPlaceholder = /Test|^\d+$|^[\s]*$/i.test(cellXml) || cellXml.match(/<w:t>([^<]*)<\/w:t>/g)?.some(tag => {
-                            const content = tag.match(/<w:t>([^<]*)<\/w:t>/)?.[1] || '';
-                            return /Test|^\d+$|^[\s]*$/i.test(content);
+                        // Step 1: Replace all <w:t> nodes that contain placeholder text
+                        replaced = replaced.replace(/<w:t>([^<]*)<\/w:t>/g, (match, content) => {
+                            const trimmedContent = content.trim();
+                            // Check if this is placeholder text ("Test", "Test 1", number "1", empty, etc.)
+                            if (/^Test\s*\d*$/i.test(trimmedContent) || /^\d+$/.test(trimmedContent) || trimmedContent === '') {
+                                hasReplacement = true;
+                                // Replace with our new text
+                                return `<w:t>${newText}</w:t>`;
+                            }
+                            // Keep existing non-placeholder text
+                            return match;
                         });
                         
-                        if (hasPlaceholder) {
-                            // Find all <w:t> nodes and replace their content if they contain placeholder text
-                            // But keep only the first run, remove others
-                            let runCount = 0;
-                            replaced = cellXml.replace(/<w:r([^>]*)>([\s\S]*?)<\/w:r>/g, (match, rProps, runContent) => {
-                                const textMatch = runContent.match(/<w:t>([^<]*)<\/w:t>/);
-                                if (textMatch && (/Test|^\d+$|^[\s]*$/i.test(textMatch[1]))) {
-                                    runCount++;
-                                    // Keep only the first run with our new text
-                                    if (runCount === 1) {
-                                        // Get the first <w:t> tag's properties and replace its content
-                                        return `<w:r${rProps}>${runContent.replace(/<w:t>([^<]*)<\/w:t>/, `<w:t>${newText}</w:t>`)}</w:r>`;
-                                    } else {
-                                        // Remove subsequent placeholder runs
-                                        return '';
-                                    }
-                                }
-                                return match; // Keep non-placeholder runs as-is
-                            });
-                            
-                            // If we removed runs but there are no runs left, add one
-                            if (!replaced.includes('<w:r>') && replaced.includes('<w:p>')) {
-                                replaced = replaced.replace(/(<w:p[^>]*>)([\s\S]*?)(<\/w:p>)/, (match, p1, p2, p3) => {
-                                    // Find first <w:r> to get its properties, or use default
-                                    const firstRunMatch = cellXml.match(/<w:r([^>]*)>/);
-                                    const runProps = firstRunMatch ? firstRunMatch[1] : '';
-                                    return `${p1}<w:r${runProps}><w:t>${newText}</w:t></w:r>${p3}`;
-                                });
-                            }
-                        } else {
-                            // If no placeholder found, try simple replacement
-                            replaced = cellXml.replace(/<w:t>([^<]*)<\/w:t>/g, (match, content) => {
-                                if (/Test|^\d+$|^[\s]*$/i.test(content)) {
-                                    return `<w:t>${newText}</w:t>`;
+                        // Step 2: If no replacement happened yet, try replacing in runs directly
+                        if (!hasReplacement) {
+                            replaced = replaced.replace(/<w:r([^>]*)>([\s\S]*?)(<w:t>)([^<]*)(<\/w:t>)([\s\S]*?)(<\/w:r>)/g, (match, rProps, before, tOpen, content, tClose, after, rClose) => {
+                                const trimmedContent = content.trim();
+                                // Check if placeholder
+                                if (/^Test\s*\d*$/i.test(trimmedContent) || /^\d+$/.test(trimmedContent) || trimmedContent === '') {
+                                    hasReplacement = true;
+                                    return `<w:r${rProps}>${before}${tOpen}${newText}${tClose}${after}${rClose}`;
                                 }
                                 return match;
                             });
-                            
-                            // If no replacement happened, add the text
-                            if (replaced === cellXml && !cellXml.includes('<w:t>')) {
-                                replaced = cellXml.replace(/(<w:p[^>]*>)([\s\S]*?)(<\/w:p>)/, (match, p1, p2, p3) => {
-                                    const firstRunMatch = cellXml.match(/<w:r([^>]*)>/);
-                                    const runProps = firstRunMatch ? firstRunMatch[1] : '';
-                                    if (!p2.includes('<w:r>')) {
-                                        return `${p1}<w:r${runProps}><w:t>${newText}</w:t></w:r>${p3}`;
-                                    } else {
-                                        return `${p1}${p2}<w:r${runProps}><w:t>${newText}</w:t></w:r>${p3}`;
-                                    }
-                                });
+                        }
+                        
+                        // Step 3: If still no replacement, the cell might be completely empty
+                        // Find empty <w:t></w:t> or <w:t> </w:t> and replace
+                        if (!hasReplacement) {
+                            replaced = replaced.replace(/<w:t>\s*<\/w:t>/g, `<w:t>${newText}</w:t>`);
+                            if (replaced !== cellXml) {
+                                hasReplacement = true;
                             }
+                        }
+                        
+                        // Step 4: If still no replacement, find empty runs and add text
+                        if (!hasReplacement && replaced.includes('<w:r')) {
+                            replaced = replaced.replace(/(<w:r[^>]*>)([\s\S]*?)(<\/w:r>)/g, (match, rOpen, rContent, rClose) => {
+                                // If run has no text nodes or only empty text, add our text
+                                if (!rContent.includes('<w:t>') || /<w:t>\s*<\/w:t>/.test(rContent)) {
+                                    hasReplacement = true;
+                                    // Add text to the run
+                                    return `${rOpen}${rContent.replace(/<w:t>\s*<\/w:t>|$/, `<w:t>${newText}</w:t>`)}${rClose}`;
+                                }
+                                return match;
+                            });
+                        }
+                        
+                        // Step 5: Last resort - find first paragraph and add text
+                        if (!hasReplacement && replaced.includes('<w:p')) {
+                            // Find first paragraph with runs
+                            replaced = replaced.replace(/(<w:p[^>]*>)([\s\S]*?<w:r[^>]*>)([\s\S]*?)(<\/w:r>[\s\S]*?)(<\/w:p>)/, (match, pOpen, beforeRun, runContent, afterRun, pClose) => {
+                                // If run content is empty or placeholder, replace it
+                                if (!runContent.includes('<w:t>') || /<w:t>\s*<\/w:t>/.test(runContent) || /<w:t>Test/.test(runContent)) {
+                                    hasReplacement = true;
+                                    return `${pOpen}${beforeRun}<w:t>${newText}</w:t>${afterRun}${pClose}`;
+                                }
+                                return match;
+                            });
                         }
                         
                         return replaced;
                     };
                     
                     // Replace cell 2: Creditor name
+                    console.log(`   🔄 Replacing cell 2 (creditor name)...`);
+                    console.log(`      Original cell preview: ${cell2.substring(0, 200)}...`);
                     const originalCell2 = cell2;
                     cell2 = replaceTextInCell(cell2, creditorName);
                     if (cell2 !== originalCell2) {
                         console.log(`   ✅ Cell 2 (creditor name) replaced: ${creditorName}`);
+                        console.log(`      Replaced cell preview: ${cell2.substring(0, 200)}...`);
+                    } else {
+                        console.log(`   ⚠️ Cell 2 was NOT replaced! Original: ${cell2.substring(0, 200)}...`);
                     }
                     
                     // Replace cell 3: Amount
                     const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                    console.log(`   🔄 Replacing cell 3 (amount)...`);
+                    console.log(`      Original cell preview: ${cell3.substring(0, 200)}...`);
                     const originalCell3 = cell3;
                     cell3 = replaceTextInCell(cell3, formattedAmount);
                     if (cell3 !== originalCell3) {
                         console.log(`   ✅ Cell 3 (amount) replaced: ${formattedAmount}`);
+                        console.log(`      Replaced cell preview: ${cell3.substring(0, 200)}...`);
+                    } else {
+                        console.log(`   ⚠️ Cell 3 was NOT replaced! Original: ${cell3.substring(0, 200)}...`);
                     }
                     
                     // Replace cell 4: Quote
                     const formattedQuote = `${creditorQuote.toFixed(2).replace('.', ',')}%`;
+                    console.log(`   🔄 Replacing cell 4 (quote)...`);
+                    console.log(`      Original cell preview: ${cell4.substring(0, 200)}...`);
                     const originalCell4 = cell4;
                     cell4 = replaceTextInCell(cell4, formattedQuote);
                     if (cell4 !== originalCell4) {
                         console.log(`   ✅ Cell 4 (quote) replaced: ${formattedQuote}`);
+                        console.log(`      Replaced cell preview: ${cell4.substring(0, 200)}...`);
+                    } else {
+                        console.log(`   ⚠️ Cell 4 was NOT replaced! Original: ${cell4.substring(0, 200)}...`);
                     }
+                    
+                    // Verify cells were actually modified
+                    const cell2Changed = cell2 !== rowMatch[2];
+                    const cell3Changed = cell3 !== rowMatch[3];
+                    const cell4Changed = cell4 !== rowMatch[4];
+                    
+                    console.log(`   📊 Cell modification status:`);
+                    console.log(`      Cell 2 changed: ${cell2Changed ? '✅ YES' : '❌ NO'}`);
+                    console.log(`      Cell 3 changed: ${cell3Changed ? '✅ YES' : '❌ NO'}`);
+                    console.log(`      Cell 4 changed: ${cell4Changed ? '✅ YES' : '❌ NO'}`);
+                    
+                    // Verify new cells contain our text
+                    console.log(`   📊 Verifying cell content:`);
+                    console.log(`      Cell 2 contains "${creditorName}": ${cell2.includes(creditorName) ? '✅ YES' : '❌ NO'}`);
+                    console.log(`      Cell 3 contains "${formattedAmount}": ${cell3.includes(formattedAmount) ? '✅ YES' : '❌ NO'}`);
+                    console.log(`      Cell 4 contains "${formattedQuote}": ${cell4.includes(formattedQuote) ? '✅ YES' : '❌ NO'}`);
                     
                     // Reconstruct the row with replaced cells
                     const newRow = `${rowMatch[1]}${cell2}${cell3}${cell4}`;
-                    result = result.replace(rowRegex, newRow);
+                    console.log(`   🔄 Reconstructing row ${creditorNum}...`);
+                    console.log(`      Original row length: ${rowMatch[0].length} chars`);
+                    console.log(`      New row length: ${newRow.length} chars`);
                     
-                    replaced = true;
-                    console.log(`   ✅ Row ${creditorNum} replaced successfully with direct cell replacement`);
-                    console.log(`   📊 All cells updated, XML structure preserved`);
+                    const beforeRowReplace = result;
+                    result = result.replace(rowRegex, newRow);
+                    const afterRowReplace = result;
+                    
+                    if (beforeRowReplace !== afterRowReplace) {
+                        replaced = true;
+                        console.log(`   ✅ Row ${creditorNum} replaced successfully with direct cell replacement`);
+                        console.log(`   📊 Row replacement changed XML: ${beforeRowReplace.length} → ${afterRowReplace.length} characters`);
+                        console.log(`   📊 All cells updated, XML structure preserved`);
+                        
+                        // Verify the replacement in the result
+                        const resultContainsNewText = result.includes(creditorName) && result.includes(formattedAmount) && result.includes(formattedQuote);
+                        console.log(`   ✅ Verified replacement in result XML: ${resultContainsNewText ? '✅ CONFIRMED' : '❌ NOT FOUND'}`);
+                    } else {
+                        console.log(`   ⚠️ Row ${creditorNum} replacement made NO CHANGE to XML!`);
+                        console.log(`   🔍 Row regex: ${rowRegex}`);
+                        console.log(`   🔍 Row match found: ${rowMatch ? 'YES' : 'NO'}`);
+                        if (rowMatch) {
+                            console.log(`   🔍 Row match length: ${rowMatch[0].length} chars`);
+                            console.log(`   🔍 Row match preview: ${rowMatch[0].substring(0, 300)}...`);
+                            console.log(`   🔍 New row preview: ${newRow.substring(0, 300)}...`);
+                            console.log(`   🔍 Checking if row exists in result...`);
+                            const rowExistsInResult = result.includes(rowMatch[0].substring(0, 100));
+                            console.log(`      Row exists in result: ${rowExistsInResult ? 'YES' : 'NO'}`);
+                        }
+                    }
                 } else {
                     console.log(`   ❌ Could not find table row structure for row ${creditorNum}`);
                 }
@@ -504,6 +564,36 @@ class RobustNullplanTableGenerator {
             console.log(`📊 Final XML length: ${result.length} characters`);
             console.log(`📊 Original XML length: ${documentXml.length} characters`);
             console.log(`📊 Difference: ${result.length - documentXml.length} characters`);
+            console.log('');
+            
+            // VERIFICATION: Check if creditor data actually appears in the result
+            console.log('🔍 [ROBUST] VERIFYING REPLACEMENT SUCCESS...');
+            let verificationPassed = true;
+            creditorData.forEach((creditor, idx) => {
+                const creditorNum = idx + 1;
+                const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || '';
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
+                const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                
+                const nameInResult = result.includes(creditorName);
+                const amountInResult = result.includes(formattedAmount);
+                
+                console.log(`   Creditor ${creditorNum}:`);
+                console.log(`      Name "${creditorName}" in result: ${nameInResult ? '✅ YES' : '❌ NO'}`);
+                console.log(`      Amount "${formattedAmount}" in result: ${amountInResult ? '✅ YES' : '❌ NO'}`);
+                
+                if (!nameInResult || !amountInResult) {
+                    verificationPassed = false;
+                    console.log(`      ⚠️ CREDITOR ${creditorNum} DATA MISSING IN RESULT!`);
+                }
+            });
+            
+            if (verificationPassed) {
+                console.log('✅ [ROBUST] VERIFICATION PASSED: All creditor data found in result XML');
+            } else {
+                console.log('❌ [ROBUST] VERIFICATION FAILED: Some creditor data missing in result XML');
+                console.log('⚠️ [ROBUST] The replacement may not have worked correctly!');
+            }
             console.log('');
             
             return result;
