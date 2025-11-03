@@ -31,21 +31,60 @@ class DocumentGenerator {
      * Generate complete Schuldenbereinigungsplan Word document with save
      */
     async generateSchuldenbereinigungsplan(clientData, settlementData, calculationResult) {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('🚀 [SCHULDEN] generateSchuldenbereinigungsplan() FUNCTION CALLED');
+        console.log('═══════════════════════════════════════════════════════════════');
+        
         if (!docxModule) {
             throw new Error('Document generation is not available - docx package not installed. Please run: npm install docx');
         }
 
         try {
             console.log(`📄 Generating Schuldenbereinigungsplan for ${clientData.name}...`);
+            console.log('');
+            
+            // LOG INPUT DATA
+            console.log('📥 [SCHULDEN] INPUT DATA:');
+            console.log('   📋 clientData:');
+            console.log(`      - name: ${clientData.name || 'NOT PROVIDED'}`);
+            console.log(`      - reference: ${clientData.reference || 'NOT PROVIDED'}`);
+            console.log(`      - Full clientData: ${JSON.stringify(clientData, null, 6)}`);
+            console.log('');
+            console.log('   📊 settlementData:');
+            console.log(`      - plan_type: ${settlementData.plan_type || 'NOT PROVIDED'}`);
+            console.log(`      - monthly_payment: ${settlementData.monthly_payment || 0}`);
+            console.log(`      - duration_months: ${settlementData.duration_months || 'NOT PROVIDED'}`);
+            console.log(`      - creditor_payments count: ${settlementData.creditor_payments?.length || 0}`);
+            console.log(`      - creditors count: ${settlementData.creditors?.length || 0}`);
+            if (settlementData.creditor_payments && settlementData.creditor_payments.length > 0) {
+                console.log(`      - creditor_payments details:`);
+                settlementData.creditor_payments.forEach((cp, idx) => {
+                    console.log(`         Creditor ${idx + 1}:`);
+                    console.log(`            * creditor_name: ${cp.creditor_name || 'NOT PROVIDED'}`);
+                    console.log(`            * debt_amount: ${cp.debt_amount || 0}`);
+                    console.log(`            * Full object: ${JSON.stringify(cp, null, 10)}`);
+                });
+            }
+            console.log(`      - Full settlementData: ${JSON.stringify(settlementData, null, 6)}`);
+            console.log('');
+            console.log('   📈 calculationResult:');
+            console.log(`      - Full calculationResult: ${JSON.stringify(calculationResult, null, 6)}`);
+            console.log('');
 
             // Generate the document
+            console.log('🔄 [SCHULDEN] Calling createSchuldenbereinigungsplanDocument()...');
             const doc = await this.createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult);
+            console.log('✅ [SCHULDEN] Document structure created');
+            console.log('');
 
             // Save the document
+            console.log('💾 [SCHULDEN] Saving document...');
             const result = await this.saveDocument(doc, clientData.reference);
-
             console.log(`✅ Schuldenbereinigungsplan document generated successfully`);
             console.log(`📁 File: ${result.filename} (${Math.round(result.size / 1024)} KB)`);
+            console.log(`📂 Path: ${result.path}`);
+            console.log('');
 
             return {
                 success: true,
@@ -61,6 +100,7 @@ class DocumentGenerator {
 
         } catch (error) {
             console.error(`❌ Error generating Schuldenbereinigungsplan: ${error.message}`);
+            console.error('   Stack:', error.stack);
             return {
                 success: false,
                 error: error.message,
@@ -138,7 +178,35 @@ if (creditorPayments.length > 0) {
         }
 
         // Generate the creditor table BEFORE creating the document (fix async issue)
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('🔄 [SCHULDEN] GENERATING CREDITOR TABLE');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log(`📊 [SCHULDEN] Calling createCreditorTableForPlan() with ${creditorPayments.length} creditors...`);
+        console.log(`   📋 Creditor payments being passed:`);
+        creditorPayments.forEach((cp, idx) => {
+            console.log(`      Creditor ${idx + 1}:`);
+            console.log(`         - creditor_name: "${cp.creditor_name}"`);
+            console.log(`         - debt_amount: ${cp.debt_amount || 0}`);
+            console.log(`         - payment_percentage: ${cp.payment_percentage || 0}`);
+            console.log(`         - monthly_payment: ${cp.monthly_payment || 0}`);
+            console.log(`         - Full object: ${JSON.stringify(cp, null, 10)}`);
+        });
+        console.log(`   📊 Settlement data: ${JSON.stringify(settlementData, null, 6)}`);
+        console.log('');
+        
         const creditorTable = await this.createCreditorTableForPlan(creditorPayments, settlementData);
+        
+        console.log('✅ [SCHULDEN] Creditor table generated');
+        console.log(`   📊 Table object type: ${typeof creditorTable}`);
+        console.log(`   📊 Table has rows: ${creditorTable?.rows ? creditorTable.rows.length : 'UNKNOWN'}`);
+        if (creditorTable?.rows) {
+            console.log(`   📋 Table rows count: ${creditorTable.rows.length}`);
+            creditorTable.rows.forEach((row, idx) => {
+                console.log(`      Row ${idx + 1}: ${row?.children?.length || 0} cells`);
+            });
+        }
+        console.log('');
 
         const doc = new Document({
             ...this.documentOptions,
@@ -495,21 +563,49 @@ if (creditorPayments.length > 0) {
      * Create the creditor table with correct German debt restructuring table specifications
      */
     async createCreditorTable(creditorPayments, settlementData) {
-        console.log(`📊 createCreditorTable called with ${creditorPayments?.length || 0} creditors`);
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('🔄 [TABLE] createCreditorTable() FUNCTION CALLED');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log(`📊 [TABLE] createCreditorTable called with ${creditorPayments?.length || 0} creditors`);
         
         if (!creditorPayments || creditorPayments.length === 0) {
             console.error('❌ ERROR: createCreditorTable called with empty or undefined creditorPayments!');
             throw new Error('Cannot create creditor table: creditorPayments is empty or undefined');
         }
         
-        console.log(`📋 Sample creditor payment: ${JSON.stringify(creditorPayments[0])}`);
+        console.log('📥 [TABLE] INPUT DATA:');
+        console.log('   👥 Creditor Payments:');
+        creditorPayments.forEach((cp, idx) => {
+            console.log(`      Creditor ${idx + 1}:`);
+            console.log(`         - creditor_name: "${cp.creditor_name || 'NOT PROVIDED'}"`);
+            console.log(`         - debt_amount: ${cp.debt_amount || 0}`);
+            console.log(`         - payment_percentage: ${cp.payment_percentage || 0}`);
+            console.log(`         - monthly_payment: ${cp.monthly_payment || 0}`);
+            console.log(`         - Full object: ${JSON.stringify(cp, null, 10)}`);
+        });
+        console.log('   📊 Settlement Data:');
+        console.log(`      - monthly_payment: ${settlementData.monthly_payment || 0}`);
+        console.log(`      - garnishable_amount: ${settlementData.garnishable_amount || 0}`);
+        console.log(`      - duration_months: ${settlementData.duration_months || 36}`);
+        console.log(`      - Full settlementData: ${JSON.stringify(settlementData, null, 6)}`);
+        console.log('');
         
         // Calculate totals for the plan
-        const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
+        console.log('💰 [TABLE] Calculating totals...');
+        const totalDebt = creditorPayments.reduce((sum, c, idx) => {
+            const debt = c.debt_amount || 0;
+            console.log(`      Creditor ${idx + 1}: ${debt} EUR (running total: ${sum + debt})`);
+            return sum + debt;
+        }, 0);
         const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
         const duration = settlementData.duration_months || 36;
         
-        console.log(`💰 Total debt: ${totalDebt}, Monthly budget: ${monthlyBudget}, Duration: ${duration} months`);
+        console.log(`   ✅ Calculated totals:`);
+        console.log(`      - Total debt: ${totalDebt} EUR`);
+        console.log(`      - Monthly budget: ${monthlyBudget} EUR`);
+        console.log(`      - Duration: ${duration} months`);
+        console.log('');
 
         const tableRows = [
             // Header Row - exactly 7 columns as specified
@@ -583,82 +679,111 @@ if (creditorPayments.length > 0) {
         ];
 
         // Data Rows - with correct calculations as specified
+        console.log('📊 [TABLE] Creating data rows...');
         creditorPayments.forEach((creditor, index) => {
+            const rowNum = index + 1;
+            console.log('');
+            console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+            console.log(`🔄 [TABLE] PROCESSING ROW ${rowNum} / ${creditorPayments.length}`);
+            console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+            console.log(`   📋 Creditor data: ${JSON.stringify(creditor, null, 6)}`);
+            
             // Column 4: Quote von Gesamtverschuldung = (Individual Forderung / Sum of all Forderungen) × 100
             const quoteTotalDebt = totalDebt > 0 ? (creditor.debt_amount / totalDebt) * 100 : 0;
+            console.log(`   💰 Calculations for row ${rowNum}:`);
+            console.log(`      - quoteTotalDebt: ${quoteTotalDebt.toFixed(4)}% (${creditor.debt_amount} / ${totalDebt} * 100)`);
             
             // Column 5: mtl. = (Total Monthly Budget × Quote von Gesamtverschuldung) / 100
             const monthlyPayment = (monthlyBudget * quoteTotalDebt) / 100;
+            console.log(`      - monthlyPayment: ${monthlyPayment.toFixed(2)} EUR (${monthlyBudget} * ${quoteTotalDebt} / 100)`);
             
             // Column 6: Gesamthöhe des Tilgungsangebots = mtl. × 36 months
             const totalRepayment = monthlyPayment * duration;
+            console.log(`      - totalRepayment: ${totalRepayment.toFixed(2)} EUR (${monthlyPayment.toFixed(2)} * ${duration})`);
             
             // Column 7: Regulierungsquote = (Gesamthöhe des Tilgungsangebots / Forderung) × 100
             const settlementRate = creditor.debt_amount > 0 ? (totalRepayment / creditor.debt_amount) * 100 : 0;
+            console.log(`      - settlementRate: ${settlementRate.toFixed(4)}% (${totalRepayment.toFixed(2)} / ${creditor.debt_amount} * 100)`);
+            
+            console.log(`   📝 Formatted values:`);
+            console.log(`      - Nr.: ${rowNum}`);
+            console.log(`      - Gläubiger: "${creditor.creditor_name}"`);
+            console.log(`      - Forderung: "${this.formatCurrency(creditor.debt_amount)}"`);
+            console.log(`      - Quote: "${this.formatPercentage(quoteTotalDebt)}"`);
+            console.log(`      - mtl.: "${this.formatCurrency(monthlyPayment)}"`);
+            console.log(`      - Gesamthöhe: "${this.formatCurrency(totalRepayment)}"`);
+            console.log(`      - Regulierungsquote: "${this.formatPercentage(settlementRate)}"`);
 
-            tableRows.push(
-                new TableRow({
-                    children: [
-                        // Column 1: Nr.
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
-                                alignment: AlignmentType.CENTER
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 2: Gläubiger
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: creditor.creditor_name, size: 16 })],
-                                alignment: AlignmentType.LEFT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 3: Forderung
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 16 })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 4: Quote von Gesamtverschuldung
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatPercentage(quoteTotalDebt), size: 16 })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 5: mtl.
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(monthlyPayment), size: 16 })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 6: Gesamthöhe des Tilgungsangebots
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatCurrency(totalRepayment), size: 16 })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        }),
-                        // Column 7: Regulierungsquote
-                        new TableCell({
-                            children: [new Paragraph({ 
-                                children: [new TextRun({ text: this.formatPercentage(settlementRate), size: 16 })],
-                                alignment: AlignmentType.RIGHT
-                            })],
-                            borders: this.createTableBorders()
-                        })
-                    ]
-                })
-            );
+            console.log(`   🏗️ Creating TableRow object for row ${rowNum}...`);
+            
+            const tableRow = new TableRow({
+                children: [
+                    // Column 1: Nr.
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: (index + 1).toString(), size: 16 })],
+                            alignment: AlignmentType.CENTER
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 2: Gläubiger
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: creditor.creditor_name, size: 16 })],
+                            alignment: AlignmentType.LEFT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 3: Forderung
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(creditor.debt_amount), size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 4: Quote von Gesamtverschuldung
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatPercentage(quoteTotalDebt), size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 5: mtl.
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(monthlyPayment), size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 6: Gesamthöhe des Tilgungsangebots
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatCurrency(totalRepayment), size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    }),
+                    // Column 7: Regulierungsquote
+                    new TableCell({
+                        children: [new Paragraph({ 
+                            children: [new TextRun({ text: this.formatPercentage(settlementRate), size: 16 })],
+                            alignment: AlignmentType.RIGHT
+                        })],
+                        borders: this.createTableBorders()
+                    })
+                ]
+            });
+            
+            console.log(`   ✅ TableRow created with ${tableRow.children.length} cells`);
+            tableRows.push(tableRow);
+            console.log(`   📊 Total rows in table so far: ${tableRows.length}`);
         });
+        
+        console.log('');
+        console.log(`✅ [TABLE] Created ${creditorPayments.length} data rows`);
 
         // Totals Row
         const totalMonthlyPayments = creditorPayments.reduce((sum, creditor) => {
@@ -669,6 +794,16 @@ if (creditorPayments.length > 0) {
 
         const totalRepayments = totalMonthlyPayments * duration;
         const averageSettlementRate = totalDebt > 0 ? (totalRepayments / totalDebt) * 100 : 0;
+
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('📊 [TABLE] CREATING TOTALS ROW');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log(`   💰 Totals calculations:`);
+        console.log(`      - totalMonthlyPayments: ${totalMonthlyPayments.toFixed(2)} EUR`);
+        console.log(`      - totalRepayments: ${totalRepayments.toFixed(2)} EUR`);
+        console.log(`      - averageSettlementRate: ${averageSettlementRate.toFixed(4)}%`);
+        console.log('');
 
         tableRows.push(
             new TableRow({
