@@ -85,6 +85,38 @@ class DocumentGenerator {
         paymentStartDate.setMonth(paymentStartDate.getMonth() + 1);
         paymentStartDate.setDate(1);
 
+        // Validate and prepare creditor payments data
+        const creditorPayments = settlementData.creditor_payments || [];
+        
+        if (!creditorPayments || creditorPayments.length === 0) {
+            console.warn('⚠️ No creditor_payments found in settlementData, checking alternative sources...');
+            // Try to get from creditors array
+            if (settlementData.creditors && settlementData.creditors.length > 0) {
+                console.log(`📊 Found ${settlementData.creditors.length} creditors in settlementData.creditors, converting to creditor_payments format...`);
+                const totalDebt = settlementData.creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+                const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
+                const duration = settlementData.duration_months || 36;
+                
+                creditorPayments.push(...settlementData.creditors.map(creditor => ({
+                    creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
+                    debt_amount: creditor.claim_amount || 0,
+                    payment_percentage: totalDebt > 0 ? (creditor.claim_amount || 0) / totalDebt * 100 : 0,
+                    monthly_payment: totalDebt > 0 ? (monthlyBudget * ((creditor.claim_amount || 0) / totalDebt)) : 0
+                })));
+            }
+        }
+        
+        console.log(`📊 Creating creditor table with ${creditorPayments.length} creditors`);
+        if (creditorPayments.length > 0) {
+            console.log(`📋 Sample creditor data: ${JSON.stringify(creditorPayments[0])}`);
+        } else {
+            console.error('❌ ERROR: No creditor payments data available for table generation!');
+            throw new Error('No creditor payments data available for Schuldenbereinigungsplan table generation');
+        }
+
+        // Generate the creditor table BEFORE creating the document (fix async issue)
+        const creditorTable = await this.createCreditorTableForPlan(creditorPayments, settlementData);
+
         const doc = new Document({
             ...this.documentOptions,
             sections: [{
@@ -151,8 +183,8 @@ class DocumentGenerator {
                         spacing: { after: 600 }
                     }),
 
-                    // Creditor Table - check if it's a Nullplan (no monthly payment)
-                    await this.createCreditorTableForPlan(settlementData.creditor_payments, settlementData),
+                    // Creditor Table - already generated above
+                    creditorTable,
 
                     // Spacing after table
                     new Paragraph({
@@ -257,9 +289,16 @@ class DocumentGenerator {
      * Create creditor table for settlement plan - detects Nullplan vs. regular plan
      */
     async createCreditorTableForPlan(creditorPayments, settlementData) {
+        console.log(`📊 createCreditorTableForPlan called with ${creditorPayments?.length || 0} creditors`);
+        
+        if (!creditorPayments || creditorPayments.length === 0) {
+            console.error('❌ ERROR: createCreditorTableForPlan called with empty creditorPayments!');
+            throw new Error('Cannot create creditor table: creditorPayments is empty or undefined');
+        }
+        
         // Check if this is a Nullplan (no monthly payment or payment is 0)
-        const monthlyPayment = settlementData.monthly_payment || 0;
-        const isNullplan = monthlyPayment === 0;
+        const monthlyPayment = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
+        const isNullplan = monthlyPayment === 0 || monthlyPayment < 1;
         
         if (isNullplan) {
             console.log('📋 Creating Nullplan table (ohne pfändbares Einkommen)');
@@ -433,10 +472,21 @@ class DocumentGenerator {
      * Create the creditor table with correct German debt restructuring table specifications
      */
     async createCreditorTable(creditorPayments, settlementData) {
+        console.log(`📊 createCreditorTable called with ${creditorPayments?.length || 0} creditors`);
+        
+        if (!creditorPayments || creditorPayments.length === 0) {
+            console.error('❌ ERROR: createCreditorTable called with empty or undefined creditorPayments!');
+            throw new Error('Cannot create creditor table: creditorPayments is empty or undefined');
+        }
+        
+        console.log(`📋 Sample creditor payment: ${JSON.stringify(creditorPayments[0])}`);
+        
         // Calculate totals for the plan
-        const totalDebt = creditorPayments.reduce((sum, c) => sum + c.debt_amount, 0);
-        const monthlyBudget = settlementData.monthly_payment || 0;
+        const totalDebt = creditorPayments.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
+        const monthlyBudget = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
         const duration = settlementData.duration_months || 36;
+        
+        console.log(`💰 Total debt: ${totalDebt}, Monthly budget: ${monthlyBudget}, Duration: ${duration} months`);
 
         const tableRows = [
             // Header Row - exactly 7 columns as specified
@@ -884,12 +934,22 @@ class DocumentGenerator {
                 reference: clientReference
             };
 
-            // Get creditor data from settlement data
-            if (!settlementData.creditor_payments || settlementData.creditor_payments.length === 0) {
+            // Get creditor data from settlement data - check both creditor_payments and creditors
+            const hasCreditorPayments = settlementData.creditor_payments && settlementData.creditor_payments.length > 0;
+            const hasCreditors = settlementData.creditors && settlementData.creditors.length > 0;
+            
+            if (!hasCreditorPayments && !hasCreditors) {
+                console.error('❌ No creditor data found in settlementData');
+                console.error('   - creditor_payments:', settlementData.creditor_payments);
+                console.error('   - creditors:', settlementData.creditors);
                 throw new Error('No creditor payment data available for document generation');
             }
 
-            console.log(`📊 Processing ${settlementData.creditor_payments.length} creditors for document`);
+            if (hasCreditorPayments) {
+                console.log(`📊 Processing ${settlementData.creditor_payments.length} creditors from creditor_payments for document`);
+            } else if (hasCreditors) {
+                console.log(`📊 Processing ${settlementData.creditors.length} creditors from creditors array (will be converted to creditor_payments format)`);
+            }
 
             // Generate the document
             const doc = await this.generateSchuldenbereinigungsplan(
