@@ -585,7 +585,48 @@ class RobustNullplanTableGenerator {
                     console.log(`      New row length: ${newRow.length} chars`);
                     
                     const beforeRowReplace = result;
-                    result = result.replace(rowRegex, newRow);
+                    
+                    // Count how many times the pattern matches (should be 1, but might be more)
+                    const allMatches = result.match(new RegExp(rowRegex.source, 'gi'));
+                    const matchCount = allMatches ? allMatches.length : 0;
+                    console.log(`   🔍 Row pattern matches: ${matchCount} time(s)`);
+                    
+                    // CRITICAL: Replace the exact matched row
+                    // Use the exact matched string to ensure we replace the right row
+                    if (rowMatch && rowMatch[0]) {
+                        const exactOldRow = rowMatch[0];
+                        
+                        // Verify this is the row we want (contains our row number)
+                        if (exactOldRow.includes(`<w:t>${creditorNum}</w:t>`)) {
+                            console.log(`   🔄 Replacing exact row ${creditorNum} (${exactOldRow.length} chars)...`);
+                            
+                            // Replace using the exact matched string
+                            result = result.replace(exactOldRow, newRow);
+                            
+                            console.log(`   ✅ Replaced exact row match`);
+                            
+                            // Verify old row is gone
+                            const oldRowStillInResult = result.includes(exactOldRow);
+                            if (oldRowStillInResult) {
+                                console.log(`   ⚠️ WARNING: Old row still exists in result! Trying alternative replacement...`);
+                                
+                                // Try replacing with escaped pattern
+                                const escapedOldRow = exactOldRow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                result = result.replace(new RegExp(escapedOldRow, 'gi'), newRow);
+                                
+                                // Check again
+                                const stillThere = result.includes(exactOldRow);
+                                if (stillThere) {
+                                    console.log(`   ❌ ERROR: Failed to remove old row after multiple attempts!`);
+                                }
+                            }
+                        } else {
+                            console.log(`   ⚠️ WARNING: Matched row doesn't contain row number ${creditorNum}!`);
+                        }
+                    } else {
+                        console.log(`   ⚠️ WARNING: No row match found for replacement!`);
+                    }
+                    
                     const afterRowReplace = result;
                     
                     if (beforeRowReplace !== afterRowReplace) {
@@ -594,9 +635,30 @@ class RobustNullplanTableGenerator {
                         console.log(`   📊 Row replacement changed XML: ${beforeRowReplace.length} → ${afterRowReplace.length} characters`);
                         console.log(`   📊 All cells updated, XML structure preserved`);
                         
-                        // Verify the replacement in the result
+                        // Verify the replacement in the result - check immediately after replacement
                         const resultContainsNewText = result.includes(creditorName) && result.includes(formattedAmount) && result.includes(formattedQuote);
-                        console.log(`   ✅ Verified replacement in result XML: ${resultContainsNewText ? '✅ CONFIRMED' : '❌ NOT FOUND'}`);
+                        console.log(`   ✅ Verified replacement in result XML (immediate): ${resultContainsNewText ? '✅ CONFIRMED' : '❌ NOT FOUND'}`);
+                        
+                        // Check if the new row actually exists in the result
+                        const newRowExists = result.includes(newRow.substring(0, 100));
+                        console.log(`   🔍 New row exists in result: ${newRowExists ? '✅ YES' : '❌ NO'}`);
+                        
+                        // Check if old row is still there (shouldn't be)
+                        const oldRowStillExists = result.includes(rowMatch[0].substring(0, 100));
+                        console.log(`   🔍 Old row still exists in result: ${oldRowStillExists ? '⚠️ YES (BAD!)' : '✅ NO (GOOD)'}`);
+                        
+                        // Extract and log a sample of the actual row content from result
+                        const rowSamplePattern = new RegExp(`<w:tr[^>]*>[\\s\\S]*?<w:t>${creditorNum}</w:t>[\\s\\S]{0,500}<\\/w:tr>`, 'i');
+                        const rowSampleMatch = result.match(rowSamplePattern);
+                        if (rowSampleMatch) {
+                            console.log(`   📋 Sample of row ${creditorNum} in result (first 500 chars):`);
+                            console.log(`      ${rowSampleMatch[0].substring(0, 500)}...`);
+                            console.log(`   🔍 Row ${creditorNum} contains "${creditorName}": ${rowSampleMatch[0].includes(creditorName) ? '✅ YES' : '❌ NO'}`);
+                            console.log(`   🔍 Row ${creditorNum} contains "${formattedAmount}": ${rowSampleMatch[0].includes(formattedAmount) ? '✅ YES' : '❌ NO'}`);
+                            console.log(`   🔍 Row ${creditorNum} contains "${formattedQuote}": ${rowSampleMatch[0].includes(formattedQuote) ? '✅ YES' : '❌ NO'}`);
+                        } else {
+                            console.log(`   ⚠️ Could not find row ${creditorNum} in result after replacement!`);
+                        }
                     } else {
                         console.log(`   ⚠️ Row ${creditorNum} replacement made NO CHANGE to XML!`);
                         console.log(`   🔍 Row regex: ${rowRegex}`);
@@ -620,20 +682,114 @@ class RobustNullplanTableGenerator {
             console.log('🧹 [ROBUST] CLEANING UP EMPTY ROWS');
             console.log('═══════════════════════════════════════════════════════════════');
             
+            // Store XML length before cleanup
+            const beforeCleanup = result;
+            const beforeCleanupLength = result.length;
+            
             // Remove rows that weren't populated (rows beyond the number of creditors)
             const rowsToRemove = Math.max(0, 8 - creditorData.length);
             console.log(`📊 [ROBUST] Will remove ${rowsToRemove} empty rows (rows ${creditorData.length + 1} to 8)`);
+            console.log(`📊 [ROBUST] XML length before cleanup: ${beforeCleanupLength} characters`);
             
+            // Verify populated rows are still in XML before cleanup
+            console.log('🔍 [ROBUST] Verifying populated rows exist before cleanup...');
+            creditorData.forEach((creditor, idx) => {
+                const creditorNum = idx + 1;
+                const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
+                const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                
+                const nameBefore = beforeCleanup.includes(creditorName);
+                const amountBefore = beforeCleanup.includes(formattedAmount);
+                
+                console.log(`   Row ${creditorNum}: Name=${nameBefore ? '✅' : '❌'}, Amount=${amountBefore ? '✅' : '❌'}`);
+            });
+            
+            // Only remove rows that are TRULY empty (have row number but no data)
+            // CRITICAL: Only remove rows AFTER the populated ones (rows 3-8), and verify they're empty
             for (let i = creditorData.length + 1; i <= 8; i++) {
-                const emptyRowPattern = new RegExp(`<w:tr[^>]*>[\\s\\S]*?<w:t>${i}<\\/w:t>[\\s\\S]*?<\\/w:tr>`, 'i');
-                const beforeRemoval = result;
-                result = result.replace(emptyRowPattern, '');
-                if (beforeRemoval !== result) {
-                    console.log(`   ✓ [ROBUST] Removed empty row ${i}`);
+                console.log(`   🔍 Checking row ${i} for removal...`);
+                
+                // Find row with this number - use a more specific pattern that won't match populated rows
+                const rowPattern = new RegExp(`<w:tr[^>]*>[\\s\\S]*?<w:t>${i}<\\/w:t>[\\s\\S]*?<\\/w:tr>`, 'i');
+                const rowMatch = result.match(rowPattern);
+                
+                if (rowMatch && rowMatch[0]) {
+                    const rowContent = rowMatch[0];
+                    console.log(`      Row ${i} found, length: ${rowContent.length} chars`);
+                    
+                    // Extract text content from the row to check if it's empty
+                    const textMatches = rowContent.match(/<w:t>([^<]*)<\/w:t>/g);
+                    const textContents = textMatches ? textMatches.map(m => {
+                        const textMatch = m.match(/<w:t>([^<]*)<\/w:t>/);
+                        return textMatch ? textMatch[1].trim() : '';
+                    }).filter(t => t && t !== '') : [];
+                    
+                    console.log(`      Row ${i} text contents: [${textContents.join(', ')}]`);
+                    
+                    // Check if row contains placeholder text ("Test"), empty cells, or only the row number
+                    const hasPlaceholder = /Test/i.test(rowContent);
+                    const onlyRowNumber = textContents.length <= 1 && textContents.every(t => t === String(i) || t === '');
+                    const hasNoMeaningfulText = textContents.length === 0 || 
+                                               (textContents.length <= 1 && textContents[0] === String(i));
+                    
+                    const shouldRemove = hasPlaceholder || onlyRowNumber || hasNoMeaningfulText;
+                    
+                    console.log(`      Row ${i} analysis:`);
+                    console.log(`         - Has placeholder "Test": ${hasPlaceholder ? 'YES' : 'NO'}`);
+                    console.log(`         - Only row number: ${onlyRowNumber ? 'YES' : 'NO'}`);
+                    console.log(`         - No meaningful text: ${hasNoMeaningfulText ? 'YES' : 'NO'}`);
+                    console.log(`         - Should remove: ${shouldRemove ? 'YES' : 'NO'}`);
+                    
+                    if (shouldRemove) {
+                        // Count how many times this pattern matches
+                        const allMatches = result.match(new RegExp(rowPattern.source, 'gi'));
+                        const matchCount = allMatches ? allMatches.length : 0;
+                        console.log(`      Pattern matches ${matchCount} time(s)`);
+                        
+                        const beforeRemoval = result;
+                        // Use global replace but only replace matches that are for this row number
+                        result = result.replace(rowPattern, (match) => {
+                            // Double-check this match is for row number i
+                            if (match.includes(`<w:t>${i}</w:t>`)) {
+                                return ''; // Remove this row
+                            }
+                            return match; // Keep it (shouldn't happen)
+                        });
+                        
+                        if (beforeRemoval !== result) {
+                            console.log(`   ✓ [ROBUST] Removed empty row ${i}`);
+                        } else {
+                            console.log(`   ⚠️ [ROBUST] Row ${i} pattern matched but removal made no change`);
+                        }
+                    } else {
+                        console.log(`   ⚠️ [ROBUST] Row ${i} contains data (${textContents.length} text elements), NOT removing`);
+                    }
                 } else {
-                    console.log(`   ℹ️ Row ${i} not found (may have been removed already)`);
+                    console.log(`   ℹ️ [ROBUST] Row ${i} not found (may have been removed already)`);
                 }
             }
+            
+            const afterCleanupLength = result.length;
+            console.log(`📊 [ROBUST] XML length after cleanup: ${afterCleanupLength} characters`);
+            console.log(`📊 [ROBUST] XML length change: ${afterCleanupLength - beforeCleanupLength} characters`);
+            
+            // Verify populated rows are STILL in XML after cleanup
+            console.log('🔍 [ROBUST] Verifying populated rows still exist AFTER cleanup...');
+            creditorData.forEach((creditor, idx) => {
+                const creditorNum = idx + 1;
+                const creditorName = creditor.creditor_name || creditor.name || creditor.sender_name || `Gläubiger ${creditorNum}`;
+                const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.original_amount || creditor.amount || creditor.claim_amount || 0;
+                const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount);
+                
+                const nameAfter = result.includes(creditorName);
+                const amountAfter = result.includes(formattedAmount);
+                
+                console.log(`   Row ${creditorNum}: Name=${nameAfter ? '✅' : '❌'}, Amount=${amountAfter ? '✅' : '❌'}`);
+                if (!nameAfter || !amountAfter) {
+                    console.log(`      ⚠️ WARNING: Row ${creditorNum} data MISSING after cleanup!`);
+                }
+            });
             
             console.log('');
             console.log('═══════════════════════════════════════════════════════════════');
