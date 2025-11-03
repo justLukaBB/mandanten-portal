@@ -169,6 +169,11 @@ class DocumentGenerator {
         }
         console.log('');
 
+        // Determine plan type (Nullplan vs Ratenplan) for document content
+        const monthlyPayment = settlementData.monthly_payment || settlementData.garnishable_amount || 0;
+        const isNullplan = monthlyPayment === 0 || monthlyPayment < 1;
+        const planType = isNullplan ? "Quotenplan" : "Ratenplan";
+
         const doc = new Document({
             ...this.documentOptions,
             sections: [{
@@ -204,10 +209,12 @@ class DocumentGenerator {
                     }),
 
                     // Quota Plan Information - matching screenshot format  
+                    // For Nullplan, show "Quotenplan" (no monthly payments)
+                    // For regular plans, show "Ratenplan" (with monthly payments)
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: "Quotenplan",
+                                text: planType,
                                 bold: true,
                                 size: 20
                             }),
@@ -281,27 +288,31 @@ class DocumentGenerator {
                         spacing: { after: 200 }
                     }),
 
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
-                                bold: true,
-                                size: 18
-                            })
-                        ],
-                        spacing: { after: 200 }
-                    }),
+                    // Only show monthly payment and total payment for non-Nullplan cases
+                    // isNullplan is already determined above
+                    ...(!isNullplan ? [
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: `Monatliche Zahlungsrate: ${this.formatCurrency(settlementData.monthly_payment)}`,
+                                    bold: true,
+                                    size: 18
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        }),
 
-                    new Paragraph({
-                        children: [
-                            new TextRun({
-                                text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(settlementData.total_payment_amount)}`,
-                                bold: true,
-                                size: 18
-                            })
-                        ],
-                        spacing: { after: 200 }
-                    }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: `Gesamte Zahlungssumme über ${settlementData.duration_months} Monate: ${this.formatCurrency(settlementData.total_payment_amount)}`,
+                                    bold: true,
+                                    size: 18
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        })
+                    ] : []),
 
                     new Paragraph({
                         children: [
@@ -3375,11 +3386,66 @@ class DocumentGenerator {
             // Generate Forderungsübersicht
             const forderungsuebersichtResult = await this.generateForderungsuebersichtDocument(clientReference);
 
-            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan) using ROBUST generator
+            // Generate Nullplan Quota Table (replaces Schuldenbereinigungsplan for Nullplan) using dynamic DocumentGenerator
             console.log('📊 Generating Nullplan quota table instead of standard Schuldenbereinigungsplan...');
-            const RobustNullplanTableGenerator = require('./robustNullplanTableGenerator');
-            const tableGenerator = new RobustNullplanTableGenerator();
-            const nullplanTableResult = await tableGenerator.generateNullplanTable(clientData, creditorData);
+            console.log('📄 Using dynamic DocumentGenerator (docx library) for Schuldenbereinigungsplan...');
+            
+            // Build settlementData for Nullplan
+            const totalDebt = creditorData.reduce((sum, c) => sum + (c.debt_amount || 0), 0);
+            const monthlyBudget = 0; // Nullplan has no monthly payment
+            const durationMonths = client.financial_data?.settlement_duration_months || 36;
+            
+            // Convert creditorData to creditor_payments format
+            const creditorPayments = creditorData.map(creditor => ({
+                creditor_name: creditor.creditor_name || creditor.name || 'Unknown Creditor',
+                debt_amount: creditor.debt_amount || 0,
+                payment_percentage: totalDebt > 0 ? ((creditor.debt_amount || 0) / totalDebt) * 100 : 0,
+                monthly_payment: 0 // Nullplan has no monthly payment
+            }));
+            
+            const settlementData = {
+                monthly_payment: 0,
+                garnishable_amount: 0,
+                total_debt: totalDebt,
+                total_payment_amount: 0, // Nullplan: no payments
+                duration_months: durationMonths,
+                average_quota_percentage: totalDebt > 0 ? 100 : 0,
+                creditor_payments: creditorPayments,
+                creditors: creditorData // Also include raw creditor data for fallback
+            };
+            
+            // Calculate result for Nullplan (not used for calculations, but needed for structure)
+            const calculationResult = {
+                totalDebt: totalDebt,
+                monthlyPayment: 0,
+                totalPaymentAmount: 0,
+                durationMonths: durationMonths,
+                averageQuota: totalDebt > 0 ? 100 : 0
+            };
+            
+            console.log(`📊 Prepared settlementData for Nullplan:`);
+            console.log(`   - Total debt: ${totalDebt} EUR`);
+            console.log(`   - Monthly payment: 0 EUR (Nullplan)`);
+            console.log(`   - Duration: ${durationMonths} months`);
+            console.log(`   - Creditor payments: ${creditorPayments.length} creditors`);
+            
+            // Generate the document using dynamic DocumentGenerator
+            const doc = await this.createSchuldenbereinigungsplanDocument(clientData, settlementData, calculationResult);
+            
+            // Save the document
+            const saveResult = await this.saveDocument(doc, clientData.reference);
+            
+            console.log(`✅ Schuldenbereinigungsplan generated successfully`);
+            console.log(`📁 File: ${saveResult.filename} (${Math.round(saveResult.size / 1024)} KB)`);
+            
+            const nullplanTableResult = {
+                success: true,
+                filename: saveResult.filename,
+                path: saveResult.path,
+                size: saveResult.size,
+                client_reference: clientReference,
+                generated_at: new Date().toISOString()
+            };
 
             return {
                 success: true,
