@@ -596,15 +596,13 @@ class RobustNullplanTableGenerator {
       }
 
   // ✅ FIXED: replaceCellText() that preserves design and ensures visible text
-const replaceCellText = (cellXml, newText, preventWrap = false) => {
+const replaceCellText = (cellXml, newText) => {
     try {
       // Escape special XML characters in newText (but preserve existing structure)
-      // IMPORTANT: Don't escape non-breaking space (\u00A0) - it should remain as-is in XML
       const escapedText = newText
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-      // Note: \u00A0 (non-breaking space) will be preserved as-is in XML
   
       // Strategy: Find first <w:t> node and replace its content, remove other text runs
       // This preserves cell properties (w:tcPr) and paragraph properties (w:pPr)
@@ -613,9 +611,6 @@ const replaceCellText = (cellXml, newText, preventWrap = false) => {
       
       // Find all text runs in the cell
       const textRunMatches = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g) || [];
-      
-      // Note: preventWrap parameter is kept for compatibility but non-breaking spaces
-      // in the text itself are the primary method to prevent wrapping
       
       if (textRunMatches.length > 0) {
         // Replace content of first text run, remove others
@@ -692,17 +687,11 @@ const replaceCellText = (cellXml, newText, preventWrap = false) => {
 
       creditorData.forEach((creditor, index) => {
         const rowNum = index + 1;
-        let creditorName =
+        const creditorName =
           creditor.creditor_name ||
           creditor.name ||
           creditor.sender_name ||
           `Gläubiger ${rowNum}`;
-        
-        // Replace regular spaces with non-breaking spaces to prevent wrapping
-        // In Word XML, non-breaking space character is \u00A0 (which will be preserved in XML)
-        // But we need to ensure it's not escaped - the character itself works in Word XML
-        creditorName = creditorName.replace(/ /g, "\u00A0"); // \u00A0 is non-breaking space (U+00A0)
-        
         const creditorAmount =
           creditor.debt_amount ||
           creditor.final_amount ||
@@ -726,8 +715,7 @@ const replaceCellText = (cellXml, newText, preventWrap = false) => {
           if (cellIndex === 0) {
             return replaceCellText(cell, rowNum.toString()); // Column 1: Nr.
           } else if (cellIndex === 1) {
-            // Column 2: Gläubiger - use non-breaking spaces to prevent wrapping
-            return replaceCellText(cell, creditorName, true); // preventWrap = true
+            return replaceCellText(cell, creditorName); // Column 2: Gläubiger
           } else if (cellIndex === 2) {
             return replaceCellText(cell, formattedAmount); // Column 3: Forderung
           } else if (cellIndex === 3) {
