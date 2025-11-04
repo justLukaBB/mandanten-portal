@@ -395,45 +395,146 @@ class RobustNullplanProcessor {
       });
 
       console.log("🎯 [ROBUST] Fixing opening hours format...");
-      const correctOpeningHours = "09.00 - 18.00 Uhr"; 
+      const correctOpeningHours = "09.00 - 18.00 Uhr";
       let openingHoursFixed = false;
+
+      // First, let's debug what's actually in the XML around Öffnungszeiten
+      console.log("🔍 [ROBUST] Debugging opening hours in XML...");
+      const offnungszeitenIndex = processedXml.indexOf("Öffnungszeiten");
+      if (offnungszeitenIndex === -1) {
+        // Try case-insensitive search
+        const offnungszeitenRegex = /[Öö]ffnungszeiten/i;
+        const match = processedXml.match(offnungszeitenRegex);
+        if (match) {
+          const foundIndex = processedXml.indexOf(match[0]);
+          console.log(`   📍 Found "${match[0]}" at index ${foundIndex}`);
+          const contextAround = processedXml.substring(
+            Math.max(0, foundIndex - 200),
+            Math.min(processedXml.length, foundIndex + 1000)
+          );
+          console.log(`   📄 Context around Öffnungszeiten (500 chars after): ${contextAround.substring(200, 700)}`);
+        } else {
+          console.log(`   ⚠️ "Öffnungszeiten" not found in XML (case-insensitive search)`);
+        }
+      } else {
+        console.log(`   📍 Found "Öffnungszeiten" at index ${offnungszeitenIndex}`);
+        const contextAround = processedXml.substring(
+          Math.max(0, offnungszeitenIndex - 200),
+          Math.min(processedXml.length, offnungszeitenIndex + 1000)
+        );
+        console.log(`   📄 Context around Öffnungszeiten (500 chars after): ${contextAround.substring(200, 700)}`);
+      }
+
+      // Search for the malformed time pattern "0194.00" or "138.00" or split characters
+      const malformedPatterns = [
+        /0194\.00/gi,
+        /138\.00/gi,
+        /0\s*1\s*9\s*4/gi,
+        /1\s*3\s*8/gi,
+      ];
+      
+      let foundMalformed = false;
+      malformedPatterns.forEach((pattern, idx) => {
+        if (pattern.test(processedXml)) {
+          const match = processedXml.match(pattern);
+          if (match && match.length > 0) {
+            const matchIndex = processedXml.indexOf(match[0]);
+            console.log(`   🔍 Found malformed pattern ${idx + 1} ("${match[0]}") at index ${matchIndex}`);
+            const context = processedXml.substring(
+              Math.max(0, matchIndex - 100),
+              Math.min(processedXml.length, matchIndex + 300)
+            );
+            console.log(`   📄 Context: ...${context}...`);
+            foundMalformed = true;
+          }
+        }
+      });
+
+      if (!foundMalformed) {
+        console.log(`   ⚠️ No malformed time patterns (0194, 138) found in XML`);
+      }
+
+      // Try multiple pattern variations
       const openingHoursPatterns = [
-        // variant 1: Mo. - Fr.
-        /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
-        // variant 2: Öffnungszeiten (split characters)
-        /(<w:t[^>]*>Ö<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>u<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>g<\/w:t>[\s\S]*?<w:t[^>]*>s<\/w:t>[\s\S]*?<w:t[^>]*>z<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>i<\/w:t>[\s\S]*?<w:t[^>]*>t<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>:<\/w:t>)[\s\S]*?(<w:t[^>]*>[0O1].*?Uhr<\/w:t>)/gi,
+        // Pattern 1: Mo. - Fr.: followed by split characters 0 1 9 4
+        {
+          name: "Mo. - Fr. with split 0194",
+          pattern: /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
+        },
+        // Pattern 2: Direct text "0194.00 - 138.00 Uhr"
+        {
+          name: "Direct text 0194.00 - 138.00",
+          pattern: /(0194\.00\s*-\s*138\.00\s*Uhr)/gi,
+        },
+        // Pattern 3: Split text with spaces "0 1 9 4 . .00 - - 1 3 8 . .00 Uh r r"
+        {
+          name: "Split text with spaces",
+          pattern: /(0\s*1\s*9\s*4\s*\.\s*\.00\s*-\s*-\s*1\s*3\s*8\s*\.\s*\.00\s*Uh\s*r\s*r)/gi,
+        },
+        // Pattern 4: After "Öffnungszeiten:" find the malformed time
+        {
+          name: "After Öffnungszeiten:",
+          pattern: /(Öffnungszeiten[\s\S]*?:[\s\S]*?Mo\.\s*-\s*Fr\.:[\s\S]*?)(0\s*1\s*9\s*4[\s\S]*?1\s*3\s*8[\s\S]*?Uhr)/gi,
+        },
+        // Pattern 5: More flexible - find any text node sequence containing 0194 or 138 followed by Uhr
+        {
+          name: "Flexible XML pattern",
+          pattern: /(<w:t[^>]*>[0O]<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>[\s\S]*?<w:t[^>]*>r<\/w:t>)/gi,
+        },
       ];
 
-      for (const pattern of openingHoursPatterns) {
+      for (const { name, pattern } of openingHoursPatterns) {
+        console.log(`   🔍 Trying pattern: "${name}"...`);
         if (pattern.test(processedXml)) {
+          const match = processedXml.match(pattern);
+          console.log(`   ✅ Pattern "${name}" matched! Found ${match ? match.length : 0} occurrence(s)`);
+          
           processedXml = processedXml.replace(
             pattern,
-            (m, prefix) =>
-              prefix +
-              `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
+            (m, prefix = "") => {
+              // If pattern has a prefix (like "Mo. - Fr.:"), keep it
+              if (prefix && prefix.trim()) {
+                return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
+              } else {
+                // Otherwise just replace the malformed time
+                return `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
+              }
+            }
           );
+          
           openingHoursFixed = true;
-          console.log(`✅ [ROBUST] Opening hours fixed (pattern matched)`);
+          console.log(`   ✅ [ROBUST] Opening hours fixed using pattern: "${name}"`);
           totalReplacements++;
           break;
+        } else {
+          console.log(`   ❌ Pattern "${name}" did not match`);
+        }
+      }
+
+      // Final fallback: simple text replacement
+      if (!openingHoursFixed) {
+        console.log(`   🔍 Trying simple text fallback patterns...`);
+        const textFallbacks = [
+          /0194\.00[\s\S]*?138\.00[\s\S]*?Uhr/gi,
+          /0\s*1\s*9\s*4[\s\S]*?1\s*3\s*8[\s\S]*?Uhr/gi,
+        ];
+
+        for (const fallbackPattern of textFallbacks) {
+          if (fallbackPattern.test(processedXml)) {
+            processedXml = processedXml.replace(fallbackPattern, correctOpeningHours);
+            openingHoursFixed = true;
+            console.log(`   ✅ [ROBUST] Opening hours fixed (fallback text pattern)`);
+            totalReplacements++;
+            break;
+          }
         }
       }
 
       if (!openingHoursFixed) {
-        const textFallback = /(0194|138|0\s*9\s*00|1\s*8\s*00).*?Uhr/gi;
-        if (textFallback.test(processedXml)) {
-          processedXml = processedXml.replace(
-            textFallback,
-            correctOpeningHours
-          );
-          console.log(`✅ [ROBUST] Opening hours fixed (fallback text)`);
-          totalReplacements++;
-          openingHoursFixed = true;
-        } else {
-          console.log(
-            `⚠️ [ROBUST] Opening hours pattern not found — check if template uses another spelling (e.g., nÖffnungszeiten)`
-          );
-        }
+        console.log(
+          `   ⚠️ [ROBUST] Opening hours pattern not found after trying all patterns`
+        );
+        console.log(`   💡 Suggestion: Check the template XML structure manually`);
       }
 
       // Log all date-related information AFTER XML processing
