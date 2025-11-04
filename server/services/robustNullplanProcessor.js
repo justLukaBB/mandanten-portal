@@ -830,6 +830,29 @@ class RobustNullplanProcessor {
       creditorAddressOnly = builtAddress ? formatAddress(builtAddress) : "";
         }
 
+        // Clean address: Remove creditor name if already present (avoid duplicates)
+    if (creditorAddressOnly && creditorName) {
+      // Handle formatted addresses (with \n line breaks)
+      if (creditorAddressOnly.includes('\n')) {
+        const lines = creditorAddressOnly.split('\n');
+        const firstLine = lines[0].trim().toLowerCase();
+        const nameLower = creditorName.toLowerCase().trim();
+
+        // If first line is the creditor name, remove it
+        if (firstLine === nameLower || firstLine.startsWith(nameLower)) {
+          creditorAddressOnly = lines.slice(1).join('\n').trim();
+        }
+      } else {
+        // Handle single-line addresses
+        const addressLower = creditorAddressOnly.toLowerCase().trim();
+        const nameLower = creditorName.toLowerCase().trim();
+
+        if (addressLower.startsWith(nameLower)) {
+          creditorAddressOnly = creditorAddressOnly.substring(creditorName.length).trim();
+        }
+      }
+    }
+
         // Combine creditor name with address (Name on first line, then address)
     // Convert \n to Word XML line breaks
     const creditorAddress = creditorAddressOnly
