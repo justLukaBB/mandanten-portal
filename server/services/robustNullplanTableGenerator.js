@@ -599,10 +599,12 @@ class RobustNullplanTableGenerator {
 const replaceCellText = (cellXml, newText, preventWrap = false) => {
     try {
       // Escape special XML characters in newText (but preserve existing structure)
+      // IMPORTANT: Don't escape non-breaking space (\u00A0) - it should remain as-is in XML
       const escapedText = newText
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+      // Note: \u00A0 (non-breaking space) will be preserved as-is in XML
   
       // Strategy: Find first <w:t> node and replace its content, remove other text runs
       // This preserves cell properties (w:tcPr) and paragraph properties (w:pPr)
@@ -697,8 +699,9 @@ const replaceCellText = (cellXml, newText, preventWrap = false) => {
           `Gläubiger ${rowNum}`;
         
         // Replace regular spaces with non-breaking spaces to prevent wrapping
-        // In Word XML, non-breaking space is &#160;
-        creditorName = creditorName.replace(/ /g, "\u00A0"); // \u00A0 is non-breaking space
+        // In Word XML, non-breaking space character is \u00A0 (which will be preserved in XML)
+        // But we need to ensure it's not escaped - the character itself works in Word XML
+        creditorName = creditorName.replace(/ /g, "\u00A0"); // \u00A0 is non-breaking space (U+00A0)
         
         const creditorAmount =
           creditor.debt_amount ||

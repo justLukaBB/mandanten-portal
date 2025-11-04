@@ -171,7 +171,32 @@ class RobustNullplanProcessor {
                 }
             });
 
-            // 2. Then handle simple quoted variables
+            // 2. Handle Öffnungszeiten (opening hours) - special case where text is split character by character
+            console.log('🎯 [ROBUST] Processing Öffnungszeiten replacement...');
+            if (replacements["Öffnungszeiten"]) {
+                // Find "Mo. - Fr.:" and replace everything after it until "Bankverbindungen" or end of paragraph
+                // The text is split character by character, so we need to match a wide pattern
+                const moFrPattern = /(Mo\.\s*-\s*Fr\.:)[\s\S]*?(?=Bankverbindungen:|<\/w:p>)/i;
+                
+                if (processedXml.match(moFrPattern)) {
+                    // Create properly formatted XML structure for opening hours
+                    // Format: "Mo. - Fr.: 09.00 - 13.00 Uhr" on first line, "14.00 - 18.00 Uhr" on second line
+                    const replacement = `Mo. - Fr.: <w:r><w:t xml:space="preserve">09.00 - 13.00 Uhr</w:t></w:r><w:br/><w:r><w:t xml:space="preserve">14.00 - 18.00 Uhr</w:t></w:r>`;
+                    
+                    // Replace the pattern, preserving "Bankverbindungen:" if it exists
+                    processedXml = processedXml.replace(moFrPattern, (match) => {
+                        const hasBankverbindungen = match.includes('Bankverbindungen');
+                        return replacement + (hasBankverbindungen ? 'Bankverbindungen:' : '');
+                    });
+                    
+                    console.log(`✅ [ROBUST] Öffnungszeiten replaced`);
+                    totalReplacements++;
+                } else {
+                    console.log(`⚠️ [ROBUST] Öffnungszeiten pattern "Mo. - Fr.:" not found`);
+                }
+            }
+
+            // 3. Then handle simple quoted variables
             console.log('🎯 [ROBUST] Processing simple variables...');
             this.simpleVariables.forEach(variable => {
                 if (replacements[variable]) {
@@ -306,7 +331,9 @@ class RobustNullplanProcessor {
             "Familienstand": this.getMaritalStatusText(clientData.maritalStatus || clientData.financial_data?.marital_status),
             "Datum in 3 Monaten": this.calculateDateInMonths(3),
             "Aktenzeichen": `${clientData.reference || clientData.aktenzeichen}`,
-            "Name des Gläubigers": creditorName
+            "Name des Gläubigers": creditorName,
+            // Öffnungszeiten (opening hours) - properly formatted
+            "Öffnungszeiten": "Mo. - Fr.: 09.00 - 13.00 Uhr\n14.00 - 18.00 Uhr"
         };
         
         console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
