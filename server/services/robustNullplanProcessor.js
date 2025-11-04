@@ -345,39 +345,37 @@ class RobustNullplanProcessor {
 
       console.log("🎯 [ROBUST] Fixing opening hours format...");
       // Use dots (.) not colons (:) for German time format, matching documentGenerator.js
-      const correctOpeningHours = "09.00 - 18.00 Uhr";
-      let openingHoursFixed = false;
+     // Match either "Mo. - Fr.:" or "Öffnungszeiten:" variants
+const openingHoursPatterns = [
+    // variant 1: Mo. - Fr.
+    /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
+    // variant 2: Öffnungszeiten (split characters)
+    /(<w:t[^>]*>Ö<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>u<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>g<\/w:t>[\s\S]*?<w:t[^>]*>s<\/w:t>[\s\S]*?<w:t[^>]*>z<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>i<\/w:t>[\s\S]*?<w:t[^>]*>t<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>:<\/w:t>)[\s\S]*?(<w:t[^>]*>[0O1].*?Uhr<\/w:t>)/gi
+];
 
-      const openingHoursPattern =
-        /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1\s*<\/w:t>[\s\S]*?<w:t[^>]*>9\s*<\/w:t>[\s\S]*?<w:t[^>]*>4\s*<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1\s*<\/w:t>[\s\S]*?<w:t[^>]*>3\s*<\/w:t>[\s\S]*?<w:t[^>]*>8\s*<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh\s*r<\/w:t>)/gi;
-
-      if (openingHoursPattern.test(processedXml)) {
-        processedXml = processedXml.replace(
-          openingHoursPattern,
-          (m, prefix) =>
-            prefix +
-            `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
+for (const pattern of openingHoursPatterns) {
+    if (pattern.test(processedXml)) {
+        processedXml = processedXml.replace(pattern, (m, prefix) =>
+            prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
         );
         openingHoursFixed = true;
-        console.log(`✅ [ROBUST] Opening hours fixed (improved pattern)`);
+        console.log(`✅ [ROBUST] Opening hours fixed (pattern matched)`);
         totalReplacements++;
-      } else {
-        const textFallback =
-          /(0\s*1\s*9\s*4|\b0194|\b09\s*00)[\s\S]*?(1\s*3\s*8|\b138|\b18\s*00)[\s\S]*?Uh[\s\S]*?r/gi;
-        if (textFallback.test(processedXml)) {
-          processedXml = processedXml.replace(
-            textFallback,
-            correctOpeningHours
-          );
-          openingHoursFixed = true;
-          console.log(`✅ [ROBUST] Opening hours fixed (fallback pattern)`);
-          totalReplacements++;
-        } else {
-          console.log(
-            `⚠️ [ROBUST] Opening hours pattern still not found - check template manually`
-          );
-        }
-      }
+        break;
+    }
+}
+
+if (!openingHoursFixed) {
+    const textFallback = /(0194|138|0\s*9\s*00|1\s*8\s*00).*?Uhr/gi;
+    if (textFallback.test(processedXml)) {
+        processedXml = processedXml.replace(textFallback, correctOpeningHours);
+        console.log(`✅ [ROBUST] Opening hours fixed (fallback text)`);
+        totalReplacements++;
+        openingHoursFixed = true;
+    } else {
+        console.log(`⚠️ [ROBUST] Opening hours pattern not found — check if template uses another spelling (e.g., nÖffnungszeiten)`);
+    }
+}
 
       // Log all date-related information AFTER XML processing
       console.log("\n═══════════════════════════════════════════════════════════════");
