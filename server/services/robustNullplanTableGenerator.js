@@ -675,9 +675,10 @@ class RobustNullplanTableGenerator {
   
       // 8️⃣ Verify inserted data
       console.log(`📊 [ROBUST] XML length after insertion: ${result.length}`);
-      creditorData.forEach((c, i) => {
-        const foundName = result.includes(c.creditor_name);
-        const foundAmount = result.includes(this.formatGermanCurrencyNoSymbol(c.debt_amount));
+        // New robust check:
+        const xmlPlain = result.replace(/<[^>]+>/g, ''); // strip XML tags
+        const foundName = xmlPlain.includes(c.creditor_name);
+        const foundAmount = xmlPlain.includes(this.formatGermanCurrencyNoSymbol(c.debt_amount));
         console.log(
           `   🔍 Verify Row ${i + 1}: Name ${foundName ? "✅ FOUND" : "❌ MISSING"}, Amount ${foundAmount ? "✅ FOUND" : "❌ MISSING"}`
         );
