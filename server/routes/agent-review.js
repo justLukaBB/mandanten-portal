@@ -613,12 +613,28 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     // Save with validation only on modified fields to avoid document validation errors
     await client.save({ validateModifiedOnly: true });
 
-    // Generate summary for response
-    const creditors = client.final_creditor_list || [];
+    // Filter out creditors that belong to documents marked as "not a creditor"
+    const allCreditors = client.final_creditor_list || [];
+    const creditors = allCreditors.filter(creditor => {
+      // Find the document this creditor is associated with
+      const doc = client.documents.find(d =>
+        d.id === creditor.document_id ||
+        d.id === creditor.source_document_id ||
+        d.name === creditor.source_document
+      );
+
+      // Only include if document is still marked as a creditor document
+      return !doc || doc.is_creditor_document !== false;
+    });
+
+    // Update final_creditor_list to exclude non-creditors
+    client.final_creditor_list = creditors;
+    await client.save({ validateModifiedOnly: true });
+
     const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
     const reviewedDocs = client.documents.filter(d => d.manually_reviewed === true);
 
-    console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors, ${totalDebt}€ total debt`);
+    console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors (filtered), ${totalDebt}€ total debt`);
 
     // IMPROVED ZENDESK TICKET HANDLING FOR REVIEW COMPLETION
     let zendeskService = null;
