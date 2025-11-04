@@ -831,9 +831,10 @@ class RobustNullplanProcessor {
         }
 
         // Combine creditor name with address (Name on first line, then address)
+    // Convert \n to Word XML line breaks
     const creditorAddress = creditorAddressOnly
-      ? `${creditorName}\n${creditorAddressOnly}`
-      : `${creditorName}\nAdresse nicht verfügbar`;
+      ? `${creditorName}\n${creditorAddressOnly}`.replace(/\n/g, '<w:br/>')
+      : `${creditorName}\nAdresse nicht verfügbar`.replace(/\n/g, '<w:br/>');
 
         // Client name
     const clientName =
