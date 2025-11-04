@@ -272,7 +272,7 @@ router.post('/preview', rateLimits.general, async (req, res) => {
 
         // Generate preview info
         const preview = {
-            document_title: `Außergerichtlicher Schuldenbereinigungsplan vom ${new Date().toLocaleDateString('de-DE')}`,
+            document_title: `Außergerichtlicher Schuldenbereinigungsplan vomsssss ${new Date().toLocaleDateString('de-DE')}`,
             client_info: {
                 name: `${client.firstName} ${client.lastName}`,
                 reference: client_reference
