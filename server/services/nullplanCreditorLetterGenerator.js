@@ -227,16 +227,23 @@ class NullplanCreditorLetterGenerator {
         const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address - street on first line, PLZ and city on second line
+        // Build creditor name
+        const creditorName = creditor.name || creditor.creditor_name || creditor.sender_name || 'Gläubiger';
+
+        // Build creditor address (without name) - street on first line, PLZ and city on second line
         // Get raw address from creditor data
         let rawAddress = creditor.address ||
             `${creditor.creditor_street || ''} ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
             '';
 
         // Format address using utility (handles various input formats)
-        // Then replace \n with Word XML line breaks for proper .docx formatting
-        const formattedAddress = rawAddress ? formatAddress(rawAddress) : 'Gläubiger Adresse';
-        const creditorAddress = formattedAddress.replace(/\n/g, '<w:br/>');
+        const formattedAddressOnly = rawAddress ? formatAddress(rawAddress) : 'Adresse nicht verfügbar';
+
+        // Combine name with address (Name on first line, then address)
+        const fullAddress = `${creditorName}\n${formattedAddressOnly}`;
+
+        // Replace \n with Word XML line breaks for proper .docx formatting
+        const creditorAddress = fullAddress.replace(/\n/g, '<w:br/>');
 
         const replacements = {
             // EXACT variables from template analysis

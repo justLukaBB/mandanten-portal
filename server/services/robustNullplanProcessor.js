@@ -794,16 +794,23 @@ class RobustNullplanProcessor {
     const creditorQuote =
       totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address using correct field mapping (sender_address is primary)
-    let creditorAddress = "";
+        // Build creditor name first
+    const creditorName =
+      creditor.sender_name ||
+      creditor.name ||
+      creditor.creditor_name ||
+      `Creditor_${creditorPosition}`;
+
+        // Build creditor address (without name) using correct field mapping (sender_address is primary)
+    let creditorAddressOnly = "";
 
         // Priority order based on actual database schema
         if (creditor.sender_address && creditor.sender_address.trim()) {
-            creditorAddress = formatAddress(creditor.sender_address.trim());
+            creditorAddressOnly = formatAddress(creditor.sender_address.trim());
         } else if (creditor.address && creditor.address.trim()) {
-            creditorAddress = formatAddress(creditor.address.trim());
+            creditorAddressOnly = formatAddress(creditor.address.trim());
         } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
-            creditorAddress = formatAddress(creditor.creditor_address.trim());
+            creditorAddressOnly = formatAddress(creditor.creditor_address.trim());
         } else {
             // Build from individual parts as fallback
             const parts = [];
@@ -820,31 +827,19 @@ class RobustNullplanProcessor {
       }
 
       const builtAddress = parts.filter((p) => p && p.trim()).join(" ");
-      creditorAddress = builtAddress ? formatAddress(builtAddress) : "";
+      creditorAddressOnly = builtAddress ? formatAddress(builtAddress) : "";
         }
 
-        // Final fallback
-    if (!creditorAddress || creditorAddress === "," || creditorAddress === "") {
-      creditorAddress = `${
-        creditor.sender_name ||
-        creditor.name ||
-        creditor.creditor_name ||
-        "Gläubiger"
-      }\nAdresse nicht verfügbar`;
-        }
+        // Combine creditor name with address (Name on first line, then address)
+    const creditorAddress = creditorAddressOnly
+      ? `${creditorName}\n${creditorAddressOnly}`
+      : `${creditorName}\nAdresse nicht verfügbar`;
 
         // Client name
     const clientName =
       clientData.fullName ||
       `${clientData.firstName || ""} ${clientData.lastName || ""}`.trim() ||
       "Max Mustermann";
-
-        // Creditor name
-    const creditorName =
-      creditor.sender_name ||
-      creditor.name ||
-      creditor.creditor_name ||
-      `Creditor_${creditorPosition}`;
 
         // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
     const creditorReference =
