@@ -156,7 +156,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Außergerichtlicher Schuldenbereinigungsplan vomss ${currentDate}`,
+                                text: `Außergerichtlicher Schuldenbereinigungsplan vom ${currentDate}`,
                                 bold: true,
                                 size: 26
                             })
