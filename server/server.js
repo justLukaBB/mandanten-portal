@@ -1225,9 +1225,11 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', (req, res) => {
     return res.status(400).json({ error: 'Erste Rate muss erst als erhalten markiert werden' });
   }
   
-  // Get all confirmed creditor documents (not duplicates, not failed)
-  const creditorDocs = client.documents.filter(doc => 
-    doc.document_status === 'creditor_confirmed' && !doc.is_duplicate
+  // Get all confirmed creditor documents (not duplicates, not failed, not marked as non-creditor)
+  const creditorDocs = client.documents.filter(doc =>
+    doc.document_status === 'creditor_confirmed' &&
+    !doc.is_duplicate &&
+    doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
   );
   
   // Create deduplicated creditor list
@@ -1289,11 +1291,12 @@ app.get('/api/admin/clients/:clientId/workflow-status', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    const creditorDocuments = (client.documents || []).filter(doc => 
-      doc.document_status === 'creditor_confirmed'
+    const creditorDocuments = (client.documents || []).filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
-    
-    const needsReview = (client.documents || []).filter(doc => 
+
+    const needsReview = (client.documents || []).filter(doc =>
       doc.document_status === 'needs_review'
     );
     
@@ -1795,9 +1798,10 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
     }
     
     // Generate creditor list from confirmed creditor documents
-    const creditorDocuments = (client.documents || []).filter(doc => 
-      doc.document_status === 'creditor_confirmed' && 
-      doc.extracted_data?.creditor_data
+    const creditorDocuments = (client.documents || []).filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
+      doc.extracted_data?.creditor_data &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
     
     const finalCreditorList = creditorDocuments.map(doc => ({
@@ -3714,7 +3718,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
       // Phase 1 status
       document_processing: {
         total_documents: client.documents.length,
-        creditor_documents: client.documents.filter(d => d.document_status === 'creditor_confirmed').length,
+        creditor_documents: client.documents.filter(d => d.document_status === 'creditor_confirmed' && d.is_creditor_document !== false).length,
         admin_approved: client.admin_approved,
         client_confirmed: client.client_confirmed_creditors
       },
@@ -4144,11 +4148,12 @@ app.post('/api/clients/:clientId/process-documents-to-creditors', (req, res) => 
     console.log(`📋 Processing documents to final creditor list for client: ${clientId}`);
 
     // Find all completed creditor documents
-    const creditorDocs = client.documents.filter(doc => 
-      doc.document_status === 'creditor_confirmed' && 
+    const creditorDocs = client.documents.filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
       doc.processing_status === 'completed' &&
       doc.extracted_data &&
-      doc.extracted_data.creditor_data
+      doc.extracted_data.creditor_data &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
 
     console.log(`Found ${creditorDocs.length} creditor documents`);

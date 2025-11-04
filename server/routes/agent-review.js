@@ -454,15 +454,16 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       } else {
         console.log(`⏭️ No creditor found to remove for document ${document_id} - document correctly identified as non-creditor`);
       }
-      
+
       // Also mark the document as not a creditor document
       document.is_creditor_document = false;
+      document.document_status = 'not_a_creditor'; // CRITICAL: Change document_status to prevent re-generation
       document.manually_reviewed = true;
       document.reviewed_by = req.agentId;
       document.reviewed_at = new Date();
       document.review_action = 'skipped_not_creditor';
-      
-      console.log(`⏭️ Document ${document_id} marked as non-creditor document`);
+
+      console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
     } else if (action === 'confirm') {
       // Confirm AI extraction is correct
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
