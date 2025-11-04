@@ -700,7 +700,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               title="Simulate 30-day period and start creditor contact process"
             >
               <ClockIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-pulse' : ''}`} />
-              30-Day Simulation
+              Letzte Zahlung bestätigen
             </button>
             <button
               onClick={fetchUserDetails}
@@ -1088,7 +1088,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 {(!user?.final_creditor_list?.some(creditor => creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at)) && (
                   <div className="text-center py-8 text-gray-500">
                     <p>No settlement plans have been sent yet.</p>
-                    <p className="text-xs mt-1">Click the "30-Day Simulation" button to trigger settlement emails.</p>
+                    <p className="text-xs mt-1">Click the "Letzte Zahlung bestätigen" button to trigger settlement emails.</p>
                   </div>
                 )}
               </div>
