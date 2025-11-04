@@ -467,6 +467,40 @@ class RobustNullplanProcessor {
         console.log(`   ⚠️ No malformed time patterns (0194, 138) found in XML`);
       }
 
+      // Extract formatting from the first time character (the "0") to preserve design
+      // This ensures we use the same formatting as the original time text
+      let extractedFormatting = '<w:rPr><w:spacing w:val="-16"/><w:sz w:val="16"/></w:rPr>'; // Default based on logs
+      const frIndex = processedXml.indexOf('<w:t>Fr.:</w:t></w:r>');
+      if (frIndex !== -1) {
+        // Find the first text run after "Fr.:" that contains a digit (the time characters start)
+        const afterFr = processedXml.substring(frIndex + '<w:t>Fr.:</w:t></w:r>'.length);
+        
+        // Look for the first text run that contains "0" (the first time character)
+        // Pattern: <w:r><w:rPr>...</w:rPr><w:t>0</w:t></w:r>
+        const timeCharRunMatch = afterFr.match(/<w:r><w:rPr>([\s\S]*?)<\/w:rPr><w:t>[0O9]<\/w:t><\/w:r>/);
+        if (timeCharRunMatch) {
+          // Extract the rPr (run properties) from the first time character run
+          extractedFormatting = `<w:rPr>${timeCharRunMatch[1]}</w:rPr>`;
+          console.log(`   📐 Extracted formatting from first time character: ${extractedFormatting.substring(0, 150)}...`);
+        } else {
+          // Fallback: Find any run properties in the time content area (skip the space after "Fr.:")
+          const allRuns = afterFr.match(/<w:r><w:rPr>([\s\S]*?)<\/w:rPr><w:t>[^<]*<\/w:t><\/w:r>/g);
+          if (allRuns && allRuns.length > 0) {
+            // Get the run that contains a digit (not the space)
+            for (const run of allRuns) {
+              if (run.match(/<w:t>[0-9O]/)) {
+                const rPrMatch = run.match(/<w:r><w:rPr>([\s\S]*?)<\/w:rPr>/);
+                if (rPrMatch) {
+                  extractedFormatting = `<w:rPr>${rPrMatch[1]}</w:rPr>`;
+                  console.log(`   📐 Extracted formatting from time character run: ${extractedFormatting.substring(0, 150)}...`);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Try multiple pattern variations
       // Based on the XML structure: <w:t>Mo.</w:t></w:r><w:r>...<w:t> </w:t></w:r><w:r>...<w:t>-</w:t></w:r>...<w:t>Fr.:</w:t></w:r>...then time
       // The key is that "Fr.:" is in a text run that closes with </w:r>, so we need to match after that
@@ -479,7 +513,8 @@ class RobustNullplanProcessor {
           replaceFn: (match, prefix, timeContent, closingTag) => {
             // prefix already includes </w:r> closing the "Fr.:" text run
             // Replace everything between "Fr.:</w:r>" and </w:p> with a single new text run
-            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+            // Use the extracted formatting to preserve the original design
+            return prefix + `<w:r>${extractedFormatting}<w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
           }
         },
         // Pattern 2: Match "Mo." - "Fr.:" then replace everything until end of paragraph
@@ -490,7 +525,8 @@ class RobustNullplanProcessor {
           replaceFn: (match, prefix, timeContent, closingTag) => {
             // prefix includes everything up to and including "Fr.:</w:r>"
             // Replace everything between "Fr.:</w:r>" and </w:p> with correct time
-            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+            // Use the extracted formatting to preserve the original design
+            return prefix + `<w:r>${extractedFormatting}<w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
           }
         },
         // Pattern 3: Match after "Fr.:" text node, find any text nodes until "Uhr" or end of paragraph
@@ -500,9 +536,9 @@ class RobustNullplanProcessor {
           replaceFn: (match, prefix, timeContent, closingTag) => {
             // If we found "Uhr" in the closing, replace everything including Uhr
             if (closingTag.includes("Uhr")) {
-              return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r></w:p>`;
+              return prefix + `<w:r>${extractedFormatting}<w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r></w:p>`;
             }
-            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+            return prefix + `<w:r>${extractedFormatting}<w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
           }
         },
         // Pattern 4: Match exact XML structure with split characters 0 1 9 4
