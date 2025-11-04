@@ -540,157 +540,114 @@ class RobustNullplanTableGenerator {
    */
   populateTableRows(documentXml, creditorData) {
     try {
-      console.log(`\n═══════════════════════════════════════════════════════════════`);
       console.log(`🔄 [ROBUST] populateTableRows() - Processing ${creditorData.length} creditors`);
-      console.log(`═══════════════════════════════════════════════════════════════`);
   
-      // 1️⃣ Calculate total debt
-      const totalDebt = creditorData.reduce((sum, creditor) => {
-        return (
-          sum +
-          (creditor.debt_amount ||
-            creditor.final_amount ||
-            creditor.original_amount ||
-            creditor.amount ||
-            creditor.claim_amount ||
-            0)
-        );
-      }, 0);
-      console.log(`💰 [ROBUST] Total debt calculated: ${this.formatGermanCurrencyNoSymbol(totalDebt)} €`);
+      // 💰 Calculate total debt for quota calculations
+      const totalDebt = creditorData.reduce((sum, creditor) =>
+        sum +
+        (creditor.debt_amount ||
+          creditor.final_amount ||
+          creditor.original_amount ||
+          creditor.amount ||
+          creditor.claim_amount ||
+          0), 0);
   
-      // 2️⃣ Locate <w:tbl>
-      const tableMatch = documentXml.match(/<w:tbl[^>]*>([\s\S]*?)<\/w:tbl>/);
+      // 🔍 Find the table in the XML
+      const tableMatch = documentXml.match(/<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/);
       if (!tableMatch) {
         console.error("❌ [ROBUST] Table not found in XML!");
         return documentXml;
       }
       const tableContent = tableMatch[0];
+  
+      // 🔍 Find all table rows
       const rowMatches = tableContent.match(/<w:tr[^>]*>[\s\S]*?<\/w:tr>/g);
       if (!rowMatches || rowMatches.length === 0) {
         console.error("❌ [ROBUST] No table rows found!");
         return documentXml;
       }
   
-      // 3️⃣ Find the template row (row that contains <w:t>1</w:t> in the first cell)
+      // 🧩 Locate template row (with <w:t>1</w:t> in first cell)
       let templateRow = null;
       for (let i = 0; i < rowMatches.length; i++) {
-        const firstCellMatch = rowMatches[i].match(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/);
-        if (firstCellMatch && firstCellMatch[1].includes("<w:t>1</w:t>")) {
+        const firstCell = rowMatches[i].match(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/);
+        if (firstCell && firstCell[1].includes("<w:t>1</w:t>")) {
           templateRow = rowMatches[i];
           console.log(`✅ [ROBUST] Found template row at index ${i}`);
           break;
         }
       }
       if (!templateRow) {
-        console.error('❌ [ROBUST] Template row (with "1") not found!');
+        console.error("❌ [ROBUST] Template row not found!");
         return documentXml;
       }
   
-      // 4️⃣ Helper — replace visible text in cell
-      const replaceCellText = (cellXml, newText, colIndex, rowIndex) => {
-        try {
-          let result = cellXml.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-          const match = result.match(/(<w:p[^>]*>[\s\S]*?<w:t[^>]*>)([^<]*)(<\/w:t>[\s\S]*?<\/w:p>)/);
-  
-          if (match) {
-            result = result.replace(match[0], `${match[1]}${newText}${match[3]}`);
-          } else {
-            result = result.replace(
-              /(<w:tc[^>]*>)([\s\S]*?)(<\/w:tc>)/,
-              `$1<w:p><w:r><w:t>${newText}</w:t></w:r></w:p>$3`
-            );
-          }
-  
-          console.log(
-            `   🧩 [CELL DEBUG] Row ${rowIndex + 1} Col ${colIndex + 1} inserted → "${newText}"`
-          );
-  
-          const snippet = result.slice(0, 180).replace(/\n/g, "");
-          console.log(`      └─ Preview: ${snippet}`);
-          return result;
-        } catch (err) {
-          console.error(`❌ [ROBUST] replaceCellText() failed for Row ${rowIndex + 1} Col ${colIndex + 1}:`, err.message);
-          return cellXml;
-        }
+      // 🧱 Helper: Build fully valid Word cell XML (Word will render this)
+      const buildCell = (width, text, align = "left") => {
+        const safeText = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return `
+          <w:tc>
+            <w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>
+            <w:p>
+              <w:pPr><w:jc w:val="${align}"/></w:pPr>
+              <w:r><w:t xml:space="preserve">${safeText}</w:t></w:r>
+            </w:p>
+          </w:tc>`;
       };
   
-      // 5️⃣ Extract template cells
-      const cellMatches = templateRow.match(/<w:tc[^>]*>[\s\S]*?<\/w:tc>/g);
-      if (!cellMatches || cellMatches.length < 4) {
-        console.error(`❌ [ROBUST] Template row has only ${cellMatches?.length || 0} cells, need ≥ 4!`);
-        return documentXml;
-      }
+      // 🧩 Extract first row cells for widths
+      const cellMatches = templateRow.match(/<w:tc[^>]*>[\s\S]*?<\/w:tc>/g) || [];
+      const colWidths = cellMatches.map(cell => {
+        const match = cell.match(/w:w="(\d+)"/);
+        return match ? match[1] : "2400";
+      });
   
-      // 6️⃣ Build new rows
-      const updatedRows = [];
-      creditorData.forEach((creditor, index) => {
+      // 🧾 Construct updated rows
+      const updatedRows = creditorData.map((creditor, index) => {
         const rowNum = index + 1;
-        const creditorName =
-          creditor.creditor_name ||
-          creditor.name ||
-          creditor.sender_name ||
-          `Gläubiger ${rowNum}`;
-        const creditorAmount =
+        const name = creditor.creditor_name || creditor.name || `Gläubiger ${rowNum}`;
+        const amount = this.formatGermanCurrencyNoSymbol(
           creditor.debt_amount ||
           creditor.final_amount ||
           creditor.original_amount ||
           creditor.amount ||
           creditor.claim_amount ||
-          0;
-        const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount) + " €";
-        const quote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
-        const formattedQuote = `${quote.toFixed(2).replace(".", ",")} %`;
+          0
+        ) + " €";
+        const quote = totalDebt ? ((creditor.debt_amount / totalDebt) * 100).toFixed(2).replace(".", ",") + " %" : "0,00 %";
   
-        const updatedCells = cellMatches.map((cell, cellIndex) => {
-          if (cellIndex === 0) return replaceCellText(cell, rowNum.toString(), cellIndex, index);
-          if (cellIndex === 1) return replaceCellText(cell, creditorName, cellIndex, index);
-          if (cellIndex === 2) return replaceCellText(cell, formattedAmount, cellIndex, index);
-          if (cellIndex === 3) return replaceCellText(cell, formattedQuote, cellIndex, index);
-          return cell;
-        });
-  
-        let reconstructedRow = (templateRow.match(/^<w:tr[^>]*>/) || ["<w:tr>"])[0];
-        reconstructedRow += updatedCells.join("") + "</w:tr>";
-  
-        updatedRows.push(reconstructedRow);
-        console.log(`✅ [ROBUST] Row ${rowNum} ready → ${creditorName} | ${formattedAmount} | ${formattedQuote}`);
+        // 🧩 Build row with fully valid structure
+        const rowXml = `
+          <w:tr>
+            ${buildCell(colWidths[0], rowNum.toString(), "center")}
+            ${buildCell(colWidths[1], name, "left")}
+            ${buildCell(colWidths[2], amount, "right")}
+            ${buildCell(colWidths[3], quote, "right")}
+          </w:tr>`;
+        console.log(`✅ [ROBUST] Row ${rowNum} ready → ${name} | ${amount} | ${quote}`);
+        return rowXml;
       });
   
-      // 7️⃣ Rebuild table
-      const tableStart = documentXml.indexOf("<w:tbl");
-      const tableEnd = documentXml.indexOf("</w:tbl>", tableStart) + "</w:tbl>".length;
-      const beforeTable = documentXml.slice(0, tableStart);
-      const afterTable = documentXml.slice(tableEnd);
-      const beforeTemplate = tableContent.slice(0, tableContent.indexOf(templateRow));
-      const afterTemplate = tableContent.slice(tableContent.indexOf(templateRow) + templateRow.length);
-      const newTableInner = beforeTemplate + updatedRows.join("") + afterTemplate;
-  
-      const cleanedTable = newTableInner.replace(
-        /<w:tr[^>]*>[\s\S]*?<w:t>[2-8]<\/w:t>[\s\S]*?<\/w:tr>/g,
-        ""
+      // 🧹 Replace old rows with new ones
+      const cleanedTable = tableContent.replace(
+        /<w:tr[^>]*>[\s\S]*?<\/w:tr>/g,
+        updatedRows.join("\n")
       );
-      const tableOpenTag = (tableContent.match(/<w:tbl[^>]*>/) || ["<w:tbl>"])[0];
-      const rebuiltTable = `${tableOpenTag}${cleanedTable}</w:tbl>`;
-      const result = beforeTable + rebuiltTable + afterTable;
   
-      // 8️⃣ Verify inserted data
-      console.log(`📊 [ROBUST] XML length after insertion: ${result.length}`);
-        // New robust check:
-        const xmlPlain = result.replace(/<[^>]+>/g, ''); // strip XML tags
-        const foundName = xmlPlain.includes(c.creditor_name);
-        const foundAmount = xmlPlain.includes(this.formatGermanCurrencyNoSymbol(c.debt_amount));
-        console.log(
-          `   🔍 Verify Row ${i + 1}: Name ${foundName ? "✅ FOUND" : "❌ MISSING"}, Amount ${foundAmount ? "✅ FOUND" : "❌ MISSING"}`
-        );
+      const result = documentXml.replace(/<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/, cleanedTable);
+  
+      // 🧾 Log verification
+      const xmlPlain = result.replace(/<[^>]+>/g, "");
+      creditorData.forEach((c, i) => {
+        const nameFound = xmlPlain.includes(c.creditor_name);
+        const amtFound = xmlPlain.includes(this.formatGermanCurrencyNoSymbol(c.debt_amount));
+        console.log(`🔍 Verify Row ${i + 1}: Name ${nameFound ? "✅ FOUND" : "❌ MISSING"}, Amount ${amtFound ? "✅ FOUND" : "❌ MISSING"}`);
       });
   
-      console.log(`✅ [ROBUST] Table successfully rebuilt and verified.`);
-      console.log(`═══════════════════════════════════════════════════════════════`);
+      console.log(`✅ [ROBUST] Table populated with ${creditorData.length} rows (Word-visible version)`);
       return result;
-  
-    } catch (error) {
-      console.error("❌ [ROBUST] Error populating table rows:", error.message);
-      console.error("   Stack:", error.stack);
+    } catch (err) {
+      console.error("❌ [ROBUST] Error populating table rows:", err);
       return documentXml;
     }
   }
