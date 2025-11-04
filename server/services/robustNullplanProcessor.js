@@ -468,40 +468,40 @@ class RobustNullplanProcessor {
       }
 
       // Try multiple pattern variations
-      // Based on the XML structure: <w:t>Mo.</w:t></w:r><w:r>...<w:t> </w:t></w:r><w:r>...<w:t>-</w:t></w:r>...<w:t>Fr.:</w:t>...then time
+      // Based on the XML structure: <w:t>Mo.</w:t></w:r><w:r>...<w:t> </w:t></w:r><w:r>...<w:t>-</w:t></w:r>...<w:t>Fr.:</w:t></w:r>...then time
+      // The key is that "Fr.:" is in a text run that closes with </w:r>, so we need to match after that
       const openingHoursPatterns = [
-        // Pattern 1: Match "Mo." - "Fr.:" then replace everything until end of paragraph or next tag
-        // This will match the structure and replace whatever comes after "Fr.:" with correct time
+        // Pattern 1: Match after "Fr.:" text node (which ends with </w:r>), then replace all following text runs until </w:p>
+        // This preserves the XML structure by keeping "Fr.:" in its own text run and adding a new run for the time
+        {
+          name: "After Fr.: replace all text runs until paragraph end",
+          pattern: /(<w:t[^>]*>Fr\.:<\/w:t><\/w:r>)([\s\S]*?)(<\/w:p>)/gi,
+          replaceFn: (match, prefix, timeContent, closingTag) => {
+            // prefix already includes </w:r> closing the "Fr.:" text run
+            // Replace everything between "Fr.:</w:r>" and </w:p> with a single new text run
+            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+          }
+        },
+        // Pattern 2: Match "Mo." - "Fr.:" then replace everything until end of paragraph
+        // This is more aggressive but should work if Pattern 1 doesn't
         {
           name: "Mo. - Fr.: replace all following text nodes until end of paragraph",
-          pattern: /(<w:t[^>]*>Mo\.<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]*?)(<\/w:p>)/gi,
+          pattern: /(<w:t[^>]*>Mo\.<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>Fr\.:<\/w:t><\/w:r>)([\s\S]*?)(<\/w:p>)/gi,
           replaceFn: (match, prefix, timeContent, closingTag) => {
-            // Replace everything between "Fr.:" and </w:p> with the correct opening hours
+            // prefix includes everything up to and including "Fr.:</w:r>"
+            // Replace everything between "Fr.:</w:r>" and </w:p> with correct time
             return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
           }
         },
-        // Pattern 2: Match after "Fr.:" text node, find any text nodes until "Uhr" or end of paragraph
+        // Pattern 3: Match after "Fr.:" text node, find any text nodes until "Uhr" or end of paragraph
         {
           name: "After Fr.: replace until Uhr or end of paragraph",
-          pattern: /(<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]*?)(<w:t[^>]*>Uhr[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>|<\/w:p>)/gi,
+          pattern: /(<w:t[^>]*>Fr\.:<\/w:t><\/w:r>)([\s\S]*?)(<w:t[^>]*>Uhr[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>|<\/w:p>)/gi,
           replaceFn: (match, prefix, timeContent, closingTag) => {
-            // If we found "Uhr" in the closing, keep it but replace the time part
+            // If we found "Uhr" in the closing, replace everything including Uhr
             if (closingTag.includes("Uhr")) {
-              // Extract the "Uhr" part and keep it
-              const uhrMatch = closingTag.match(/(<w:t[^>]*>Uhr[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>)/);
-              if (uhrMatch) {
-                return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r></w:p>`;
-              }
+              return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r></w:p>`;
             }
-            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
-          }
-        },
-        // Pattern 3: Find "Fr.:" and replace everything after it until the next paragraph or specific tag
-        {
-          name: "Fr.: replace following content until paragraph end",
-          pattern: /(<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]{0,1000}?)(<\/w:p>)/gi,
-          replaceFn: (match, prefix, timeContent, closingTag) => {
-            // Replace everything between "Fr.:" and </w:p>
             return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
           }
         },
