@@ -187,6 +187,20 @@ class RobustNullplanProcessor {
         } replacements for ${creditor.name || creditor.creditor_name}`
       );
 
+      // Log all date-related replacements BEFORE XML processing
+      console.log("═══════════════════════════════════════════════════════════════");
+      console.log("📅 [ROBUST] DATE INFORMATION BEFORE XML PROCESSING:");
+      console.log("═══════════════════════════════════════════════════════════════");
+      const dateKeysBefore = ["Heutiges Datum", "Datum in 14 Tagen", "Datum in 3 Monaten", "Geburtstag"];
+      dateKeysBefore.forEach((key) => {
+        if (replacements[key]) {
+          console.log(`   📆 ${key}: "${replacements[key]}"`);
+          console.log(`      - Type: ${typeof replacements[key]}`);
+          console.log(`      - Length: ${replacements[key].length} characters`);
+        }
+      });
+      console.log("═══════════════════════════════════════════════════════════════");
+
       // Apply replacements using robust pattern matching
       let processedXml = documentXml;
       let totalReplacements = 0;
@@ -196,12 +210,59 @@ class RobustNullplanProcessor {
       Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
         if (replacements[variable]) {
           const pattern = mapping.pattern;
+          const replacementValue = replacements[variable];
+
+          // Special logging for date variables
+          if (variable.includes("Datum") || variable.includes("Geburtstag")) {
+            console.log(
+              `\n📅 [ROBUST] Processing date variable: "${variable}"`
+            );
+            console.log(`   📥 Replacement value: "${replacementValue}"`);
+            console.log(`   📥 Value type: ${typeof replacementValue}`);
+            console.log(`   📥 Value length: ${replacementValue.length}`);
+            
+            // Check if pattern exists in XML
+            const patternExists = processedXml.includes(pattern);
+            console.log(`   🔍 Pattern found in XML: ${patternExists ? "✅ YES" : "❌ NO"}`);
+            
+            if (patternExists) {
+              // Find the pattern in XML and show context
+              const patternIndex = processedXml.indexOf(pattern);
+              const contextBefore = processedXml.substring(
+                Math.max(0, patternIndex - 100),
+                patternIndex
+              );
+              const contextAfter = processedXml.substring(
+                patternIndex + pattern.length,
+                Math.min(
+                  processedXml.length,
+                  patternIndex + pattern.length + 100
+                )
+              );
+              console.log(`   📄 Context before pattern: ...${contextBefore.substring(contextBefore.length - 50)}`);
+              console.log(`   📄 Pattern to replace (first 100 chars): ${pattern.substring(0, 100)}...`);
+              console.log(`   📄 Context after pattern: ${contextAfter.substring(0, 50)}...`);
+            }
+          }
 
           if (processedXml.includes(pattern)) {
-            processedXml = processedXml.replace(
-              pattern,
-              replacements[variable]
+            const beforeReplacement = processedXml.substring(
+              processedXml.indexOf(pattern),
+              processedXml.indexOf(pattern) + Math.min(200, pattern.length)
             );
+            
+            processedXml = processedXml.replace(pattern, replacementValue);
+            
+            // Log after replacement for date variables
+            if (variable.includes("Datum") || variable.includes("Geburtstag")) {
+              const afterReplacement = processedXml.substring(
+                processedXml.indexOf(replacementValue),
+                processedXml.indexOf(replacementValue) + Math.min(200, replacementValue.length + 50)
+              );
+              console.log(`   ✅ After replacement (first 200 chars): ${afterReplacement.substring(0, 200)}...`);
+              console.log(`   ✅ Replacement successful!`);
+            }
+            
             console.log(
               `✅ [ROBUST] XML-split pattern replaced: "${variable}"`
             );
@@ -221,12 +282,59 @@ class RobustNullplanProcessor {
       this.simpleVariables.forEach((variable) => {
         if (replacements[variable]) {
           const quotedVariable = `&quot;${variable}&quot;`;
+          const replacementValue = replacements[variable];
+
+          // Special logging for date variables
+          if (variable.includes("Datum") || variable.includes("Geburtstag")) {
+            console.log(
+              `\n📅 [ROBUST] Processing date variable: "${variable}"`
+            );
+            console.log(`   📥 Replacement value: "${replacementValue}"`);
+            console.log(`   📥 Quoted variable to find: "${quotedVariable}"`);
+          }
 
           if (processedXml.includes(quotedVariable)) {
-            processedXml = processedXml.replace(
-              new RegExp(this.escapeRegex(quotedVariable), "g"),
-              replacements[variable]
-            );
+            // Find all occurrences
+            const regex = new RegExp(this.escapeRegex(quotedVariable), "g");
+            const matches = processedXml.match(regex);
+            console.log(`   🔍 Found ${matches ? matches.length : 0} occurrence(s) in XML`);
+
+            if (variable.includes("Datum") || variable.includes("Geburtstag")) {
+              // Show context before replacement
+              const firstMatchIndex = processedXml.indexOf(quotedVariable);
+              if (firstMatchIndex !== -1) {
+                const contextBefore = processedXml.substring(
+                  Math.max(0, firstMatchIndex - 100),
+                  firstMatchIndex
+                );
+                const contextAfter = processedXml.substring(
+                  firstMatchIndex + quotedVariable.length,
+                  Math.min(
+                    processedXml.length,
+                    firstMatchIndex + quotedVariable.length + 100
+                  )
+                );
+                console.log(`   📄 Context before: ...${contextBefore.substring(contextBefore.length - 50)}`);
+                console.log(`   📄 Variable to replace: "${quotedVariable}"`);
+                console.log(`   📄 Context after: ${contextAfter.substring(0, 50)}...`);
+              }
+            }
+
+            processedXml = processedXml.replace(regex, replacementValue);
+
+            if (variable.includes("Datum") || variable.includes("Geburtstag")) {
+              // Show context after replacement
+              const afterIndex = processedXml.indexOf(replacementValue);
+              if (afterIndex !== -1) {
+                const contextAfter = processedXml.substring(
+                  afterIndex,
+                  Math.min(processedXml.length, afterIndex + replacementValue.length + 50)
+                );
+                console.log(`   ✅ After replacement: ${contextAfter.substring(0, 150)}...`);
+                console.log(`   ✅ Replacement successful!`);
+              }
+            }
+
             console.log(`✅ [ROBUST] Simple variable replaced: "${variable}"`);
             totalReplacements++;
           } else {
@@ -271,8 +379,66 @@ class RobustNullplanProcessor {
         }
       }
 
+      // Log all date-related information AFTER XML processing
+      console.log("\n═══════════════════════════════════════════════════════════════");
+      console.log("📅 [ROBUST] DATE INFORMATION AFTER XML PROCESSING:");
+      console.log("═══════════════════════════════════════════════════════════════");
+      const dateKeysAfter = ["Heutiges Datum", "Datum in 14 Tagen", "Datum in 3 Monaten", "Geburtstag"];
+      dateKeysAfter.forEach((key) => {
+        const replacementValue = replacements[key];
+        if (replacementValue) {
+          // Check if the date appears in the processed XML
+          const appearsInXml = processedXml.includes(replacementValue);
+          console.log(`\n   📆 ${key}: "${replacementValue}"`);
+          console.log(`      - Found in processed XML: ${appearsInXml ? "✅ YES" : "❌ NO"}`);
+          
+          if (appearsInXml) {
+            // Find where it appears and show context
+            const index = processedXml.indexOf(replacementValue);
+            const contextBefore = processedXml.substring(
+              Math.max(0, index - 150),
+              index
+            );
+            const contextAfter = processedXml.substring(
+              index + replacementValue.length,
+              Math.min(processedXml.length, index + replacementValue.length + 150)
+            );
+            console.log(`      - Context in XML (before): ...${contextBefore.substring(contextBefore.length - 80)}`);
+            console.log(`      - Value in XML: "${replacementValue}"`);
+            console.log(`      - Context in XML (after): ${contextAfter.substring(0, 80)}...`);
+            
+            // Also check if it appears in XML text nodes
+            const inTextNode = processedXml.includes(`<w:t>${replacementValue}</w:t>`) || 
+                              processedXml.includes(`<w:t xml:space="preserve">${replacementValue}</w:t>`) ||
+                              processedXml.includes(`>${replacementValue}<`);
+            console.log(`      - In proper XML text node: ${inTextNode ? "✅ YES" : "⚠️ CHECK MANUALLY"}`);
+            
+            // Check if it's properly wrapped in XML structure
+            const xmlPattern = new RegExp(
+              `<w:t[^>]*>${this.escapeRegex(replacementValue)}</w:t>`,
+              "i"
+            );
+            const properlyWrapped = xmlPattern.test(processedXml);
+            console.log(`      - Properly wrapped in <w:t> node: ${properlyWrapped ? "✅ YES" : "⚠️ NO"}`);
+          } else {
+            // Try to find similar patterns
+            const datePattern = replacementValue.replace(/\./g, "\\.");
+            const regexPattern = new RegExp(datePattern, "i");
+            const similarMatch = processedXml.match(regexPattern);
+            if (similarMatch) {
+              console.log(`      - ⚠️ Found similar pattern: "${similarMatch[0]}"`);
+            } else {
+              console.log(`      - ❌ No similar pattern found - date may not have been replaced`);
+            }
+          }
+        }
+      });
+      console.log("═══════════════════════════════════════════════════════════════\n");
+
       // Update the document XML in the zip
+      console.log("💾 [ROBUST] Saving processed XML to ZIP archive...");
       zip.file("word/document.xml", processedXml);
+      console.log("   ✅ XML saved to ZIP");
 
       // Generate output
       const outputBuffer = await zip.generateAsync({ type: "nodebuffer" });
@@ -409,14 +575,40 @@ class RobustNullplanProcessor {
       creditor.reference ||
       `${clientData.reference || clientData.aktenzeichen}-${creditorPosition}`;
 
+    // Prepare dates with detailed logging
+    console.log("\n═══════════════════════════════════════════════════════════════");
+    console.log("📅 [ROBUST] PREPARING DATE REPLACEMENTS:");
+    console.log("═══════════════════════════════════════════════════════════════");
+    
+    const today = new Date();
+    const todayFormatted = this.formatGermanDate(today);
+    console.log(`\n📅 Today's date:`);
+    console.log(`   📥 Raw Date object: ${today.toString()}`);
+    console.log(`   📥 ISO string: ${today.toISOString()}`);
+    console.log(`   📤 Formatted: "${todayFormatted}"`);
+    
+    const deadlineDate = this.calculateDeadlineDate();
+    console.log(`\n📅 Deadline date (14 days):`);
+    console.log(`   📤 Formatted: "${deadlineDate}"`);
+    
+    const dateIn3Months = this.calculateDateInMonths(3);
+    console.log(`\n📅 Date in 3 months:`);
+    console.log(`   📤 Formatted: "${dateIn3Months}"`);
+    
+    const birthDate = clientData.birthDate || clientData.geburtstag || "01.01.1980";
+    console.log(`\n📅 Birth date:`);
+    console.log(`   📥 Raw value: "${clientData.birthDate || clientData.geburtstag || "NOT PROVIDED"}"`);
+    console.log(`   📤 Final value: "${birthDate}"`);
+    console.log("═══════════════════════════════════════════════════════════════\n");
+
     const replacements = {
       // XML-split variables (exact mapping)
       "Adresse des Creditors": creditorAddress,
       "Aktenzeichen der Forderung": creditorReference,
       "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
-      "Heutiges Datum": this.formatGermanDate(new Date()),
+      "Heutiges Datum": todayFormatted,
       "Mandant Name": clientName,
-      "Datum in 14 Tagen": this.calculateDeadlineDate(),
+      "Datum in 14 Tagen": deadlineDate,
       "Name Mandant XML-1": clientName,
       "Name Mandant XML-2": clientName,
 
@@ -431,14 +623,20 @@ class RobustNullplanProcessor {
           clientData.monthlyNetIncome ||
           0
       ),
-      Geburtstag: clientData.birthDate || clientData.geburtstag || "01.01.1980",
+      Geburtstag: birthDate,
       Familienstand: this.getMaritalStatusText(
         clientData.maritalStatus || clientData.financial_data?.marital_status
       ),
-      "Datum in 3 Monaten": this.calculateDateInMonths(3),
+      "Datum in 3 Monaten": dateIn3Months,
       Aktenzeichen: `${clientData.reference || clientData.aktenzeichen}`,
       "Name des Gläubigers": creditorName,
     };
+
+    console.log("📋 [ROBUST] All date replacements stored:");
+    console.log(`   "Heutiges Datum": "${replacements["Heutiges Datum"]}"`);
+    console.log(`   "Datum in 14 Tagen": "${replacements["Datum in 14 Tagen"]}"`);
+    console.log(`   "Datum in 3 Monaten": "${replacements["Datum in 3 Monaten"]}"`);
+    console.log(`   "Geburtstag": "${replacements["Geburtstag"]}"`);
 
     console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
     console.log(`   Address: ${creditorAddress}`);
@@ -471,11 +669,25 @@ class RobustNullplanProcessor {
    * Matches format used in firstRoundDocumentGenerator.js
    */
   formatGermanDate(date) {
-    return date.toLocaleDateString("de-DE", {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      console.error(`❌ [ROBUST] Invalid date provided to formatGermanDate: ${date}`);
+      return "01.01.2025"; // Fallback
+    }
+
+    const formatted = date.toLocaleDateString("de-DE", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     });
+
+    console.log(`📅 [ROBUST] formatGermanDate() called:`);
+    console.log(`   📥 Input date: ${date.toISOString()}`);
+    console.log(`   📥 Input date object: ${date.toString()}`);
+    console.log(`   📤 Formatted result: "${formatted}"`);
+    console.log(`   📊 Result length: ${formatted.length} characters`);
+    console.log(`   📊 Result format check: ${/^\d{2}\.\d{2}\.\d{4}$/.test(formatted) ? "✅ Valid format (dd.mm.yyyy)" : "❌ Invalid format"}`);
+
+    return formatted;
   }
 
   /**
