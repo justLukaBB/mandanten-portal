@@ -188,10 +188,19 @@ class RobustNullplanProcessor {
       );
 
       // Log all date-related replacements BEFORE XML processing
-      console.log("═══════════════════════════════════════════════════════════════");
+      console.log(
+        "═══════════════════════════════════════════════════════════════"
+      );
       console.log("📅 [ROBUST] DATE INFORMATION BEFORE XML PROCESSING:");
-      console.log("═══════════════════════════════════════════════════════════════");
-      const dateKeysBefore = ["Heutiges Datum", "Datum in 14 Tagen", "Datum in 3 Monaten", "Geburtstag"];
+      console.log(
+        "═══════════════════════════════════════════════════════════════"
+      );
+      const dateKeysBefore = [
+        "Heutiges Datum",
+        "Datum in 14 Tagen",
+        "Datum in 3 Monaten",
+        "Geburtstag",
+      ];
       dateKeysBefore.forEach((key) => {
         if (replacements[key]) {
           console.log(`   📆 ${key}: "${replacements[key]}"`);
@@ -199,7 +208,9 @@ class RobustNullplanProcessor {
           console.log(`      - Length: ${replacements[key].length} characters`);
         }
       });
-      console.log("═══════════════════════════════════════════════════════════════");
+      console.log(
+        "═══════════════════════════════════════════════════════════════"
+      );
 
       // Apply replacements using robust pattern matching
       let processedXml = documentXml;
@@ -220,11 +231,15 @@ class RobustNullplanProcessor {
             console.log(`   📥 Replacement value: "${replacementValue}"`);
             console.log(`   📥 Value type: ${typeof replacementValue}`);
             console.log(`   📥 Value length: ${replacementValue.length}`);
-            
+
             // Check if pattern exists in XML
             const patternExists = processedXml.includes(pattern);
-            console.log(`   🔍 Pattern found in XML: ${patternExists ? "✅ YES" : "❌ NO"}`);
-            
+            console.log(
+              `   🔍 Pattern found in XML: ${
+                patternExists ? "✅ YES" : "❌ NO"
+              }`
+            );
+
             if (patternExists) {
               // Find the pattern in XML and show context
               const patternIndex = processedXml.indexOf(pattern);
@@ -239,9 +254,23 @@ class RobustNullplanProcessor {
                   patternIndex + pattern.length + 100
                 )
               );
-              console.log(`   📄 Context before pattern: ...${contextBefore.substring(contextBefore.length - 50)}`);
-              console.log(`   📄 Pattern to replace (first 100 chars): ${pattern.substring(0, 100)}...`);
-              console.log(`   📄 Context after pattern: ${contextAfter.substring(0, 50)}...`);
+              console.log(
+                `   📄 Context before pattern: ...${contextBefore.substring(
+                  contextBefore.length - 50
+                )}`
+              );
+              console.log(
+                `   📄 Pattern to replace (first 100 chars): ${pattern.substring(
+                  0,
+                  100
+                )}...`
+              );
+              console.log(
+                `   📄 Context after pattern: ${contextAfter.substring(
+                  0,
+                  50
+                )}...`
+              );
             }
           }
 
@@ -250,19 +279,25 @@ class RobustNullplanProcessor {
               processedXml.indexOf(pattern),
               processedXml.indexOf(pattern) + Math.min(200, pattern.length)
             );
-            
+
             processedXml = processedXml.replace(pattern, replacementValue);
-            
+
             // Log after replacement for date variables
             if (variable.includes("Datum") || variable.includes("Geburtstag")) {
               const afterReplacement = processedXml.substring(
                 processedXml.indexOf(replacementValue),
-                processedXml.indexOf(replacementValue) + Math.min(200, replacementValue.length + 50)
+                processedXml.indexOf(replacementValue) +
+                  Math.min(200, replacementValue.length + 50)
               );
-              console.log(`   ✅ After replacement (first 200 chars): ${afterReplacement.substring(0, 200)}...`);
+              console.log(
+                `   ✅ After replacement (first 200 chars): ${afterReplacement.substring(
+                  0,
+                  200
+                )}...`
+              );
               console.log(`   ✅ Replacement successful!`);
             }
-            
+
             console.log(
               `✅ [ROBUST] XML-split pattern replaced: "${variable}"`
             );
@@ -297,7 +332,9 @@ class RobustNullplanProcessor {
             // Find all occurrences
             const regex = new RegExp(this.escapeRegex(quotedVariable), "g");
             const matches = processedXml.match(regex);
-            console.log(`   🔍 Found ${matches ? matches.length : 0} occurrence(s) in XML`);
+            console.log(
+              `   🔍 Found ${matches ? matches.length : 0} occurrence(s) in XML`
+            );
 
             if (variable.includes("Datum") || variable.includes("Geburtstag")) {
               // Show context before replacement
@@ -314,9 +351,15 @@ class RobustNullplanProcessor {
                     firstMatchIndex + quotedVariable.length + 100
                   )
                 );
-                console.log(`   📄 Context before: ...${contextBefore.substring(contextBefore.length - 50)}`);
+                console.log(
+                  `   📄 Context before: ...${contextBefore.substring(
+                    contextBefore.length - 50
+                  )}`
+                );
                 console.log(`   📄 Variable to replace: "${quotedVariable}"`);
-                console.log(`   📄 Context after: ${contextAfter.substring(0, 50)}...`);
+                console.log(
+                  `   📄 Context after: ${contextAfter.substring(0, 50)}...`
+                );
               }
             }
 
@@ -328,9 +371,17 @@ class RobustNullplanProcessor {
               if (afterIndex !== -1) {
                 const contextAfter = processedXml.substring(
                   afterIndex,
-                  Math.min(processedXml.length, afterIndex + replacementValue.length + 50)
+                  Math.min(
+                    processedXml.length,
+                    afterIndex + replacementValue.length + 50
+                  )
                 );
-                console.log(`   ✅ After replacement: ${contextAfter.substring(0, 150)}...`);
+                console.log(
+                  `   ✅ After replacement: ${contextAfter.substring(
+                    0,
+                    150
+                  )}...`
+                );
                 console.log(`   ✅ Replacement successful!`);
               }
             }
@@ -344,52 +395,73 @@ class RobustNullplanProcessor {
       });
 
       console.log("🎯 [ROBUST] Fixing opening hours format...");
-      // Use dots (.) not colons (:) for German time format, matching documentGenerator.js
-     // Match either "Mo. - Fr.:" or "Öffnungszeiten:" variants
-const openingHoursPatterns = [
-    // variant 1: Mo. - Fr.
-    /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
-    // variant 2: Öffnungszeiten (split characters)
-    /(<w:t[^>]*>Ö<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>u<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>g<\/w:t>[\s\S]*?<w:t[^>]*>s<\/w:t>[\s\S]*?<w:t[^>]*>z<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>i<\/w:t>[\s\S]*?<w:t[^>]*>t<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>:<\/w:t>)[\s\S]*?(<w:t[^>]*>[0O1].*?Uhr<\/w:t>)/gi
-];
+      const correctOpeningHours = "09.00 - 18.00 Uhr"; 
+      let openingHoursFixed = false;
+      const openingHoursPatterns = [
+        // variant 1: Mo. - Fr.
+        /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
+        // variant 2: Öffnungszeiten (split characters)
+        /(<w:t[^>]*>Ö<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>f<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>u<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>g<\/w:t>[\s\S]*?<w:t[^>]*>s<\/w:t>[\s\S]*?<w:t[^>]*>z<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>i<\/w:t>[\s\S]*?<w:t[^>]*>t<\/w:t>[\s\S]*?<w:t[^>]*>e<\/w:t>[\s\S]*?<w:t[^>]*>n<\/w:t>[\s\S]*?<w:t[^>]*>:<\/w:t>)[\s\S]*?(<w:t[^>]*>[0O1].*?Uhr<\/w:t>)/gi,
+      ];
 
-for (const pattern of openingHoursPatterns) {
-    if (pattern.test(processedXml)) {
-        processedXml = processedXml.replace(pattern, (m, prefix) =>
-            prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
-        );
-        openingHoursFixed = true;
-        console.log(`✅ [ROBUST] Opening hours fixed (pattern matched)`);
-        totalReplacements++;
-        break;
-    }
-}
+      for (const pattern of openingHoursPatterns) {
+        if (pattern.test(processedXml)) {
+          processedXml = processedXml.replace(
+            pattern,
+            (m, prefix) =>
+              prefix +
+              `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
+          );
+          openingHoursFixed = true;
+          console.log(`✅ [ROBUST] Opening hours fixed (pattern matched)`);
+          totalReplacements++;
+          break;
+        }
+      }
 
-if (!openingHoursFixed) {
-    const textFallback = /(0194|138|0\s*9\s*00|1\s*8\s*00).*?Uhr/gi;
-    if (textFallback.test(processedXml)) {
-        processedXml = processedXml.replace(textFallback, correctOpeningHours);
-        console.log(`✅ [ROBUST] Opening hours fixed (fallback text)`);
-        totalReplacements++;
-        openingHoursFixed = true;
-    } else {
-        console.log(`⚠️ [ROBUST] Opening hours pattern not found — check if template uses another spelling (e.g., nÖffnungszeiten)`);
-    }
-}
+      if (!openingHoursFixed) {
+        const textFallback = /(0194|138|0\s*9\s*00|1\s*8\s*00).*?Uhr/gi;
+        if (textFallback.test(processedXml)) {
+          processedXml = processedXml.replace(
+            textFallback,
+            correctOpeningHours
+          );
+          console.log(`✅ [ROBUST] Opening hours fixed (fallback text)`);
+          totalReplacements++;
+          openingHoursFixed = true;
+        } else {
+          console.log(
+            `⚠️ [ROBUST] Opening hours pattern not found — check if template uses another spelling (e.g., nÖffnungszeiten)`
+          );
+        }
+      }
 
       // Log all date-related information AFTER XML processing
-      console.log("\n═══════════════════════════════════════════════════════════════");
+      console.log(
+        "\n═══════════════════════════════════════════════════════════════"
+      );
       console.log("📅 [ROBUST] DATE INFORMATION AFTER XML PROCESSING:");
-      console.log("═══════════════════════════════════════════════════════════════");
-      const dateKeysAfter = ["Heutiges Datum", "Datum in 14 Tagen", "Datum in 3 Monaten", "Geburtstag"];
+      console.log(
+        "═══════════════════════════════════════════════════════════════"
+      );
+      const dateKeysAfter = [
+        "Heutiges Datum",
+        "Datum in 14 Tagen",
+        "Datum in 3 Monaten",
+        "Geburtstag",
+      ];
       dateKeysAfter.forEach((key) => {
         const replacementValue = replacements[key];
         if (replacementValue) {
           // Check if the date appears in the processed XML
           const appearsInXml = processedXml.includes(replacementValue);
           console.log(`\n   📆 ${key}: "${replacementValue}"`);
-          console.log(`      - Found in processed XML: ${appearsInXml ? "✅ YES" : "❌ NO"}`);
-          
+          console.log(
+            `      - Found in processed XML: ${
+              appearsInXml ? "✅ YES" : "❌ NO"
+            }`
+          );
+
           if (appearsInXml) {
             // Find where it appears and show context
             const index = processedXml.indexOf(replacementValue);
@@ -399,39 +471,68 @@ if (!openingHoursFixed) {
             );
             const contextAfter = processedXml.substring(
               index + replacementValue.length,
-              Math.min(processedXml.length, index + replacementValue.length + 150)
+              Math.min(
+                processedXml.length,
+                index + replacementValue.length + 150
+              )
             );
-            console.log(`      - Context in XML (before): ...${contextBefore.substring(contextBefore.length - 80)}`);
+            console.log(
+              `      - Context in XML (before): ...${contextBefore.substring(
+                contextBefore.length - 80
+              )}`
+            );
             console.log(`      - Value in XML: "${replacementValue}"`);
-            console.log(`      - Context in XML (after): ${contextAfter.substring(0, 80)}...`);
-            
+            console.log(
+              `      - Context in XML (after): ${contextAfter.substring(
+                0,
+                80
+              )}...`
+            );
+
             // Also check if it appears in XML text nodes
-            const inTextNode = processedXml.includes(`<w:t>${replacementValue}</w:t>`) || 
-                              processedXml.includes(`<w:t xml:space="preserve">${replacementValue}</w:t>`) ||
-                              processedXml.includes(`>${replacementValue}<`);
-            console.log(`      - In proper XML text node: ${inTextNode ? "✅ YES" : "⚠️ CHECK MANUALLY"}`);
-            
+            const inTextNode =
+              processedXml.includes(`<w:t>${replacementValue}</w:t>`) ||
+              processedXml.includes(
+                `<w:t xml:space="preserve">${replacementValue}</w:t>`
+              ) ||
+              processedXml.includes(`>${replacementValue}<`);
+            console.log(
+              `      - In proper XML text node: ${
+                inTextNode ? "✅ YES" : "⚠️ CHECK MANUALLY"
+              }`
+            );
+
             // Check if it's properly wrapped in XML structure
             const xmlPattern = new RegExp(
               `<w:t[^>]*>${this.escapeRegex(replacementValue)}</w:t>`,
               "i"
             );
             const properlyWrapped = xmlPattern.test(processedXml);
-            console.log(`      - Properly wrapped in <w:t> node: ${properlyWrapped ? "✅ YES" : "⚠️ NO"}`);
+            console.log(
+              `      - Properly wrapped in <w:t> node: ${
+                properlyWrapped ? "✅ YES" : "⚠️ NO"
+              }`
+            );
           } else {
             // Try to find similar patterns
             const datePattern = replacementValue.replace(/\./g, "\\.");
             const regexPattern = new RegExp(datePattern, "i");
             const similarMatch = processedXml.match(regexPattern);
             if (similarMatch) {
-              console.log(`      - ⚠️ Found similar pattern: "${similarMatch[0]}"`);
+              console.log(
+                `      - ⚠️ Found similar pattern: "${similarMatch[0]}"`
+              );
             } else {
-              console.log(`      - ❌ No similar pattern found - date may not have been replaced`);
+              console.log(
+                `      - ❌ No similar pattern found - date may not have been replaced`
+              );
             }
           }
         }
       });
-      console.log("═══════════════════════════════════════════════════════════════\n");
+      console.log(
+        "═══════════════════════════════════════════════════════════════\n"
+      );
 
       // Update the document XML in the zip
       console.log("💾 [ROBUST] Saving processed XML to ZIP archive...");
@@ -574,30 +675,41 @@ if (!openingHoursFixed) {
       `${clientData.reference || clientData.aktenzeichen}-${creditorPosition}`;
 
     // Prepare dates with detailed logging
-    console.log("\n═══════════════════════════════════════════════════════════════");
+    console.log(
+      "\n═══════════════════════════════════════════════════════════════"
+    );
     console.log("📅 [ROBUST] PREPARING DATE REPLACEMENTS:");
-    console.log("═══════════════════════════════════════════════════════════════");
-    
+    console.log(
+      "═══════════════════════════════════════════════════════════════"
+    );
+
     const today = new Date();
     const todayFormatted = this.formatGermanDate(today);
     console.log(`\n📅 Today's date:`);
     console.log(`   📥 Raw Date object: ${today.toString()}`);
     console.log(`   📥 ISO string: ${today.toISOString()}`);
     console.log(`   📤 Formatted: "${todayFormatted}"`);
-    
+
     const deadlineDate = this.calculateDeadlineDate();
     console.log(`\n📅 Deadline date (14 days):`);
     console.log(`   📤 Formatted: "${deadlineDate}"`);
-    
+
     const dateIn3Months = this.calculateDateInMonths(3);
     console.log(`\n📅 Date in 3 months:`);
     console.log(`   📤 Formatted: "${dateIn3Months}"`);
-    
-    const birthDate = clientData.birthDate || clientData.geburtstag || "01.01.1980";
+
+    const birthDate =
+      clientData.birthDate || clientData.geburtstag || "01.01.1980";
     console.log(`\n📅 Birth date:`);
-    console.log(`   📥 Raw value: "${clientData.birthDate || clientData.geburtstag || "NOT PROVIDED"}"`);
+    console.log(
+      `   📥 Raw value: "${
+        clientData.birthDate || clientData.geburtstag || "NOT PROVIDED"
+      }"`
+    );
     console.log(`   📤 Final value: "${birthDate}"`);
-    console.log("═══════════════════════════════════════════════════════════════\n");
+    console.log(
+      "═══════════════════════════════════════════════════════════════\n"
+    );
 
     const replacements = {
       // XML-split variables (exact mapping)
@@ -632,8 +744,12 @@ if (!openingHoursFixed) {
 
     console.log("📋 [ROBUST] All date replacements stored:");
     console.log(`   "Heutiges Datum": "${replacements["Heutiges Datum"]}"`);
-    console.log(`   "Datum in 14 Tagen": "${replacements["Datum in 14 Tagen"]}"`);
-    console.log(`   "Datum in 3 Monaten": "${replacements["Datum in 3 Monaten"]}"`);
+    console.log(
+      `   "Datum in 14 Tagen": "${replacements["Datum in 14 Tagen"]}"`
+    );
+    console.log(
+      `   "Datum in 3 Monaten": "${replacements["Datum in 3 Monaten"]}"`
+    );
     console.log(`   "Geburtstag": "${replacements["Geburtstag"]}"`);
 
     console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
@@ -668,7 +784,9 @@ if (!openingHoursFixed) {
    */
   formatGermanDate(date) {
     if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
-      console.error(`❌ [ROBUST] Invalid date provided to formatGermanDate: ${date}`);
+      console.error(
+        `❌ [ROBUST] Invalid date provided to formatGermanDate: ${date}`
+      );
       return "01.01.2025"; // Fallback
     }
 
@@ -683,7 +801,13 @@ if (!openingHoursFixed) {
     console.log(`   📥 Input date object: ${date.toString()}`);
     console.log(`   📤 Formatted result: "${formatted}"`);
     console.log(`   📊 Result length: ${formatted.length} characters`);
-    console.log(`   📊 Result format check: ${/^\d{2}\.\d{2}\.\d{4}$/.test(formatted) ? "✅ Valid format (dd.mm.yyyy)" : "❌ Invalid format"}`);
+    console.log(
+      `   📊 Result format check: ${
+        /^\d{2}\.\d{2}\.\d{4}$/.test(formatted)
+          ? "✅ Valid format (dd.mm.yyyy)"
+          : "❌ Invalid format"
+      }`
+    );
 
     return formatted;
   }
