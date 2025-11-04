@@ -174,25 +174,87 @@ class RobustNullplanProcessor {
             // 2. Handle Öffnungszeiten (opening hours) - special case where text is split character by character
             console.log('🎯 [ROBUST] Processing Öffnungszeiten replacement...');
             if (replacements["Öffnungszeiten"]) {
-                // Find "Mo. - Fr.:" and replace everything after it until "Bankverbindungen" or end of paragraph
-                // The text is split character by character, so we need to match a wide pattern
-                const moFrPattern = /(Mo\.\s*-\s*Fr\.:)[\s\S]*?(?=Bankverbindungen:|<\/w:p>)/i;
+                // Strategy: Find "Öffnungszeiten" and "Bankverbindungen" by looking in text content
+                // Extract all text content to find positions, then work with XML
+                let offnungszeitenPos = -1;
+                let bankverbindungenPos = -1;
                 
-                if (processedXml.match(moFrPattern)) {
+                // Search for "Öffnungszeiten" - it might be split across XML tags
+                const offnungszeitenSearch = processedXml.match(/Öffnungszeiten[:\s]/i);
+                if (offnungszeitenSearch) {
+                    offnungszeitenPos = processedXml.indexOf(offnungszeitenSearch[0]);
+                }
+                
+                // Search for "Bankverbindungen" after Öffnungszeiten
+                if (offnungszeitenPos !== -1) {
+                    const afterOffnungszeiten = processedXml.substring(offnungszeitenPos);
+                    const bankverbindungenSearch = afterOffnungszeiten.match(/Bankverbindungen[:\s]/i);
+                    if (bankverbindungenSearch) {
+                        bankverbindungenPos = processedXml.indexOf(bankverbindungenSearch[0], offnungszeitenPos);
+                    }
+                }
+                
+                if (offnungszeitenPos !== -1 && bankverbindungenPos !== -1) {
+                    // Find the colon after "Öffnungszeiten" to know where to start replacement
+                    let sectionStart = processedXml.indexOf(':', offnungszeitenPos);
+                    if (sectionStart === -1 || sectionStart > bankverbindungenPos) {
+                        // If no colon found, start after "Öffnungszeiten"
+                        sectionStart = offnungszeitenPos + (offnungszeitenSearch ? offnungszeitenSearch[0].length : 0);
+                    } else {
+                        sectionStart += 1; // Start after the colon
+                    }
+                    
+                    // Extract everything between Öffnungszeiten: and Bankverbindungen:
+                    // This includes all the malformed character-by-character split text
+                    const beforeSection = processedXml.substring(0, sectionStart);
+                    const afterSection = processedXml.substring(bankverbindungenPos);
+                    
                     // Create properly formatted XML structure for opening hours
-                    // Format: "Mo. - Fr.: 09.00 - 13.00 Uhr" on first line, "14.00 - 18.00 Uhr" on second line
-                    const replacement = `Mo. - Fr.: <w:r><w:t xml:space="preserve">09.00 - 13.00 Uhr</w:t></w:r><w:br/><w:r><w:t xml:space="preserve">14.00 - 18.00 Uhr</w:t></w:r>`;
+                    // We need to ensure proper Word XML structure with text runs
+                    const formattedHours = `<w:r><w:t xml:space="preserve">Mo. - Fr.: 09.00 - 13.00 Uhr</w:t></w:r><w:br/><w:r><w:t xml:space="preserve">14.00 - 18.00 Uhr</w:t></w:r>`;
                     
-                    // Replace the pattern, preserving "Bankverbindungen:" if it exists
-                    processedXml = processedXml.replace(moFrPattern, (match) => {
-                        const hasBankverbindungen = match.includes('Bankverbindungen');
-                        return replacement + (hasBankverbindungen ? 'Bankverbindungen:' : '');
-                    });
+                    // Reconstruct XML with properly formatted opening hours
+                    processedXml = beforeSection + formattedHours + afterSection;
                     
-                    console.log(`✅ [ROBUST] Öffnungszeiten replaced`);
+                    console.log(`✅ [ROBUST] Öffnungszeiten replaced (found section between Öffnungszeiten and Bankverbindungen)`);
                     totalReplacements++;
                 } else {
-                    console.log(`⚠️ [ROBUST] Öffnungszeiten pattern "Mo. - Fr.:" not found`);
+                        console.log(`⚠️ [ROBUST] Bankverbindungen not found after Öffnungszeiten - trying pattern matching`);
+                        // Fallback: try pattern matching
+                        const patterns = [
+                            /(Mo\.\s*-\s*Fr\.:)[\s\S]*?(?=Bankverbindungen:|<\/w:p>)/i,
+                            /(Mo\.-Fr\.:)[\s\S]*?(?=Bankverbindungen:|<\/w:p>)/i,
+                            /(Mo\.-\s*Fr\.:)[\s\S]*?(?=Bankverbindungen:|<\/w:p>)/i
+                        ];
+                        
+                        let replaced = false;
+                        for (const pattern of patterns) {
+                            if (processedXml.match(pattern)) {
+                                const formattedHours = `Mo. - Fr.: <w:r><w:t xml:space="preserve">09.00 - 13.00 Uhr</w:t></w:r><w:br/><w:r><w:t xml:space="preserve">14.00 - 18.00 Uhr</w:t></w:r>`;
+                                processedXml = processedXml.replace(pattern, (match) => {
+                                    const hasBankverbindungen = match.includes('Bankverbindungen');
+                                    return formattedHours + (hasBankverbindungen ? 'Bankverbindungen:' : '');
+                                });
+                                console.log(`✅ [ROBUST] Öffnungszeiten replaced (using pattern match)`);
+                                totalReplacements++;
+                                replaced = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!replaced) {
+                            console.log(`⚠️ [ROBUST] Öffnungszeiten pattern not found - trying malformed time pattern`);
+                            // Last resort: try to find malformed time pattern like "0194.00-138.00"
+                            const malformedTimePattern = /(0\s*1\s*9\s*4[\s\S]*?Uhr[\s\S]*?)(?=Bankverbindungen:|<\/w:p>)/i;
+                            if (processedXml.match(malformedTimePattern)) {
+                                const formattedHours = `<w:r><w:t xml:space="preserve">Mo. - Fr.: 09.00 - 13.00 Uhr</w:t></w:r><w:br/><w:r><w:t xml:space="preserve">14.00 - 18.00 Uhr</w:t></w:r>`;
+                                processedXml = processedXml.replace(malformedTimePattern, formattedHours);
+                                console.log(`✅ [ROBUST] Öffnungszeiten replaced (malformed time pattern)`);
+                                totalReplacements++;
+                            } else {
+                                console.log(`⚠️ [ROBUST] Could not find Öffnungszeiten pattern to replace`);
+                            }
+                        }
                 }
             }
 
