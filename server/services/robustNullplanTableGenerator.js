@@ -598,30 +598,73 @@ class RobustNullplanTableGenerator {
   // ✅ FIXED: replaceCellText() that preserves design and ensures visible text
 const replaceCellText = (cellXml, newText) => {
     try {
-      // Keep original cell design (w:tcPr, borders, shading, etc.)
+      // Escape special XML characters in newText (but preserve existing structure)
+      const escapedText = newText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+  
+      // Strategy: Find first <w:t> node and replace its content, remove other text runs
+      // This preserves cell properties (w:tcPr) and paragraph properties (w:pPr)
+      
       let result = cellXml;
-  
-      // Replace encoded brackets if any
-      result = result.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-  
-      // Look for an existing <w:t> node (normal Word text node)
-      if (result.includes("<w:t")) {
-        // Replace only the text inside first <w:t>…</w:t>
-        result = result.replace(/<w:t[^>]*>[\s\S]*?<\/w:t>/, `<w:t xml:space="preserve">${newText}</w:t>`);
+      
+      // Find all text runs in the cell
+      const textRunMatches = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g) || [];
+      
+      if (textRunMatches.length > 0) {
+        // Replace content of first text run, remove others
+        const firstTextRun = textRunMatches[0];
+        // Find the <w:t> node in first run
+        const textNodeMatch = firstTextRun.match(/<w:t[^>]*>[\s\S]*?<\/w:t>/);
+        if (textNodeMatch) {
+          // Replace the text node content
+          // Extract attributes from original text node
+          const textNodeAttrs = textNodeMatch[0].match(/<w:t[^>]*>/);
+          const attrs = textNodeAttrs ? textNodeAttrs[0].replace(/^<w:t/, "").replace(/>$/, "") : "";
+          const newTextNode = `<w:t${attrs} xml:space="preserve">${escapedText}</w:t>`;
+          const updatedFirstRun = firstTextRun.replace(textNodeMatch[0], newTextNode);
+          
+          // Replace first run with updated version, remove all other runs
+          result = result.replace(firstTextRun, updatedFirstRun);
+          // Remove remaining text runs
+          for (let i = 1; i < textRunMatches.length; i++) {
+            result = result.replace(textRunMatches[i], "");
+          }
+        } else {
+          // No <w:t> in first run, add it
+          const updatedFirstRun = firstTextRun.replace(
+            /<\/w:r>/,
+            `<w:t xml:space="preserve">${escapedText}</w:t></w:r>`
+          );
+          result = result.replace(firstTextRun, updatedFirstRun);
+          // Remove remaining runs
+          for (let i = 1; i < textRunMatches.length; i++) {
+            result = result.replace(textRunMatches[i], "");
+          }
+        }
       } else if (result.includes("<w:p")) {
-        // If <w:p> exists but <w:t> missing, insert text inside paragraph
-        result = result.replace(/(<w:p[^>]*>)/, `$1<w:r><w:t xml:space="preserve">${newText}</w:t></w:r>`);
+        // Paragraph exists but no text runs, add one
+        const paragraphMatch = result.match(/<w:p[^>]*>/);
+        if (paragraphMatch) {
+          result = result.replace(
+            paragraphMatch[0],
+            `${paragraphMatch[0]}<w:r><w:t xml:space="preserve">${escapedText}</w:t></w:r>`
+          );
+        }
       } else {
-        // If cell has no paragraph at all, create one cleanly
-        result = result.replace(
-          /(<w:tc[^>]*>)([\s\S]*?)(<\/w:tc>)/,
-          `$1<w:p><w:r><w:t xml:space="preserve">${newText}</w:t></w:r></w:p>$3`
-        );
+        // No paragraph, create one
+        const cellMatch = result.match(/(<w:tc[^>]*>)([\s\S]*?)(<\/w:tc>)/);
+        if (cellMatch) {
+          result = `${cellMatch[1]}<w:p><w:r><w:t xml:space="preserve">${escapedText}</w:t></w:r></w:p>${cellMatch[3]}`;
+        }
       }
   
       return result;
     } catch (err) {
       console.error("❌ [ROBUST] replaceCellText() error:", err.message);
+      console.error("   Cell XML:", cellXml.substring(0, 200));
+      console.error("   New Text:", newText);
       return cellXml;
     }
   };
@@ -662,7 +705,7 @@ const replaceCellText = (cellXml, newText) => {
           totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         const formattedQuote = `${creditorQuote
           .toFixed(2)
-          .replace(".", ",")} %`;
+          .replace(".", ",")}%`;
 
         // Clone template row and update first 4 cells
         let clonedRow = templateRow;
@@ -697,6 +740,20 @@ const replaceCellText = (cellXml, newText) => {
         console.log(
           `✅ [ROBUST] Row ${rowNum} prepared: ${creditorName} - ${formattedAmount} - ${formattedQuote}`
         );
+        
+        // Debug: Verify the row contains the expected data
+        // Check for both escaped and unescaped versions
+        const escapedName = creditorName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const nameInRow = reconstructedRow.includes(creditorName) || reconstructedRow.includes(escapedName);
+        const amountInRow = reconstructedRow.includes(formattedAmount.replace(" €", "")) || reconstructedRow.includes(formattedAmount.replace(" €", "").replace(".", ","));
+        const quoteInRow = reconstructedRow.includes(formattedQuote.replace("%", "")) || reconstructedRow.includes(formattedQuote.replace("%", "").replace(".", ","));
+        console.log(
+          `   🔍 [ROBUST] Row ${rowNum} verification: name=${nameInRow ? "✅" : "❌"}, amount=${amountInRow ? "✅" : "❌"}, quote=${quoteInRow ? "✅" : "❌"}`
+        );
+        if (!nameInRow || !amountInRow || !quoteInRow) {
+          console.log(`   ⚠️ [ROBUST] Row ${rowNum} XML preview: ${reconstructedRow.substring(0, 800)}`);
+          console.log(`   ⚠️ [ROBUST] Looking for: name="${creditorName}", amount="${formattedAmount.replace(" €", "")}", quote="${formattedQuote.replace("%", "")}"`);
+        }
       });
 
       // Insert new rows after template row and remove old placeholder rows
@@ -728,16 +785,23 @@ const replaceCellText = (cellXml, newText) => {
       const newTableContent =
         beforeTemplateRow + updatedRows.join("") + afterTemplateRowContent;
 
-      // Remove old placeholder rows (rows 2-8 that aren't our new rows)
-      // Remove rows with "2", "3", etc. that are placeholders
+      // Remove old placeholder rows (rows 2-8 that existed BEFORE our new rows)
+      // IMPORTANT: Only remove placeholders that are in afterTemplateRowContent, not in our newly inserted rows
       let cleanedTable = newTableContent;
+      
+      // First, identify all rows in the afterTemplateRowContent section (old placeholders)
+      const afterRows = afterTemplateRowContent.match(/<w:tr[^>]*>[\s\S]*?<\/w:tr>/g) || [];
+      
+      // Remove placeholder rows (2-8) only from the after section
       for (let i = 2; i <= 8; i++) {
-        // Find placeholder rows with this number
-        const placeholderPattern = new RegExp(
-          `<w:tr[^>]*>[\\s\\S]*?<w:t>${i}<\\/w:t>[\\s\\S]*?<\\/w:tr>`,
-          "g"
-        );
-        cleanedTable = cleanedTable.replace(placeholderPattern, "");
+        afterRows.forEach((row) => {
+          // Check if this row contains the placeholder number in the first cell
+          const firstCellMatch = row.match(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/);
+          if (firstCellMatch && firstCellMatch[1].includes(`<w:t>${i}</w:t>`)) {
+            // This is a placeholder row, remove it
+            cleanedTable = cleanedTable.replace(row, "");
+          }
+        });
       }
 
       // Reconstruct final XML
@@ -754,6 +818,49 @@ const replaceCellText = (cellXml, newText) => {
       console.log(
         `✅ [ROBUST] Table populated with ${creditorData.length} creditor rows and reinserted correctly`
       );
+
+      // Debug: Verify rows are in final XML
+      creditorData.forEach((creditor, index) => {
+        const rowNum = index + 1;
+        const creditorName =
+          creditor.creditor_name ||
+          creditor.name ||
+          creditor.sender_name ||
+          `Gläubiger ${rowNum}`;
+        const creditorAmount =
+          creditor.debt_amount ||
+          creditor.final_amount ||
+          creditor.original_amount ||
+          creditor.amount ||
+          creditor.claim_amount ||
+          0;
+        const formattedAmount =
+          this.formatGermanCurrencyNoSymbol(creditorAmount);
+        const creditorQuote =
+          totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+        const formattedQuote = `${creditorQuote
+          .toFixed(2)
+          .replace(".", ",")}%`;
+
+        // Check for both escaped and unescaped versions
+        const escapedName = creditorName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const nameInFinal = result.includes(creditorName) || result.includes(escapedName);
+        const amountInFinal = result.includes(formattedAmount) || result.includes(formattedAmount.replace(".", ","));
+        const quoteInFinal = result.includes(formattedQuote.replace("%", "")) || result.includes(formattedQuote.replace("%", "").replace(".", ","));
+
+        console.log(
+          `   🔍 [ROBUST] Final XML check Row ${rowNum}: name=${nameInFinal ? "✅" : "❌"}, amount=${amountInFinal ? "✅" : "❌"}, quote=${quoteInFinal ? "✅" : "❌"}`
+        );
+        
+        if (!nameInFinal || !amountInFinal || !quoteInFinal) {
+          // Extract table content for debugging
+          const tableMatch = result.match(/<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/);
+          if (tableMatch) {
+            const tableContent = tableMatch[0];
+            console.log(`   ⚠️ [ROBUST] Table content preview (first 1000 chars): ${tableContent.substring(0, 1000)}`);
+          }
+        }
+      });
 
       console.log(
         `✅ [ROBUST] Table populated with ${creditorData.length} creditor rows`
