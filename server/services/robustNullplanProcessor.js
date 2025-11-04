@@ -8,95 +8,95 @@ const { formatAddress } = require("../utils/addressFormatter");
  * Uses exact XML patterns identified from template analysis
  */
 class RobustNullplanProcessor {
-  constructor() {
+    constructor() {
     this.templatePath = path.join(
       __dirname,
       "../templates/Nullplan_Text_Template.docx"
     );
     this.outputDir = path.join(__dirname, "../documents");
+        
+        // Create output directory if it doesn't exist
+        if (!fs.existsSync(this.outputDir)) {
+            fs.mkdirSync(this.outputDir, { recursive: true });
+        }
 
-    // Create output directory if it doesn't exist
-    if (!fs.existsSync(this.outputDir)) {
-      fs.mkdirSync(this.outputDir, { recursive: true });
-    }
-
-    // Load exact template mapping from analysis
-    this.templateMapping = {
-      "Adresse des Creditors": {
+        // Load exact template mapping from analysis
+        this.templateMapping = {
+            "Adresse des Creditors": {
         type: "xml-split",
         pattern:
           '&quot;Adresse</w:t></w:r><w:r><w:rPr><w:spacing w:val="-7"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>des</w:t></w:r><w:r><w:rPr><w:spacing w:val="-6"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val="-2"/></w:rPr><w:t>Creditors&quot;',
-      },
-      "Aktenzeichen der Forderung": {
+            },
+            "Aktenzeichen der Forderung": {
         type: "xml-split",
         pattern:
           '&quot;Aktenzeichen der</w:t></w:r><w:r><w:rPr><w:spacing w:val="40"/><w:sz w:val="22"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Forderung &quot;',
-      },
-      "Schuldsumme Insgesamt": {
+            },
+            "Schuldsumme Insgesamt": {
         type: "xml-split",
         pattern:
           '&quot;Schuldsumme</w:t></w:r><w:r><w:rPr><w:spacing w:val="-3"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Insgesamt&quot;',
-      },
-      "Heutiges Datum": {
+            },
+            "Heutiges Datum": {
         type: "xml-split",
         pattern:
           '&quot;Heutiges </w:t></w:r><w:r><w:rPr><w:spacing w:val="-2"/><w:sz w:val="20"/></w:rPr><w:t>Datum&quot;',
-      },
-      "Mandant Name": {
+            },
+            "Mandant Name": {
         type: "xml-split",
         pattern:
           '&quot;Mandant</w:t></w:r><w:r><w:rPr><w:spacing w:val="-1"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Name&quot;',
-      },
-      "Datum in 14 Tagen": {
+            },
+            "Datum in 14 Tagen": {
         type: "xml-split",
         pattern:
           '&quot;Datum</w:t></w:r><w:r><w:rPr><w:spacing w:val="-5"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>in</w:t></w:r><w:r><w:rPr><w:spacing w:val="-5"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>14</w:t></w:r><w:r><w:rPr><w:spacing w:val="-5"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:spacing w:val="-2"/></w:rPr><w:t>Tagen&quot;',
-      },
-      "Name Mandant XML-1": {
+            },
+            "Name Mandant XML-1": {
         type: "xml-split",
         pattern:
           '&quot;Name</w:t></w:r><w:r><w:rPr><w:spacing w:val="-8"/><w:sz w:val="22"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Mandant&quot;',
-      },
-      "Name Mandant XML-2": {
+            },
+            "Name Mandant XML-2": {
         type: "xml-split",
         pattern:
           '&quot;Name</w:t></w:r><w:r><w:rPr><w:spacing w:val="-4"/></w:rPr><w:t> </w:t></w:r><w:r><w:rPr/><w:t>Mandant&quot;',
       },
-    };
+        };
 
-    // Simple variables that use standard quoted patterns
-    this.simpleVariables = [
-      "Name Mandant",
-      "Forderungssumme",
-      "Quote des Gläubigers",
-      "Forderungsnummer in der Forderungsliste",
-      "Gläuibgeranzahl",
-      "Einkommen",
-      "Geburtstag",
-      "Familienstand",
-      "Datum in 3 Monaten",
-      "Aktenzeichen",
+        // Simple variables that use standard quoted patterns
+        this.simpleVariables = [
+            "Name Mandant",
+            "Forderungssumme", 
+            "Quote des Gläubigers",
+            "Forderungsnummer in der Forderungsliste",
+            "Gläuibgeranzahl",
+            "Einkommen",
+            "Geburtstag",
+            "Familienstand",
+            "Datum in 3 Monaten",
+            "Aktenzeichen",
       "Name des Gläubigers",
-    ];
-  }
+        ];
+    }
 
-  /**
-   * Generate individual Nullplan letters for all creditors
-   */
-  async generateNullplanLettersForAllCreditors(clientData, allCreditors) {
-    try {
+    /**
+     * Generate individual Nullplan letters for all creditors
+     */
+    async generateNullplanLettersForAllCreditors(clientData, allCreditors) {
+        try {
       console.log(
         `📄 [ROBUST] Generating individual Nullplan letters for ${allCreditors.length} creditors...`
       );
 
-      if (!fs.existsSync(this.templatePath)) {
-        throw new Error(`Nullplan template not found: ${this.templatePath}`);
-      }
+            if (!fs.existsSync(this.templatePath)) {
+                throw new Error(`Nullplan template not found: ${this.templatePath}`);
+            }
 
-      const results = [];
-
-      // Calculate total debt for quota calculations
-      const totalDebt = allCreditors.reduce((sum, creditor) => {
+            const results = [];
+            
+            // Calculate total debt for quota calculations
+            const totalDebt = allCreditors.reduce((sum, creditor) => {
         return (
           sum +
           (creditor.debt_amount ||
@@ -104,30 +104,30 @@ class RobustNullplanProcessor {
             creditor.amount ||
             0)
         );
-      }, 0);
+            }, 0);
 
-      // Generate individual letter for each creditor
-      for (let i = 0; i < allCreditors.length; i++) {
-        const creditor = allCreditors[i];
-        const creditorPosition = i + 1;
-
+            // Generate individual letter for each creditor
+            for (let i = 0; i < allCreditors.length; i++) {
+                const creditor = allCreditors[i];
+                const creditorPosition = i + 1;
+                
         console.log(
           `📝 [ROBUST] Processing creditor ${creditorPosition}/${
             allCreditors.length
           }: ${creditor.sender_name || creditor.name || creditor.creditor_name}`
         );
-
-        const letterResult = await this.generateNullplanLetterForCreditor(
-          clientData,
-          creditor,
-          creditorPosition,
-          allCreditors.length,
-          totalDebt
-        );
-
-        if (letterResult.success) {
-          results.push(letterResult);
-        } else {
+                
+                const letterResult = await this.generateNullplanLetterForCreditor(
+                    clientData, 
+                    creditor, 
+                    creditorPosition, 
+                    allCreditors.length,
+                    totalDebt
+                );
+                
+                if (letterResult.success) {
+                    results.push(letterResult);
+                } else {
           console.error(
             `❌ [ROBUST] Failed to generate letter for ${
               creditor.sender_name || creditor.name || creditor.creditor_name
@@ -140,25 +140,25 @@ class RobustNullplanProcessor {
         `✅ [ROBUST] Generated ${results.length}/${allCreditors.length} individual Nullplan letters`
       );
 
-      return {
-        success: true,
-        documents: results,
-        total_generated: results.length,
+            return {
+                success: true,
+                documents: results,
+                total_generated: results.length,
         total_creditors: allCreditors.length,
-      };
-    } catch (error) {
+            };
+        } catch (error) {
       console.error("❌ [ROBUST] Error generating Nullplan letters:", error);
-      return {
-        success: false,
-        error: error.message,
+            return {
+                success: false,
+                error: error.message,
         documents: [],
-      };
+            };
+        }
     }
-  }
 
-  /**
-   * Generate Nullplan letter for a single creditor using robust pattern matching
-   */
+    /**
+     * Generate Nullplan letter for a single creditor using robust pattern matching
+     */
   async generateNullplanLetterForCreditor(
     clientData,
     creditor,
@@ -166,21 +166,21 @@ class RobustNullplanProcessor {
     totalCreditors,
     totalDebt
   ) {
-    try {
-      // Load the template
-      const templateBuffer = fs.readFileSync(this.templatePath);
-      const zip = await JSZip.loadAsync(templateBuffer);
+        try {
+            // Load the template
+            const templateBuffer = fs.readFileSync(this.templatePath);
+            const zip = await JSZip.loadAsync(templateBuffer);
       const documentXml = await zip.file("word/document.xml").async("string");
 
-      // Prepare creditor-specific replacements
-      const replacements = this.prepareCreditorSpecificReplacements(
-        clientData,
-        creditor,
-        creditorPosition,
-        totalCreditors,
-        totalDebt
-      );
-
+            // Prepare creditor-specific replacements
+            const replacements = this.prepareCreditorSpecificReplacements(
+                clientData, 
+                creditor, 
+                creditorPosition, 
+                totalCreditors, 
+                totalDebt
+            );
+            
       console.log(
         `🔄 [ROBUST] Applying ${
           Object.keys(replacements).length
@@ -212,15 +212,15 @@ class RobustNullplanProcessor {
         "═══════════════════════════════════════════════════════════════"
       );
 
-      // Apply replacements using robust pattern matching
-      let processedXml = documentXml;
-      let totalReplacements = 0;
+            // Apply replacements using robust pattern matching
+            let processedXml = documentXml;
+            let totalReplacements = 0;
 
-      // 1. First handle XML-split patterns with exact matches
+            // 1. First handle XML-split patterns with exact matches
       console.log("🎯 [ROBUST] Processing XML-split patterns...");
-      Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
-        if (replacements[variable]) {
-          const pattern = mapping.pattern;
+            Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
+                if (replacements[variable]) {
+                    const pattern = mapping.pattern;
           const replacementValue = replacements[variable];
 
           // Special logging for date variables
@@ -273,8 +273,8 @@ class RobustNullplanProcessor {
               );
             }
           }
-
-          if (processedXml.includes(pattern)) {
+                    
+                    if (processedXml.includes(pattern)) {
             const beforeReplacement = processedXml.substring(
               processedXml.indexOf(pattern),
               processedXml.indexOf(pattern) + Math.min(200, pattern.length)
@@ -301,16 +301,16 @@ class RobustNullplanProcessor {
             console.log(
               `✅ [ROBUST] XML-split pattern replaced: "${variable}"`
             );
-            totalReplacements++;
-          } else {
+                        totalReplacements++;
+                    } else {
             console.log(
               `⚠️ [ROBUST] XML-split pattern not found: "${variable}"`
             );
-            console.log(`   Expected pattern length: ${pattern.length}`);
-            console.log(`   Pattern start: ${pattern.substring(0, 50)}...`);
-          }
-        }
-      });
+                        console.log(`   Expected pattern length: ${pattern.length}`);
+                        console.log(`   Pattern start: ${pattern.substring(0, 50)}...`);
+                    }
+                }
+            });
 
       // 2. Then handle simple quoted variables
       console.log("🎯 [ROBUST] Processing simple variables...");
@@ -386,14 +386,14 @@ class RobustNullplanProcessor {
               }
             }
 
-            console.log(`✅ [ROBUST] Simple variable replaced: "${variable}"`);
-            totalReplacements++;
-          } else {
-            console.log(`⚠️ [ROBUST] Simple variable not found: "${variable}"`);
-          }
-        }
-      });
-
+                        console.log(`✅ [ROBUST] Simple variable replaced: "${variable}"`);
+                        totalReplacements++;
+                    } else {
+                        console.log(`⚠️ [ROBUST] Simple variable not found: "${variable}"`);
+                    }
+                }
+            });
+            
       console.log("🎯 [ROBUST] Fixing opening hours format...");
       const correctOpeningHours = "09.00 - 18.00 Uhr";
       let openingHoursFixed = false;
@@ -420,9 +420,22 @@ class RobustNullplanProcessor {
         console.log(`   📍 Found "Öffnungszeiten" at index ${offnungszeitenIndex}`);
         const contextAround = processedXml.substring(
           Math.max(0, offnungszeitenIndex - 200),
-          Math.min(processedXml.length, offnungszeitenIndex + 1000)
+          Math.min(processedXml.length, offnungszeitenIndex + 2000)
         );
-        console.log(`   📄 Context around Öffnungszeiten (500 chars after): ${contextAround.substring(200, 700)}`);
+        console.log(`   📄 Context around Öffnungszeiten (first 500 chars after): ${contextAround.substring(200, 700)}`);
+        console.log(`   📄 Context around Öffnungszeiten (next 500 chars): ${contextAround.substring(700, 1200)}`);
+        console.log(`   📄 Context around Öffnungszeiten (next 500 chars): ${contextAround.substring(1200, 1700)}`);
+        
+        // Extract all text content after "Mo. - Fr.:" to see what follows
+        const moFrIndex = contextAround.indexOf("Mo.");
+        if (moFrIndex !== -1) {
+          const afterMoFr = contextAround.substring(moFrIndex, Math.min(moFrIndex + 1500, contextAround.length));
+          console.log(`   📄 Full text after "Mo. - Fr.:" (1500 chars): ${afterMoFr}`);
+          
+          // Try to extract just the text content (remove XML tags)
+          const textOnly = afterMoFr.replace(/<[^>]*>/g, '');
+          console.log(`   📄 Text content only (after XML tags removed): "${textOnly.substring(0, 200)}"`);
+        }
       }
 
       // Search for the malformed time pattern "0194.00" or "138.00" or split characters
@@ -455,52 +468,81 @@ class RobustNullplanProcessor {
       }
 
       // Try multiple pattern variations
+      // Based on the XML structure: <w:t>Mo.</w:t></w:r><w:r>...<w:t> </w:t></w:r><w:r>...<w:t>-</w:t></w:r>...<w:t>Fr.:</w:t>...then time
       const openingHoursPatterns = [
-        // Pattern 1: Mo. - Fr.: followed by split characters 0 1 9 4
+        // Pattern 1: Match "Mo." - "Fr.:" then replace everything until end of paragraph or next tag
+        // This will match the structure and replace whatever comes after "Fr.:" with correct time
         {
-          name: "Mo. - Fr. with split 0194",
-          pattern: /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>)/gi,
+          name: "Mo. - Fr.: replace all following text nodes until end of paragraph",
+          pattern: /(<w:t[^>]*>Mo\.<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]*?)(<\/w:p>)/gi,
+          replaceFn: (match, prefix, timeContent, closingTag) => {
+            // Replace everything between "Fr.:" and </w:p> with the correct opening hours
+            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+          }
         },
-        // Pattern 2: Direct text "0194.00 - 138.00 Uhr"
+        // Pattern 2: Match after "Fr.:" text node, find any text nodes until "Uhr" or end of paragraph
+        {
+          name: "After Fr.: replace until Uhr or end of paragraph",
+          pattern: /(<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]*?)(<w:t[^>]*>Uhr[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>|<\/w:p>)/gi,
+          replaceFn: (match, prefix, timeContent, closingTag) => {
+            // If we found "Uhr" in the closing, keep it but replace the time part
+            if (closingTag.includes("Uhr")) {
+              // Extract the "Uhr" part and keep it
+              const uhrMatch = closingTag.match(/(<w:t[^>]*>Uhr[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>)/);
+              if (uhrMatch) {
+                return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r></w:p>`;
+              }
+            }
+            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+          }
+        },
+        // Pattern 3: Find "Fr.:" and replace everything after it until the next paragraph or specific tag
+        {
+          name: "Fr.: replace following content until paragraph end",
+          pattern: /(<w:t[^>]*>Fr\.:<\/w:t>)([\s\S]{0,1000}?)(<\/w:p>)/gi,
+          replaceFn: (match, prefix, timeContent, closingTag) => {
+            // Replace everything between "Fr.:" and </w:p>
+            return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + closingTag;
+          }
+        },
+        // Pattern 4: Match exact XML structure with split characters 0 1 9 4
+        {
+          name: "Mo. - Fr.: with split 0194 pattern",
+          pattern: /(<w:t[^>]*>Mo\.<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>[\s\S]*?<w:t[^>]*>r<\/w:t>)/gi,
+        },
+        // Pattern 5: Direct text "0194.00 - 138.00 Uhr"
         {
           name: "Direct text 0194.00 - 138.00",
           pattern: /(0194\.00\s*-\s*138\.00\s*Uhr)/gi,
         },
-        // Pattern 3: Split text with spaces "0 1 9 4 . .00 - - 1 3 8 . .00 Uh r r"
-        {
-          name: "Split text with spaces",
-          pattern: /(0\s*1\s*9\s*4\s*\.\s*\.00\s*-\s*-\s*1\s*3\s*8\s*\.\s*\.00\s*Uh\s*r\s*r)/gi,
-        },
-        // Pattern 4: After "Öffnungszeiten:" find the malformed time
-        {
-          name: "After Öffnungszeiten:",
-          pattern: /(Öffnungszeiten[\s\S]*?:[\s\S]*?Mo\.\s*-\s*Fr\.:[\s\S]*?)(0\s*1\s*9\s*4[\s\S]*?1\s*3\s*8[\s\S]*?Uhr)/gi,
-        },
-        // Pattern 5: More flexible - find any text node sequence containing 0194 or 138 followed by Uhr
-        {
-          name: "Flexible XML pattern",
-          pattern: /(<w:t[^>]*>[0O]<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s\S]*?r<\/w:t>[\s\S]*?<w:t[^>]*>r<\/w:t>)/gi,
-        },
       ];
 
-      for (const { name, pattern } of openingHoursPatterns) {
+      for (const patternConfig of openingHoursPatterns) {
+        const { name, pattern, replaceFn } = patternConfig;
         console.log(`   🔍 Trying pattern: "${name}"...`);
+        
         if (pattern.test(processedXml)) {
           const match = processedXml.match(pattern);
           console.log(`   ✅ Pattern "${name}" matched! Found ${match ? match.length : 0} occurrence(s)`);
           
-          processedXml = processedXml.replace(
-            pattern,
-            (m, prefix = "") => {
-              // If pattern has a prefix (like "Mo. - Fr.:"), keep it
-              if (prefix && prefix.trim()) {
-                return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
-              } else {
-                // Otherwise just replace the malformed time
-                return `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
+          if (replaceFn) {
+            // Use custom replace function
+            processedXml = processedXml.replace(pattern, replaceFn);
+          } else {
+            // Default replace - keep prefix if exists
+            processedXml = processedXml.replace(
+              pattern,
+              (m, prefix = "", suffix = "") => {
+                // If pattern has a prefix (like "Mo. - Fr.:"), keep it
+                if (prefix && prefix.trim()) {
+                  return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>` + (suffix || "");
+                } else {
+                  // Otherwise just replace the malformed time
+                  return `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
+                }
               }
-            }
-          );
+            );
+          }
           
           openingHoursFixed = true;
           console.log(`   ✅ [ROBUST] Opening hours fixed using pattern: "${name}"`);
@@ -635,50 +677,50 @@ class RobustNullplanProcessor {
         "═══════════════════════════════════════════════════════════════\n"
       );
 
-      // Update the document XML in the zip
+            // Update the document XML in the zip
       console.log("💾 [ROBUST] Saving processed XML to ZIP archive...");
       zip.file("word/document.xml", processedXml);
       console.log("   ✅ XML saved to ZIP");
 
-      // Generate output
+            // Generate output
       const outputBuffer = await zip.generateAsync({ type: "nodebuffer" });
-
-      // Create creditor-specific filename using correct field priority
+            
+            // Create creditor-specific filename using correct field priority
       const creditorNameForFile = (
         creditor.sender_name ||
         creditor.name ||
         creditor.creditor_name ||
         `Creditor_${creditorPosition}`
       ).replace(/[^a-zA-Z0-9\-_.]/g, "_");
-
-      // Get creditor reference for filename uniqueness
+            
+            // Get creditor reference for filename uniqueness
       const creditorRef = (
         creditor.reference_number ||
-        creditor.creditor_reference ||
-        creditor.reference ||
-        creditor.aktenzeichen ||
+                               creditor.creditor_reference || 
+                               creditor.reference || 
+                               creditor.aktenzeichen || 
         `REF_${creditorPosition}`
       ).replace(/[^a-zA-Z0-9\-_.]/g, "_");
-
-      // Always include creditor position to ensure uniqueness
+            
+            // Always include creditor position to ensure uniqueness
       const filename = `Nullplan_${
         clientData.reference || clientData.aktenzeichen
       }_${creditorNameForFile}_${creditorRef}_${creditorPosition}_${
         new Date().toISOString().split("T")[0]
       }.docx`;
-      const outputPath = path.join(this.outputDir, filename);
-
-      fs.writeFileSync(outputPath, outputBuffer);
+            const outputPath = path.join(this.outputDir, filename);
+            
+            fs.writeFileSync(outputPath, outputBuffer);
 
       console.log(
         `✅ [ROBUST] Individual Nullplan letter generated: ${filename}`
       );
 
-      return {
-        success: true,
-        filename: filename,
-        path: outputPath,
-        size: outputBuffer.length,
+            return {
+                success: true,
+                filename: filename,
+                path: outputPath,
+                size: outputBuffer.length,
         creditor_name:
           creditor.sender_name ||
           creditor.name ||
@@ -686,23 +728,23 @@ class RobustNullplanProcessor {
           `Creditor_${creditorPosition}`,
         creditor_id: creditor.id || creditorPosition,
       };
-    } catch (error) {
+        } catch (error) {
       console.error(
         "❌ [ROBUST] Error generating Nullplan letter for creditor:",
         error
       );
-      return {
-        success: false,
-        error: error.message,
+            return {
+                success: false,
+                error: error.message,
         creditor_name:
           creditor.sender_name || creditor.name || creditor.creditor_name,
-      };
+            };
+        }
     }
-  }
 
-  /**
-   * Prepare creditor-specific variable replacements
-   */
+    /**
+     * Prepare creditor-specific variable replacements
+     */
   prepareCreditorSpecificReplacements(
     clientData,
     creditor,
@@ -710,29 +752,29 @@ class RobustNullplanProcessor {
     totalCreditors,
     totalDebt
   ) {
-    // Extract creditor data
+        // Extract creditor data
     const creditorAmount =
       creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
     const creditorQuote =
       totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
-
-    // Build creditor address using correct field mapping (sender_address is primary)
+        
+        // Build creditor address using correct field mapping (sender_address is primary)
     let creditorAddress = "";
 
-    // Priority order based on actual database schema
-    if (creditor.sender_address && creditor.sender_address.trim()) {
-      creditorAddress = formatAddress(creditor.sender_address.trim());
-    } else if (creditor.address && creditor.address.trim()) {
-      creditorAddress = formatAddress(creditor.address.trim());
-    } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
-      creditorAddress = formatAddress(creditor.creditor_address.trim());
-    } else {
-      // Build from individual parts as fallback
-      const parts = [];
-      if (creditor.creditor_street || creditor.sender_street) {
-        parts.push(creditor.creditor_street || creditor.sender_street);
-      }
-      if (creditor.creditor_postal_code || creditor.sender_postal_code) {
+        // Priority order based on actual database schema
+        if (creditor.sender_address && creditor.sender_address.trim()) {
+            creditorAddress = formatAddress(creditor.sender_address.trim());
+        } else if (creditor.address && creditor.address.trim()) {
+            creditorAddress = formatAddress(creditor.address.trim());
+        } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
+            creditorAddress = formatAddress(creditor.creditor_address.trim());
+        } else {
+            // Build from individual parts as fallback
+            const parts = [];
+            if (creditor.creditor_street || creditor.sender_street) {
+                parts.push(creditor.creditor_street || creditor.sender_street);
+            }
+            if (creditor.creditor_postal_code || creditor.sender_postal_code) {
         const city = creditor.creditor_city || creditor.sender_city || "";
         parts.push(
           `${
@@ -743,9 +785,9 @@ class RobustNullplanProcessor {
 
       const builtAddress = parts.filter((p) => p && p.trim()).join(" ");
       creditorAddress = builtAddress ? formatAddress(builtAddress) : "";
-    }
+        }
 
-    // Final fallback
+        // Final fallback
     if (!creditorAddress || creditorAddress === "," || creditorAddress === "") {
       creditorAddress = `${
         creditor.sender_name ||
@@ -753,27 +795,27 @@ class RobustNullplanProcessor {
         creditor.creditor_name ||
         "Gläubiger"
       }\nAdresse nicht verfügbar`;
-    }
+        }
 
-    // Client name
+        // Client name
     const clientName =
       clientData.fullName ||
       `${clientData.firstName || ""} ${clientData.lastName || ""}`.trim() ||
       "Max Mustermann";
 
-    // Creditor name
+        // Creditor name
     const creditorName =
       creditor.sender_name ||
       creditor.name ||
       creditor.creditor_name ||
       `Creditor_${creditorPosition}`;
 
-    // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
+        // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
     const creditorReference =
       creditor.reference_number ||
-      creditor.creditor_reference ||
-      creditor.reference ||
-      `${clientData.reference || clientData.aktenzeichen}-${creditorPosition}`;
+                                creditor.creditor_reference || 
+                                creditor.reference || 
+                                `${clientData.reference || clientData.aktenzeichen}-${creditorPosition}`;
 
     // Prepare dates with detailed logging
     console.log(
@@ -812,22 +854,22 @@ class RobustNullplanProcessor {
       "═══════════════════════════════════════════════════════════════\n"
     );
 
-    const replacements = {
-      // XML-split variables (exact mapping)
-      "Adresse des Creditors": creditorAddress,
-      "Aktenzeichen der Forderung": creditorReference,
-      "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
+        const replacements = {
+            // XML-split variables (exact mapping)
+            "Adresse des Creditors": creditorAddress,
+            "Aktenzeichen der Forderung": creditorReference,
+            "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
       "Heutiges Datum": todayFormatted,
-      "Mandant Name": clientName,
+            "Mandant Name": clientName,
       "Datum in 14 Tagen": deadlineDate,
-      "Name Mandant XML-1": clientName,
-      "Name Mandant XML-2": clientName,
-
-      // Simple variables
-      "Name Mandant": clientName,
+            "Name Mandant XML-1": clientName,
+            "Name Mandant XML-2": clientName,
+            
+            // Simple variables
+            "Name Mandant": clientName,
       Forderungssumme: this.formatGermanCurrency(creditorAmount),
       "Quote des Gläubigers": `${creditorQuote.toFixed(2).replace(".", ",")}%`,
-      "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
+            "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
       Gläuibgeranzahl: totalCreditors.toString(),
       Einkommen: this.formatGermanCurrency(
         clientData.financial_data?.monthly_net_income ||
@@ -840,7 +882,7 @@ class RobustNullplanProcessor {
       ),
       "Datum in 3 Monaten": dateIn3Months,
       Aktenzeichen: `${clientData.reference || clientData.aktenzeichen}`,
-      "Name des Gläubigers": creditorName,
+            "Name des Gläubigers": creditorName,
     };
 
     console.log("📋 [ROBUST] All date replacements stored:");
@@ -852,20 +894,20 @@ class RobustNullplanProcessor {
       `   "Datum in 3 Monaten": "${replacements["Datum in 3 Monaten"]}"`
     );
     console.log(`   "Geburtstag": "${replacements["Geburtstag"]}"`);
+        
+        console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
+        console.log(`   Address: ${creditorAddress}`);
+        console.log(`   Amount: ${replacements["Forderungssumme"]}`);
+        console.log(`   Quote: ${replacements["Quote des Gläubigers"]}`);
 
-    console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
-    console.log(`   Address: ${creditorAddress}`);
-    console.log(`   Amount: ${replacements["Forderungssumme"]}`);
-    console.log(`   Quote: ${replacements["Quote des Gläubigers"]}`);
+        return replacements;
+    }
 
-    return replacements;
-  }
-
-  /**
-   * Get German marital status text
-   */
-  getMaritalStatusText(status) {
-    const statusMap = {
+    /**
+     * Get German marital status text
+     */
+    getMaritalStatusText(status) {
+        const statusMap = {
       verheiratet: "verheiratet",
       ledig: "ledig",
       geschieden: "geschieden",
@@ -911,42 +953,42 @@ class RobustNullplanProcessor {
     );
 
     return formatted;
-  }
+    }
 
-  /**
-   * Calculate deadline date (2 weeks from now)
-   */
-  calculateDeadlineDate() {
-    const deadline = new Date();
-    deadline.setDate(deadline.getDate() + 14);
+    /**
+     * Calculate deadline date (2 weeks from now)
+     */
+    calculateDeadlineDate() {
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + 14);
     return this.formatGermanDate(deadline);
-  }
+    }
 
-  /**
-   * Calculate date in specified number of months
-   */
-  calculateDateInMonths(months) {
-    const futureDate = new Date();
-    futureDate.setMonth(futureDate.getMonth() + months);
+    /**
+     * Calculate date in specified number of months
+     */
+    calculateDateInMonths(months) {
+        const futureDate = new Date();
+        futureDate.setMonth(futureDate.getMonth() + months);
     return this.formatGermanDate(futureDate);
-  }
+    }
 
-  /**
-   * Format number as German currency
-   */
-  formatGermanCurrency(amount) {
+    /**
+     * Format number as German currency
+     */
+    formatGermanCurrency(amount) {
     return new Intl.NumberFormat("de-DE", {
-      minimumFractionDigits: 2,
+            minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(amount);
-  }
+        }).format(amount);
+    }
 
-  /**
-   * Escape special regex characters
-   */
-  escapeRegex(string) {
+    /**
+     * Escape special regex characters
+     */
+    escapeRegex(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
+    }
 }
 
 module.exports = RobustNullplanProcessor;
