@@ -1378,9 +1378,23 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     // Also include creditor_review status when 7-day review has been triggered and payment received
     if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
         (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
+
+      // Filter out creditors that belong to documents marked as "not a creditor"
+      const validCreditors = (client.final_creditor_list || []).filter(creditor => {
+        // Find the document this creditor is associated with
+        const doc = client.documents.find(d =>
+          d.id === creditor.document_id ||
+          d.id === creditor.source_document_id ||
+          d.name === creditor.source_document
+        );
+
+        // Only include if document is still marked as a creditor document
+        return !doc || doc.is_creditor_document !== false;
+      });
+
       return res.json({
         workflow_status: status,
-        creditors: client.final_creditor_list || [],
+        creditors: validCreditors,
         client_confirmed: client.client_confirmed_creditors || false,
         confirmation_deadline: null
       });
