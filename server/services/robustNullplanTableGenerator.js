@@ -540,11 +540,11 @@ class RobustNullplanTableGenerator {
    */
   populateTableRows(documentXml, creditorData) {
     try {
-      console.log(
-        `🔄 [ROBUST] populateTableRows() - Processing ${creditorData.length} creditors`
-      );
-
-      // Calculate total debt for quota calculations
+      console.log(`\n═══════════════════════════════════════════════════════════════`);
+      console.log(`🔄 [ROBUST] populateTableRows() - Processing ${creditorData.length} creditors`);
+      console.log(`═══════════════════════════════════════════════════════════════`);
+  
+      // 1️⃣ Calculate total debt
       const totalDebt = creditorData.reduce((sum, creditor) => {
         return (
           sum +
@@ -556,102 +556,73 @@ class RobustNullplanTableGenerator {
             0)
         );
       }, 0);
-
-      // Find the table in the XML
+      console.log(`💰 [ROBUST] Total debt calculated: ${this.formatGermanCurrencyNoSymbol(totalDebt)} €`);
+  
+      // 2️⃣ Locate <w:tbl>
       const tableMatch = documentXml.match(/<w:tbl[^>]*>([\s\S]*?)<\/w:tbl>/);
       if (!tableMatch) {
         console.error("❌ [ROBUST] Table not found in XML!");
         return documentXml;
       }
-
       const tableContent = tableMatch[0];
-
-      // Find all table rows
       const rowMatches = tableContent.match(/<w:tr[^>]*>[\s\S]*?<\/w:tr>/g);
       if (!rowMatches || rowMatches.length === 0) {
         console.error("❌ [ROBUST] No table rows found!");
         return documentXml;
       }
-
-      // Find template row (the one with "1" in the first cell)
+  
+      // 3️⃣ Find the template row (row that contains <w:t>1</w:t> in the first cell)
       let templateRow = null;
-      let templateRowIndex = -1;
-
       for (let i = 0; i < rowMatches.length; i++) {
-        const row = rowMatches[i];
-        // Check if this row contains "<w:t>1</w:t>" in the first cell
-        // First cell should be within the first <w:tc>...</w:tc>
-        const firstCellMatch = row.match(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/);
+        const firstCellMatch = rowMatches[i].match(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/);
         if (firstCellMatch && firstCellMatch[1].includes("<w:t>1</w:t>")) {
-          templateRow = row;
-          templateRowIndex = i;
+          templateRow = rowMatches[i];
           console.log(`✅ [ROBUST] Found template row at index ${i}`);
           break;
         }
       }
-
       if (!templateRow) {
         console.error('❌ [ROBUST] Template row (with "1") not found!');
         return documentXml;
       }
-
-      // Helper function to replace text in a cell while preserving XML structure
-      const replaceCellText = (cellXml, newText) => {
-        // Strategy: Find all <w:t> nodes and replace content
-        // Priority: Replace placeholder text first, then any text node
-        let result = cellXml;
-        let replaced = false;
-
-        // First pass: Replace placeholder text (Test, numbers, empty, etc.)
-        result = result.replace(/<w:t>([^<]*)<\/w:t>/g, (match, content) => {
-          const trimmed = content.trim();
-          // Check if placeholder
-          if (
-            /^Test\s*\d*$/i.test(trimmed) ||
-            /^\d+$/.test(trimmed) ||
-            trimmed === "" ||
-            /^[\d.,\s%€]*$/.test(trimmed)
-          ) {
-            replaced = true;
-            return `<w:t>${newText}</w:t>`;
-          }
-          return match;
-        });
-
-        // Second pass: If no placeholder found, replace the FIRST <w:t> node (main text content)
-        if (!replaced) {
-          result = result.replace(/<w:t>[^<]*<\/w:t>/, `<w:t>${newText}</w:t>`);
-          replaced = true;
-        }
-
-        // Fallback: If still no replacement, add text to first empty <w:t> or create one
-        if (!result.includes(`<w:t>${newText}</w:t>`)) {
-          // Find first paragraph and add/update text
-          if (result.includes("<w:p")) {
+  
+      // 4️⃣ Helper — replace visible text in cell
+      const replaceCellText = (cellXml, newText, colIndex, rowIndex) => {
+        try {
+          let result = cellXml.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+          const match = result.match(/(<w:p[^>]*>[\s\S]*?<w:t[^>]*>)([^<]*)(<\/w:t>[\s\S]*?<\/w:p>)/);
+  
+          if (match) {
+            result = result.replace(match[0], `${match[1]}${newText}${match[3]}`);
+          } else {
             result = result.replace(
-              /(<w:p[^>]*>[\s\S]*?)(<w:t>)[^<]*(<\/w:t>)/,
-              `$1$2${newText}$3`
+              /(<w:tc[^>]*>)([\s\S]*?)(<\/w:tc>)/,
+              `$1<w:p><w:r><w:t>${newText}</w:t></w:r></w:p>$3`
             );
           }
+  
+          console.log(
+            `   🧩 [CELL DEBUG] Row ${rowIndex + 1} Col ${colIndex + 1} inserted → "${newText}"`
+          );
+  
+          const snippet = result.slice(0, 180).replace(/\n/g, "");
+          console.log(`      └─ Preview: ${snippet}`);
+          return result;
+        } catch (err) {
+          console.error(`❌ [ROBUST] replaceCellText() failed for Row ${rowIndex + 1} Col ${colIndex + 1}:`, err.message);
+          return cellXml;
         }
-
-        return result;
       };
-
-      // Extract cells from template row
+  
+      // 5️⃣ Extract template cells
       const cellMatches = templateRow.match(/<w:tc[^>]*>[\s\S]*?<\/w:tc>/g);
       if (!cellMatches || cellMatches.length < 4) {
-        console.error(
-          `❌ [ROBUST] Template row has only ${
-            cellMatches?.length || 0
-          } cells, need at least 4!`
-        );
+        console.error(`❌ [ROBUST] Template row has only ${cellMatches?.length || 0} cells, need ≥ 4!`);
         return documentXml;
       }
-
-      // Update template row for first creditor, then clone for remaining creditors
+  
+      // 6️⃣ Build new rows
       const updatedRows = [];
-
       creditorData.forEach((creditor, index) => {
         const rowNum = index + 1;
         const creditorName =
@@ -666,116 +637,63 @@ class RobustNullplanTableGenerator {
           creditor.amount ||
           creditor.claim_amount ||
           0;
-        const formattedAmount =
-          this.formatGermanCurrencyNoSymbol(creditorAmount) + " €";
-        const creditorQuote =
-          totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
-        const formattedQuote = `${creditorQuote
-          .toFixed(2)
-          .replace(".", ",")} %`;
-
-        // Clone template row and update first 4 cells
-        let clonedRow = templateRow;
-
-        // Update cells one by one - replace each cell in order to avoid conflicts
+        const formattedAmount = this.formatGermanCurrencyNoSymbol(creditorAmount) + " €";
+        const quote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
+        const formattedQuote = `${quote.toFixed(2).replace(".", ",")} %`;
+  
         const updatedCells = cellMatches.map((cell, cellIndex) => {
-          if (cellIndex === 0) {
-            return replaceCellText(cell, rowNum.toString()); // Column 1: Nr.
-          } else if (cellIndex === 1) {
-            return replaceCellText(cell, creditorName); // Column 2: Gläubiger
-          } else if (cellIndex === 2) {
-            return replaceCellText(cell, formattedAmount); // Column 3: Forderung
-          } else if (cellIndex === 3) {
-            return replaceCellText(cell, formattedQuote); // Column 4: Quote
-          } else {
-            return cell; // Keep other cells unchanged
-          }
+          if (cellIndex === 0) return replaceCellText(cell, rowNum.toString(), cellIndex, index);
+          if (cellIndex === 1) return replaceCellText(cell, creditorName, cellIndex, index);
+          if (cellIndex === 2) return replaceCellText(cell, formattedAmount, cellIndex, index);
+          if (cellIndex === 3) return replaceCellText(cell, formattedQuote, cellIndex, index);
+          return cell;
         });
-
-        // Reconstruct row: row start + updated cells + row end
-        const rowStartMatch = clonedRow.match(/^<w:tr[^>]*>/);
-        const rowStart = rowStartMatch ? rowStartMatch[0] : "<w:tr>";
-
-        // Reconstruct the row by replacing cells in order
-        let reconstructedRow = rowStart;
-        cellMatches.forEach((originalCell, idx) => {
-          reconstructedRow += updatedCells[idx];
-        });
-        reconstructedRow += "</w:tr>";
-
+  
+        let reconstructedRow = (templateRow.match(/^<w:tr[^>]*>/) || ["<w:tr>"])[0];
+        reconstructedRow += updatedCells.join("") + "</w:tr>";
+  
         updatedRows.push(reconstructedRow);
+        console.log(`✅ [ROBUST] Row ${rowNum} ready → ${creditorName} | ${formattedAmount} | ${formattedQuote}`);
+      });
+  
+      // 7️⃣ Rebuild table
+      const tableStart = documentXml.indexOf("<w:tbl");
+      const tableEnd = documentXml.indexOf("</w:tbl>", tableStart) + "</w:tbl>".length;
+      const beforeTable = documentXml.slice(0, tableStart);
+      const afterTable = documentXml.slice(tableEnd);
+      const beforeTemplate = tableContent.slice(0, tableContent.indexOf(templateRow));
+      const afterTemplate = tableContent.slice(tableContent.indexOf(templateRow) + templateRow.length);
+      const newTableInner = beforeTemplate + updatedRows.join("") + afterTemplate;
+  
+      const cleanedTable = newTableInner.replace(
+        /<w:tr[^>]*>[\s\S]*?<w:t>[2-8]<\/w:t>[\s\S]*?<\/w:tr>/g,
+        ""
+      );
+      const tableOpenTag = (tableContent.match(/<w:tbl[^>]*>/) || ["<w:tbl>"])[0];
+      const rebuiltTable = `${tableOpenTag}${cleanedTable}</w:tbl>`;
+      const result = beforeTable + rebuiltTable + afterTable;
+  
+      // 8️⃣ Verify inserted data
+      console.log(`📊 [ROBUST] XML length after insertion: ${result.length}`);
+      creditorData.forEach((c, i) => {
+        const foundName = result.includes(c.creditor_name);
+        const foundAmount = result.includes(this.formatGermanCurrencyNoSymbol(c.debt_amount));
         console.log(
-          `✅ [ROBUST] Row ${rowNum} prepared: ${creditorName} - ${formattedAmount} - ${formattedQuote}`
+          `   🔍 Verify Row ${i + 1}: Name ${foundName ? "✅ FOUND" : "❌ MISSING"}, Amount ${foundAmount ? "✅ FOUND" : "❌ MISSING"}`
         );
       });
-
-      // Insert new rows after template row and remove old placeholder rows
-      let result = documentXml;
-      const tableStart = result.indexOf("<w:tbl");
-      const tableEnd =
-        result.indexOf("</w:tbl>", tableStart) + "</w:tbl>".length;
-
-      // Extract table content
-      const beforeTable = result.substring(0, tableStart);
-      const tableFull = result.substring(tableStart, tableEnd);
-      const afterTable = result.substring(tableEnd);
-
-      // Find template row position in table
-      const templateRowPos = tableFull.indexOf(templateRow);
-      if (templateRowPos === -1) {
-        console.error("❌ [ROBUST] Template row not found in table!");
-        return documentXml;
-      }
-
-      // Find position after template row (we'll replace template row with first creditor row)
-      const afterTemplateRow = templateRowPos + templateRow.length;
-
-      // Replace template row with first updated row, then append remaining rows
-      const beforeTemplateRow = tableFull.substring(0, templateRowPos);
-      const afterTemplateRowContent = tableFull.substring(afterTemplateRow);
-
-      // Build new table content: before template + updated rows (including replacement of template) + after template
-      const newTableContent =
-        beforeTemplateRow + updatedRows.join("") + afterTemplateRowContent;
-
-      // Remove old placeholder rows (rows 2-8 that aren't our new rows)
-      // Remove rows with "2", "3", etc. that are placeholders
-      let cleanedTable = newTableContent;
-      for (let i = 2; i <= 8; i++) {
-        // Find placeholder rows with this number
-        const placeholderPattern = new RegExp(
-          `<w:tr[^>]*>[\\s\\S]*?<w:t>${i}<\\/w:t>[\\s\\S]*?<\\/w:tr>`,
-          "g"
-        );
-        cleanedTable = cleanedTable.replace(placeholderPattern, "");
-      }
-
-      // Reconstruct final XML
-      // ✅ Properly rewrap the cleaned content inside the original <w:tbl> tags
-      const tableOpenTagMatch = tableFull.match(/<w:tbl[^>]*>/);
-      const tableCloseTag = "</w:tbl>";
-      const tableOpenTag = tableOpenTagMatch ? tableOpenTagMatch[0] : "<w:tbl>";
-
-      const rebuiltTable = `${tableOpenTag}${cleanedTable}${tableCloseTag}`;
-
-      // Replace the entire old table in the document with the rebuilt one
-      result = result.replace(/<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/, rebuiltTable);
-
-      console.log(
-        `✅ [ROBUST] Table populated with ${creditorData.length} creditor rows and reinserted correctly`
-      );
-
-      console.log(
-        `✅ [ROBUST] Table populated with ${creditorData.length} creditor rows`
-      );
-
+  
+      console.log(`✅ [ROBUST] Table successfully rebuilt and verified.`);
+      console.log(`═══════════════════════════════════════════════════════════════`);
       return result;
+  
     } catch (error) {
       console.error("❌ [ROBUST] Error populating table rows:", error.message);
       console.error("   Stack:", error.stack);
       return documentXml;
     }
   }
+  
 
   /**
    * Escape special regex characters
