@@ -917,7 +917,20 @@ class NewWordTemplateProcessor {
     cleanCreditorAddress(address, creditorName) {
         if (!address || !creditorName) return address;
 
-        // Remove creditor name from beginning of address if present
+        // Handle formatted addresses (with \n line breaks)
+        if (address.includes('\n')) {
+            const lines = address.split('\n');
+            const firstLine = lines[0].trim().toLowerCase();
+            const nameLower = creditorName.toLowerCase().trim();
+
+            // If first line is the creditor name, remove it
+            if (firstLine === nameLower || firstLine.startsWith(nameLower)) {
+                // Return all lines except the first one
+                return lines.slice(1).join('\n').trim();
+            }
+        }
+
+        // Handle single-line addresses
         const addressLower = address.toLowerCase().trim();
         const nameLower = creditorName.toLowerCase().trim();
 
