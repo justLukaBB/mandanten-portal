@@ -187,59 +187,30 @@ class RobustNullplanProcessor {
                 }
             });
             
-            // 3. Fix opening hours format (Öffnungszeiten)
-            // The template has "0194.00 - 138.00 Uhr" (characters split) which should be "09:00 - 18:00 Uhr"
             console.log('🎯 [ROBUST] Fixing opening hours format...');
-            const correctOpeningHours = '09:00 - 18:00 Uhr';
-            let openingHoursFixed = false;
-            
-            // Find the pattern where "Mo. - Fr.:" is followed by malformed time
-            // Look for the sequence of text nodes containing "0194.00 - 138.00 Uhr" characters
-            // Pattern: Find "Mo. - Fr.:" then find all text runs until we find "0194.00" or "0 1 9 4" pattern
-            const openingHoursPattern = /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>0<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.<\/w:t>[\s\S]*?<w:t[^>]*>\.00<\/w:t>[\s\S]*?<w:t[^>]*>[\s-]*<\/w:t>[\s\S]*?<w:t[^>]*>[\s-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.<\/w:t>[\s\S]*?<w:t[^>]*>\.00<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s]*r<\/w:t>[\s\S]*?<w:t[^>]*>r<\/w:t>)/gi;
-            
-            if (openingHoursPattern.test(processedXml)) {
-                processedXml = processedXml.replace(openingHoursPattern, (match, prefix, malformedTimePart) => {
-                    // Replace the malformed time part with correct format
-                    // Keep the prefix ("Mo. - Fr.:") and add the correct time
-                    return prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`;
-                });
-                openingHoursFixed = true;
-                console.log(`✅ [ROBUST] Opening hours fixed (XML pattern match)`);
-                totalReplacements++;
-            } else {
-                // Fallback: Try to find just the malformed time pattern and replace it
-                const malformedTimePattern = /(<w:t[^>]*>0<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>9<\/w:t>[\s\S]*?<w:t[^>]*>4<\/w:t>[\s\S]*?<w:t[^>]*>\.<\/w:t>[\s\S]*?<w:t[^>]*>\.00<\/w:t>[\s\S]*?<w:t[^>]*>[\s-]*<\/w:t>[\s\S]*?<w:t[^>]*>[\s-]*<\/w:t>[\s\S]*?<w:t[^>]*>1<\/w:t>[\s\S]*?<w:t[^>]*>3<\/w:t>[\s\S]*?<w:t[^>]*>8<\/w:t>[\s\S]*?<w:t[^>]*>\.<\/w:t>[\s\S]*?<w:t[^>]*>\.00<\/w:t>[\s\S]*?<w:t[^>]*>Uh[\s]*r<\/w:t>[\s\S]*?<w:t[^>]*>r<\/w:t>)/gi;
-                if (malformedTimePattern.test(processedXml)) {
-                    processedXml = processedXml.replace(malformedTimePattern, `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`);
-                    openingHoursFixed = true;
-                    console.log(`✅ [ROBUST] Opening hours fixed (malformed time pattern)`);
-                    totalReplacements++;
-                }
-            }
-            
-            // Also try plain text replacement (in case it's not split in XML)
-            if (!openingHoursFixed) {
-                const textPatterns = [
-                    /0194\.00\s*-\s*138\.00\s*Uhr/gi,
-                    /0\s*1\s*9\s*4\s*\.\s*\.00\s*-\s*-\s*1\s*3\s*8\s*\.\s*\.00\s*Uh\s*r\s*r/gi
-                ];
-                
-                textPatterns.forEach((pattern, idx) => {
-                    if (pattern.test(processedXml)) {
-                        processedXml = processedXml.replace(pattern, correctOpeningHours);
-                        openingHoursFixed = true;
-                        console.log(`✅ [ROBUST] Opening hours fixed (text pattern ${idx + 1})`);
-                        totalReplacements++;
-                    }
-                });
-            }
-            
-            if (!openingHoursFixed) {
-                console.log(`⚠️ [ROBUST] Opening hours pattern not found - may need manual inspection`);
-            }
-            
-            console.log(`✅ [ROBUST] Total replacements made: ${totalReplacements}`);
+const correctOpeningHours = '09:00 - 18:00 Uhr';
+let openingHoursFixed = false;
+
+const openingHoursPattern = /(<w:t[^>]*>Mo\.\s*-\s*Fr\.:<\/w:t>[\s\S]*?)(<w:t[^>]*>[0O]\s*<\/w:t>[\s\S]*?<w:t[^>]*>1\s*<\/w:t>[\s\S]*?<w:t[^>]*>9\s*<\/w:t>[\s\S]*?<w:t[^>]*>4\s*<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>[\s\-]*<\/w:t>[\s\S]*?<w:t[^>]*>1\s*<\/w:t>[\s\S]*?<w:t[^>]*>3\s*<\/w:t>[\s\S]*?<w:t[^>]*>8\s*<\/w:t>[\s\S]*?<w:t[^>]*>\.?<\/w:t>[\s\S]*?<w:t[^>]*>0*<\/w:t>[\s\S]*?<w:t[^>]*>Uh\s*r<\/w:t>)/gi;
+
+if (openingHoursPattern.test(processedXml)) {
+    processedXml = processedXml.replace(openingHoursPattern, (m, prefix) =>
+        prefix + `<w:r><w:t xml:space="preserve">${correctOpeningHours}</w:t></w:r>`
+    );
+    openingHoursFixed = true;
+    console.log(`✅ [ROBUST] Opening hours fixed (improved pattern)`);
+    totalReplacements++;
+} else {
+    const textFallback = /(0\s*1\s*9\s*4|\b0194|\b09\s*00)[\s\S]*?(1\s*3\s*8|\b138|\b18\s*00)[\s\S]*?Uh[\s\S]*?r/gi;
+    if (textFallback.test(processedXml)) {
+        processedXml = processedXml.replace(textFallback, correctOpeningHours);
+        openingHoursFixed = true;
+        console.log(`✅ [ROBUST] Opening hours fixed (fallback pattern)`);
+        totalReplacements++;
+    } else {
+        console.log(`⚠️ [ROBUST] Opening hours pattern still not found - check template manually`);
+    }
+}
 
             // Update the document XML in the zip
             zip.file('word/document.xml', processedXml);
