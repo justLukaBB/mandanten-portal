@@ -148,11 +148,7 @@ export const PersonalPortal = ({
           setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
           setFinancialDataSubmitted(alreadySubmitted);
           setCreditorResponsePeriod(periodInfo);
-
-          const clientHasAddress = Boolean(clientData?.address);
-          const shouldShowAddressForm =
-            (shouldShowFinancialForm && !alreadySubmitted && !clientHasAddress) ||
-            (alreadySubmitted && !clientHasAddress);
+          const shouldShowAddressForm = shouldShowFinancialForm || alreadySubmitted;
 
           setShowAddressForm(shouldShowAddressForm);
         } else {
