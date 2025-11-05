@@ -126,10 +126,51 @@ function validateAktenzeichenParam(req, res, next) {
   }
 }
 
+/**
+ * Express middleware to validate clientId URL parameters
+ * ClientId can be either a UUID or an Aktenzeichen
+ * If it's an aktenzeichen, it must be URL-encoded if it contains special characters
+ *
+ * Usage: router.get('/api/clients/:clientId', validateClientIdParam, handler)
+ */
+function validateClientIdParam(req, res, next) {
+  const clientId = req.params.clientId;
+
+  if (!clientId) {
+    return res.status(400).json({
+      error: 'ClientId parameter is required'
+    });
+  }
+
+  // UUID pattern (like: 653442b8-9cc6-432c-af2a-d725e26ecc5e)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Check if it's a valid UUID
+  if (uuidRegex.test(clientId)) {
+    req.clientIdType = 'uuid';
+    next();
+    return;
+  }
+
+  // If not UUID, treat as aktenzeichen and validate
+  if (!isValidAktenzeichen(clientId)) {
+    console.warn(`⚠️ Invalid clientId format in URL parameter: ${clientId}`);
+    return res.status(400).json({
+      error: 'Invalid clientId format',
+      message: 'ClientId must be a valid UUID or aktenzeichen (3-50 chars with letters, numbers, underscore or dash only). If using aktenzeichen with special characters like "/", please URL-encode it.',
+      hint: 'Use encodeURIComponent() in JavaScript to properly encode the aktenzeichen'
+    });
+  }
+
+  req.clientIdType = 'aktenzeichen';
+  next();
+}
+
 module.exports = {
   isValidAktenzeichen,
   sanitizeAktenzeichen,
   sanitizeAktenzeichenSafe,
   validateAktenzeichenParam,
+  validateClientIdParam,
   AKTENZEICHEN_REGEX
 };
