@@ -221,7 +221,19 @@ class RobustNullplanProcessor {
             Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
                 if (replacements[variable]) {
                     const pattern = mapping.pattern;
-          const replacementValue = replacements[variable];
+          let replacementValue = replacements[variable];
+
+          // Special handling for address: convert \n to Word XML line breaks
+          if (variable === "Adresse des Creditors") {
+            // Convert newlines to Word XML line breaks for proper formatting
+            // formatAddress returns "Street\nPostalCode City" - convert \n to <w:br/>
+            // This ensures proper postal address formatting in Word
+            const originalAddress = replacementValue;
+            replacementValue = replacementValue.replace(/\n/g, '<w:br/>');
+            console.log(`   📍 [ROBUST] Address formatting:`);
+            console.log(`      📥 Original: "${originalAddress.replace(/\n/g, '\\n')}"`);
+            console.log(`      📤 With XML breaks: "${replacementValue.replace(/<w:br\/>/g, '\\n')}"`);
+          }
 
           // Special logging for date variables
           if (variable.includes("Datum") || variable.includes("Geburtstag")) {
