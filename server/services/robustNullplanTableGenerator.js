@@ -596,10 +596,24 @@ class RobustNullplanTableGenerator {
       }
 
   // ✅ FIXED: replaceCellText() that preserves design and ensures visible text
-const replaceCellText = (cellXml, newText) => {
+const replaceCellText = (cellXml, newText, cellIndex = -1) => {
     try {
+      // For creditor name cells (cellIndex === 1), optimize text to reduce unnecessary wrapping
+      let processedText = newText;
+      if (cellIndex === 1) {
+        // Replace soft hyphens (U+00AD) with regular hyphens to prevent unnecessary breaks
+        processedText = processedText.replace(/\u00AD/g, '-');
+        // Replace multiple spaces with single space to prevent spacing issues
+        processedText = processedText.replace(/\s+/g, ' ');
+        // Trim any leading/trailing whitespace
+        processedText = processedText.trim();
+        // Note: Word will handle natural wrapping based on cell width
+        // By removing soft hyphens and normalizing spaces, we allow Word to wrap more naturally
+        // This should prevent breaking at every hyphen and reduce empty space
+      }
+      
       // Escape special XML characters in newText (but preserve existing structure)
-      const escapedText = newText
+      const escapedText = processedText
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
@@ -608,6 +622,27 @@ const replaceCellText = (cellXml, newText) => {
       // This preserves cell properties (w:tcPr) and paragraph properties (w:pPr)
       
       let result = cellXml;
+      
+      // For creditor name cells (cellIndex === 1), ensure cell width is properly set
+      // This helps prevent unnecessary wrapping and empty space
+      if (cellIndex === 1) {
+        // Check if cell has w:tcPr (cell properties)
+        const cellPrMatch = result.match(/<w:tcPr[^>]*>([\s\S]*?)<\/w:tcPr>/);
+        if (cellPrMatch) {
+          // Ensure cell width is set (if not already present, we'll let Word handle it)
+          // The key is to ensure text flows naturally without forced breaks
+        } else {
+          // If no w:tcPr exists, add one to ensure proper cell formatting
+          const cellStartMatch = result.match(/(<w:tc[^>]*>)/);
+          if (cellStartMatch) {
+            // Add basic cell properties after cell start tag
+            result = result.replace(
+              cellStartMatch[0],
+              `${cellStartMatch[0]}<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>`
+            );
+          }
+        }
+      }
       
       // Find all text runs in the cell
       const textRunMatches = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g) || [];
@@ -713,13 +748,13 @@ const replaceCellText = (cellXml, newText) => {
         // Update cells one by one - replace each cell in order to avoid conflicts
         const updatedCells = cellMatches.map((cell, cellIndex) => {
           if (cellIndex === 0) {
-            return replaceCellText(cell, rowNum.toString()); // Column 1: Nr.
+            return replaceCellText(cell, rowNum.toString(), cellIndex); // Column 1: Nr.
           } else if (cellIndex === 1) {
-            return replaceCellText(cell, creditorName); // Column 2: Gläubiger
+            return replaceCellText(cell, creditorName, cellIndex); // Column 2: Gläubiger
           } else if (cellIndex === 2) {
-            return replaceCellText(cell, formattedAmount); // Column 3: Forderung
+            return replaceCellText(cell, formattedAmount, cellIndex); // Column 3: Forderung
           } else if (cellIndex === 3) {
-            return replaceCellText(cell, formattedQuote); // Column 4: Quote
+            return replaceCellText(cell, formattedQuote, cellIndex); // Column 4: Quote
           } else {
             return cell; // Keep other cells unchanged
           }
