@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const Client = require('../models/Client');
 const { rateLimits } = require('../middleware/security');
+const { sanitizeAktenzeichenSafe } = require('../utils/sanitizeAktenzeichen');
 const ConditionCheckService = require('../services/conditionCheckService');
 
 const router = express.Router();
@@ -48,8 +49,8 @@ async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
 router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
   try {
     console.log('📄 Portal Webhook: Documents-Uploaded received', req.body);
-    
-    const {
+
+    let {
       client_id,
       aktenzeichen,
       uploaded_documents,
@@ -62,8 +63,16 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
       });
     }
 
+    // Sanitize aktenzeichen if provided
+    if (aktenzeichen) {
+      const sanitized = sanitizeAktenzeichenSafe(aktenzeichen);
+      if (sanitized) {
+        aktenzeichen = sanitized;
+      }
+    }
+
     // Find client
-    const client = await Client.findOne({ 
+    const client = await Client.findOne({
       $or: [
         { id: client_id },
         { aktenzeichen: aktenzeichen }
@@ -112,7 +121,107 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
       client.current_status = 'documents_processing';
     }
 
+    // ===== ITERATIVE LOOP: Check if client is in awaiting_client_confirmation status =====
+    // If yes, create new review ticket for additional documents
+    const isInConfirmationPhase = client.current_status === 'awaiting_client_confirmation' &&
+                                    client.admin_approved === true;
+
+    if (isInConfirmationPhase && documentsCount > 0) {
+      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen}`);
+
+      // Mark that additional documents were uploaded after agent review
+      client.additional_documents_uploaded_after_review = true;
+      client.additional_documents_uploaded_at = new Date();
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'additional_documents_uploaded',
+        changed_by: 'client',
+        metadata: {
+          documents_count: documentsCount,
+          upload_type: 'additional_after_review',
+          previous_status: 'awaiting_client_confirmation',
+          iteration: (client.review_iteration_count || 0) + 1
+        }
+      });
+
+      // Change status back to additional_documents_review
+      client.current_status = 'additional_documents_review';
+    }
+
     await client.save();
+
+    // ===== ITERATIVE LOOP: Create new Zendesk ticket for additional review =====
+    if (isInConfirmationPhase && documentsCount > 0) {
+      try {
+        const ZendeskService = require('../services/zendeskService');
+        const zendeskService = new ZendeskService();
+
+        if (zendeskService.isConfigured()) {
+          const newDocsList = uploaded_documents?.map((d, i) =>
+            `${i + 1}. ${d.name}`
+          ).join('\n') || 'Neue Dokumente';
+
+          const ticketResult = await zendeskService.createTicket({
+            subject: `🔄 Zusätzliche Dokumente hochgeladen: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+            content: `**🔄 ZUSÄTZLICHE DOKUMENTE NACH AGENT REVIEW**
+
+👤 **Client:** ${client.firstName} ${client.lastName}
+📧 **Email:** ${client.email}
+📁 **Aktenzeichen:** ${client.aktenzeichen}
+📅 **Hochgeladen:** ${new Date().toLocaleString('de-DE')}
+
+📊 **Situation:**
+• Status: Wartend auf Client-Bestätigung
+• Vorherige Agent-Review: Abgeschlossen am ${client.admin_approved_at?.toLocaleString('de-DE')}
+• Anzahl bereits bestätigter Gläubiger: ${(client.final_creditor_list || []).length}
+• **NEUE** Dokumente hochgeladen: ${documentsCount}
+• Review-Iteration: ${(client.review_iteration_count || 0) + 1}
+
+📄 **Neue Dokumente:**
+${newDocsList}
+
+⚠️ **AKTION ERFORDERLICH:**
+1. Bitte die neuen Dokumente im Agent Portal prüfen
+2. Neue Gläubiger extrahieren und bestätigen
+3. Diese werden zur bestehenden Gläubigerliste hinzugefügt
+4. Client erhält automatisch aktualisierte Liste zur erneuten Bestätigung
+
+🔗 **Agent Portal:** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${client.id}
+
+📋 **STATUS:** Zusätzliche Dokumente - Review erforderlich`,
+            requesterEmail: client.email,
+            tags: ['additional-documents', 'agent-review-required', 'creditor-documents', 'iterative-review'],
+            priority: 'normal'
+          });
+
+          if (ticketResult.success) {
+            console.log(`✅ New review ticket created for additional documents: ${ticketResult.ticket_id}`);
+
+            // Store new ticket
+            if (!client.zendesk_tickets) {
+              client.zendesk_tickets = [];
+            }
+            client.zendesk_tickets.push({
+              ticket_id: ticketResult.ticket_id,
+              ticket_type: 'additional_creditor_review',
+              ticket_scenario: 'additional_documents_after_confirmation',
+              status: 'open',
+              created_at: new Date()
+            });
+
+            await client.save();
+          } else {
+            console.error(`❌ Failed to create Zendesk ticket for additional documents:`, ticketResult.error);
+          }
+        } else {
+          console.log(`⚠️ Zendesk not configured - skipping ticket creation for additional documents`);
+        }
+      } catch (zendeskError) {
+        console.error(`❌ Failed to create Zendesk ticket for additional documents:`, zendeskError.message);
+      }
+    }
 
     // Check if both conditions (payment + documents) are met for 7-day review
     const conditionCheckResult = await conditionCheckService.handleDocumentUploaded(client.id);
@@ -144,8 +253,8 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
 router.post('/creditors-confirmed', rateLimits.general, async (req, res) => {
   try {
     console.log('✅ Portal Webhook: Creditors-Confirmed received', req.body);
-    
-    const {
+
+    let {
       client_id,
       aktenzeichen,
       confirmed_creditors,
@@ -156,6 +265,14 @@ router.post('/creditors-confirmed', rateLimits.general, async (req, res) => {
       return res.status(400).json({
         error: 'Missing required field: client_id or aktenzeichen'
       });
+    }
+
+    // Sanitize aktenzeichen if provided
+    if (aktenzeichen) {
+      const sanitized = sanitizeAktenzeichenSafe(aktenzeichen);
+      if (sanitized) {
+        aktenzeichen = sanitized;
+      }
     }
 
     if (!confirmed_creditors || !Array.isArray(confirmed_creditors)) {
