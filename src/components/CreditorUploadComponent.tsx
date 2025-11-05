@@ -353,7 +353,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {!showingCreditorConfirmation && documents.length > 0 && (
         <div className="mt-6 space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">Zuvor hochgeladene Dokumentes</h4>
+          <h4 className="text-sm font-medium text-gray-900">Bereits erfolgreich hochgeladene Dokumente:</h4>
           {documents
             .filter((doc) => !uploadedFiles.some((file) => file.file.name ===  doc.filename)) // skip current files
             .map((document) => (
@@ -372,6 +372,25 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                 </div>
               </div>
             ))}
+        </div>
+      )}
+
+      {/* Success Banner at Bottom */}
+      {!showingCreditorConfirmation && documents.length > 0 && (
+        <div className="mt-8 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 rounded-lg shadow-sm">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <CheckCircleIcon className="w-6 h-6 text-green-500" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-green-800">
+                Ihre Dokumente wurden erfolgreich hochgeladen
+              </p>
+              <p className="text-xs text-green-700 mt-1">
+                {documents.length} {documents.length === 1 ? 'Dokument' : 'Dokumente'} gespeichert und werden verarbeitet
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>

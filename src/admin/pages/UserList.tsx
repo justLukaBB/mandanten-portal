@@ -73,8 +73,6 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
 
   useEffect(() => {
     fetchUsers();
-    const interval = setInterval(fetchUsers, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

@@ -70,7 +70,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -100,16 +99,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
 
   useEffect(() => {
     fetchUsers();
-    
-    let interval: NodeJS.Timeout;
-    if (autoRefresh) {
-      interval = setInterval(fetchUsers, 30000); // Refresh every 30 seconds
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [autoRefresh]);
+  }, []);
 
   useEffect(() => {
     applyFilters();
@@ -360,16 +350,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
           )}
         </div>
         <div className="flex items-center space-x-4">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Auto-Refresh (30s)</span>
-          </label>
-          
           <button
             onClick={fetchUsers}
             disabled={loading}
