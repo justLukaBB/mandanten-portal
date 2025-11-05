@@ -12,6 +12,7 @@ const config = require('./config');
 const { uploadsDir, upload } = require('./middleware/upload');
 const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
 const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
+const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
 const healthRoutes = require('./routes/health');
 const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
@@ -1124,17 +1125,29 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
 
     // Find the document by ID
     const document = client.documents.find(doc => doc.id === documentId);
-    
+
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Sanitize aktenzeichen to prevent path traversal attacks
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
+    } catch (error) {
+      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
+      return res.status(400).json({
+        error: 'Invalid aktenzeichen format',
+        message: 'The aktenzeichen contains invalid characters'
+      });
     }
 
     // Construct file path - try different possible paths
     const possiblePaths = [
       path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
+      path.join(uploadsDir, safeAktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
       path.join(uploadsDir, clientId, document.filename || document.name),
-      path.join(uploadsDir, client.aktenzeichen, document.filename || document.name),
+      path.join(uploadsDir, safeAktenzeichen, document.filename || document.name),
     ];
 
     let filePath = null;
