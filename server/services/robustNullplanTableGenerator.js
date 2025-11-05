@@ -664,6 +664,39 @@ const replaceCellText = (cellXml, newText, cellIndex = -1) => {
         if (pPrMatch) {
           console.log(`   ✅ Found w:pPr (paragraph properties):`);
           console.log(`      ${pPrMatch[0].substring(0, 200)}${pPrMatch[0].length > 200 ? '...' : ''}`);
+          
+          // Remove or reduce excessive right indentation that causes empty space
+          let updatedPPr = pPrMatch[0];
+          let needsUpdate = false;
+          
+          // Check and fix right indent
+          // Match <w:ind> tag (handles both self-closing and with closing tag)
+          const rightIndentMatch = updatedPPr.match(/<w:ind[^>]*w:right="(\d+)"[^>]*\/?>/);
+          if (rightIndentMatch) {
+            const rightIndentValue = parseInt(rightIndentMatch[1]);
+            console.log(`   ⚠️ Found excessive right indent: ${rightIndentValue} twips`);
+            
+            if (rightIndentValue > 100) {
+              // Replace the right indent value with 0 to allow full cell width usage
+              // This handles both self-closing tags <w:ind w:right="2198"/> and regular tags
+              updatedPPr = updatedPPr.replace(/w:right="\d+"/, 'w:right="0"');
+              console.log(`   🔧 Removed excessive right indent (set to 0)`);
+              needsUpdate = true;
+            }
+          }
+          
+          // Change justification from "right" to "left" for better text flow
+          if (updatedPPr.includes('w:jc w:val="right"')) {
+            updatedPPr = updatedPPr.replace(/w:jc w:val="right"/, 'w:jc w:val="left"');
+            console.log(`   🔧 Changed justification from right to left`);
+            needsUpdate = true;
+          }
+          
+          // Apply the updated paragraph properties if changes were made
+          if (needsUpdate) {
+            result = result.replace(pPrMatch[0], updatedPPr);
+            console.log(`   ✅ Updated paragraph properties applied`);
+          }
         } else {
           console.log(`   ⚠️ No w:pPr found`);
         }
