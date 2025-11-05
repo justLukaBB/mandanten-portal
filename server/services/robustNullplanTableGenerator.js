@@ -370,7 +370,9 @@ class RobustNullplanTableGenerator {
             .toFixed(2)
             .replace(".", ",")}%`;
 
-          const nameInResult = processedXml.includes(creditorName);
+          // Check for creditor name - also account for non-breaking hyphen (U+2011) used in cells
+          const nameWithNonBreakingHyphen = creditorName.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+          const nameInResult = processedXml.includes(creditorName) || processedXml.includes(nameWithNonBreakingHyphen);
           const amountInResult = processedXml.includes(formattedAmount);
           const quoteInResult = processedXml.includes(formattedQuote);
 
@@ -855,8 +857,12 @@ const replaceCellText = (cellXml, newText, cellIndex = -1) => {
         
         // Debug: Verify the row contains the expected data
         // Check for both escaped and unescaped versions
+        // Also check for non-breaking hyphen variant (U+2011) that we use in creditor name cells
         const escapedName = creditorName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const nameInRow = reconstructedRow.includes(creditorName) || reconstructedRow.includes(escapedName);
+        const nameWithNonBreakingHyphen = creditorName.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+        const nameInRow = reconstructedRow.includes(creditorName) || 
+                          reconstructedRow.includes(escapedName) || 
+                          reconstructedRow.includes(nameWithNonBreakingHyphen);
         const amountInRow = reconstructedRow.includes(formattedAmount.replace(" €", "")) || reconstructedRow.includes(formattedAmount.replace(" €", "").replace(".", ","));
         const quoteInRow = reconstructedRow.includes(formattedQuote.replace("%", "")) || reconstructedRow.includes(formattedQuote.replace("%", "").replace(".", ","));
         console.log(
