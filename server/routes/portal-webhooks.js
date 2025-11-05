@@ -89,9 +89,15 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
 
     console.log(`📋 Processing document upload for: ${client.firstName} ${client.lastName}`);
 
-    // Update client status
     const documentsCount = client.documents?.length || 0;
-    if (documentsCount > 0) {
+
+    // ===== ITERATIVE LOOP: Check if client is in awaiting_client_confirmation status =====
+    // IMPORTANT: Check BEFORE changing status!
+    const isInConfirmationPhase = client.current_status === 'awaiting_client_confirmation' &&
+                                    client.admin_approved === true;
+
+    // Update client status (but NOT if in confirmation phase - will be handled below)
+    if (documentsCount > 0 && !isInConfirmationPhase) {
       client.current_status = 'documents_uploaded';
       client.updated_at = new Date();
 
@@ -120,11 +126,6 @@ router.post('/documents-uploaded', rateLimits.general, async (req, res) => {
 
       client.current_status = 'documents_processing';
     }
-
-    // ===== ITERATIVE LOOP: Check if client is in awaiting_client_confirmation status =====
-    // If yes, create new review ticket for additional documents
-    const isInConfirmationPhase = client.current_status === 'awaiting_client_confirmation' &&
-                                    client.admin_approved === true;
 
     if (isInConfirmationPhase && documentsCount > 0) {
       console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen}`);

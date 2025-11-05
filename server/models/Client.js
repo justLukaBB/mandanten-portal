@@ -212,6 +212,7 @@ const clientSchema = new mongoose.Schema({
       'creditor_contact_initiated',
       'creditor_contact_failed',
       'awaiting_client_confirmation',
+      'additional_documents_review',
       'creditor_contact_active',
       'settlement_documents_generated',
       'settlement_plan_sent_to_creditors',
@@ -287,6 +288,11 @@ const clientSchema = new mongoose.Schema({
   client_confirmed_creditors: { type: Boolean, default: false },
   client_confirmed_at: Date,
   processing_notes: String,
+
+  // Iterative document upload tracking (additional documents after initial review)
+  additional_documents_uploaded_after_review: { type: Boolean, default: false },
+  additional_documents_uploaded_at: Date,
+  review_iteration_count: { type: Number, default: 0 }, // Track how many review cycles have been completed
   
   // Creditor contact
   creditor_contact_started: { type: Boolean, default: false },

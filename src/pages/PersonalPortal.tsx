@@ -338,34 +338,30 @@ export const PersonalPortal = ({
         {/* Previously uploaded documents viewer */}
         {/* <ClientDocumentsViewer client={client} /> */}
 
-        {/* Creditor upload component - conditional display based on workflow status and creditor confirmation */}
-        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors ? (
-          <div className={`relative ${showingCreditorConfirmation ? 'pointer-events-none' : ''}`}>
-            <div className={showingCreditorConfirmation ? 'filter blur-sm' : ''}>
-              <CreditorUploadComponent
-                client={client}
-                onUploadComplete={handleUploadComplete}
-                showingCreditorConfirmation={showingCreditorConfirmation}
-                documents={documents}
-              />
-            </div>
+        {/* Creditor upload component - ALWAYS ACTIVE (iterative loop enabled) */}
+        {client?.workflow_status !== 'completed' ? (
+          <div className="relative">
+            <CreditorUploadComponent
+              client={client}
+              onUploadComplete={handleUploadComplete}
+              showingCreditorConfirmation={showingCreditorConfirmation}
+              documents={documents}
+            />
 
-            {/* Overlay message when creditor confirmation is shown */}
+            {/* Info banner when creditor confirmation is pending */}
             {showingCreditorConfirmation && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 rounded-lg">
-                <div className="text-center p-6 max-w-md">
-                  <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Upload momentan nicht möglich
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Ihre Gläubigerliste wird gerade überprüft. Der Dokumentenupload ist während dieser Zeit gesperrt.
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Falls Sie weitere Gläubigerdokumente haben, schreiben Sie uns bitte eine E-Mail.
-                  </p>
+              <div className="mt-4 bg-blue-50 border-l-4 border-blue-400 rounded-lg p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-800">
+                      <strong className="font-semibold">💡 Weitere Dokumente hochladen:</strong> Falls Ihnen auffällt, dass noch Gläubigerbriefe fehlen, können Sie diese jederzeit hier hochladen. Nach dem Upload werden die neuen Dokumente von unserem Team geprüft und Sie erhalten eine aktualisierte Gläubigerliste zur Bestätigung.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
