@@ -598,21 +598,25 @@ class RobustNullplanTableGenerator {
   // ✅ FIXED: replaceCellText() that preserves design and ensures visible text
 const replaceCellText = (cellXml, newText, cellIndex = -1) => {
     try {
+      // For creditor name cells (cellIndex === 1), log the XML structure for debugging
+      if (cellIndex === 1) {
+        console.log(`\n📋 [ROBUST] Processing Gläubiger cell (cellIndex === 1)`);
+        console.log(`   📥 Original text: "${newText}"`);
+        console.log(`   📄 Original cell XML (first 500 chars):`);
+        console.log(`   ${cellXml.substring(0, 500)}${cellXml.length > 500 ? '...' : ''}`);
+        console.log(`   📄 Full cell XML length: ${cellXml.length} characters`);
+      }
+      
       // For creditor name cells (cellIndex === 1), optimize text to reduce unnecessary wrapping
       let processedText = newText;
       if (cellIndex === 1) {
-        // Replace soft hyphens (U+00AD) with regular hyphens to prevent unnecessary breaks
         processedText = processedText.replace(/\u00AD/g, '-');
-        // Replace multiple spaces with single space to prevent spacing issues
         processedText = processedText.replace(/\s+/g, ' ');
-        // Trim any leading/trailing whitespace
         processedText = processedText.trim();
-        // Note: Word will handle natural wrapping based on cell width
-        // By removing soft hyphens and normalizing spaces, we allow Word to wrap more naturally
-        // This should prevent breaking at every hyphen and reduce empty space
+        processedText = processedText.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+        console.log(`   🔧 Processed text: "${processedText}"`);
       }
       
-      // Escape special XML characters in newText (but preserve existing structure)
       const escapedText = processedText
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -626,12 +630,23 @@ const replaceCellText = (cellXml, newText, cellIndex = -1) => {
       // For creditor name cells (cellIndex === 1), ensure cell width is properly set
       // This helps prevent unnecessary wrapping and empty space
       if (cellIndex === 1) {
+        console.log(`   🔍 Analyzing cell structure...`);
+        
         // Check if cell has w:tcPr (cell properties)
         const cellPrMatch = result.match(/<w:tcPr[^>]*>([\s\S]*?)<\/w:tcPr>/);
         if (cellPrMatch) {
-          // Ensure cell width is set (if not already present, we'll let Word handle it)
-          // The key is to ensure text flows naturally without forced breaks
+          console.log(`   ✅ Found w:tcPr (cell properties):`);
+          console.log(`      ${cellPrMatch[0].substring(0, 200)}${cellPrMatch[0].length > 200 ? '...' : ''}`);
+          
+          // Check for width settings
+          const widthMatch = cellPrMatch[0].match(/w:tcW[^>]*>/);
+          if (widthMatch) {
+            console.log(`   ✅ Found w:tcW (cell width): ${widthMatch[0]}`);
+          } else {
+            console.log(`   ⚠️ No w:tcW found in cell properties`);
+          }
         } else {
+          console.log(`   ⚠️ No w:tcPr found, adding basic cell properties...`);
           // If no w:tcPr exists, add one to ensure proper cell formatting
           const cellStartMatch = result.match(/(<w:tc[^>]*>)/);
           if (cellStartMatch) {
@@ -640,7 +655,28 @@ const replaceCellText = (cellXml, newText, cellIndex = -1) => {
               cellStartMatch[0],
               `${cellStartMatch[0]}<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>`
             );
+            console.log(`   ✅ Added w:tcPr with auto width`);
           }
+        }
+        
+        // Check for paragraph properties
+        const pPrMatch = result.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (pPrMatch) {
+          console.log(`   ✅ Found w:pPr (paragraph properties):`);
+          console.log(`      ${pPrMatch[0].substring(0, 200)}${pPrMatch[0].length > 200 ? '...' : ''}`);
+        } else {
+          console.log(`   ⚠️ No w:pPr found`);
+        }
+        
+        // Check for text runs
+        const textRuns = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g);
+        if (textRuns) {
+          console.log(`   ✅ Found ${textRuns.length} text run(s)`);
+          textRuns.forEach((run, idx) => {
+            console.log(`      Run ${idx + 1} (first 150 chars): ${run.substring(0, 150)}${run.length > 150 ? '...' : ''}`);
+          });
+        } else {
+          console.log(`   ⚠️ No text runs found`);
         }
       }
       
@@ -693,6 +729,14 @@ const replaceCellText = (cellXml, newText, cellIndex = -1) => {
         if (cellMatch) {
           result = `${cellMatch[1]}<w:p><w:r><w:t xml:space="preserve">${escapedText}</w:t></w:r></w:p>${cellMatch[3]}`;
         }
+      }
+  
+      // For creditor name cells (cellIndex === 1), log the final XML structure
+      if (cellIndex === 1) {
+        console.log(`   📤 Final cell XML (first 500 chars):`);
+        console.log(`   ${result.substring(0, 500)}${result.length > 500 ? '...' : ''}`);
+        console.log(`   📤 Final cell XML length: ${result.length} characters`);
+        console.log(`   ✅ Cell processing complete\n`);
       }
   
       return result;
