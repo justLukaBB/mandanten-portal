@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const Client = require('../models/Client');
 const { authenticateAdmin } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
+const { validateAktenzeichenParam } = require('../utils/sanitizeAktenzeichen');
 const CreditorContactService = require('../services/creditorContactService');
 const SideConversationMonitor = require('../services/sideConversationMonitor');
 
@@ -211,7 +212,7 @@ router.post('/create-ready-client', authenticateAdmin, rateLimits.general, async
 
 // Manually trigger client confirmation (simulates portal confirmation)
 // POST /api/test/creditor-contact/manual-client-confirmation/:aktenzeichen
-router.post('/manual-client-confirmation/:aktenzeichen', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.post('/manual-client-confirmation/:aktenzeichen', authenticateAdmin, rateLimits.general, validateAktenzeichenParam, async (req, res) => {
   try {
     const { aktenzeichen } = req.params;
     console.log(`🎯 Manually triggering client confirmation for ${aktenzeichen}...`);
@@ -263,7 +264,7 @@ router.post('/manual-client-confirmation/:aktenzeichen', authenticateAdmin, rate
 
 // Direct creditor contact trigger (bypasses client confirmation)
 // POST /api/test/creditor-contact/trigger-creditor-contact/:aktenzeichen
-router.post('/trigger-creditor-contact/:aktenzeichen', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.post('/trigger-creditor-contact/:aktenzeichen', authenticateAdmin, rateLimits.general, validateAktenzeichenParam, async (req, res) => {
   try {
     const { aktenzeichen } = req.params;
     console.log(`🚀 Directly triggering creditor contact for ${aktenzeichen}...`);
@@ -321,7 +322,7 @@ router.post('/trigger-creditor-contact/:aktenzeichen', authenticateAdmin, rateLi
 
 // Check monitoring status for a client
 // GET /api/test/creditor-contact/monitor-status/:aktenzeichen
-router.get('/monitor-status/:aktenzeichen', authenticateAdmin, rateLimits.general, async (req, res) => {
+router.get('/monitor-status/:aktenzeichen', authenticateAdmin, rateLimits.general, validateAktenzeichenParam, async (req, res) => {
   try {
     const { aktenzeichen } = req.params;
     console.log(`📊 Checking monitoring status for ${aktenzeichen}...`);
