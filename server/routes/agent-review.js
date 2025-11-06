@@ -630,6 +630,21 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
 
     // Update final_creditor_list to exclude non-creditors
     client.final_creditor_list = creditors;
+
+    // ===== ITERATIVE LOOP: Track review iteration =====
+    if (client.review_iteration_count === undefined) {
+      client.review_iteration_count = 0;
+    }
+    client.review_iteration_count += 1;
+
+    // Reset additional documents flag after review
+    if (client.additional_documents_uploaded_after_review) {
+      client.additional_documents_uploaded_after_review = false;
+      console.log(`🔄 Completed review iteration ${client.review_iteration_count} for ${client.aktenzeichen} (additional documents processed)`);
+    } else {
+      console.log(`📊 Completed review iteration ${client.review_iteration_count} for ${client.aktenzeichen}`);
+    }
+
     await client.save({ validateModifiedOnly: true });
 
     const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
@@ -814,16 +829,16 @@ ${finalCreditorsList}
           try {
             const clientMessage = `Sehr geehrte/r Frau/Herr ${client.lastName},
 
-wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
+wir haben Ihre ${client.review_iteration_count > 1 ? 'zusätzlich eingereichten' : 'im Mandantenportal eingereichten'} Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
 
-**📋 GLÄUBIGERLISTE:**
+**📋 GLÄUBIGERLISTE${client.review_iteration_count > 1 ? ` (Aktualisiert - Version ${client.review_iteration_count})` : ''}:**
 ${creditorsList}
 
 **Gesamtschulden:** €${totalDebt.toFixed(2)}
 
 👉 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
-Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
+${client.review_iteration_count > 1 ? '⚠️ **WICHTIG:** Falls Ihnen weitere fehlende Gläubiger auffallen, können Sie jederzeit zusätzliche Dokumente im Portal hochladen. Wir prüfen diese und senden Ihnen eine aktualisierte Liste.\n\n' : ''}Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
 
 Den Zugang zum Portal finden Sie hier: https://mandanten-portal.onrender.com/login
 
