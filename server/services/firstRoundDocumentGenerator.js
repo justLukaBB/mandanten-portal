@@ -173,74 +173,35 @@ class FirstRoundDocumentGenerator {
             
             // Additional fix for "Eini-" at end of line followed by "gungsversuchs" on new line
             // This handles cases where the hyphenation spans across XML text elements or lines
+            // Goal: Merge "Eini-" and "gungsversuchs" into "Einigungsversuchs" (one word, no hyphen, no space)
             console.log('   🔍 Fixing "Eini-" hyphenation across XML elements...');
             
             let fixesApplied = 0;
+            const beforeAll = documentXml;
             
-            // Pattern 1: "Eini-" at end of text run, followed by closing tags, then "gungsversuchs" in next run
-            // Matches: Eini-</w:t></w:r>...<w:r><w:t>gungsversuchs
-            // Replace: Einigungsversuchs</w:t></w:r>...<w:r><w:t> (remove gungsversuchs from second run)
-            const before1 = documentXml;
-            documentXml = documentXml.replace(/Eini-\s*<\/w:t><\/w:r>([\s\S]*?)<w:r[^>]*><w:t[^>]*>gungsversuchs/gi, (match, p1) => {
-                // Check if the second text run only contains "gungsversuchs" or has more content
-                const afterMatch = match.match(/<w:r[^>]*><w:t[^>]*>gungsversuchs([^<]*)<\/w:t>/);
-                if (afterMatch && afterMatch[1].trim() === '') {
-                    // Only "gungsversuchs" in the run, remove the entire run
-                    return 'Einigungsversuchs</w:t></w:r>' + p1;
-                } else {
-                    // More content after "gungsversuchs", keep the run but remove "gungsversuchs"
-                    return match.replace(/gungsversuchs/, '');
-                }
+            // Main pattern: Find "Eini-" followed by closing tags, then "gungsversuchs" in next text run
+            // Replace "Eini-" with "Einigungsversuchs" and remove "gungsversuchs" from second run
+            // This handles: <w:t>Eini-</w:t></w:r>...<w:r><w:t>gungsversuchs</w:t>
+            documentXml = documentXml.replace(/(<w:t[^>]*>)Eini-(\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs([^<]*)/gi, (match, p1, p2, p3) => {
+                // p1 = opening <w:t> tag
+                // p2 = closing tags and XML between the two text runs
+                // p3 = any text after "gungsversuchs" (like spaces or punctuation)
+                // Replace "Eini-" with "Einigungsversuchs" and keep any text that was after "gungsversuchs"
+                return p1 + 'Einigungsversuchs' + p2 + p3;
             });
-            if (documentXml !== before1) {
-                fixesApplied++;
-                console.log('   ✅ Fixed "Eini-" hyphenation (pattern 1: across text runs)');
-            }
             
-            // Pattern 2: "Eini-" with space before closing tag, then "gungsversuchs" in next run
-            const before2 = documentXml;
-            documentXml = documentXml.replace(/Eini-\s+<\/w:t><\/w:r>([\s\S]*?)<w:r[^>]*><w:t[^>]*>gungsversuchs/gi, (match, p1) => {
-                const afterMatch = match.match(/<w:r[^>]*><w:t[^>]*>gungsversuchs([^<]*)<\/w:t>/);
-                if (afterMatch && afterMatch[1].trim() === '') {
-                    return 'Einigungsversuchs</w:t></w:r>' + p1;
-                } else {
-                    return match.replace(/gungsversuchs/, '');
-                }
+            // Also handle case where "gungsversuchs" is at the very start of a text run with no following text
+            documentXml = documentXml.replace(/(<w:t[^>]*>)Eini-(\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs<\/w:t>/gi, '$1Einigungsversuchs$2</w:t>');
+            
+            // Handle case with space before closing tag
+            documentXml = documentXml.replace(/(<w:t[^>]*>)Eini-\s+(\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs([^<]*)/gi, (match, p1, p2, p3) => {
+                return p1 + 'Einigungsversuchs' + p2 + p3;
             });
-            if (documentXml !== before2) {
-                fixesApplied++;
-                console.log('   ✅ Fixed "Eini-" hyphenation (pattern 2: with space)');
-            }
             
-            // Pattern 3: "Eini-" in one text element, any XML in between, "gungsversuchs" in next
-            // This captures the opening <w:t> tag to preserve it and merges the word
-            const before3 = documentXml;
-            documentXml = documentXml.replace(/(<w:t[^>]*>)Eini-(\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs/gi, '$1Einigungsversuchs$2');
-            if (documentXml !== before3) {
+            if (documentXml !== beforeAll) {
                 fixesApplied++;
-                console.log('   ✅ Fixed "Eini-" hyphenation (pattern 3: preserving text tags)');
-            }
-            
-            // Pattern 4: Handle case where there might be a line break or paragraph break between them
-            // "Eini-" at end of paragraph, "gungsversuchs" at start of next
-            const before4 = documentXml;
-            documentXml = documentXml.replace(/Eini-\s*<\/w:t><\/w:r><\/w:p>[\s\S]*?<w:p[^>]*>[\s\S]*?<w:r[^>]*><w:t[^>]*>gungsversuchs/gi, 'Einigungsversuchs</w:t></w:r></w:p><w:p><w:r><w:t>gungsversuchs');
-            if (documentXml !== before4) {
-                fixesApplied++;
-                console.log('   ✅ Fixed "Eini-" hyphenation (pattern 4: across paragraphs)');
-            }
-            
-            // Cleanup: Remove any orphaned "gungsversuchs" at the start of a text run
-            // This handles cases where "Eini-" was fixed but "gungsversuchs" remains
-            const before5 = documentXml;
-            documentXml = documentXml.replace(/(<w:r[^>]*><w:t[^>]*>)gungsversuchs(\s)/gi, '$1$2');
-            documentXml = documentXml.replace(/(<w:r[^>]*><w:t[^>]*>)gungsversuchs<\/w:t><\/w:r>/gi, '<w:r><w:t></w:t></w:r>');
-            if (documentXml !== before5) {
-                fixesApplied++;
-                console.log('   ✅ Cleaned up orphaned "gungsversuchs" text');
-            }
-            
-            if (fixesApplied === 0) {
+                console.log('   ✅ Fixed "Eini-" hyphenation - merged into "Einigungsversuchs"');
+            } else {
                 console.log('   ℹ️ No "Eini-" hyphenation issues found across XML elements');
             }
             
