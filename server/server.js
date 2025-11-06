@@ -5548,9 +5548,19 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
               created_at: new Date()
             });
           }
-          
-          // If payment is also received, populate creditor list and schedule delayed webhook
-          if (allDocsCompleted && updatedClient.first_payment_received) {
+
+          // ===== ITERATIVE LOOP: Check if client is in confirmation phase BEFORE scheduling webhook =====
+          const clientStatus = updatedClient.current_status;
+          const inConfirmationPhase = (clientStatus === 'awaiting_client_confirmation' ||
+                                        clientStatus === 'additional_documents_review') &&
+                                       updatedClient.admin_approved === true;
+
+          if (inConfirmationPhase) {
+            console.log(`🔄 Client ${clientId} is in confirmation phase (${clientStatus}) - skipping processing-complete webhook (iterative loop active)`);
+          }
+
+          // If payment is also received AND NOT in confirmation phase, populate creditor list and schedule delayed webhook
+          if (allDocsCompleted && updatedClient.first_payment_received && !inConfirmationPhase) {
             console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
             
             // Update final creditor list
