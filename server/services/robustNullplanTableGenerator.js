@@ -370,7 +370,9 @@ class RobustNullplanTableGenerator {
             .toFixed(2)
             .replace(".", ",")}%`;
 
-          const nameInResult = processedXml.includes(creditorName);
+          // Check for creditor name - also account for non-breaking hyphen (U+2011) used in cells
+          const nameWithNonBreakingHyphen = creditorName.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+          const nameInResult = processedXml.includes(creditorName) || processedXml.includes(nameWithNonBreakingHyphen);
           const amountInResult = processedXml.includes(formattedAmount);
           const quoteInResult = processedXml.includes(formattedQuote);
 
@@ -596,10 +598,28 @@ class RobustNullplanTableGenerator {
       }
 
   // ✅ FIXED: replaceCellText() that preserves design and ensures visible text
-const replaceCellText = (cellXml, newText) => {
+const replaceCellText = (cellXml, newText, cellIndex = -1) => {
     try {
-      // Escape special XML characters in newText (but preserve existing structure)
-      const escapedText = newText
+      // For creditor name cells (cellIndex === 1), log the XML structure for debugging
+      if (cellIndex === 1) {
+        console.log(`\n📋 [ROBUST] Processing Gläubiger cell (cellIndex === 1)`);
+        console.log(`   📥 Original text: "${newText}"`);
+        console.log(`   📄 Original cell XML (first 500 chars):`);
+        console.log(`   ${cellXml.substring(0, 500)}${cellXml.length > 500 ? '...' : ''}`);
+        console.log(`   📄 Full cell XML length: ${cellXml.length} characters`);
+      }
+      
+      // For creditor name cells (cellIndex === 1), optimize text to reduce unnecessary wrapping
+      let processedText = newText;
+      if (cellIndex === 1) {
+        processedText = processedText.replace(/\u00AD/g, '-');
+        processedText = processedText.replace(/\s+/g, ' ');
+        processedText = processedText.trim();
+        processedText = processedText.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+        console.log(`   🔧 Processed text: "${processedText}"`);
+      }
+      
+      const escapedText = processedText
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
@@ -608,6 +628,92 @@ const replaceCellText = (cellXml, newText) => {
       // This preserves cell properties (w:tcPr) and paragraph properties (w:pPr)
       
       let result = cellXml;
+      
+      // For creditor name cells (cellIndex === 1), ensure cell width is properly set
+      // This helps prevent unnecessary wrapping and empty space
+      if (cellIndex === 1) {
+        console.log(`   🔍 Analyzing cell structure...`);
+        
+        // Check if cell has w:tcPr (cell properties)
+        const cellPrMatch = result.match(/<w:tcPr[^>]*>([\s\S]*?)<\/w:tcPr>/);
+        if (cellPrMatch) {
+          console.log(`   ✅ Found w:tcPr (cell properties):`);
+          console.log(`      ${cellPrMatch[0].substring(0, 200)}${cellPrMatch[0].length > 200 ? '...' : ''}`);
+          
+          // Check for width settings
+          const widthMatch = cellPrMatch[0].match(/w:tcW[^>]*>/);
+          if (widthMatch) {
+            console.log(`   ✅ Found w:tcW (cell width): ${widthMatch[0]}`);
+          } else {
+            console.log(`   ⚠️ No w:tcW found in cell properties`);
+          }
+        } else {
+          console.log(`   ⚠️ No w:tcPr found, adding basic cell properties...`);
+          // If no w:tcPr exists, add one to ensure proper cell formatting
+          const cellStartMatch = result.match(/(<w:tc[^>]*>)/);
+          if (cellStartMatch) {
+            // Add basic cell properties after cell start tag
+            result = result.replace(
+              cellStartMatch[0],
+              `${cellStartMatch[0]}<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>`
+            );
+            console.log(`   ✅ Added w:tcPr with auto width`);
+          }
+        }
+        
+        // Check for paragraph properties
+        const pPrMatch = result.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (pPrMatch) {
+          console.log(`   ✅ Found w:pPr (paragraph properties):`);
+          console.log(`      ${pPrMatch[0].substring(0, 200)}${pPrMatch[0].length > 200 ? '...' : ''}`);
+          
+          // Remove or reduce excessive right indentation that causes empty space
+          let updatedPPr = pPrMatch[0];
+          let needsUpdate = false;
+          
+          // Check and fix right indent
+          // Match <w:ind> tag (handles both self-closing and with closing tag)
+          const rightIndentMatch = updatedPPr.match(/<w:ind[^>]*w:right="(\d+)"[^>]*\/?>/);
+          if (rightIndentMatch) {
+            const rightIndentValue = parseInt(rightIndentMatch[1]);
+            console.log(`   ⚠️ Found excessive right indent: ${rightIndentValue} twips`);
+            
+            if (rightIndentValue > 100) {
+              // Replace the right indent value with 0 to allow full cell width usage
+              // This handles both self-closing tags <w:ind w:right="2198"/> and regular tags
+              updatedPPr = updatedPPr.replace(/w:right="\d+"/, 'w:right="0"');
+              console.log(`   🔧 Removed excessive right indent (set to 0)`);
+              needsUpdate = true;
+            }
+          }
+          
+          // Change justification from "right" to "left" for better text flow
+          if (updatedPPr.includes('w:jc w:val="right"')) {
+            updatedPPr = updatedPPr.replace(/w:jc w:val="right"/, 'w:jc w:val="left"');
+            console.log(`   🔧 Changed justification from right to left`);
+            needsUpdate = true;
+          }
+          
+          // Apply the updated paragraph properties if changes were made
+          if (needsUpdate) {
+            result = result.replace(pPrMatch[0], updatedPPr);
+            console.log(`   ✅ Updated paragraph properties applied`);
+          }
+        } else {
+          console.log(`   ⚠️ No w:pPr found`);
+        }
+        
+        // Check for text runs
+        const textRuns = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g);
+        if (textRuns) {
+          console.log(`   ✅ Found ${textRuns.length} text run(s)`);
+          textRuns.forEach((run, idx) => {
+            console.log(`      Run ${idx + 1} (first 150 chars): ${run.substring(0, 150)}${run.length > 150 ? '...' : ''}`);
+          });
+        } else {
+          console.log(`   ⚠️ No text runs found`);
+        }
+      }
       
       // Find all text runs in the cell
       const textRunMatches = result.match(/<w:r[^>]*>[\s\S]*?<\/w:r>/g) || [];
@@ -658,6 +764,14 @@ const replaceCellText = (cellXml, newText) => {
         if (cellMatch) {
           result = `${cellMatch[1]}<w:p><w:r><w:t xml:space="preserve">${escapedText}</w:t></w:r></w:p>${cellMatch[3]}`;
         }
+      }
+  
+      // For creditor name cells (cellIndex === 1), log the final XML structure
+      if (cellIndex === 1) {
+        console.log(`   📤 Final cell XML (first 500 chars):`);
+        console.log(`   ${result.substring(0, 500)}${result.length > 500 ? '...' : ''}`);
+        console.log(`   📤 Final cell XML length: ${result.length} characters`);
+        console.log(`   ✅ Cell processing complete\n`);
       }
   
       return result;
@@ -713,13 +827,13 @@ const replaceCellText = (cellXml, newText) => {
         // Update cells one by one - replace each cell in order to avoid conflicts
         const updatedCells = cellMatches.map((cell, cellIndex) => {
           if (cellIndex === 0) {
-            return replaceCellText(cell, rowNum.toString()); // Column 1: Nr.
+            return replaceCellText(cell, rowNum.toString(), cellIndex); // Column 1: Nr.
           } else if (cellIndex === 1) {
-            return replaceCellText(cell, creditorName); // Column 2: Gläubiger
+            return replaceCellText(cell, creditorName, cellIndex); // Column 2: Gläubiger
           } else if (cellIndex === 2) {
-            return replaceCellText(cell, formattedAmount); // Column 3: Forderung
+            return replaceCellText(cell, formattedAmount, cellIndex); // Column 3: Forderung
           } else if (cellIndex === 3) {
-            return replaceCellText(cell, formattedQuote); // Column 4: Quote
+            return replaceCellText(cell, formattedQuote, cellIndex); // Column 4: Quote
           } else {
             return cell; // Keep other cells unchanged
           }
@@ -743,8 +857,12 @@ const replaceCellText = (cellXml, newText) => {
         
         // Debug: Verify the row contains the expected data
         // Check for both escaped and unescaped versions
+        // Also check for non-breaking hyphen variant (U+2011) that we use in creditor name cells
         const escapedName = creditorName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const nameInRow = reconstructedRow.includes(creditorName) || reconstructedRow.includes(escapedName);
+        const nameWithNonBreakingHyphen = creditorName.replace(/([a-zA-ZäöüßÄÖÜ])-([a-zA-ZäöüßÄÖÜ])/g, '$1\u2011$2');
+        const nameInRow = reconstructedRow.includes(creditorName) || 
+                          reconstructedRow.includes(escapedName) || 
+                          reconstructedRow.includes(nameWithNonBreakingHyphen);
         const amountInRow = reconstructedRow.includes(formattedAmount.replace(" €", "")) || reconstructedRow.includes(formattedAmount.replace(" €", "").replace(".", ","));
         const quoteInRow = reconstructedRow.includes(formattedQuote.replace("%", "")) || reconstructedRow.includes(formattedQuote.replace("%", "").replace(".", ","));
         console.log(

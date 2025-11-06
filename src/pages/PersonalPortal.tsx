@@ -51,6 +51,13 @@ export const PersonalPortal = ({
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    loading?: boolean;
+    url?: string;
+    name?: string;
+    type?: string;
+  } | null>(null);
+
 
   // Default progress phases
   const defaultProgressPhases = [
@@ -223,16 +230,16 @@ export const PersonalPortal = ({
   // Add polling to check for status updates
   useEffect(() => {
     if (!clientId) return;
-    
+
     // Poll every 30 seconds when creditor confirmation or financial form is not showing
     const interval = setInterval(() => {
-      if (!showingCreditorConfirmation && !showingFinancialForm) {
+      if (!showingCreditorConfirmation && !showingFinancialForm && !previewFile) {
         fetchClientData();
       }
     }, 30000); // 30 seconds
-    
+
     return () => clearInterval(interval);
-  }, [clientId, showingCreditorConfirmation, showingFinancialForm]);
+  }, [clientId, showingCreditorConfirmation, showingFinancialForm, previewFile]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
@@ -346,6 +353,8 @@ export const PersonalPortal = ({
               onUploadComplete={handleUploadComplete}
               showingCreditorConfirmation={showingCreditorConfirmation}
               documents={documents}
+              previewFile={previewFile}
+              setPreviewFile={setPreviewFile}
             />
 
             {/* Info banner when creditor confirmation is pending */}
@@ -455,17 +464,17 @@ export const PersonalPortal = ({
               onFormSubmitted={handleFinancialFormSubmitted}
               customColors={customColors}
             />
-            
+
           </>
-        )} 
+        )}
 
         {showAddressForm && (
-            <ClientAddressForm
-              clientId={clientId!}
-              client={client}
-              customColors={customColors}
-              onFormSubmitted={() => console.log('✅ Address form submitted')}
-            />
+          <ClientAddressForm
+            clientId={clientId!}
+            client={client}
+            customColors={customColors}
+            onFormSubmitted={() => console.log('✅ Address form submitted')}
+          />
         )}
 
         {/* Financial Data Submitted Status */}

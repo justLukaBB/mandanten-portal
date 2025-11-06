@@ -1048,7 +1048,7 @@ router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.gene
 
 // Secure file serving for document review
 // GET /api/agent-review/:clientId/document/:documentId/file
-router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits.general, async (req, res) => {
+router.get('/:clientId/document/:documentId/file', rateLimits.general, async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
     const fs = require('fs');
