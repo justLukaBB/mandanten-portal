@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const Client = require("../models/Client");
 const { rateLimits } = require("../middleware/security");
+const { sanitizeAktenzeichen } = require("../utils/sanitizeAktenzeichen");
 const ZendeskService = require("../services/zendeskService");
 const CreditorContactService = require("../services/creditorContactService");
 const SideConversationMonitor = require("../services/sideConversationMonitor");
@@ -50,6 +51,32 @@ const parseZendeskPayload = (req, res, next) => {
   console.log("📦 Final parsed body:", JSON.stringify(req.body, null, 2));
   next();
 };
+
+// Helper function to sanitize aktenzeichen from webhook payload
+function sanitizeAktenzeichenFromPayload(aktenzeichen, res) {
+  if (!aktenzeichen) {
+    return null;
+  }
+
+  const original = aktenzeichen;
+  try {
+    const sanitized = sanitizeAktenzeichen(aktenzeichen);
+    if (original !== sanitized) {
+      console.log(`🔧 Sanitized aktenzeichen: "${original}" → "${sanitized}"`);
+    }
+    return sanitized;
+  } catch (error) {
+    console.error(`❌ Failed to sanitize aktenzeichen "${original}":`, error.message);
+    if (res) {
+      res.status(400).json({
+        error: "Invalid aktenzeichen format",
+        message: error.message,
+        received: original
+      });
+    }
+    return null;
+  }
+}
 
 // Zendesk Webhook: Portal Link Sent
 // Triggered when agent uses "Portal-Link senden" macro
@@ -121,6 +148,24 @@ router.post(
           address,
           geburtstag,
         } = req.body);
+      }
+
+      // Sanitize aktenzeichen: Replace / with _ and other dangerous characters
+      if (aktenzeichen) {
+        const originalAktenzeichen = aktenzeichen;
+        try {
+          aktenzeichen = sanitizeAktenzeichen(aktenzeichen);
+          if (originalAktenzeichen !== aktenzeichen) {
+            console.log(`🔧 Sanitized aktenzeichen: "${originalAktenzeichen}" → "${aktenzeichen}"`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to sanitize aktenzeichen "${originalAktenzeichen}":`, error.message);
+          return res.status(400).json({
+            error: "Invalid aktenzeichen format",
+            message: error.message,
+            received: originalAktenzeichen
+          });
+        }
       }
 
       // Validate required fields
@@ -583,6 +628,22 @@ router.post(
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
           hint: "Make sure ticket.requester.aktenzeichen is populated in Zendesk webhook",
+        });
+      }
+
+      // Sanitize aktenzeichen: Replace / with _ and other dangerous characters
+      const originalAktenzeichen = aktenzeichen;
+      try {
+        aktenzeichen = sanitizeAktenzeichen(aktenzeichen);
+        if (originalAktenzeichen !== aktenzeichen) {
+          console.log(`🔧 Sanitized aktenzeichen: "${originalAktenzeichen}" → "${aktenzeichen}"`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to sanitize aktenzeichen "${originalAktenzeichen}":`, error.message);
+        return res.status(400).json({
+          error: "Invalid aktenzeichen format",
+          message: error.message,
+          received: originalAktenzeichen
         });
       }
 
@@ -1432,13 +1493,17 @@ router.post("/start-manual-review", rateLimits.general, async (req, res) => {
   try {
     console.log("🔍 Zendesk Webhook: Start-Manual-Review received", req.body);
 
-    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+    let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
     if (!aktenzeichen) {
       return res.status(400).json({
         error: "Missing required field: aktenzeichen",
       });
     }
+
+    // Sanitize aktenzeichen
+    aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+    if (!aktenzeichen) return;
 
     const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -1506,13 +1571,17 @@ router.post("/manual-review-complete", rateLimits.general, async (req, res) => {
       req.body
     );
 
-    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+    let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
     if (!aktenzeichen) {
       return res.status(400).json({
         error: "Missing required field: aktenzeichen",
       });
     }
+
+    // Sanitize aktenzeichen
+    aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+    if (!aktenzeichen) return;
 
     const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -1974,13 +2043,17 @@ router.post(
         req.body
       );
 
-      const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+      let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
       if (!aktenzeichen) {
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
         });
       }
+
+      // Sanitize aktenzeichen
+      aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+      if (!aktenzeichen) return;
 
       const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -2109,13 +2182,17 @@ router.post(
         req.body
       );
 
-      const { aktenzeichen, confirmed_at, creditors_confirmed } = req.body;
+      let { aktenzeichen, confirmed_at, creditors_confirmed } = req.body;
 
       if (!aktenzeichen) {
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
         });
       }
+
+      // Sanitize aktenzeichen
+      aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+      if (!aktenzeichen) return;
 
       const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 

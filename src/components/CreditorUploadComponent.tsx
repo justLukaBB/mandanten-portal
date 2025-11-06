@@ -12,7 +12,21 @@ interface CreditorUploadComponentProps {
   client: Client | null;
   onUploadComplete: (documents: any[]) => void;
   showingCreditorConfirmation: boolean;
-  documents: any[]
+  documents: any[];
+  previewFile: {
+    loading?: boolean;
+    url?: string;
+    name?: string;
+    type?: string;
+  } | null;
+  setPreviewFile: React.Dispatch<
+    React.SetStateAction<{
+      loading?: boolean;
+      url?: string;
+      name?: string;
+      type?: string;
+    } | null>
+  >;
 }
 
 interface UploadedFile {
@@ -22,11 +36,19 @@ interface UploadedFile {
   status: 'uploading' | 'completed' | 'error';
 }
 
-const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ client, onUploadComplete, showingCreditorConfirmation, documents }) => {
+const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
+  client,
+  onUploadComplete,
+  showingCreditorConfirmation,
+  documents,
+  previewFile,
+  setPreviewFile,
+}) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const validateFile = (file: File): string | null => {
     // Check file size (10MB limit)
@@ -233,6 +255,58 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handlePreview = async (fileOrDocument: any) => {
+  try {
+    setPreviewFile({ loading: true });
+
+    // 🧩 Case 1: Local uploaded file (not yet saved on backend)
+    if (fileOrDocument.file instanceof File) {
+      const file = fileOrDocument.file;
+      const objectUrl = URL.createObjectURL(file);
+
+      setPreviewFile({
+        loading: false,
+        url: objectUrl,
+        name: file.name,
+        type: file.type,
+      });
+      return;
+    }
+
+    // 🧩 Case 2: Existing document from backend
+    if (!client?.id || !fileOrDocument.id) throw new Error("Invalid document reference");
+
+    const token = localStorage.getItem("token");
+    const fileUrl = `${API_BASE_URL}/api/agent-review/${client.id}/document/${fileOrDocument.id}/file`;
+
+    const res = await fetch(fileUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) throw new Error("Failed to load file");
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    const contentType = res.headers.get("Content-Type") || blob.type || "application/pdf";
+    const contentDisposition = res.headers.get("Content-Disposition");
+    const nameMatch = contentDisposition?.match(/filename="(.+)"/);
+    const fileName = nameMatch ? nameMatch[1] : `document-${fileOrDocument.id}`;
+
+    setPreviewFile({
+      loading: false,
+      url: objectUrl,
+      name: fileName,
+      type: contentType,
+    });
+  } catch (err) {
+    console.error("❌ Preview failed:", err);
+    alert("Unable to load preview. Please try again.");
+    setPreviewFile(null);
+  }
+};
+
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Dokumente hochladen</h3>
@@ -263,9 +337,8 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
 
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          showingCreditorConfirmation ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-        } ${isDragOver
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${showingCreditorConfirmation ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+          } ${isDragOver
             ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
           }`}
@@ -301,7 +374,12 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         <div className="mt-6 space-y-3">
           <h4 className="text-sm font-medium text-gray-900">Aktuell hochgeladene Dateien</h4>
           {uploadedFiles.map((uploadedFile) => (
-            <div key={uploadedFile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div
+              key={uploadedFile.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer
+              hover:bg-gray-100 transition-colors duration-200 border border-transparent hover:border-gray-200"
+              onClick={() => handlePreview(uploadedFile)}
+            >
               <div className="flex items-center flex-1 min-w-0">
                 <DocumentIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
@@ -340,7 +418,10 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                   </div>
                 )}
                 <button
-                  onClick={() => removeFile(uploadedFile.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFile(uploadedFile.id);
+                  }}
                   className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                 >
                   <XMarkIcon className="w-4 h-4" />
@@ -355,9 +436,14 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
         <div className="mt-6 space-y-3">
           <h4 className="text-sm font-medium text-gray-900">Bereits erfolgreich hochgeladene Dokumente:</h4>
           {documents
-            .filter((doc) => !uploadedFiles.some((file) => file.file.name ===  doc.filename)) // skip current files
+            .filter((doc) => !uploadedFiles.some((file) => file.file.name === doc.filename)) // skip current files
             .map((document) => (
-              <div key={document.extracted_data?.document_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div 
+                key={document.extracted_data?.document_id} 
+                onClick={() => handlePreview(document)} 
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer
+                hover:bg-gray-100 transition-colors duration-200 border border-transparent hover:border-gray-200"
+              >
                 <div className="flex items-center flex-1 min-w-0">
                   <DocumentIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
@@ -390,6 +476,59 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({ clien
                 {documents.length} {documents.length === 1 ? 'Dokument' : 'Dokumente'} gespeichert und werden verarbeitet
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-white rounded-xl w-11/12 md:w-3/4 lg:w-1/2 p-4 relative">
+            <button
+              onClick={() => setPreviewFile(null)}
+              className="absolute top-3 right-3 text-gray-600 hover:text-black"
+            >
+              ✕
+            </button>
+
+            {/* Show loader while previewFile.loading is true */}
+            {previewFile.loading ? (
+              <div className="flex flex-col items-center justify-center p-10">
+                <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                <p className="mt-4 text-sm text-gray-600">Loading preview...</p>
+              </div>
+            ) : previewFile.url ? (
+              <>
+                {previewFile.type?.includes("image") ? (
+                  <img
+                    src={previewFile.url}
+                    alt="Preview"
+                    className="max-h-[70vh] w-full object-contain"
+                  />
+                ) : previewFile.type === "application/pdf" ? (
+                  <iframe
+                    src={previewFile.url}
+                    className="w-full h-[80vh] rounded-lg"
+                    title="PDF Preview"
+                  />
+                ) : (
+                  <p className="text-center text-gray-600 p-6">
+                    Preview not supported for this file type.
+                    <br />
+                    <a
+                      href={previewFile.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      Download file
+                    </a>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-gray-600 p-6">No preview available.</p>
+            )}
           </div>
         </div>
       )}

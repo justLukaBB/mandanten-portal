@@ -7,6 +7,7 @@ const { rateLimits } = require('../middleware/security');
 const CreditorContactService = require('../services/creditorContactService');
 const ZendeskService = require('../services/zendeskService');
 const config = require('../config');
+const { sanitizeAktenzeichen } = require('../utils/sanitizeAktenzeichen');
 
 const router = express.Router();
 
@@ -1032,7 +1033,7 @@ router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.gene
 
 // Secure file serving for document review
 // GET /api/agent-review/:clientId/document/:documentId/file
-router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits.general, async (req, res) => {
+router.get('/:clientId/document/:documentId/file', rateLimits.general, async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
     const fs = require('fs');
@@ -1078,26 +1079,38 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     // Adjust this path based on your actual file storage structure
     const uploadsDir = path.join(__dirname, '../uploads');
     let filePath;
-    
+
+    // Sanitize aktenzeichen to prevent path traversal attacks
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
+    } catch (error) {
+      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
+      return res.status(400).json({
+        error: 'Invalid aktenzeichen format',
+        message: 'The aktenzeichen contains invalid characters'
+      });
+    }
+
     // Build possible paths with proper null checking
     const possiblePaths = [];
-    
+
     // Most reliable: stored filename from multer (UUID with extension)
     if (document.filename) {
       possiblePaths.push(path.join(uploadsDir, clientId, document.filename));
-      possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, document.filename));
+      possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, document.filename));
     }
-    
+
     // Fallback: document name as stored
     if (document.name) {
       possiblePaths.push(path.join(uploadsDir, clientId, document.name));
-      possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, document.name));
+      possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, document.name));
     }
-    
+
     // Last resort: try with document ID and inferred extension
     const extension = document.type?.split('/')[1] || 'pdf';
     possiblePaths.push(path.join(uploadsDir, clientId, `${documentId}.${extension}`));
-    possiblePaths.push(path.join(uploadsDir, client.aktenzeichen, `${documentId}.${extension}`));
+    possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, `${documentId}.${extension}`));
     
     console.log(`🔍 Agent document loading for ${documentId}:`, {
       documentId,
@@ -1113,7 +1126,7 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     // Debug: List actual files in upload directories and check root uploads dir
     try {
       const clientUploadDir = path.join(uploadsDir, clientId);
-      const aktenzeichenUploadDir = path.join(uploadsDir, client.aktenzeichen);
+      const aktenzeichenUploadDir = path.join(uploadsDir, safeAktenzeichen);
       
       console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
       console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');

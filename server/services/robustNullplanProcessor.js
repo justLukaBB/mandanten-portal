@@ -221,7 +221,19 @@ class RobustNullplanProcessor {
             Object.entries(this.templateMapping).forEach(([variable, mapping]) => {
                 if (replacements[variable]) {
                     const pattern = mapping.pattern;
-          const replacementValue = replacements[variable];
+          let replacementValue = replacements[variable];
+
+          // Special handling for address: convert \n to Word XML line breaks
+          if (variable === "Adresse des Creditors") {
+            // Convert newlines to Word XML line breaks for proper formatting
+            // formatAddress returns "Street\nPostalCode City" - convert \n to <w:br/>
+            // This ensures proper postal address formatting in Word
+            const originalAddress = replacementValue;
+            replacementValue = replacementValue.replace(/\n/g, '<w:br/>');
+            console.log(`   📍 [ROBUST] Address formatting:`);
+            console.log(`      📥 Original: "${originalAddress.replace(/\n/g, '\\n')}"`);
+            console.log(`      📤 With XML breaks: "${replacementValue.replace(/<w:br\/>/g, '\\n')}"`);
+          }
 
           // Special logging for date variables
           if (variable.includes("Datum") || variable.includes("Geburtstag")) {
@@ -794,23 +806,72 @@ class RobustNullplanProcessor {
     const creditorQuote =
       totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor name first
+        // Get creditor name first (before processing address)
     const creditorName =
       creditor.sender_name ||
       creditor.name ||
       creditor.creditor_name ||
       `Creditor_${creditorPosition}`;
 
-        // Build creditor address (without name) using correct field mapping (sender_address is primary)
-    let creditorAddressOnly = "";
+    console.log(`\n🔍 [ROBUST] Processing creditor address for: "${creditorName}"`);
+
+        // Build creditor address using correct field mapping (sender_address is primary)
+    let creditorAddress = "";
+
+        // Helper function to remove creditor name from address
+        const removeCreditorNameFromAddress = (address) => {
+          if (!address || !creditorName) return address;
+          
+          const originalAddress = address;
+          let cleaned = address.trim();
+          
+          console.log(`   📥 Original address: "${originalAddress.substring(0, 100)}${originalAddress.length > 100 ? '...' : ''}"`);
+          
+          // Remove creditor name if it appears at the start (with optional newline/comma)
+          if (cleaned.startsWith(creditorName)) {
+            cleaned = cleaned.substring(creditorName.length).trim();
+            cleaned = cleaned.replace(/^[\n,\-]+/, '').trim();
+            console.log(`   🔧 Removed creditor name from address (starts with name)`);
+            console.log(`   📤 Cleaned address: "${cleaned.substring(0, 100)}${cleaned.length > 100 ? '...' : ''}"`);
+            return cleaned;
+          }
+          
+          // Remove creditor name if it appears on first line (before newline)
+          const firstNewlineIndex = cleaned.indexOf('\n');
+          if (firstNewlineIndex !== -1) {
+            const firstLine = cleaned.substring(0, firstNewlineIndex).trim();
+            if (firstLine === creditorName) {
+              cleaned = cleaned.substring(firstNewlineIndex + 1).trim();
+              cleaned = cleaned.replace(/^[\n,\-]+/, '').trim();
+              console.log(`   🔧 Removed creditor name from address (first line)`);
+              console.log(`   📤 Cleaned address: "${cleaned.substring(0, 100)}${cleaned.length > 100 ? '...' : ''}"`);
+              return cleaned;
+            }
+          }
+          
+          // Remove creditor name if it appears anywhere at the start (with surrounding punctuation)
+          const nameRegex = new RegExp(`^${this.escapeRegex(creditorName)}[\\s\\n,\\-]+`, 'i');
+          if (nameRegex.test(cleaned)) {
+            cleaned = cleaned.replace(nameRegex, '').trim();
+            console.log(`   🔧 Removed creditor name from address (regex match)`);
+            console.log(`   📤 Cleaned address: "${cleaned.substring(0, 100)}${cleaned.length > 100 ? '...' : ''}"`);
+            return cleaned;
+          }
+          
+          console.log(`   ✅ No creditor name found in address - keeping as-is`);
+          return cleaned;
+        };
 
         // Priority order based on actual database schema
         if (creditor.sender_address && creditor.sender_address.trim()) {
-            creditorAddressOnly = formatAddress(creditor.sender_address.trim());
+            let rawAddress = removeCreditorNameFromAddress(creditor.sender_address.trim());
+            creditorAddress = formatAddress(rawAddress);
         } else if (creditor.address && creditor.address.trim()) {
-            creditorAddressOnly = formatAddress(creditor.address.trim());
+            let rawAddress = removeCreditorNameFromAddress(creditor.address.trim());
+            creditorAddress = formatAddress(rawAddress);
         } else if (creditor.creditor_address && creditor.creditor_address.trim()) {
-            creditorAddressOnly = formatAddress(creditor.creditor_address.trim());
+            let rawAddress = removeCreditorNameFromAddress(creditor.creditor_address.trim());
+            creditorAddress = formatAddress(rawAddress);
         } else {
             // Build from individual parts as fallback
             const parts = [];
@@ -827,43 +888,21 @@ class RobustNullplanProcessor {
       }
 
       const builtAddress = parts.filter((p) => p && p.trim()).join(" ");
-      creditorAddressOnly = builtAddress ? formatAddress(builtAddress) : "";
+      creditorAddress = builtAddress ? formatAddress(builtAddress) : "";
         }
 
-        // Clean address: Remove creditor name if already present (avoid duplicates)
-    if (creditorAddressOnly && creditorName) {
-      // Handle formatted addresses (with \n line breaks)
-      if (creditorAddressOnly.includes('\n')) {
-        const lines = creditorAddressOnly.split('\n');
-        const firstLine = lines[0].trim().toLowerCase();
-        const nameLower = creditorName.toLowerCase().trim();
-
-        // If first line is the creditor name, remove it
-        if (firstLine === nameLower || firstLine.startsWith(nameLower)) {
-          creditorAddressOnly = lines.slice(1).join('\n').trim();
+        // Final fallback
+    if (!creditorAddress || creditorAddress === "," || creditorAddress === "") {
+      creditorAddress = `Adresse nicht verfügbar`;
         }
-      } else {
-        // Handle single-line addresses
-        const addressLower = creditorAddressOnly.toLowerCase().trim();
-        const nameLower = creditorName.toLowerCase().trim();
-
-        if (addressLower.startsWith(nameLower)) {
-          creditorAddressOnly = creditorAddressOnly.substring(creditorName.length).trim();
-        }
-      }
-    }
-
-        // Combine creditor name with address (Name on first line, then address)
-    // Convert \n to Word XML line breaks
-    const creditorAddress = creditorAddressOnly
-      ? `${creditorName}\n${creditorAddressOnly}`.replace(/\n/g, '<w:br/>')
-      : `${creditorName}\nAdresse nicht verfügbar`.replace(/\n/g, '<w:br/>');
 
         // Client name
     const clientName =
       clientData.fullName ||
       `${clientData.firstName || ""} ${clientData.lastName || ""}`.trim() ||
       "Max Mustermann";
+
+        // Note: creditorName was already extracted above to check for duplicates in address
 
         // Get creditor-specific reference number (priority: reference_number > creditor_reference > fallback to client)
     const creditorReference =
@@ -950,10 +989,12 @@ class RobustNullplanProcessor {
     );
     console.log(`   "Geburtstag": "${replacements["Geburtstag"]}"`);
         
-        console.log(`💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
-        console.log(`   Address: ${creditorAddress}`);
-        console.log(`   Amount: ${replacements["Forderungssumme"]}`);
-        console.log(`   Quote: ${replacements["Quote des Gläubigers"]}`);
+        console.log(`\n💼 [ROBUST] Creditor ${creditorPosition}: ${creditorName}`);
+        console.log(`   📍 Final creditor address: "${creditorAddress}"`);
+        console.log(`   💰 Amount: ${replacements["Forderungssumme"]}`);
+        console.log(`   📊 Quote: ${replacements["Quote des Gläubigers"]}`);
+        console.log(`   📝 Creditor name for replacement: "${creditorName}"`);
+        console.log(`   📝 "Name des Gläubigers" replacement value: "${replacements["Name des Gläubigers"]}"`);
 
         return replacements;
     }
