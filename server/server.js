@@ -5448,10 +5448,40 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     // Add document to client
     client.documents = client.documents || [];
     client.documents.push(documentRecord);
-    
-    // Update client status to documents_uploaded if needed
-    if (client.current_status === 'created' || client.current_status === 'portal_access_sent') {
+
+    // ===== ITERATIVE LOOP: Check if client is in awaiting_client_confirmation status =====
+    // IMPORTANT: Check BEFORE changing status!
+    const isInConfirmationPhase = client.current_status === 'awaiting_client_confirmation' &&
+                                    client.admin_approved === true;
+
+    // Update client status to documents_uploaded if needed (but NOT if in confirmation phase)
+    if (!isInConfirmationPhase && (client.current_status === 'created' || client.current_status === 'portal_access_sent')) {
       client.current_status = 'documents_uploaded';
+    }
+
+    // If in confirmation phase, mark additional documents uploaded
+    if (isInConfirmationPhase) {
+      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id}`);
+
+      client.additional_documents_uploaded_after_review = true;
+      client.additional_documents_uploaded_at = new Date();
+      client.current_status = 'additional_documents_review';
+
+      // Add status history
+      client.status_history = client.status_history || [];
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'additional_documents_uploaded',
+        changed_by: 'client',
+        metadata: {
+          documents_count: client.documents.length,
+          upload_type: 'additional_after_review',
+          previous_status: 'awaiting_client_confirmation',
+          iteration: (client.review_iteration_count || 0) + 1,
+          document_name: originalName
+        },
+        created_at: new Date()
+      });
     }
 
     await saveClient(client);
@@ -5595,6 +5625,71 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
         }
       }
     });
+
+    // ===== ITERATIVE LOOP: Create Zendesk ticket for additional documents =====
+    if (isInConfirmationPhase) {
+      try {
+        const ZendeskService = require('./services/zendeskService');
+        const zendeskService = new ZendeskService();
+
+        if (zendeskService.isConfigured()) {
+          console.log(`🎫 Creating Zendesk ticket for additional documents upload...`);
+
+          const ticketResult = await zendeskService.createTicket({
+            subject: `🔄 Zusätzliche Dokumente hochgeladen: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+            content: `**🔄 ZUSÄTZLICHE DOKUMENTE NACH AGENT REVIEW**
+
+👤 **Client:** ${client.firstName} ${client.lastName}
+📧 **Email:** ${client.email}
+📁 **Aktenzeichen:** ${client.aktenzeichen}
+📅 **Hochgeladen:** ${new Date().toLocaleString('de-DE')}
+📄 **Dokument:** ${originalName}
+
+📊 **Situation:**
+• Status: War in Client-Bestätigung (awaiting_client_confirmation)
+• Vorherige Agent-Review: Abgeschlossen am ${client.admin_approved_at?.toLocaleString('de-DE') || 'N/A'}
+• Anzahl bereits bestätigter Gläubiger: ${(client.final_creditor_list || []).length}
+• **NEUES** Dokument hochgeladen: ${originalName}
+• Review-Iteration: ${(client.review_iteration_count || 0) + 1}
+
+⚠️ **AKTION ERFORDERLICH:**
+1. Bitte das neue Dokument im Agent Portal prüfen
+2. Neue Gläubiger extrahieren und bestätigen
+3. Diese werden zur bestehenden Gläubigerliste hinzugefügt
+4. Client erhält automatisch aktualisierte Liste zur erneuten Bestätigung
+
+🔗 **Agent Portal:** ${process.env.FRONTEND_URL || process.env.BACKEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${clientId}
+
+📋 **STATUS:** Zusätzliche Dokumente - Review erforderlich`,
+            requesterEmail: client.email,
+            tags: ['additional-documents', 'agent-review-required', 'creditor-documents', 'iterative-review'],
+            priority: 'normal'
+          });
+
+          if (ticketResult.success) {
+            console.log(`✅ Zendesk ticket created for additional documents: ${ticketResult.ticket_id}`);
+
+            // Store new ticket
+            client.zendesk_tickets = client.zendesk_tickets || [];
+            client.zendesk_tickets.push({
+              ticket_id: ticketResult.ticket_id,
+              ticket_type: 'additional_creditor_review',
+              ticket_scenario: 'additional_documents_after_confirmation',
+              status: 'open',
+              created_at: new Date()
+            });
+
+            await saveClient(client);
+          } else {
+            console.error(`❌ Failed to create Zendesk ticket:`, ticketResult.error);
+          }
+        } else {
+          console.log(`⚠️ Zendesk not configured - skipping ticket creation`);
+        }
+      } catch (zendeskError) {
+        console.error(`❌ Error creating Zendesk ticket:`, zendeskError.message);
+      }
+    }
 
     res.json({
       success: true,
