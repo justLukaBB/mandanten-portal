@@ -233,113 +233,170 @@ class FirstRoundDocumentGenerator {
                 return;
             }
             
-            // Check the next few paragraphs after the salutation for excessive spacing
-            const paragraphsToCheck = Math.min(3, paragraphs.length - salutationParagraphIndex - 1);
-            console.log(`   🔍 Checking ${paragraphsToCheck} paragraphs after salutation for spacing issues...`);
+            // First, check and fix the salutation paragraph itself for w:after spacing
+            console.log(`   🔍 Checking salutation paragraph for spacing issues...`);
+            const salutationPara = paragraphs[salutationParagraphIndex];
+            const salutationPPrMatch = salutationPara.fullMatch.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
             
             let spacingFixed = false;
             const replacements = []; // Store all replacements to apply at once
             
-            for (let i = 1; i <= paragraphsToCheck; i++) {
-                const paraIndex = salutationParagraphIndex + i;
-                if (paraIndex >= paragraphs.length) break;
+            if (salutationPPrMatch) {
+                const salutationPPrContent = salutationPPrMatch[1];
+                console.log(`   📝 Salutation paragraph pPr XML: ${salutationPPrMatch[0].substring(0, 400)}...`);
                 
-                const para = paragraphs[paraIndex];
+                // Check for w:after spacing in salutation paragraph
+                const salutationAfterMatch = salutationPPrContent.match(/w:after="(\d+)"/);
+                const salutationBeforeMatch = salutationPPrContent.match(/w:before="(\d+)"/);
+                
+                if (salutationAfterMatch) {
+                    const afterValue = parseInt(salutationAfterMatch[1]);
+                    console.log(`   ⚠️ Salutation paragraph has w:after="${afterValue}" twips`);
+                    // Remove ANY w:after spacing from salutation (should be 0)
+                    console.log(`   🔧 Removing w:after spacing from salutation paragraph (${afterValue} twips -> removed)`);
+                    let updatedSalutationXml = salutationPara.fullMatch;
+                    
+                    // Check if spacing tag has other attributes
+                    const spacingTagMatch = salutationPPrContent.match(/<w:spacing[^>]*>/);
+                    if (spacingTagMatch) {
+                        const spacingTag = spacingTagMatch[0];
+                        // Remove w:after attribute
+                        let updatedSpacingTag = spacingTag.replace(/\s*w:after="\d+"/, '');
+                        // If spacing tag only had w:after, remove the entire tag
+                        if (updatedSpacingTag === '<w:spacing>' || updatedSpacingTag === '<w:spacing/>') {
+                            // Remove the entire spacing tag
+                            updatedSalutationXml = updatedSalutationXml.replace(/<w:spacing[^>]*\/?>/, '');
+                        } else {
+                            // Replace the spacing tag with updated version
+                            updatedSalutationXml = updatedSalutationXml.replace(spacingTag, updatedSpacingTag);
+                        }
+                    } else {
+                        // Fallback: just remove w:after attribute
+                        updatedSalutationXml = updatedSalutationXml.replace(/\s*w:after="\d+"/, '');
+                    }
+                    
+                    replacements.push({
+                        original: salutationPara.fullMatch,
+                        updated: updatedSalutationXml
+                    });
+                    spacingFixed = true;
+                } else {
+                    console.log(`   ✅ Salutation paragraph has no w:after spacing`);
+                }
+                
+                if (salutationBeforeMatch) {
+                    const beforeValue = parseInt(salutationBeforeMatch[1]);
+                    console.log(`   📝 Salutation paragraph has w:before="${beforeValue}" twips`);
+                }
+            } else {
+                console.log(`   ℹ️ Salutation paragraph has no w:pPr`);
+            }
+            
+            // Find the actual body text paragraph (not contact info)
+            // Look for paragraphs containing body text indicators like "wird von uns", "geb. am", client name patterns
+            console.log(`   🔍 Searching for body text paragraph after salutation...`);
+            let bodyParagraphIndex = -1;
+            const contactInfoKeywords = ['Telefon', 'Telefax', 'e-Mail', 'Öffnungszeiten', 'Bankverbindungen', 'Aktenzeichen', 'BLZ', 'Konto-Nr'];
+            
+            for (let i = salutationParagraphIndex + 1; i < paragraphs.length && i <= salutationParagraphIndex + 10; i++) {
+                const para = paragraphs[i];
                 const paraXml = para.fullMatch;
-                let updatedParaXml = paraXml; // Track updates to this paragraph
                 
-                // Extract text to see what paragraph this is
+                // Extract text content
                 const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
                 const fullText = textMatches ? textMatches.map(m => {
                     const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
                     return textMatch ? textMatch[1] : '';
                 }).join('') : '';
                 
-                console.log(`   📄 Paragraph ${paraIndex} (first 100 chars of text): "${fullText.substring(0, 100)}..."`);
+                // Skip if it's contact info or empty
+                const isContactInfo = contactInfoKeywords.some(keyword => fullText.includes(keyword));
+                const isEmpty = !fullText.trim() || fullText.trim().length < 3;
                 
-                // Check for paragraph properties with spacing
-                const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-                
-                if (pPrMatch) {
-                    const pPrContent = pPrMatch[1];
-                    console.log(`   🔍 Found w:pPr in paragraph ${paraIndex}`);
-                    console.log(`      pPr XML: ${pPrMatch[0].substring(0, 400)}...`);
-                    
-                    // Check for spacing attributes
-                    const spacingMatch = pPrContent.match(/<w:spacing[^>]*>/);
-                    if (spacingMatch) {
-                        console.log(`   ⚠️ Found w:spacing in paragraph ${paraIndex}`);
-                        
-                        // Extract spacing values
-                        const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
-                        const afterMatch = pPrContent.match(/w:after="(\d+)"/);
-                        const lineMatch = pPrContent.match(/w:line="(\d+)"/);
-                        
-                        if (beforeMatch) {
-                            const beforeValue = parseInt(beforeMatch[1]);
-                            console.log(`      w:before="${beforeValue}" twips`);
-                            if (beforeValue > 200) { // More than ~14 points (200 twips = ~14pt)
-                                console.log(`      🔧 Excessive before spacing detected (${beforeValue} twips), reducing to 0`);
-                                updatedParaXml = updatedParaXml.replace(/w:before="\d+"/, 'w:before="0"');
-                                spacingFixed = true;
-                            }
-                        }
-                        
-                        if (afterMatch) {
-                            const afterValue = parseInt(afterMatch[1]);
-                            console.log(`      w:after="${afterValue}" twips`);
-                            if (afterValue > 200) { // More than ~14 points
-                                console.log(`      🔧 Excessive after spacing detected (${afterValue} twips), reducing to 0`);
-                                updatedParaXml = updatedParaXml.replace(/w:after="\d+"/, 'w:after="0"');
-                                spacingFixed = true;
-                            }
-                        }
-                        
-                        // Store replacement if paragraph was modified
-                        if (updatedParaXml !== paraXml) {
-                            replacements.push({
-                                original: paraXml,
-                                updated: updatedParaXml
-                            });
-                        }
-                        
-                        if (lineMatch) {
-                            const lineValue = parseInt(lineMatch[1]);
-                            console.log(`      w:line="${lineValue}" (line spacing)`);
-                        }
-                    } else {
-                        console.log(`      No w:spacing found in paragraph ${paraIndex}`);
+                if (!isContactInfo && !isEmpty) {
+                    // Check if it looks like body text (contains "wird von uns", "geb. am", or starts with client name pattern)
+                    if (fullText.includes('wird von uns') || 
+                        fullText.includes('geb. am') || 
+                        fullText.includes('wohnhaft') ||
+                        fullText.length > 50) { // Long paragraph likely body text
+                        bodyParagraphIndex = i;
+                        console.log(`   ✅ Found body text paragraph at index ${i}`);
+                        console.log(`   📄 Body text (first 150 chars): "${fullText.substring(0, 150)}..."`);
+                        break;
                     }
-                } else {
-                    console.log(`   ℹ️ No w:pPr found in paragraph ${paraIndex}`);
-                }
-                
-                // Also check if this is an empty paragraph that might be causing spacing
-                if (!fullText.trim() && i === 1) {
-                    console.log(`   ⚠️ Found empty paragraph immediately after salutation at index ${paraIndex}`);
-                    console.log(`      Empty paragraph XML: ${paraXml.substring(0, 200)}...`);
                 }
             }
             
-            // Also check the salutation paragraph itself for excessive after spacing
-            const salutationPara = paragraphs[salutationParagraphIndex];
-            const salutationPPrMatch = salutationPara.fullMatch.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-            
-            if (salutationPPrMatch) {
-                const salutationPPrContent = salutationPPrMatch[1];
-                const salutationAfterMatch = salutationPPrContent.match(/w:after="(\d+)"/);
+            // Check the body paragraph for excessive w:before spacing
+            if (bodyParagraphIndex !== -1) {
+                const bodyPara = paragraphs[bodyParagraphIndex];
+                const bodyParaXml = bodyPara.fullMatch;
+                let updatedBodyParaXml = bodyParaXml;
                 
-                if (salutationAfterMatch) {
-                    const afterValue = parseInt(salutationAfterMatch[1]);
-                    console.log(`   🔍 Salutation paragraph w:after="${afterValue}" twips`);
-                    if (afterValue > 200) {
-                        console.log(`   🔧 Excessive after spacing in salutation paragraph (${afterValue} twips), reducing to 120`);
-                        const updatedSalutationXml = salutationPara.fullMatch.replace(/w:after="\d+"/, 'w:after="120"');
-                        replacements.push({
-                            original: salutationPara.fullMatch,
-                            updated: updatedSalutationXml
-                        });
-                        spacingFixed = true;
+                const bodyPPrMatch = bodyParaXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+                
+                if (bodyPPrMatch) {
+                    const bodyPPrContent = bodyPPrMatch[1];
+                    console.log(`   🔍 Body paragraph pPr XML: ${bodyPPrMatch[0].substring(0, 400)}...`);
+                    
+                    const bodyBeforeMatch = bodyPPrContent.match(/w:before="(\d+)"/);
+                    if (bodyBeforeMatch) {
+                        const beforeValue = parseInt(bodyBeforeMatch[1]);
+                        console.log(`   ⚠️ Body paragraph has w:before="${beforeValue}" twips`);
+                        // Lower threshold - anything over 100 twips (~7 points) is excessive for body text after salutation
+                        if (beforeValue > 100) {
+                            console.log(`   🔧 Reducing w:before spacing on body paragraph (${beforeValue} twips -> 0)`);
+                            updatedBodyParaXml = updatedBodyParaXml.replace(/w:before="\d+"/, 'w:before="0"');
+                            replacements.push({
+                                original: bodyParaXml,
+                                updated: updatedBodyParaXml
+                            });
+                            spacingFixed = true;
+                        }
+                    }
+                }
+            } else {
+                console.log(`   ⚠️ Could not find body text paragraph, checking next few paragraphs...`);
+                
+                // Fallback: check next few paragraphs for spacing issues
+                const paragraphsToCheck = Math.min(5, paragraphs.length - salutationParagraphIndex - 1);
+                for (let i = 1; i <= paragraphsToCheck; i++) {
+                    const paraIndex = salutationParagraphIndex + i;
+                    if (paraIndex >= paragraphs.length) break;
+                    
+                    const para = paragraphs[paraIndex];
+                    const paraXml = para.fullMatch;
+                    let updatedParaXml = paraXml;
+                    
+                    // Extract text to see what paragraph this is
+                    const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+                    const fullText = textMatches ? textMatches.map(m => {
+                        const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                        return textMatch ? textMatch[1] : '';
+                    }).join('') : '';
+                    
+                    console.log(`   📄 Paragraph ${paraIndex} (first 100 chars): "${fullText.substring(0, 100)}..."`);
+                    
+                    // Check for paragraph properties with spacing
+                    const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+                    
+                    if (pPrMatch) {
+                        const pPrContent = pPrMatch[1];
+                        const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
+                        
+                        if (beforeMatch) {
+                            const beforeValue = parseInt(beforeMatch[1]);
+                            // Lower threshold - anything over 100 twips is excessive
+                            if (beforeValue > 100) {
+                                console.log(`   🔧 Reducing w:before spacing on paragraph ${paraIndex} (${beforeValue} twips -> 0)`);
+                                updatedParaXml = updatedParaXml.replace(/w:before="\d+"/, 'w:before="0"');
+                                replacements.push({
+                                    original: paraXml,
+                                    updated: updatedParaXml
+                                });
+                                spacingFixed = true;
+                            }
+                        }
                     }
                 }
             }
@@ -363,6 +420,11 @@ class FirstRoundDocumentGenerator {
                     spacingFixed = true;
                 }
             }
+            
+            // Add console log to identify the salutation line
+            console.log(`   📍 SALUTATION LINE IDENTIFIED:`);
+            console.log(`      Paragraph Index: ${salutationParagraphIndex}`);
+            console.log(`      Full XML (first 500 chars): ${salutationPara.fullMatch.substring(0, 500)}...`);
             
             // Apply all replacements to document XML
             if (spacingFixed && replacements.length > 0) {
