@@ -825,7 +825,7 @@ ${creditorsList}
 
 Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
 
-Den Zugang zum Portal finden Sie hier: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
+Den Zugang zum Portal finden Sie hier: https://mandanten-portal.onrender.com/login
 
 Mit freundlichen Grüßen
 Rechtsanwalt Thomas Scuric

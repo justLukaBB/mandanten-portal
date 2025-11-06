@@ -1071,9 +1071,7 @@ Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläub
 
 📎 **Bitte laden Sie Ihre Dokumente hoch:**
 
-${
-  process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"
-}/portal?token=${client.portal_token}
+https://mandanten-portal.onrender.com/login
 
 **Was Sie hochladen sollten:**
 
