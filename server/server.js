@@ -5465,7 +5465,12 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 
     // If in confirmation phase, mark additional documents uploaded
     if (isInConfirmationPhase) {
-      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id} (previous status: ${previousStatus})`);
+      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id}`, {
+        previousStatus,
+        newStatus: 'additional_documents_review',
+        admin_approved: client.admin_approved,
+        review_iteration: client.review_iteration_count || 0
+      });
 
       client.additional_documents_uploaded_after_review = true;
       client.additional_documents_uploaded_at = new Date();
@@ -5644,6 +5649,14 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     // Only create ticket on FIRST upload (transition from awaiting_client_confirmation)
     // Subsequent uploads while already in additional_documents_review should not create duplicate tickets
     const shouldCreateTicket = isInConfirmationPhase && previousStatus === 'awaiting_client_confirmation';
+
+    console.log(`🔍 Zendesk ticket decision for ${client.aktenzeichen}:`, {
+      isInConfirmationPhase,
+      previousStatus,
+      currentStatus: client.current_status,
+      admin_approved: client.admin_approved,
+      shouldCreateTicket
+    });
 
     if (shouldCreateTicket) {
       try {
