@@ -335,17 +335,16 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         </div>
       )}
 
-      {/* Upload Area */}
+      {/* Upload Area - ALWAYS ACTIVE (iterative loop enabled) */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${showingCreditorConfirmation ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-          } ${isDragOver
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragOver
             ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
           }`}
-        onDragOver={showingCreditorConfirmation ? undefined : handleDragOver}
-        onDragLeave={showingCreditorConfirmation ? undefined : handleDragLeave}
-        onDrop={showingCreditorConfirmation ? undefined : handleDrop}
-        onClick={() => !showingCreditorConfirmation && fileInputRef.current?.click()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
       >
         <CloudArrowUpIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <p className="text-sm text-gray-600 mb-2">
@@ -364,7 +363,6 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
           multiple
           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
           onChange={(e) => handleFileSelect(e.target.files)}
-          disabled={showingCreditorConfirmation}
           className="hidden"
         />
       </div>
@@ -432,9 +430,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         </div>
       )}
 
-      {!showingCreditorConfirmation && documents.length > 0 && (
+      {documents.length > 0 && (
         <div className="mt-6 space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">Zuvor hochgeladene Dokumentes</h4>
+          <h4 className="text-sm font-medium text-gray-900">Zuvor hochgeladene Dokumente</h4>
           {documents
             .filter((doc) => !uploadedFiles.some((file) => file.file.name === doc.filename)) // skip current files
             .map((document) => (
