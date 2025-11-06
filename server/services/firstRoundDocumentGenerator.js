@@ -293,12 +293,16 @@ class FirstRoundDocumentGenerator {
                 console.log(`   ℹ️ Salutation paragraph has no w:pPr`);
             }
             
-            // Find the actual body text paragraph (not contact info)
+            // Find the actual body text paragraph (not contact info or sidebar text)
             // Look for paragraphs containing body text indicators like "wird von uns", "geb. am", "test user", client name patterns
             console.log(`   🔍 Searching for body text paragraph (searching all paragraphs)...`);
             let bodyParagraphIndex = -1;
             const contactInfoKeywords = ['Telefon', 'Telefax', 'e-Mail', 'Öffnungszeiten', 'Bankverbindungen', 'Aktenzeichen', 'BLZ', 'Konto-Nr', 'Deutsche Bank'];
-            const bodyTextKeywords = ['wird von uns', 'geb. am', 'wohnhaft', 'test user', 'Einigungsversuchs', 'Verbraucherinsolvenzverfahrens'];
+            const sidebarKeywords = ['Bei Schriftverkehr', 'unbedingt angeben', 'Schriftverkehr und Zahlungen'];
+            // Strong indicators - these should be prioritized
+            const strongBodyTextKeywords = ['test user', 'geb. am', 'wohnhaft', 'wird von uns'];
+            // Medium indicators
+            const mediumBodyTextKeywords = ['Einigungsversuchs', 'Verbraucherinsolvenzverfahrens', 'geb.', 'wohnhaft'];
             
             // Search through all paragraphs after the salutation
             for (let i = salutationParagraphIndex + 1; i < paragraphs.length; i++) {
@@ -312,20 +316,38 @@ class FirstRoundDocumentGenerator {
                     return textMatch ? textMatch[1] : '';
                 }).join('') : '';
                 
-                // Skip if it's contact info or empty
+                // Skip if it's contact info, sidebar text, or empty
                 const isContactInfo = contactInfoKeywords.some(keyword => fullText.includes(keyword));
+                const isSidebarText = sidebarKeywords.some(keyword => fullText.includes(keyword));
                 const isEmpty = !fullText.trim() || fullText.trim().length < 3;
                 
-                if (!isContactInfo && !isEmpty) {
+                if (!isContactInfo && !isSidebarText && !isEmpty) {
+                    // Check for strong body text indicators first (highest priority)
+                    const hasStrongIndicator = strongBodyTextKeywords.some(keyword => fullText.includes(keyword));
+                    const hasMediumIndicator = mediumBodyTextKeywords.some(keyword => fullText.includes(keyword));
+                    
                     // Check if it looks like body text
-                    const isBodyText = bodyTextKeywords.some(keyword => fullText.includes(keyword)) || 
-                                      (fullText.length > 50 && !fullText.match(/^\d+$/)); // Long paragraph that's not just numbers
+                    // Priority 1: Has strong indicators (test user, geb. am, wohnhaft, wird von uns)
+                    // Priority 2: Has medium indicators and is reasonably long
+                    // Priority 3: Very long paragraph that's not just numbers
+                    const isBodyText = hasStrongIndicator || 
+                                      (hasMediumIndicator && fullText.length > 30) ||
+                                      (fullText.length > 80 && !fullText.match(/^\d+$/) && !fullText.startsWith('('));
                     
                     if (isBodyText) {
                         bodyParagraphIndex = i;
                         console.log(`   ✅ Found body text paragraph at index ${i}`);
                         console.log(`   📄 Body text (first 150 chars): "${fullText.substring(0, 150)}..."`);
+                        if (hasStrongIndicator) {
+                            console.log(`   🎯 Matched strong indicator (high priority)`);
+                        } else if (hasMediumIndicator) {
+                            console.log(`   🎯 Matched medium indicator`);
+                        }
                         break;
+                    }
+                } else {
+                    if (isSidebarText) {
+                        console.log(`   ⏭️ Skipping sidebar text at index ${i}: "${fullText.substring(0, 50)}..."`);
                     }
                 }
             }
@@ -340,13 +362,20 @@ class FirstRoundDocumentGenerator {
                 // Get the salutation XML
                 let salutationXml = salutationPara.fullMatch;
                 
-                // Ensure salutation has proper spacing - add w:after="240" for clean layout
+                // Ensure salutation has proper spacing and left alignment (not indented like sidebar)
                 // First, check if it has pPr
                 let salutationPPr = salutationXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
                 if (salutationPPr) {
                     const pPrContent = salutationPPr[1];
+                    let updatedPPrContent = pPrContent;
+                    
+                    // Remove left indentation to ensure it's left-aligned (not in sidebar)
+                    console.log(`   🔧 Removing left indentation from salutation to ensure left alignment`);
+                    updatedPPrContent = updatedPPrContent.replace(/<w:ind[^>]*w:left="\d+"[^>]*\/?>/g, '');
+                    updatedPPrContent = updatedPPrContent.replace(/w:left="\d+"/g, '');
+                    
                     // Remove any existing w:after from spacing tags
-                    let updatedPPrContent = pPrContent.replace(/\s*w:after="\d+"/g, '');
+                    updatedPPrContent = updatedPPrContent.replace(/\s*w:after="\d+"/g, '');
                     
                     // Check if spacing tag exists (handle both self-closing and regular tags)
                     const spacingTagMatch = updatedPPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
@@ -369,10 +398,15 @@ class FirstRoundDocumentGenerator {
                         // No spacing tag exists, add one
                         updatedPPrContent = '<w:spacing w:after="240"/>' + updatedPPrContent;
                     }
+                    
+                    // Ensure left alignment (remove any right alignment)
+                    updatedPPrContent = updatedPPrContent.replace(/<w:jc[^>]*w:val="right"[^>]*\/?>/g, '');
+                    updatedPPrContent = updatedPPrContent.replace(/w:jc[^>]*w:val="right"/g, '');
+                    
                     // Replace the pPr in salutation
                     salutationXml = salutationXml.replace(salutationPPr[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
                 } else {
-                    // No pPr exists, add one with spacing
+                    // No pPr exists, add one with spacing and left alignment
                     salutationXml = salutationXml.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="240"/></w:pPr>');
                 }
                 
