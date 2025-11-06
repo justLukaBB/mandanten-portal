@@ -5449,9 +5449,13 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     client.documents = client.documents || [];
     client.documents.push(documentRecord);
 
-    // ===== ITERATIVE LOOP: Check if client is in awaiting_client_confirmation status =====
+    // ===== ITERATIVE LOOP: Check if client is in confirmation phase =====
     // IMPORTANT: Check BEFORE changing status!
-    const isInConfirmationPhase = client.current_status === 'awaiting_client_confirmation' &&
+    // Include both awaiting_client_confirmation AND additional_documents_review
+    // (additional_documents_review can occur when multiple documents are uploaded in succession)
+    const previousStatus = client.current_status; // Store for Zendesk ticket logic
+    const isInConfirmationPhase = (client.current_status === 'awaiting_client_confirmation' ||
+                                    client.current_status === 'additional_documents_review') &&
                                     client.admin_approved === true;
 
     // Update client status to documents_uploaded if needed (but NOT if in confirmation phase)
@@ -5461,7 +5465,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 
     // If in confirmation phase, mark additional documents uploaded
     if (isInConfirmationPhase) {
-      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id}`);
+      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id} (previous status: ${previousStatus})`);
 
       client.additional_documents_uploaded_after_review = true;
       client.additional_documents_uploaded_at = new Date();
@@ -5637,7 +5641,11 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     });
 
     // ===== ITERATIVE LOOP: Create Zendesk ticket for additional documents =====
-    if (isInConfirmationPhase) {
+    // Only create ticket on FIRST upload (transition from awaiting_client_confirmation)
+    // Subsequent uploads while already in additional_documents_review should not create duplicate tickets
+    const shouldCreateTicket = isInConfirmationPhase && previousStatus === 'awaiting_client_confirmation';
+
+    if (shouldCreateTicket) {
       try {
         const ZendeskService = require('./services/zendeskService');
         const zendeskService = new ZendeskService();
