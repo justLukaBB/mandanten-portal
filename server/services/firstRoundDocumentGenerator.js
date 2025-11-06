@@ -235,11 +235,12 @@ class FirstRoundDocumentGenerator {
             
             // First, check and fix the salutation paragraph itself for w:after spacing
             console.log(`   🔍 Checking salutation paragraph for spacing issues...`);
-            const salutationPara = paragraphs[salutationParagraphIndex];
-            const salutationPPrMatch = salutationPara.fullMatch.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-            
             let spacingFixed = false;
             const replacements = []; // Store all replacements to apply at once
+            
+            // Get salutation paragraph (we'll use it later for moving)
+            const salutationPara = paragraphs[salutationParagraphIndex];
+            const salutationPPrMatch = salutationPara.fullMatch.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
             
             if (salutationPPrMatch) {
                 const salutationPPrContent = salutationPPrMatch[1];
@@ -293,12 +294,14 @@ class FirstRoundDocumentGenerator {
             }
             
             // Find the actual body text paragraph (not contact info)
-            // Look for paragraphs containing body text indicators like "wird von uns", "geb. am", client name patterns
-            console.log(`   🔍 Searching for body text paragraph after salutation...`);
+            // Look for paragraphs containing body text indicators like "wird von uns", "geb. am", "test user", client name patterns
+            console.log(`   🔍 Searching for body text paragraph (searching all paragraphs)...`);
             let bodyParagraphIndex = -1;
-            const contactInfoKeywords = ['Telefon', 'Telefax', 'e-Mail', 'Öffnungszeiten', 'Bankverbindungen', 'Aktenzeichen', 'BLZ', 'Konto-Nr'];
+            const contactInfoKeywords = ['Telefon', 'Telefax', 'e-Mail', 'Öffnungszeiten', 'Bankverbindungen', 'Aktenzeichen', 'BLZ', 'Konto-Nr', 'Deutsche Bank'];
+            const bodyTextKeywords = ['wird von uns', 'geb. am', 'wohnhaft', 'test user', 'Einigungsversuchs', 'Verbraucherinsolvenzverfahrens'];
             
-            for (let i = salutationParagraphIndex + 1; i < paragraphs.length && i <= salutationParagraphIndex + 10; i++) {
+            // Search through all paragraphs after the salutation
+            for (let i = salutationParagraphIndex + 1; i < paragraphs.length; i++) {
                 const para = paragraphs[i];
                 const paraXml = para.fullMatch;
                 
@@ -314,11 +317,11 @@ class FirstRoundDocumentGenerator {
                 const isEmpty = !fullText.trim() || fullText.trim().length < 3;
                 
                 if (!isContactInfo && !isEmpty) {
-                    // Check if it looks like body text (contains "wird von uns", "geb. am", or starts with client name pattern)
-                    if (fullText.includes('wird von uns') || 
-                        fullText.includes('geb. am') || 
-                        fullText.includes('wohnhaft') ||
-                        fullText.length > 50) { // Long paragraph likely body text
+                    // Check if it looks like body text
+                    const isBodyText = bodyTextKeywords.some(keyword => fullText.includes(keyword)) || 
+                                      (fullText.length > 50 && !fullText.match(/^\d+$/)); // Long paragraph that's not just numbers
+                    
+                    if (isBodyText) {
                         bodyParagraphIndex = i;
                         console.log(`   ✅ Found body text paragraph at index ${i}`);
                         console.log(`   📄 Body text (first 150 chars): "${fullText.substring(0, 150)}..."`);
@@ -327,74 +330,128 @@ class FirstRoundDocumentGenerator {
                 }
             }
             
-            // Check the body paragraph for excessive w:before spacing
-            if (bodyParagraphIndex !== -1) {
+            // If we found the body paragraph, move the salutation to be directly before it
+            if (bodyParagraphIndex !== -1 && bodyParagraphIndex > salutationParagraphIndex) {
+                console.log(`   🔄 Moving salutation paragraph from index ${salutationParagraphIndex} to before body paragraph at index ${bodyParagraphIndex}`);
+                
+                const salutationPara = paragraphs[salutationParagraphIndex];
                 const bodyPara = paragraphs[bodyParagraphIndex];
+                
+                // Get the salutation XML
+                let salutationXml = salutationPara.fullMatch;
+                
+                // Ensure salutation has proper spacing - add w:after="240" for clean layout
+                // First, check if it has pPr
+                let salutationPPr = salutationXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+                if (salutationPPr) {
+                    const pPrContent = salutationPPr[1];
+                    // Remove any existing w:after from spacing tags
+                    let updatedPPrContent = pPrContent.replace(/\s*w:after="\d+"/g, '');
+                    
+                    // Check if spacing tag exists (handle both self-closing and regular tags)
+                    const spacingTagMatch = updatedPPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
+                    if (spacingTagMatch) {
+                        // Spacing tag exists - add w:after to it
+                        let spacingAttrs = spacingTagMatch[1].trim();
+                        // Remove any trailing / if it was self-closing
+                        const wasSelfClosing = spacingTagMatch[2] === '/';
+                        // Add w:after attribute
+                        if (spacingAttrs && !spacingAttrs.endsWith(' ')) {
+                            spacingAttrs += ' ';
+                        }
+                        spacingAttrs += 'w:after="240"';
+                        // Replace the spacing tag
+                        updatedPPrContent = updatedPPrContent.replace(
+                            /<w:spacing[^>]*?\/?>/,
+                            `<w:spacing ${spacingAttrs}>`
+                        );
+                    } else {
+                        // No spacing tag exists, add one
+                        updatedPPrContent = '<w:spacing w:after="240"/>' + updatedPPrContent;
+                    }
+                    // Replace the pPr in salutation
+                    salutationXml = salutationXml.replace(salutationPPr[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                } else {
+                    // No pPr exists, add one with spacing
+                    salutationXml = salutationXml.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="240"/></w:pPr>');
+                }
+                
+                console.log(`   📝 Updated salutation XML with w:after="240" spacing`);
+                console.log(`      Salutation XML (first 400 chars): ${salutationXml.substring(0, 400)}...`);
+                
+                // Also reduce w:before spacing on body paragraph if it exists (before moving salutation)
                 const bodyParaXml = bodyPara.fullMatch;
                 let updatedBodyParaXml = bodyParaXml;
-                
                 const bodyPPrMatch = bodyParaXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
                 
                 if (bodyPPrMatch) {
                     const bodyPPrContent = bodyPPrMatch[1];
-                    console.log(`   🔍 Body paragraph pPr XML: ${bodyPPrMatch[0].substring(0, 400)}...`);
-                    
                     const bodyBeforeMatch = bodyPPrContent.match(/w:before="(\d+)"/);
                     if (bodyBeforeMatch) {
                         const beforeValue = parseInt(bodyBeforeMatch[1]);
                         console.log(`   ⚠️ Body paragraph has w:before="${beforeValue}" twips`);
-                        // Lower threshold - anything over 100 twips (~7 points) is excessive for body text after salutation
                         if (beforeValue > 100) {
                             console.log(`   🔧 Reducing w:before spacing on body paragraph (${beforeValue} twips -> 0)`);
                             updatedBodyParaXml = updatedBodyParaXml.replace(/w:before="\d+"/, 'w:before="0"');
-                            replacements.push({
-                                original: bodyParaXml,
-                                updated: updatedBodyParaXml
-                            });
-                            spacingFixed = true;
                         }
                     }
                 }
-            } else {
-                console.log(`   ⚠️ Could not find body text paragraph, checking next few paragraphs...`);
                 
-                // Fallback: check next few paragraphs for spacing issues
-                const paragraphsToCheck = Math.min(5, paragraphs.length - salutationParagraphIndex - 1);
-                for (let i = 1; i <= paragraphsToCheck; i++) {
-                    const paraIndex = salutationParagraphIndex + i;
-                    if (paraIndex >= paragraphs.length) break;
-                    
-                    const para = paragraphs[paraIndex];
-                    const paraXml = para.fullMatch;
-                    let updatedParaXml = paraXml;
-                    
-                    // Extract text to see what paragraph this is
-                    const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
-                    const fullText = textMatches ? textMatches.map(m => {
-                        const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
-                        return textMatch ? textMatch[1] : '';
-                    }).join('') : '';
-                    
-                    console.log(`   📄 Paragraph ${paraIndex} (first 100 chars): "${fullText.substring(0, 100)}..."`);
-                    
-                    // Check for paragraph properties with spacing
-                    const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-                    
-                    if (pPrMatch) {
-                        const pPrContent = pPrMatch[1];
-                        const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
+                // Remove the old salutation paragraph from its current position
+                console.log(`   🗑️ Removing salutation from original position (index ${salutationParagraphIndex})`);
+                documentXml = documentXml.replace(salutationPara.fullMatch, '');
+                
+                // Insert the new salutation paragraph before the body paragraph (use updated body XML if it was modified)
+                console.log(`   ➕ Inserting salutation before body paragraph (index ${bodyParagraphIndex})`);
+                const bodyParaToUse = (updatedBodyParaXml !== bodyParaXml) ? updatedBodyParaXml : bodyParaXml;
+                documentXml = documentXml.replace(bodyParaXml, salutationXml + bodyParaToUse);
+                
+                spacingFixed = true;
+                console.log(`   ✅ Successfully moved salutation paragraph to be directly before body text`);
+            } else {
+                console.log(`   ⚠️ Could not find body text paragraph or body is before salutation`);
+                console.log(`      Salutation index: ${salutationParagraphIndex}, Body index: ${bodyParagraphIndex}`);
+                
+                // Fallback: just fix spacing issues without moving
+                if (bodyParagraphIndex === -1) {
+                    console.log(`   🔍 Fallback: checking next few paragraphs for spacing issues...`);
+                    const paragraphsToCheck = Math.min(10, paragraphs.length - salutationParagraphIndex - 1);
+                    for (let i = 1; i <= paragraphsToCheck; i++) {
+                        const paraIndex = salutationParagraphIndex + i;
+                        if (paraIndex >= paragraphs.length) break;
                         
-                        if (beforeMatch) {
-                            const beforeValue = parseInt(beforeMatch[1]);
-                            // Lower threshold - anything over 100 twips is excessive
-                            if (beforeValue > 100) {
-                                console.log(`   🔧 Reducing w:before spacing on paragraph ${paraIndex} (${beforeValue} twips -> 0)`);
-                                updatedParaXml = updatedParaXml.replace(/w:before="\d+"/, 'w:before="0"');
-                                replacements.push({
-                                    original: paraXml,
-                                    updated: updatedParaXml
-                                });
-                                spacingFixed = true;
+                        const para = paragraphs[paraIndex];
+                        const paraXml = para.fullMatch;
+                        let updatedParaXml = paraXml;
+                        
+                        // Extract text to see what paragraph this is
+                        const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+                        const fullText = textMatches ? textMatches.map(m => {
+                            const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                            return textMatch ? textMatch[1] : '';
+                        }).join('') : '';
+                        
+                        console.log(`   📄 Paragraph ${paraIndex} (first 100 chars): "${fullText.substring(0, 100)}..."`);
+                        
+                        // Check for paragraph properties with spacing
+                        const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+                        
+                        if (pPrMatch) {
+                            const pPrContent = pPrMatch[1];
+                            const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
+                            
+                            if (beforeMatch) {
+                                const beforeValue = parseInt(beforeMatch[1]);
+                                // Lower threshold - anything over 100 twips is excessive
+                                if (beforeValue > 100) {
+                                    console.log(`   🔧 Reducing w:before spacing on paragraph ${paraIndex} (${beforeValue} twips -> 0)`);
+                                    updatedParaXml = updatedParaXml.replace(/w:before="\d+"/, 'w:before="0"');
+                                    replacements.push({
+                                        original: paraXml,
+                                        updated: updatedParaXml
+                                    });
+                                    spacingFixed = true;
+                                }
                             }
                         }
                     }
@@ -426,9 +483,9 @@ class FirstRoundDocumentGenerator {
             console.log(`      Paragraph Index: ${salutationParagraphIndex}`);
             console.log(`      Full XML (first 500 chars): ${salutationPara.fullMatch.substring(0, 500)}...`);
             
-            // Apply all replacements to document XML
-            if (spacingFixed && replacements.length > 0) {
-                console.log(`   🔧 Applying ${replacements.length} XML replacements...`);
+            // Apply all replacements to document XML (if any were collected)
+            if (replacements.length > 0) {
+                console.log(`   🔧 Applying ${replacements.length} additional XML replacements...`);
                 for (const replacement of replacements) {
                     if (replacement.updated === '') {
                         // Remove empty paragraph
@@ -440,12 +497,14 @@ class FirstRoundDocumentGenerator {
                         console.log(`      ✅ Updated paragraph XML`);
                     }
                 }
-                
-                // Update the document XML
+            }
+            
+            // Update the document XML if any changes were made
+            if (spacingFixed || replacements.length > 0) {
                 zip.file('word/document.xml', documentXml);
-                console.log('✅ Fixed excessive spacing issues in document');
+                console.log('✅ Fixed spacing issues and repositioned salutation in document');
             } else {
-                console.log('ℹ️ No excessive spacing issues found');
+                console.log('ℹ️ No spacing issues found or changes needed');
             }
             
         } catch (error) {
