@@ -804,57 +804,86 @@ class FirstRoundDocumentGenerator {
         }
       }
       
-      // Find the paragraph before "test user...strebt eine Schuldenbereinigung" and fix its w:after spacing
+      // Find the paragraph before "test user...strebt eine Schuldenbereinigung" and fix spacing
       for (let i = 0; i < allParagraphs.length; i++) {
         const para = allParagraphs[i];
         if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
-          // Found the target paragraph, check the previous one
-          if (i > 0) {
-            const prevPara = allParagraphs[i - 1];
-            console.log(`\n   🔍 Found paragraph before "test user...": "${prevPara.text.substring(0, 80)}..."`);
-            console.log(`      Full XML: ${prevPara.original}`);
+          // Found the target paragraph, look backwards to find the actual content paragraph
+          // Skip empty paragraphs and find "Eine entsprechende Vollmacht liegt bei"
+          let foundPrevPara = false;
+          for (let j = i - 1; j >= 0 && j >= i - 5; j--) {
+            const prevPara = allParagraphs[j];
+            const prevText = prevPara.text.trim();
             
-            // Check if previous paragraph has w:after spacing
-            const prevPPrMatch = prevPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-            if (prevPPrMatch) {
-              const prevAfterMatch = prevPPrMatch[1].match(/w:after="(\d+)"/);
-              if (prevAfterMatch) {
-                console.log(`      ⚠️ Previous paragraph has w:after="${prevAfterMatch[1]}" twips - REMOVING`);
-                
-                // Remove w:after from previous paragraph
-                let updatedPrev = prevPara.original;
-                const prevSpacingMatch = prevPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
-                if (prevSpacingMatch) {
-                  let spacingTag = prevSpacingMatch[0];
-                  spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
-                  if (!/w:after=/.test(spacingTag)) {
-                    const isSelfClosing = prevSpacingMatch[2] === '/';
-                    if (isSelfClosing) {
-                      spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
-                    } else {
-                      spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+            // Skip empty paragraphs
+            if (!prevText || prevText.length < 3) {
+              // Remove empty paragraph
+              console.log(`\n   🗑️ Removing empty paragraph at index ${j}`);
+              documentXml = documentXml.replace(prevPara.original, "");
+              continue;
+            }
+            
+            // Check if this is the paragraph we're looking for
+            if (prevText.includes("Eine entsprechende Vollmacht liegt bei") || 
+                prevText.includes("Vollmacht liegt bei") ||
+                prevText.length > 20) {
+              console.log(`\n   🔍 Found paragraph before "test user...": "${prevText.substring(0, 80)}..."`);
+              console.log(`      Full XML: ${prevPara.original}`);
+              
+              // Check if previous paragraph has w:after spacing
+              const prevPPrMatch = prevPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+              if (prevPPrMatch) {
+                const prevAfterMatch = prevPPrMatch[1].match(/w:after="(\d+)"/);
+                if (prevAfterMatch) {
+                  console.log(`      ⚠️ Previous paragraph has w:after="${prevAfterMatch[1]}" twips - REMOVING`);
+                  
+                  // Remove w:after from previous paragraph
+                  let updatedPrev = prevPara.original;
+                  const prevSpacingMatch = prevPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+                  if (prevSpacingMatch) {
+                    let spacingTag = prevSpacingMatch[0];
+                    spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
+                    if (!/w:after=/.test(spacingTag)) {
+                      const isSelfClosing = prevSpacingMatch[2] === '/';
+                      if (isSelfClosing) {
+                        spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+                      } else {
+                        spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+                      }
                     }
+                    let updatedPPrContent = prevPPrMatch[1].replace(prevSpacingMatch[0], spacingTag);
+                    updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  } else {
+                    // No spacing tag, add one with w:after="0"
+                    let updatedPPrContent = '<w:spacing w:after="0"/>' + prevPPrMatch[1];
+                    updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
                   }
-                  let updatedPPrContent = prevPPrMatch[1].replace(prevSpacingMatch[0], spacingTag);
-                  updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  
+                  // Apply the fix to document XML
+                  documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                  console.log(`      ✅ Removed w:after spacing from previous paragraph`);
                 } else {
-                  // No spacing tag, add one with w:after="0"
+                  // No w:after, but add one with w:after="0" to ensure no spacing
+                  let updatedPrev = prevPara.original;
                   let updatedPPrContent = '<w:spacing w:after="0"/>' + prevPPrMatch[1];
                   updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                  console.log(`      ✅ Added w:after="0" to previous paragraph to ensure no spacing`);
                 }
-                
-                // Apply the fix to document XML
-                documentXml = documentXml.replace(prevPara.original, updatedPrev);
-                console.log(`      ✅ Removed w:after spacing from previous paragraph`);
               } else {
-                console.log(`      ✅ Previous paragraph has no w:after spacing`);
+                // No pPr, add one with w:after="0"
+                let updatedPrev = prevPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>');
+                documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                console.log(`      ✅ Added pPr with w:after="0" to previous paragraph`);
               }
-            } else {
-              // No pPr, add one with w:after="0"
-              let updatedPrev = prevPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>');
-              documentXml = documentXml.replace(prevPara.original, updatedPrev);
-              console.log(`      ✅ Added pPr with w:after="0" to previous paragraph`);
+              
+              foundPrevPara = true;
+              break;
             }
+          }
+          
+          if (!foundPrevPara) {
+            console.log(`\n   ⚠️ Could not find content paragraph before "test user..."`);
           }
           break;
         }
