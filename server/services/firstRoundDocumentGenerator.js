@@ -888,6 +888,131 @@ class FirstRoundDocumentGenerator {
           break;
         }
       }
+      
+      // Find and fix spacing between "Einigungsversuches mit den Gläubigern." and "Hierzu benötigen wir zunächst einen"
+      let einigungsversuchesParaIndex = -1;
+      let hierzuParaIndex = -1;
+      
+      for (let i = 0; i < allParagraphs.length; i++) {
+        const para = allParagraphs[i];
+        const paraText = para.text.trim();
+        
+        // Find paragraph ending with "Einigungsversuches mit den Gläubigern."
+        if (paraText.includes("Einigungsversuches mit den Gläubigern") && einigungsversuchesParaIndex === -1) {
+          einigungsversuchesParaIndex = i;
+          console.log(`\n   🔍 FOUND: Paragraph ending with "Einigungsversuches mit den Gläubigern." (index ${i})`);
+          console.log(`      Text: "${paraText.substring(Math.max(0, paraText.length - 80))}"`);
+          console.log(`      Full XML: ${para.original}`);
+        }
+        
+        // Find paragraph starting with "Hierzu benötigen wir zunächst einen"
+        if (paraText.includes("Hierzu benötigen wir zunächst einen") && hierzuParaIndex === -1) {
+          hierzuParaIndex = i;
+          console.log(`\n   🔍 FOUND: Paragraph starting with "Hierzu benötigen wir zunächst einen" (index ${i})`);
+          console.log(`      Text: "${paraText.substring(0, 80)}..."`);
+          console.log(`      Full XML: ${para.original}`);
+        }
+      }
+      
+      // Fix spacing between these two paragraphs
+      if (einigungsversuchesParaIndex !== -1 && hierzuParaIndex !== -1) {
+        const einigungsPara = allParagraphs[einigungsversuchesParaIndex];
+        const hierzuPara = allParagraphs[hierzuParaIndex];
+        
+        console.log(`\n   🔧 FIXING SPACING between paragraph ${einigungsversuchesParaIndex} and ${hierzuParaIndex}`);
+        
+        // Remove empty paragraphs between them
+        for (let j = einigungsversuchesParaIndex + 1; j < hierzuParaIndex; j++) {
+          const emptyPara = allParagraphs[j];
+          if (!emptyPara.text.trim() || emptyPara.text.trim().length < 3) {
+            console.log(`   🗑️ Removing empty paragraph at index ${j}`);
+            documentXml = documentXml.replace(emptyPara.original, "");
+          }
+        }
+        
+        // Fix w:after on "Einigungsversuches mit den Gläubigern." paragraph
+        const einigungsPPrMatch = einigungsPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (einigungsPPrMatch) {
+          const einigungsAfterMatch = einigungsPPrMatch[1].match(/w:after="(\d+)"/);
+          if (einigungsAfterMatch) {
+            console.log(`   ⚠️ "Einigungsversuches..." paragraph has w:after="${einigungsAfterMatch[1]}" twips`);
+          } else {
+            console.log(`   ✅ "Einigungsversuches..." paragraph has no w:after spacing`);
+          }
+          
+          // Always set w:after="0" to ensure no spacing
+          let updatedEinigungs = einigungsPara.original;
+          const einigungsSpacingMatch = einigungsPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+          if (einigungsSpacingMatch) {
+            let spacingTag = einigungsSpacingMatch[0];
+            spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
+            if (!/w:after=/.test(spacingTag)) {
+              const isSelfClosing = einigungsSpacingMatch[2] === '/';
+              if (isSelfClosing) {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+              } else {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+              }
+            }
+            let updatedPPrContent = einigungsPPrMatch[1].replace(einigungsSpacingMatch[0], spacingTag);
+            updatedEinigungs = updatedEinigungs.replace(einigungsPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          } else {
+            let updatedPPrContent = '<w:spacing w:after="0"/>' + einigungsPPrMatch[1];
+            updatedEinigungs = updatedEinigungs.replace(einigungsPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          }
+          documentXml = documentXml.replace(einigungsPara.original, updatedEinigungs);
+          console.log(`   ✅ Set w:after="0" on "Einigungsversuches..." paragraph`);
+        } else {
+          let updatedEinigungs = einigungsPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>');
+          documentXml = documentXml.replace(einigungsPara.original, updatedEinigungs);
+          console.log(`   ✅ Added pPr with w:after="0" to "Einigungsversuches..." paragraph`);
+        }
+        
+        // Fix w:before on "Hierzu benötigen wir zunächst einen" paragraph
+        const hierzuPPrMatch = hierzuPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (hierzuPPrMatch) {
+          const hierzuBeforeMatch = hierzuPPrMatch[1].match(/w:before="(\d+)"/);
+          if (hierzuBeforeMatch) {
+            console.log(`   ⚠️ "Hierzu benötigen wir..." paragraph has w:before="${hierzuBeforeMatch[1]}" twips`);
+          } else {
+            console.log(`   ✅ "Hierzu benötigen wir..." paragraph has no w:before spacing`);
+          }
+          
+          // Always set w:before="0" to ensure no spacing
+          let updatedHierzu = hierzuPara.original;
+          const hierzuSpacingMatch = hierzuPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+          if (hierzuSpacingMatch) {
+            let spacingTag = hierzuSpacingMatch[0];
+            spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
+            if (!/w:before=/.test(spacingTag)) {
+              const isSelfClosing = hierzuSpacingMatch[2] === '/';
+              if (isSelfClosing) {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
+              } else {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
+              }
+            }
+            let updatedPPrContent = hierzuPPrMatch[1].replace(hierzuSpacingMatch[0], spacingTag);
+            updatedHierzu = updatedHierzu.replace(hierzuPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          } else {
+            let updatedPPrContent = '<w:spacing w:before="0"/>' + hierzuPPrMatch[1];
+            updatedHierzu = updatedHierzu.replace(hierzuPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          }
+          documentXml = documentXml.replace(hierzuPara.original, updatedHierzu);
+          console.log(`   ✅ Set w:before="0" on "Hierzu benötigen wir..." paragraph`);
+        } else {
+          let updatedHierzu = hierzuPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:before="0"/></w:pPr>');
+          documentXml = documentXml.replace(hierzuPara.original, updatedHierzu);
+          console.log(`   ✅ Added pPr with w:before="0" to "Hierzu benötigen wir..." paragraph`);
+        }
+      } else {
+        if (einigungsversuchesParaIndex === -1) {
+          console.log(`\n   ⚠️ Could not find paragraph ending with "Einigungsversuches mit den Gläubigern."`);
+        }
+        if (hierzuParaIndex === -1) {
+          console.log(`\n   ⚠️ Could not find paragraph starting with "Hierzu benötigen wir zunächst einen"`);
+        }
+      }
 
       // Log XML for specific paragraphs BEFORE fixing
       bodyParagraphs.forEach((para, idx) => {
