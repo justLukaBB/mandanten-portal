@@ -205,18 +205,21 @@ const clientSchema = new mongoose.Schema({
       'portal_access_sent',
       'documents_uploaded',
       'documents_processing',
+      'documents_completed',
       'waiting_for_payment',
       'payment_confirmed',
       'creditor_review',
       'manual_review_complete',
       'creditor_contact_initiated',
+      'creditor_calculation_ready',
       'creditor_contact_failed',
       'awaiting_client_confirmation',
       'additional_documents_review',
       'creditor_contact_active',
       'settlement_documents_generated',
       'settlement_plan_sent_to_creditors',
-      'completed'
+      'completed',
+      'no_creditors_found'
     ],
     default: 'created'
   },

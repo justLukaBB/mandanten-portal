@@ -823,6 +823,9 @@ app.post('/api/clients/:clientId/documents',
             if (docIndex !== -1) {
               client.documents[docIndex] = {
                 ...client.documents[docIndex],
+                id: client.documents[docIndex].id,
+                name: client.documents[docIndex].name,
+                filename: client.documents[docIndex].filename,
                 processing_status: classificationSuccess ? 'completed' : 'failed',
                 classification_success: classificationSuccess,
                 is_creditor_document: extractedData.is_creditor_document || false,
