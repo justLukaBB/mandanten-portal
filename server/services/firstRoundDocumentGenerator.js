@@ -9,28 +9,28 @@ const { formatAddress } = require("../utils/addressFormatter");
  * Generates individual DOCX files for each creditor using the template
  */
 class FirstRoundDocumentGenerator {
-  constructor() {
+    constructor() {
     this.templatePath = path.join(__dirname, "../templates/1.Schreiben.docx");
     this.outputDir = path.join(__dirname, "../generated_documents/first_round");
-  }
+    }
 
-  /**
-   * Generate DOCX files for all creditors
-   */
-  async generateCreditorDocuments(clientData, creditors) {
-    try {
+    /**
+     * Generate DOCX files for all creditors
+     */
+    async generateCreditorDocuments(clientData, creditors) {
+        try {
       console.log(
         `📄 Generating first round documents for ${creditors.length} creditors...`
       );
 
-      // Ensure output directory exists
-      await this.ensureOutputDirectory();
+            // Ensure output directory exists
+            await this.ensureOutputDirectory();
 
-      const results = [];
-      const errors = [];
+            const results = [];
+            const errors = [];
 
-      for (let i = 0; i < creditors.length; i++) {
-        const creditor = creditors[i];
+            for (let i = 0; i < creditors.length; i++) {
+                const creditor = creditors[i];
         console.log(
           `   Processing ${i + 1}/${creditors.length}: ${
             creditor.creditor_name || creditor.sender_name
@@ -42,81 +42,81 @@ class FirstRoundDocumentGenerator {
             clientData,
             creditor
           );
-          results.push(result);
-        } catch (error) {
+                    results.push(result);
+                } catch (error) {
           console.error(
             `❌ Failed to generate document for ${
               creditor.creditor_name || creditor.sender_name
             }: ${error.message}`
           );
-          errors.push({
-            creditor: creditor.creditor_name || creditor.sender_name,
+                    errors.push({
+                        creditor: creditor.creditor_name || creditor.sender_name,
             error: error.message,
-          });
-        }
-      }
+                    });
+                }
+            }
 
       console.log(
         `✅ Generated ${results.length}/${creditors.length} documents successfully`
       );
-      if (errors.length > 0) {
-        console.log(`❌ ${errors.length} documents failed to generate`);
-      }
+            if (errors.length > 0) {
+                console.log(`❌ ${errors.length} documents failed to generate`);
+            }
 
-      return {
-        success: true,
-        documents: results,
-        errors: errors,
-        total_generated: results.length,
+            return {
+                success: true,
+                documents: results,
+                errors: errors,
+                total_generated: results.length,
         total_failed: errors.length,
-      };
-    } catch (error) {
-      console.error(`❌ Error in generateCreditorDocuments: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        documents: [],
+            };
+        } catch (error) {
+            console.error(`❌ Error in generateCreditorDocuments: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                documents: [],
         errors: [],
-      };
+            };
+        }
     }
-  }
 
-  /**
-   * Generate a single DOCX document for one creditor
-   */
-  async generateSingleCreditorDocument(clientData, creditor) {
-    try {
-      // Read the template file
-      const templateContent = await fs.readFile(this.templatePath);
-      const zip = new PizZip(templateContent);
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        delimiters: {
-          start: '"',
+    /**
+     * Generate a single DOCX document for one creditor
+     */
+    async generateSingleCreditorDocument(clientData, creditor) {
+        try {
+            // Read the template file
+            const templateContent = await fs.readFile(this.templatePath);
+            const zip = new PizZip(templateContent);
+            const doc = new Docxtemplater(zip, {
+                paragraphLoop: true,
+                linebreaks: true,
+                delimiters: {
+                    start: '"',
           end: '"',
         },
-      });
+            });
 
-      // Prepare the data for replacement
-      const templateData = this.prepareTemplateData(clientData, creditor);
+            // Prepare the data for replacement
+            const templateData = this.prepareTemplateData(clientData, creditor);
 
-      // Render the document with the data
-      doc.render(templateData);
+            // Render the document with the data
+            doc.render(templateData);
 
-      // Fix German hyphenation issues in the rendered document
-      this.fixDocumentHyphenation(doc);
+            // Fix German hyphenation issues in the rendered document
+            this.fixDocumentHyphenation(doc);
 
       // Fix excessive spacing issues in the rendered document
-      this.fixDocumentSpacing(doc);
+            this.fixDocumentSpacing(doc);
 
-      // Generate the output buffer
-      const outputBuffer = doc.getZip().generate({
+            // Generate the output buffer
+            const outputBuffer = doc.getZip().generate({
         type: "nodebuffer",
         compression: "DEFLATE",
-      });
+            });
 
-      // Generate filename
+            // Generate filename
       const creditorName = (
         creditor.creditor_name ||
         creditor.sender_name ||
@@ -124,44 +124,44 @@ class FirstRoundDocumentGenerator {
       )
         .replace(/[^a-zA-Z0-9äöüßÄÖÜ\s-]/g, "") // Remove special characters
         .replace(/\s+/g, "_") // Replace spaces with underscores
-        .substring(0, 50); // Limit length
+                .substring(0, 50); // Limit length
 
-      const filename = `${clientData.reference}_${creditorName}_Erstschreiben.docx`;
-      const outputPath = path.join(this.outputDir, filename);
+            const filename = `${clientData.reference}_${creditorName}_Erstschreiben.docx`;
+            const outputPath = path.join(this.outputDir, filename);
 
-      // Save the file
-      await fs.writeFile(outputPath, outputBuffer);
+            // Save the file
+            await fs.writeFile(outputPath, outputBuffer);
 
-      const stats = await fs.stat(outputPath);
+            const stats = await fs.stat(outputPath);
 
-      return {
-        success: true,
-        creditor_name: creditor.creditor_name || creditor.sender_name,
-        creditor_id: creditor.id,
-        filename: filename,
-        path: outputPath,
-        size: stats.size,
+            return {
+                success: true,
+                creditor_name: creditor.creditor_name || creditor.sender_name,
+                creditor_id: creditor.id,
+                filename: filename,
+                path: outputPath,
+                size: stats.size,
         generated_at: new Date().toISOString(),
-      };
-    } catch (error) {
+            };
+        } catch (error) {
       console.error(
         `❌ Error generating document for creditor: ${error.message}`
       );
-      throw error;
+            throw error;
+        }
     }
-  }
 
-  /**
-   * Fix German hyphenation issues in the rendered Word document
-   */
-  fixDocumentHyphenation(doc) {
-    try {
-      // Get the document XML
-      const zip = doc.getZip();
+    /**
+     * Fix German hyphenation issues in the rendered Word document
+     */
+    fixDocumentHyphenation(doc) {
+        try {
+            // Get the document XML
+            const zip = doc.getZip();
       let documentXml = zip.files["word/document.xml"].asText();
-
-      // Define hyphenation fixes
-      const hyphenationFixes = {
+            
+            // Define hyphenation fixes
+            const hyphenationFixes = {
         "Eini-gungsversuchs": "Einigungsversuchs",
         "Eini- gungsversuchs": "Einigungsversuchs",
         "Eini-\ngungsversuchs": "Einigungsversuchs",
@@ -184,10 +184,10 @@ class FirstRoundDocumentGenerator {
         "Schuldner/in": "Schuldner/die Schuldnerin",
       };
 
-      for (const [broken, fixed] of Object.entries(hyphenationFixes)) {
+            for (const [broken, fixed] of Object.entries(hyphenationFixes)) {
         const regex = new RegExp(broken.replace(/[-\s]/g, "[-\\s]*"), "gi");
-        documentXml = documentXml.replace(regex, fixed);
-      }
+                documentXml = documentXml.replace(regex, fixed);
+            }
       console.log('   🔍 Fixing "Eini-" hyphenation across XML elements...');
 
       // First, let's find and log the exact XML structure around "Eini-"
@@ -308,12 +308,12 @@ class FirstRoundDocumentGenerator {
           );
         }
       }
-
-      // Update the document XML
+            
+            // Update the document XML
       zip.file("word/document.xml", documentXml);
-
+            
       console.log("✅ Fixed German hyphenation issues in document");
-    } catch (error) {
+        } catch (error) {
       console.error(
         "⚠️ Warning: Could not fix hyphenation issues:",
         error.message
@@ -856,24 +856,9 @@ class FirstRoundDocumentGenerator {
         }
       }
 
-      // Remove excessive spacing between ALL body paragraphs
+      // Remove excessive spacing between ALL body paragraphs (simpler, safer approach)
       console.log(`   🔍 Removing excessive spacing between all body paragraphs...`);
-      const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
-      const allParagraphs = [];
-      let paraMatch;
       
-      // Re-parse paragraphs after replacements
-      while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
-        allParagraphs.push({
-          fullMatch: paraMatch[0],
-          content: paraMatch[1],
-          index: paraMatch.index
-        });
-      }
-
-      let bodySpacingFixed = false;
-      const bodySpacingReplacements = [];
-
       // Skip contact info and sidebar paragraphs - only fix body text paragraphs
       const skipKeywords = [
         "Telefon", "Telefax", "e-Mail", "Öffnungszeiten", 
@@ -881,12 +866,18 @@ class FirstRoundDocumentGenerator {
         "Deutsche Bank", "Bei Schriftverkehr"
       ];
 
-      for (let i = 0; i < allParagraphs.length; i++) {
-        const para = allParagraphs[i];
-        const paraXml = para.fullMatch;
-        
+      // Simple approach: Just set w:before and w:after to "0" for body paragraphs
+      // This is safer than removing tags and won't corrupt XML
+      let bodySpacingFixed = false;
+      
+      // Find all paragraphs and fix spacing in body text ones
+      const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
+      let paraMatch;
+      let fixCount = 0;
+      
+      documentXml = documentXml.replace(allParagraphsRegex, (match) => {
         // Extract text to check if it's body text
-        const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+        const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
         const fullText = textMatches
           ? textMatches
               .map((m) => {
@@ -904,101 +895,30 @@ class FirstRoundDocumentGenerator {
 
         // Only process body text paragraphs (not contact info, not empty)
         if (!isSkipPara && !isEmpty && fullText.length > 10) {
-          const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          // Check if paragraph has spacing
+          const hasBefore = /w:before="\d+"/.test(match);
+          const hasAfter = /w:after="\d+"/.test(match);
           
-          if (pPrMatch) {
-            const pPrContent = pPrMatch[1];
-            let updatedPPrContent = pPrContent;
-            let needsUpdate = false;
-
-            // Remove w:before spacing (spacing before this paragraph)
-            const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
-            if (beforeMatch) {
-              const beforeValue = parseInt(beforeMatch[1]);
-              if (beforeValue > 0) {
-                console.log(
-                  `   🔧 Removing w:before="${beforeValue}" from body paragraph ${i}`
-                );
-                updatedPPrContent = updatedPPrContent.replace(
-                  /w:before="\d+"/,
-                  'w:before="0"'
-                );
-                needsUpdate = true;
-              }
-            }
-
-            // Remove w:after spacing (spacing after this paragraph)
-            const afterMatch = pPrContent.match(/w:after="(\d+)"/);
-            if (afterMatch) {
-              const afterValue = parseInt(afterMatch[1]);
-              if (afterValue > 0) {
-                console.log(
-                  `   🔧 Removing w:after="${afterValue}" from body paragraph ${i}`
-                );
-                updatedPPrContent = updatedPPrContent.replace(
-                  /w:after="\d+"/,
-                  'w:after="0"'
-                );
-                needsUpdate = true;
-              }
-            }
-
-            // If spacing tag becomes empty, remove it
-            if (needsUpdate) {
-              const spacingTagMatch = updatedPPrContent.match(
-                /<w:spacing([^>]*?)(\/?)>/
-              );
-              if (spacingTagMatch) {
-                let spacingAttrs = spacingTagMatch[1].trim();
-                spacingAttrs = spacingAttrs.replace(/\s*w:before="\d+"/g, "");
-                spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
-                
-                if (!spacingAttrs.trim()) {
-                  // Remove empty spacing tag
-                  updatedPPrContent = updatedPPrContent.replace(
-                    /<w:spacing[^>]*?\/?>/,
-                    ""
-                  );
-                } else {
-                  // Update spacing tag
-                  updatedPPrContent = updatedPPrContent.replace(
-                    /<w:spacing[^>]*?\/?>/,
-                    `<w:spacing ${spacingAttrs.trim()}>`
-                  );
-                }
-              }
-
-              // Update the paragraph
-              const updatedParaXml = paraXml.replace(
-                pPrMatch[0],
-                `<w:pPr>${updatedPPrContent}</w:pPr>`
-              );
-              
-              bodySpacingReplacements.push({
-                original: paraXml,
-                updated: updatedParaXml
-              });
-              bodySpacingFixed = true;
-            }
+          if (hasBefore || hasAfter) {
+            // Set spacing to 0 (safer than removing tags)
+            let updated = match.replace(/w:before="\d+"/g, 'w:before="0"');
+            updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
+            fixCount++;
+            bodySpacingFixed = true;
+            return updated;
           }
         }
-      }
+        
+        return match; // Return unchanged if not a body paragraph
+      });
 
-      // Apply body paragraph spacing fixes
-      if (bodySpacingReplacements.length > 0) {
+      if (bodySpacingFixed) {
         console.log(
-          `   🔧 Applying ${bodySpacingReplacements.length} body paragraph spacing fixes...`
+          `   ✅ Removed excessive spacing from ${fixCount} body paragraphs`
         );
-        for (const replacement of bodySpacingReplacements) {
-          documentXml = documentXml.replace(
-            replacement.original,
-            replacement.updated
-          );
-        }
         spacingFixed = true;
-        console.log(
-          `   ✅ Removed excessive spacing between ${bodySpacingReplacements.length} body paragraphs`
-        );
+      } else {
+        console.log(`   ℹ️ No body paragraph spacing issues found`);
       }
 
       // Update the document XML if any changes were made
@@ -1013,138 +933,138 @@ class FirstRoundDocumentGenerator {
     } catch (error) {
       console.error("⚠️ Warning: Could not fix spacing issues:", error.message);
       console.error("   Error stack:", error.stack);
-      // Don't throw error - document generation should continue
+            // Don't throw error - document generation should continue
+        }
     }
-  }
 
-  /**
-   * Parse and format client address for proper line breaks
-   */
-  formatClientAddress(clientData) {
-    // Priority 1: Use structured address fields if available
-    if (clientData.street && clientData.zipCode && clientData.city) {
+    /**
+     * Parse and format client address for proper line breaks
+     */
+    formatClientAddress(clientData) {
+        // Priority 1: Use structured address fields if available
+        if (clientData.street && clientData.zipCode && clientData.city) {
       const streetLine = clientData.houseNumber
         ? `${clientData.street} ${clientData.houseNumber}`
         : clientData.street;
-      const address = `${streetLine} ${clientData.zipCode} ${clientData.city}`;
-      return formatAddress(address);
+            const address = `${streetLine} ${clientData.zipCode} ${clientData.city}`;
+            return formatAddress(address);
+        }
+
+        // Priority 2: Use address string
+        const address = clientData.address;
+        if (!address) {
+            return "Adresse nicht verfügbar";
+        }
+
+        // Use the shared formatAddress utility
+        return formatAddress(address);
     }
 
-    // Priority 2: Use address string
-    const address = clientData.address;
-    if (!address) {
-      return "Adresse nicht verfügbar";
-    }
-
-    // Use the shared formatAddress utility
-    return formatAddress(address);
-  }
-
-  /**
-   * Format creditor address using the same logic as client address
-   */
-  formatCreditorAddress(creditor) {
+    /**
+     * Format creditor address using the same logic as client address
+     */
+    formatCreditorAddress(creditor) {
     const address =
       creditor.creditor_address ||
-      creditor.address ||
-      creditor.sender_address ||
-      null;
+                       creditor.address ||
+                       creditor.sender_address ||
+                       null;
 
-    if (!address) {
-      return "Adresse nicht verfügbar";
+        if (!address) {
+            return "Adresse nicht verfügbar";
+        }
+
+        return formatAddress(address);
     }
 
-    return formatAddress(address);
-  }
+    /**
+     * Prepare template data for Word document
+     */
+    prepareTemplateData(clientData, creditor) {
+        const today = new Date();
+        const responseDate = new Date();
+        responseDate.setDate(today.getDate() + 14); // 14 days from today
 
-  /**
-   * Prepare template data for Word document
-   */
-  prepareTemplateData(clientData, creditor) {
-    const today = new Date();
-    const responseDate = new Date();
-    responseDate.setDate(today.getDate() + 14); // 14 days from today
-
-    const formatGermanDate = (date) => {
+        const formatGermanDate = (date) => {
       return date.toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
-      });
-    };
+            });
+        };
 
-    return {
-      // Creditor information
-      "Adresse des Creditors": this.formatCreditorAddress(creditor),
+        return {
+            // Creditor information
+            "Adresse des Creditors": this.formatCreditorAddress(creditor),
 
       Creditor:
         creditor.creditor_name ||
-        creditor.sender_name ||
-        "Unbekannter Gläubiger",
-
+                creditor.sender_name || 
+                "Unbekannter Gläubiger",
+            
       "Aktenzeichen des Credtiors":
         creditor.reference_number ||
-        creditor.creditor_reference ||
-        creditor.reference ||
-        creditor.aktenzeichen ||
-        "Nicht verfügbar",
+                creditor.creditor_reference || 
+                creditor.reference || 
+                creditor.aktenzeichen || 
+                "Nicht verfügbar",
 
-      // Client information
+            // Client information
       Name: clientData.name,
       Geburtstag:
         clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar",
       Adresse: this.formatClientAddress(clientData),
-      "Aktenzeichen des Mandanten": clientData.reference,
+            "Aktenzeichen des Mandanten": clientData.reference,
 
-      // Dates
-      "heutiges Datum": formatGermanDate(today),
+            // Dates
+            "heutiges Datum": formatGermanDate(today),
       "Datum in 14 Tagen": formatGermanDate(responseDate),
-    };
-  }
-
-  /**
-   * Ensure output directory exists
-   */
-  async ensureOutputDirectory() {
-    try {
-      await fs.access(this.outputDir);
-    } catch (error) {
-      // Directory doesn't exist, create it
-      await fs.mkdir(this.outputDir, { recursive: true });
-      console.log(`📁 Created output directory: ${this.outputDir}`);
+        };
     }
-  }
 
-  /**
-   * Clean up old generated files (optional utility method)
-   */
-  async cleanupOldFiles(olderThanDays = 30) {
-    try {
-      const files = await fs.readdir(this.outputDir);
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-      let deletedCount = 0;
-      for (const file of files) {
-        const filePath = path.join(this.outputDir, file);
-        const stats = await fs.stat(filePath);
-
-        if (stats.mtime < cutoffDate) {
-          await fs.unlink(filePath);
-          deletedCount++;
+    /**
+     * Ensure output directory exists
+     */
+    async ensureOutputDirectory() {
+        try {
+            await fs.access(this.outputDir);
+        } catch (error) {
+            // Directory doesn't exist, create it
+            await fs.mkdir(this.outputDir, { recursive: true });
+            console.log(`📁 Created output directory: ${this.outputDir}`);
         }
-      }
-
-      if (deletedCount > 0) {
-        console.log(`🗑️ Cleaned up ${deletedCount} old document files`);
-      }
-
-      return { deleted: deletedCount };
-    } catch (error) {
-      console.error(`❌ Error cleaning up old files: ${error.message}`);
-      return { deleted: 0, error: error.message };
     }
-  }
+
+    /**
+     * Clean up old generated files (optional utility method)
+     */
+    async cleanupOldFiles(olderThanDays = 30) {
+        try {
+            const files = await fs.readdir(this.outputDir);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+            let deletedCount = 0;
+            for (const file of files) {
+                const filePath = path.join(this.outputDir, file);
+                const stats = await fs.stat(filePath);
+                
+                if (stats.mtime < cutoffDate) {
+                    await fs.unlink(filePath);
+                    deletedCount++;
+                }
+            }
+
+            if (deletedCount > 0) {
+                console.log(`🗑️ Cleaned up ${deletedCount} old document files`);
+            }
+
+            return { deleted: deletedCount };
+        } catch (error) {
+            console.error(`❌ Error cleaning up old files: ${error.message}`);
+            return { deleted: 0, error: error.message };
+        }
+    }
 }
 
 module.exports = FirstRoundDocumentGenerator;
