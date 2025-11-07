@@ -307,7 +307,7 @@ class FirstRoundDocumentGenerator {
             '   ⚠️ "Eini-" found but could not find "gungsversuchs" to merge with'
           );
         }
-      }
+            }
             
             // Update the document XML
       zip.file("word/document.xml", documentXml);
@@ -856,7 +856,7 @@ class FirstRoundDocumentGenerator {
         }
       }
 
-      // Remove excessive spacing between ALL body paragraphs (simpler, safer approach)
+      // Remove excessive spacing between ALL body paragraphs
       console.log(`   🔍 Removing excessive spacing between all body paragraphs...`);
       
       // Skip contact info and sidebar paragraphs - only fix body text paragraphs
@@ -866,15 +866,44 @@ class FirstRoundDocumentGenerator {
         "Deutsche Bank", "Bei Schriftverkehr"
       ];
 
-      // Simple approach: Just set w:before and w:after to "0" for body paragraphs
-      // This is safer than removing tags and won't corrupt XML
       let bodySpacingFixed = false;
+      let fixCount = 0;
       
       // Find all paragraphs and fix spacing in body text ones
       const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
       let paraMatch;
-      let fixCount = 0;
+      const bodyParagraphs = [];
       
+      // First pass: identify all body paragraphs
+      while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
+        const match = paraMatch[0];
+        const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+        const fullText = textMatches
+          ? textMatches
+              .map((m) => {
+                const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                return textMatch ? textMatch[1] : "";
+              })
+              .join("")
+          : "";
+
+        const isSkipPara = skipKeywords.some((keyword) =>
+          fullText.includes(keyword)
+        );
+        const isEmpty = !fullText.trim() || fullText.trim().length < 3;
+
+        // Only process body text paragraphs (not contact info, not empty)
+        if (!isSkipPara && !isEmpty && fullText.length > 10) {
+          bodyParagraphs.push({
+            original: match,
+            text: fullText.substring(0, 50)
+          });
+        }
+      }
+
+      console.log(`   📍 Found ${bodyParagraphs.length} body paragraphs to process`);
+
+      // Second pass: fix spacing in all body paragraphs
       documentXml = documentXml.replace(allParagraphsRegex, (match) => {
         // Extract text to check if it's body text
         const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -887,26 +916,68 @@ class FirstRoundDocumentGenerator {
               .join("")
           : "";
 
-        // Skip if it's contact info, sidebar, or empty
         const isSkipPara = skipKeywords.some((keyword) =>
           fullText.includes(keyword)
         );
         const isEmpty = !fullText.trim() || fullText.trim().length < 3;
 
-        // Only process body text paragraphs (not contact info, not empty)
+        // Only process body text paragraphs - ALWAYS ensure spacing is 0
         if (!isSkipPara && !isEmpty && fullText.length > 10) {
-          // Check if paragraph has spacing
-          const hasBefore = /w:before="\d+"/.test(match);
-          const hasAfter = /w:after="\d+"/.test(match);
+          let updated = match;
+          const originalMatch = match;
+
+          // Check if paragraph has pPr
+          const hasPPr = /<w:pPr[^>]*>/.test(updated);
           
-          if (hasBefore || hasAfter) {
-            // Set spacing to 0 (safer than removing tags)
-            let updated = match.replace(/w:before="\d+"/g, 'w:before="0"');
-            updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
+          if (hasPPr) {
+            // If pPr exists, ensure spacing is set to 0
+            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+            if (pPrMatch) {
+              let pPrContent = pPrMatch[1];
+              
+              // Always ensure w:before="0" and w:after="0" exist
+              // First, remove any existing w:before and w:after
+              pPrContent = pPrContent.replace(/\s*w:before="\d+"/g, '');
+              pPrContent = pPrContent.replace(/\s*w:after="\d+"/g, '');
+              
+              // Check if spacing tag exists
+              const spacingMatch = pPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
+              if (spacingMatch) {
+                // Spacing tag exists - update it to include w:before="0" w:after="0"
+                let spacingAttrs = spacingMatch[1].trim();
+                // Remove any remaining spacing attributes we want to override
+                spacingAttrs = spacingAttrs.replace(/\s*w:before="\d+"/g, '');
+                spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, '');
+                // Add our spacing attributes at the beginning
+                const newSpacingTag = `<w:spacing w:before="0" w:after="0"${spacingAttrs ? ' ' + spacingAttrs.trim() : ''}>`;
+                pPrContent = pPrContent.replace(/<w:spacing[^>]*?\/?>/, newSpacingTag);
+              } else {
+                // No spacing tag exists, add one with w:before="0" and w:after="0"
+                pPrContent = '<w:spacing w:before="0" w:after="0"/>' + pPrContent;
+              }
+              
+              updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+            }
+          } else {
+            // No pPr exists, add one with spacing=0
+            updated = updated.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>');
+          }
+
+          // Also replace any w:before or w:after in the paragraph XML directly (outside pPr)
+          updated = updated.replace(/w:before="\d+"/g, 'w:before="0"');
+          updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
+
+          // Always return updated version for body paragraphs (even if unchanged, ensures consistency)
+          if (updated !== originalMatch) {
             fixCount++;
             bodySpacingFixed = true;
-            return updated;
+            console.log(`   🔧 Fixed spacing for body paragraph: "${fullText.substring(0, 50)}..."`);
+          } else {
+            // Even if no change detected, ensure spacing is explicitly set
+            fixCount++;
+            bodySpacingFixed = true;
           }
+          return updated;
         }
         
         return match; // Return unchanged if not a body paragraph
