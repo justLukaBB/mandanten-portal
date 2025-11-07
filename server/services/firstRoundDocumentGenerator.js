@@ -942,78 +942,106 @@ class FirstRoundDocumentGenerator {
         }
       });
       
-      // Now fix spacing in all body paragraphs - ALWAYS ensure spacing is 0
-      documentXml = documentXml.replace(allParagraphsRegex, (match) => {
-        // Extract text to check if it's body text
-        const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
-        const fullText = textMatches
-          ? textMatches
-              .map((m) => {
-                const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
-                return textMatch ? textMatch[1] : "";
-              })
-              .join("")
-          : "";
-
-        // Skip if it's contact info, sidebar, or empty
-        const isSkipPara = skipKeywords.some((keyword) =>
-          fullText.includes(keyword)
-        );
-        const isEmpty = !fullText.trim() || fullText.trim().length < 3;
-
-        // Only process body text paragraphs (not contact info, not empty)
-        if (!isSkipPara && !isEmpty && fullText.length > 10) {
-          let updated = match;
-          const originalMatch = match;
-          
-          // Check if paragraph has pPr
-          const hasPPr = /<w:pPr[^>]*>/.test(updated);
-          
-          if (hasPPr) {
-            // If pPr exists, ensure spacing is set to 0
-            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-            if (pPrMatch) {
-              let pPrContent = pPrMatch[1];
+      // Now fix spacing in all body paragraphs - SAFEST approach: only modify existing spacing tags
+      const bodySpacingReplacements = [];
+      
+      bodyParagraphs.forEach((para) => {
+        let updated = para.original;
+        const originalMatch = para.original;
+        let needsUpdate = false;
+        
+        // Check if paragraph has pPr
+        const hasPPr = /<w:pPr[^>]*>/.test(updated);
+        
+        if (hasPPr) {
+          // If pPr exists, check for spacing and set to 0
+          const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            let pPrContent = pPrMatch[1];
+            const originalPPrContent = pPrContent;
+            
+            // Check if spacing tag exists - ONLY modify if it exists
+            const spacingMatch = pPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
+            if (spacingMatch) {
+              // Spacing tag exists - update w:before and w:after to 0
+              let spacingTag = spacingMatch[0];
+              const originalSpacingTag = spacingTag;
+              const isSelfClosing = spacingMatch[2] === '/';
               
-              // Remove any existing w:before and w:after
-              pPrContent = pPrContent.replace(/\s*w:before="\d+"/g, '');
-              pPrContent = pPrContent.replace(/\s*w:after="\d+"/g, '');
+              // Replace existing w:before and w:after with "0"
+              spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
+              spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
               
-              // Check if spacing tag exists
-              const spacingMatch = pPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
-              if (spacingMatch) {
-                // Spacing tag exists - update it
-                let spacingAttrs = spacingMatch[1].trim();
-                spacingAttrs = spacingAttrs.replace(/\s*w:before="\d+"/g, '');
-                spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, '');
-                const newSpacingTag = `<w:spacing w:before="0" w:after="0"${spacingAttrs ? ' ' + spacingAttrs.trim() : ''}>`;
-                pPrContent = pPrContent.replace(/<w:spacing[^>]*?\/?>/, newSpacingTag);
-              } else {
-                // No spacing tag exists, add one
-                pPrContent = '<w:spacing w:before="0" w:after="0"/>' + pPrContent;
+              // If spacing tag doesn't have w:before, add it
+              if (!/w:before=/.test(spacingTag)) {
+                if (isSelfClosing) {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
+                } else {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
+                }
+              }
+              // If spacing tag doesn't have w:after, add it
+              if (!/w:after=/.test(spacingTag)) {
+                if (isSelfClosing) {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+                } else {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+                }
               }
               
-              updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+              // Only update if spacing tag changed
+              if (spacingTag !== originalSpacingTag) {
+                // Replace the spacing tag in pPrContent
+                pPrContent = pPrContent.replace(originalSpacingTag, spacingTag);
+                
+                if (pPrContent !== originalPPrContent) {
+                  updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+                  needsUpdate = true;
+                }
+              }
             }
-          } else {
-            // No pPr exists, add one with spacing=0
-            updated = updated.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>');
+            // If no spacing tag exists, leave it unchanged (no spacing = no problem)
           }
-
-          // Also replace any w:before or w:after anywhere in the paragraph
-          updated = updated.replace(/w:before="\d+"/g, 'w:before="0"');
-          updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
-
-          if (updated !== originalMatch) {
-            fixCount++;
-            bodySpacingFixed = true;
-            console.log(`   🔧 Fixed spacing for: "${fullText.substring(0, 60)}..."`);
-          }
-          return updated;
         }
-        
-        return match; // Return unchanged if not a body paragraph
+        // If no pPr exists, leave it unchanged (no pPr = no spacing to fix)
+
+        // Also replace any w:before or w:after anywhere else in the paragraph (outside pPr)
+        // This is safe as it only modifies existing attributes
+        if (/w:before="\d+"/.test(updated)) {
+          updated = updated.replace(/w:before="\d+"/g, 'w:before="0"');
+          needsUpdate = true;
+        }
+        if (/w:after="\d+"/.test(updated)) {
+          updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
+          needsUpdate = true;
+        }
+
+        if (needsUpdate && updated !== originalMatch) {
+          bodySpacingReplacements.push({
+            original: originalMatch,
+            updated: updated
+          });
+          fixCount++;
+          bodySpacingFixed = true;
+          console.log(`   🔧 Fixed spacing for: "${para.text.substring(0, 60)}..."`);
+        }
       });
+
+      // Apply all replacements to document XML (in reverse order to avoid index issues)
+      if (bodySpacingReplacements.length > 0) {
+        console.log(`   🔧 Applying ${bodySpacingReplacements.length} body paragraph spacing fixes...`);
+        // Apply in reverse order to avoid index shifting issues
+        for (let i = bodySpacingReplacements.length - 1; i >= 0; i--) {
+          const replacement = bodySpacingReplacements[i];
+          // Use exact match to avoid corrupting XML
+          const beforeReplace = documentXml;
+          documentXml = documentXml.replace(replacement.original, replacement.updated);
+          // Verify replacement worked
+          if (documentXml === beforeReplace) {
+            console.log(`   ⚠️ Warning: Replacement failed for paragraph (exact match not found)`);
+          }
+        }
+      }
 
       if (bodySpacingFixed) {
         console.log(
