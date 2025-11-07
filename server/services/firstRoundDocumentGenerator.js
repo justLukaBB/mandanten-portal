@@ -164,7 +164,7 @@ class FirstRoundDocumentGenerator {
       const hyphenationFixes = {
         "Eini-gungsversuchs": "Einigungsversuchs",
         "Eini- gungsversuchs": "Einigungsversuchs",
-        "Eini-\ngungsversuchs": "Einigungsversuchs", 
+        "Eini-\ngungsversuchs": "Einigungsversuchs",
         "Eini- \ngungsversuchs": "Einigungsversuchs",
         "die-sem": "diesem",
         "die- sem": "diesem",
@@ -251,7 +251,7 @@ class FirstRoundDocumentGenerator {
         fixesApplied++;
         return p1 + "Einigungsversuchs" + p2 + "</w:t>";
       });
-      
+
       const pattern4 =
         /(<w:t[^>]*>)Eini-(\s*&nbsp;?\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs([^<]*)/gi;
       documentXml = documentXml.replace(pattern4, (match, p1, p2, p3) => {
@@ -381,12 +381,10 @@ class FirstRoundDocumentGenerator {
         return;
       }
 
-      // First, check and fix the salutation paragraph itself for w:after spacing
       console.log(`   🔍 Checking salutation paragraph for spacing issues...`);
       let spacingFixed = false;
-      const replacements = []; // Store all replacements to apply at once
+      const replacements = [];
 
-      // Get salutation paragraph (we'll use it later for moving)
       const salutationPara = paragraphs[salutationParagraphIndex];
       const salutationPPrMatch = salutationPara.fullMatch.match(
         /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
@@ -610,36 +608,39 @@ class FirstRoundDocumentGenerator {
           );
           updatedPPrContent = updatedPPrContent.replace(/w:left="\d+"/g, "");
 
-          // Remove any existing w:after from spacing tags
+          // Remove ANY w:after spacing from salutation (should be 0 for no extra spacing)
+          console.log(
+            `   🔧 Removing ALL w:after spacing from salutation paragraph`
+          );
           updatedPPrContent = updatedPPrContent.replace(
             /\s*w:after="\d+"/g,
             ""
           );
 
-          // Check if spacing tag exists (handle both self-closing and regular tags)
+          // Check if spacing tag exists and remove it if it's now empty
           const spacingTagMatch = updatedPPrContent.match(
             /<w:spacing([^>]*?)(\/?)>/
           );
           if (spacingTagMatch) {
-            // Spacing tag exists - add w:after to it
             let spacingAttrs = spacingTagMatch[1].trim();
-            // Remove any trailing / if it was self-closing
-            const wasSelfClosing = spacingTagMatch[2] === "/";
-            // Add w:after attribute
-            if (spacingAttrs && !spacingAttrs.endsWith(" ")) {
-              spacingAttrs += " ";
+            // Remove w:after if it still exists
+            spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
+            // If spacing tag is now empty or only has whitespace, remove it entirely
+            if (!spacingAttrs.trim() || spacingAttrs.trim() === "") {
+              // Remove the entire spacing tag
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                ""
+              );
+            } else {
+              // Keep the spacing tag but without w:after
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                `<w:spacing ${spacingAttrs.trim()}>`
+              );
             }
-            spacingAttrs += 'w:after="240"';
-            // Replace the spacing tag
-            updatedPPrContent = updatedPPrContent.replace(
-              /<w:spacing[^>]*?\/?>/,
-              `<w:spacing ${spacingAttrs}>`
-            );
-          } else {
-            // No spacing tag exists, add one
-            updatedPPrContent =
-              '<w:spacing w:after="240"/>' + updatedPPrContent;
           }
+          // Do NOT add any spacing tag - we want NO spacing after salutation
 
           // Ensure left alignment (remove any right alignment)
           updatedPPrContent = updatedPPrContent.replace(
@@ -657,14 +658,17 @@ class FirstRoundDocumentGenerator {
             `<w:pPr>${updatedPPrContent}</w:pPr>`
           );
         } else {
-          // No pPr exists, add one with spacing and left alignment
+          // No pPr exists, add one WITHOUT spacing (we want no extra spacing after salutation)
+          console.log(
+            `   🔧 Adding pPr to salutation WITHOUT spacing`
+          );
           salutationXml = salutationXml.replace(
             /<w:p>/,
-            '<w:p><w:pPr><w:spacing w:after="240"/></w:pPr>'
+            '<w:p><w:pPr></w:pPr>'
           );
         }
 
-        console.log(`   📝 Updated salutation XML with w:after="240" spacing`);
+        console.log(`   📝 Updated salutation XML - removed all spacing`);
         console.log(
           `      Salutation XML (first 400 chars): ${salutationXml.substring(
             0,
