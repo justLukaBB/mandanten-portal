@@ -941,7 +941,6 @@ class FirstRoundDocumentGenerator {
         }
       });
       
-      // Now fix spacing in all body paragraphs - SAFEST approach: only modify existing spacing tags
       const bodySpacingReplacements = [];
       
       bodyParagraphs.forEach((para) => {
