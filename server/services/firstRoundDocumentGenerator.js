@@ -796,6 +796,23 @@ class FirstRoundDocumentGenerator {
 
       // Log XML for specific paragraphs BEFORE fixing
       bodyParagraphs.forEach((para, idx) => {
+        // Check for "Eine entsprechende Vollmacht liegt bei."
+        if (para.text.includes("Eine entsprechende Vollmacht liegt bei")) {
+          console.log(`\n   🔍 BEFORE FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+          console.log(`      Full XML: ${para.original}`);
+          
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes (no spacing)`);
+          } else {
+            console.log(`      ✅ No pPr found (no spacing)`);
+          }
+        }
+        
         if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
           console.log(`\n   🔍 BEFORE FIX - Paragraph "${para.text.substring(0, 50)}...":`);
           console.log(`      Full XML: ${para.original}`);
@@ -886,11 +903,22 @@ class FirstRoundDocumentGenerator {
                   needsUpdate = true;
                 }
               }
+            } else {
+              // No spacing tag exists - add one with w:before="0" w:after="0" to ensure no spacing
+              pPrContent = '<w:spacing w:before="0" w:after="0"/>' + pPrContent;
+              updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+              needsUpdate = true;
             }
-            // If no spacing tag exists, leave it unchanged (no spacing = no problem)
+          }
+        } else {
+          // No pPr exists - add one with spacing=0 to ensure no spacing
+          const paraStartMatch = updated.match(/^<w:p([^>]*)>/);
+          if (paraStartMatch) {
+            const paraAttrs = paraStartMatch[1];
+            updated = updated.replace(/^<w:p[^>]*>/, `<w:p${paraAttrs}><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>`);
+            needsUpdate = true;
           }
         }
-        // If no pPr exists, leave it unchanged (no pPr = no spacing to fix)
 
         // Also replace any w:before or w:after anywhere else in the paragraph (outside pPr)
         // This is safe as it only modifies existing attributes
@@ -913,6 +941,19 @@ class FirstRoundDocumentGenerator {
           bodySpacingFixed = true;
           
           // Log AFTER fix for specific paragraphs
+          if (para.text.includes("Eine entsprechende Vollmacht liegt bei")) {
+            console.log(`\n   ✅ AFTER FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+            console.log(`      Updated XML: ${updated}`);
+            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+            if (pPrMatch) {
+              const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+              const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+              if (beforeMatch) console.log(`      ✅ w:before="${beforeMatch[1]}" twips`);
+              if (afterMatch) console.log(`      ✅ w:after="${afterMatch[1]}" twips`);
+              if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes`);
+            }
+          }
+          
           if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
             console.log(`\n   ✅ AFTER FIX - Paragraph "${para.text.substring(0, 50)}...":`);
             console.log(`      Updated XML: ${updated}`);
