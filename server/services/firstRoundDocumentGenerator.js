@@ -307,7 +307,7 @@ class FirstRoundDocumentGenerator {
             '   ⚠️ "Eini-" found but could not find "gungsversuchs" to merge with'
           );
         }
-            }
+      }
             
             // Update the document XML
       zip.file("word/document.xml", documentXml);
@@ -865,7 +865,6 @@ class FirstRoundDocumentGenerator {
         "Bankverbindungen", "Aktenzeichen", "BLZ", "Konto-Nr", 
         "Deutsche Bank", "Bei Schriftverkehr"
       ];
-
       let bodySpacingFixed = false;
       let fixCount = 0;
       
@@ -874,7 +873,7 @@ class FirstRoundDocumentGenerator {
       let paraMatch;
       const bodyParagraphs = [];
       
-      // First pass: identify all body paragraphs
+      // First, collect all body paragraphs with their XML for logging
       while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
         const match = paraMatch[0];
         const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -892,18 +891,58 @@ class FirstRoundDocumentGenerator {
         );
         const isEmpty = !fullText.trim() || fullText.trim().length < 3;
 
-        // Only process body text paragraphs (not contact info, not empty)
+        // Only process body text paragraphs
         if (!isSkipPara && !isEmpty && fullText.length > 10) {
           bodyParagraphs.push({
             original: match,
-            text: fullText.substring(0, 50)
+            text: fullText.substring(0, 100),
+            index: bodyParagraphs.length
           });
         }
       }
 
       console.log(`   📍 Found ${bodyParagraphs.length} body paragraphs to process`);
-
-      // Second pass: fix spacing in all body paragraphs
+      
+      // Log XML for specific paragraphs mentioned by user
+      bodyParagraphs.forEach((para, idx) => {
+        if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
+          console.log(`   📄 BODY PARAGRAPH ${idx} - "test user...strebt eine Schuldenbereinigung":`);
+          console.log(`      Full XML (first 600 chars): ${para.original.substring(0, 600)}...`);
+          
+          // Extract and log spacing information
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            console.log(`      pPr XML: ${pPrMatch[0].substring(0, 400)}...`);
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ℹ️ No spacing attributes found`);
+          } else {
+            console.log(`      ℹ️ No pPr found in paragraph`);
+          }
+        }
+        
+        if (para.text.includes("Hierzu benötigen wir zunächst")) {
+          console.log(`   📄 BODY PARAGRAPH ${idx} - "Hierzu benötigen wir zunächst":`);
+          console.log(`      Full XML (first 600 chars): ${para.original.substring(0, 600)}...`);
+          
+          // Extract and log spacing information
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            console.log(`      pPr XML: ${pPrMatch[0].substring(0, 400)}...`);
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ℹ️ No spacing attributes found`);
+          } else {
+            console.log(`      ℹ️ No pPr found in paragraph`);
+          }
+        }
+      });
+      
+      // Now fix spacing in all body paragraphs
       documentXml = documentXml.replace(allParagraphsRegex, (match) => {
         // Extract text to check if it's body text
         const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -921,11 +960,11 @@ class FirstRoundDocumentGenerator {
         );
         const isEmpty = !fullText.trim() || fullText.trim().length < 3;
 
-        // Only process body text paragraphs - ALWAYS ensure spacing is 0
+        // Only process body text paragraphs
         if (!isSkipPara && !isEmpty && fullText.length > 10) {
           let updated = match;
           const originalMatch = match;
-
+          
           // Check if paragraph has pPr
           const hasPPr = /<w:pPr[^>]*>/.test(updated);
           
@@ -935,24 +974,21 @@ class FirstRoundDocumentGenerator {
             if (pPrMatch) {
               let pPrContent = pPrMatch[1];
               
-              // Always ensure w:before="0" and w:after="0" exist
-              // First, remove any existing w:before and w:after
+              // Remove any existing w:before and w:after
               pPrContent = pPrContent.replace(/\s*w:before="\d+"/g, '');
               pPrContent = pPrContent.replace(/\s*w:after="\d+"/g, '');
               
               // Check if spacing tag exists
               const spacingMatch = pPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
               if (spacingMatch) {
-                // Spacing tag exists - update it to include w:before="0" w:after="0"
+                // Spacing tag exists - update it
                 let spacingAttrs = spacingMatch[1].trim();
-                // Remove any remaining spacing attributes we want to override
                 spacingAttrs = spacingAttrs.replace(/\s*w:before="\d+"/g, '');
                 spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, '');
-                // Add our spacing attributes at the beginning
                 const newSpacingTag = `<w:spacing w:before="0" w:after="0"${spacingAttrs ? ' ' + spacingAttrs.trim() : ''}>`;
                 pPrContent = pPrContent.replace(/<w:spacing[^>]*?\/?>/, newSpacingTag);
               } else {
-                // No spacing tag exists, add one with w:before="0" and w:after="0"
+                // No spacing tag exists, add one
                 pPrContent = '<w:spacing w:before="0" w:after="0"/>' + pPrContent;
               }
               
@@ -963,19 +999,14 @@ class FirstRoundDocumentGenerator {
             updated = updated.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>');
           }
 
-          // Also replace any w:before or w:after in the paragraph XML directly (outside pPr)
+          // Also replace any w:before or w:after anywhere in the paragraph
           updated = updated.replace(/w:before="\d+"/g, 'w:before="0"');
           updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
 
-          // Always return updated version for body paragraphs (even if unchanged, ensures consistency)
           if (updated !== originalMatch) {
             fixCount++;
             bodySpacingFixed = true;
-            console.log(`   🔧 Fixed spacing for body paragraph: "${fullText.substring(0, 50)}..."`);
-          } else {
-            // Even if no change detected, ensure spacing is explicitly set
-            fixCount++;
-            bodySpacingFixed = true;
+            console.log(`   🔧 Fixed spacing for: "${fullText.substring(0, 60)}..."`);
           }
           return updated;
         }
