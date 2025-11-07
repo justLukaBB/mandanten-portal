@@ -307,7 +307,7 @@ class FirstRoundDocumentGenerator {
             '   ⚠️ "Eini-" found but could not find "gungsversuchs" to merge with'
           );
         }
-      }
+            }
             
             // Update the document XML
       zip.file("word/document.xml", documentXml);
@@ -868,12 +868,12 @@ class FirstRoundDocumentGenerator {
       let bodySpacingFixed = false;
       let fixCount = 0;
       
-      // Find all paragraphs and fix spacing in body text ones
+      // First, collect all body paragraphs with their XML for logging
       const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
       let paraMatch;
       const bodyParagraphs = [];
       
-      // First, collect all body paragraphs with their XML for logging
+      // First pass: identify and log body paragraphs
       while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
         const match = paraMatch[0];
         const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -942,7 +942,7 @@ class FirstRoundDocumentGenerator {
         }
       });
       
-      // Now fix spacing in all body paragraphs
+      // Now fix spacing in all body paragraphs - ALWAYS ensure spacing is 0
       documentXml = documentXml.replace(allParagraphsRegex, (match) => {
         // Extract text to check if it's body text
         const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -955,12 +955,13 @@ class FirstRoundDocumentGenerator {
               .join("")
           : "";
 
+        // Skip if it's contact info, sidebar, or empty
         const isSkipPara = skipKeywords.some((keyword) =>
           fullText.includes(keyword)
         );
         const isEmpty = !fullText.trim() || fullText.trim().length < 3;
 
-        // Only process body text paragraphs
+        // Only process body text paragraphs (not contact info, not empty)
         if (!isSkipPara && !isEmpty && fullText.length > 10) {
           let updated = match;
           const originalMatch = match;
@@ -1035,7 +1036,6 @@ class FirstRoundDocumentGenerator {
     } catch (error) {
       console.error("⚠️ Warning: Could not fix spacing issues:", error.message);
       console.error("   Error stack:", error.stack);
-            // Don't throw error - document generation should continue
         }
     }
 
