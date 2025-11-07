@@ -856,8 +856,153 @@ class FirstRoundDocumentGenerator {
         }
       }
 
+      // Remove excessive spacing between ALL body paragraphs
+      console.log(`   🔍 Removing excessive spacing between all body paragraphs...`);
+      const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
+      const allParagraphs = [];
+      let paraMatch;
+      
+      // Re-parse paragraphs after replacements
+      while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
+        allParagraphs.push({
+          fullMatch: paraMatch[0],
+          content: paraMatch[1],
+          index: paraMatch.index
+        });
+      }
+
+      let bodySpacingFixed = false;
+      const bodySpacingReplacements = [];
+
+      // Skip contact info and sidebar paragraphs - only fix body text paragraphs
+      const skipKeywords = [
+        "Telefon", "Telefax", "e-Mail", "Öffnungszeiten", 
+        "Bankverbindungen", "Aktenzeichen", "BLZ", "Konto-Nr", 
+        "Deutsche Bank", "Bei Schriftverkehr"
+      ];
+
+      for (let i = 0; i < allParagraphs.length; i++) {
+        const para = allParagraphs[i];
+        const paraXml = para.fullMatch;
+        
+        // Extract text to check if it's body text
+        const textMatches = paraXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+        const fullText = textMatches
+          ? textMatches
+              .map((m) => {
+                const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                return textMatch ? textMatch[1] : "";
+              })
+              .join("")
+          : "";
+
+        // Skip if it's contact info, sidebar, or empty
+        const isSkipPara = skipKeywords.some((keyword) =>
+          fullText.includes(keyword)
+        );
+        const isEmpty = !fullText.trim() || fullText.trim().length < 3;
+
+        // Only process body text paragraphs (not contact info, not empty)
+        if (!isSkipPara && !isEmpty && fullText.length > 10) {
+          const pPrMatch = paraXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          
+          if (pPrMatch) {
+            const pPrContent = pPrMatch[1];
+            let updatedPPrContent = pPrContent;
+            let needsUpdate = false;
+
+            // Remove w:before spacing (spacing before this paragraph)
+            const beforeMatch = pPrContent.match(/w:before="(\d+)"/);
+            if (beforeMatch) {
+              const beforeValue = parseInt(beforeMatch[1]);
+              if (beforeValue > 0) {
+                console.log(
+                  `   🔧 Removing w:before="${beforeValue}" from body paragraph ${i}`
+                );
+                updatedPPrContent = updatedPPrContent.replace(
+                  /w:before="\d+"/,
+                  'w:before="0"'
+                );
+                needsUpdate = true;
+              }
+            }
+
+            // Remove w:after spacing (spacing after this paragraph)
+            const afterMatch = pPrContent.match(/w:after="(\d+)"/);
+            if (afterMatch) {
+              const afterValue = parseInt(afterMatch[1]);
+              if (afterValue > 0) {
+                console.log(
+                  `   🔧 Removing w:after="${afterValue}" from body paragraph ${i}`
+                );
+                updatedPPrContent = updatedPPrContent.replace(
+                  /w:after="\d+"/,
+                  'w:after="0"'
+                );
+                needsUpdate = true;
+              }
+            }
+
+            // If spacing tag becomes empty, remove it
+            if (needsUpdate) {
+              const spacingTagMatch = updatedPPrContent.match(
+                /<w:spacing([^>]*?)(\/?)>/
+              );
+              if (spacingTagMatch) {
+                let spacingAttrs = spacingTagMatch[1].trim();
+                spacingAttrs = spacingAttrs.replace(/\s*w:before="\d+"/g, "");
+                spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
+                
+                if (!spacingAttrs.trim()) {
+                  // Remove empty spacing tag
+                  updatedPPrContent = updatedPPrContent.replace(
+                    /<w:spacing[^>]*?\/?>/,
+                    ""
+                  );
+                } else {
+                  // Update spacing tag
+                  updatedPPrContent = updatedPPrContent.replace(
+                    /<w:spacing[^>]*?\/?>/,
+                    `<w:spacing ${spacingAttrs.trim()}>`
+                  );
+                }
+              }
+
+              // Update the paragraph
+              const updatedParaXml = paraXml.replace(
+                pPrMatch[0],
+                `<w:pPr>${updatedPPrContent}</w:pPr>`
+              );
+              
+              bodySpacingReplacements.push({
+                original: paraXml,
+                updated: updatedParaXml
+              });
+              bodySpacingFixed = true;
+            }
+          }
+        }
+      }
+
+      // Apply body paragraph spacing fixes
+      if (bodySpacingReplacements.length > 0) {
+        console.log(
+          `   🔧 Applying ${bodySpacingReplacements.length} body paragraph spacing fixes...`
+        );
+        for (const replacement of bodySpacingReplacements) {
+          documentXml = documentXml.replace(
+            replacement.original,
+            replacement.updated
+          );
+        }
+        spacingFixed = true;
+        console.log(
+          `   ✅ Removed excessive spacing between ${bodySpacingReplacements.length} body paragraphs`
+        );
+      }
+
       // Update the document XML if any changes were made
-      if (spacingFixed || replacements.length > 0) {
+      if (spacingFixed || replacements.length > 0 || bodySpacingFixed) {
         zip.file("word/document.xml", documentXml);
         console.log(
           "✅ Fixed spacing issues and repositioned salutation in document"
