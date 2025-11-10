@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { CloudArrowUpIcon, DocumentIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, DocumentIcon, XMarkIcon, CheckCircleIcon, DocumentTextIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon, MagnifyingGlassMinusIcon } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../config/api';
 
 interface Client {
@@ -49,6 +49,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   const [successMessage, setSuccessMessage] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   const validateFile = (file: File): string | null => {
     // Check file size (10MB limit)
@@ -256,55 +257,58 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   };
 
   const handlePreview = async (fileOrDocument: any) => {
-  try {
-    setPreviewFile({ loading: true });
+    try {
+      setPreviewFile({ loading: true });
 
-    // 🧩 Case 1: Local uploaded file (not yet saved on backend)
-    if (fileOrDocument.file instanceof File) {
-      const file = fileOrDocument.file;
-      const objectUrl = URL.createObjectURL(file);
+      // 🧩 Case 1: Local uploaded file (not yet saved on backend)
+      if (fileOrDocument.file instanceof File) {
+        const file = fileOrDocument.file;
+        const objectUrl = URL.createObjectURL(file);
+
+        setPreviewFile({
+          loading: false,
+          url: objectUrl,
+          name: file.name,
+          type: file.type,
+        });
+        return;
+      }
+
+      // 🧩 Case 2: Existing document from backend
+      if (!client?.id || !fileOrDocument.id) throw new Error("Invalid document reference");
+
+      const token = localStorage.getItem("token");
+      const fileUrl = `${API_BASE_URL}/api/agent-review/${client.id}/document/${fileOrDocument.id}/file`;
+
+      const res = await fetch(fileUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Failed to load file");
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const contentType = res.headers.get("Content-Type") || blob.type || "application/pdf";
+      const contentDisposition = res.headers.get("Content-Disposition");
+      const nameMatch = contentDisposition?.match(/filename="(.+)"/);
+      const fileName = nameMatch ? nameMatch[1] : `document-${fileOrDocument.id}`;
 
       setPreviewFile({
         loading: false,
         url: objectUrl,
-        name: file.name,
-        type: file.type,
+        name: fileName,
+        type: contentType,
       });
-      return;
+    } catch (err) {
+      console.error("❌ Preview failed:", err);
+      alert("Unable to load preview. Please try again.");
+      setPreviewFile(null);
     }
+  };
 
-    // 🧩 Case 2: Existing document from backend
-    if (!client?.id || !fileOrDocument.id) throw new Error("Invalid document reference");
-
-    const token = localStorage.getItem("token");
-    const fileUrl = `${API_BASE_URL}/api/agent-review/${client.id}/document/${fileOrDocument.id}/file`;
-
-    const res = await fetch(fileUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) throw new Error("Failed to load file");
-
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-
-    const contentType = res.headers.get("Content-Type") || blob.type || "application/pdf";
-    const contentDisposition = res.headers.get("Content-Disposition");
-    const nameMatch = contentDisposition?.match(/filename="(.+)"/);
-    const fileName = nameMatch ? nameMatch[1] : `document-${fileOrDocument.id}`;
-
-    setPreviewFile({
-      loading: false,
-      url: objectUrl,
-      name: fileName,
-      type: contentType,
-    });
-  } catch (err) {
-    console.error("❌ Preview failed:", err);
-    alert("Unable to load preview. Please try again.");
-    setPreviewFile(null);
-  }
-};
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
 
 
   return (
@@ -338,8 +342,8 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
       {/* Upload Area - ALWAYS ACTIVE for iterative document uploads */}
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragOver
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+          ? 'border-blue-400 bg-blue-50'
+          : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -436,9 +440,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
           {documents
             .filter((doc) => !uploadedFiles.some((file) => file.file.name === doc.filename)) // skip current files
             .map((document) => (
-              <div 
-                key={document.extracted_data?.document_id} 
-                onClick={() => handlePreview(document)} 
+              <div
+                key={document.extracted_data?.document_id}
+                onClick={() => handlePreview(document)}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer
                 hover:bg-gray-100 transition-colors duration-200 border border-transparent hover:border-gray-200"
               >
@@ -481,55 +485,107 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
       {/* Preview Modal */}
       {previewFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-xl w-11/12 md:w-3/4 lg:w-1/2 p-4 relative">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col w-10/12 md:w-2/3 lg:w-1/2
+ h-[90vh] relative">
+            {/* Close button */}
             <button
-              onClick={() => setPreviewFile(null)}
-              className="absolute top-3 right-3 text-gray-600 hover:text-black"
+              onClick={() => {
+                setPreviewFile(null)
+                setZoom(1)
+              }}
+              className="absolute top-1 right-2 text-gray-600 hover:text-black z-10"
             >
               ✕
             </button>
 
-            {/* Show loader while previewFile.loading is true */}
-            {previewFile.loading ? (
-              <div className="flex flex-col items-center justify-center p-10">
-                <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                <p className="mt-4 text-sm text-gray-600">Loading preview...</p>
-              </div>
-            ) : previewFile.url ? (
-              <>
-                {previewFile.type?.includes("image") ? (
-                  <img
-                    src={previewFile.url}
-                    alt="Preview"
-                    className="max-h-[70vh] w-full object-contain"
-                  />
-                ) : previewFile.type === "application/pdf" ? (
-                  <iframe
-                    src={previewFile.url}
-                    className="w-full h-[80vh] rounded-lg"
-                    title="PDF Preview"
-                  />
-                ) : (
-                  <p className="text-center text-gray-600 p-6">
-                    Preview not supported for this file type.
-                    <br />
-                    <a
-                      href={previewFile.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 underline"
-                    >
-                      Download file
-                    </a>
+            {/* Header with controls */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center space-x-2">
+                <DocumentTextIcon className="h-6 w-6 text-gray-300 mx-auto mb-4" />
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">
+                    {previewFile.name || "Preview Document"}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {previewFile.type || "Unknown type"}
                   </p>
-                )}
-              </>
-            ) : (
-              <p className="text-center text-gray-600 p-6">No preview available.</p>
-            )}
+                </div>
+              </div>
+
+              {/* Zoom Controls */}
+              <div className="flex items-center space-x-1 mt-1">
+                <button
+                  onClick={handleZoomOut}
+                  disabled={zoom <= 0.5}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Zoom Out"
+                >
+                  <MagnifyingGlassMinusIcon className="h-4 w-4 text-gray-600" />
+                </button>
+
+                <span className="text-xs text-gray-600 text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+
+                <button
+                  onClick={handleZoomIn}
+                  disabled={zoom >= 3}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Zoom In"
+                >
+                  <MagnifyingGlassPlusIcon className="h-4 w-4 text-gray-600" />
+                </button>
+
+
+
+              </div>
+            </div>
+
+            {/* Document content */}
+            <div className="flex-1 overflow-auto p-4 flex justify-center items-center bg-gray-50">
+              {previewFile.loading ? (
+                <div className="flex flex-col items-center justify-center p-10">
+                  <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                  <p className="mt-4 text-sm text-gray-600">Loading preview...</p>
+                </div>
+              ) : previewFile.url ? (
+                <>
+                  {previewFile.type?.includes("image") ? (
+                    <img
+                      src={previewFile.url}
+                      alt="Preview"
+                      className="max-h-[80vh] object-contain border rounded shadow-sm"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+                    />
+                  ) : previewFile.type === "application/pdf" ? (
+                    <iframe
+                      src={previewFile.url}
+                      className="w-full h-full min-h-[80vh] border rounded"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+                      title="PDF Preview"
+                    />
+                  ) : (
+                    <p className="text-center text-gray-600 p-6">
+                      Preview not supported for this file type.{" "}
+                      <a
+                        href={previewFile.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        Download file
+                      </a>
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-center text-gray-600 p-6">No preview available.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };
