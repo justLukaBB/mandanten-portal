@@ -9,28 +9,28 @@ const { formatAddress } = require("../utils/addressFormatter");
  * Generates individual DOCX files for each creditor using the template
  */
 class FirstRoundDocumentGenerator {
-  constructor() {
+    constructor() {
     this.templatePath = path.join(__dirname, "../templates/1.Schreiben.docx");
     this.outputDir = path.join(__dirname, "../generated_documents/first_round");
-  }
+    }
 
-  /**
-   * Generate DOCX files for all creditors
-   */
-  async generateCreditorDocuments(clientData, creditors) {
-    try {
+    /**
+     * Generate DOCX files for all creditors
+     */
+    async generateCreditorDocuments(clientData, creditors) {
+        try {
       console.log(
         `📄 Generating first round documents for ${creditors.length} creditors...`
       );
 
-      // Ensure output directory exists
-      await this.ensureOutputDirectory();
+            // Ensure output directory exists
+            await this.ensureOutputDirectory();
 
-      const results = [];
-      const errors = [];
+            const results = [];
+            const errors = [];
 
-      for (let i = 0; i < creditors.length; i++) {
-        const creditor = creditors[i];
+            for (let i = 0; i < creditors.length; i++) {
+                const creditor = creditors[i];
         console.log(
           `   Processing ${i + 1}/${creditors.length}: ${
             creditor.creditor_name || creditor.sender_name
@@ -42,81 +42,81 @@ class FirstRoundDocumentGenerator {
             clientData,
             creditor
           );
-          results.push(result);
-        } catch (error) {
+                    results.push(result);
+                } catch (error) {
           console.error(
             `❌ Failed to generate document for ${
               creditor.creditor_name || creditor.sender_name
             }: ${error.message}`
           );
-          errors.push({
-            creditor: creditor.creditor_name || creditor.sender_name,
+                    errors.push({
+                        creditor: creditor.creditor_name || creditor.sender_name,
             error: error.message,
-          });
-        }
-      }
+                    });
+                }
+            }
 
       console.log(
         `✅ Generated ${results.length}/${creditors.length} documents successfully`
       );
-      if (errors.length > 0) {
-        console.log(`❌ ${errors.length} documents failed to generate`);
-      }
+            if (errors.length > 0) {
+                console.log(`❌ ${errors.length} documents failed to generate`);
+            }
 
-      return {
-        success: true,
-        documents: results,
-        errors: errors,
-        total_generated: results.length,
+            return {
+                success: true,
+                documents: results,
+                errors: errors,
+                total_generated: results.length,
         total_failed: errors.length,
-      };
-    } catch (error) {
-      console.error(`❌ Error in generateCreditorDocuments: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-        documents: [],
+            };
+        } catch (error) {
+            console.error(`❌ Error in generateCreditorDocuments: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                documents: [],
         errors: [],
-      };
+            };
+        }
     }
-  }
 
-  /**
-   * Generate a single DOCX document for one creditor
-   */
-  async generateSingleCreditorDocument(clientData, creditor) {
-    try {
-      // Read the template file
-      const templateContent = await fs.readFile(this.templatePath);
-      const zip = new PizZip(templateContent);
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        delimiters: {
-          start: '"',
+    /**
+     * Generate a single DOCX document for one creditor
+     */
+    async generateSingleCreditorDocument(clientData, creditor) {
+        try {
+            // Read the template file
+            const templateContent = await fs.readFile(this.templatePath);
+            const zip = new PizZip(templateContent);
+            const doc = new Docxtemplater(zip, {
+                paragraphLoop: true,
+                linebreaks: true,
+                delimiters: {
+                    start: '"',
           end: '"',
         },
-      });
+            });
 
-      // Prepare the data for replacement
-      const templateData = this.prepareTemplateData(clientData, creditor);
+            // Prepare the data for replacement
+            const templateData = this.prepareTemplateData(clientData, creditor);
 
-      // Render the document with the data
-      doc.render(templateData);
+            // Render the document with the data
+            doc.render(templateData);
 
-      // Fix German hyphenation issues in the rendered document
-      this.fixDocumentHyphenation(doc);
+            // Fix German hyphenation issues in the rendered document
+            this.fixDocumentHyphenation(doc);
 
       // Fix excessive spacing issues in the rendered document
-      this.fixDocumentSpacing(doc);
+            this.fixDocumentSpacing(doc);
 
-      // Generate the output buffer
-      const outputBuffer = doc.getZip().generate({
+            // Generate the output buffer
+            const outputBuffer = doc.getZip().generate({
         type: "nodebuffer",
         compression: "DEFLATE",
-      });
+            });
 
-      // Generate filename
+            // Generate filename
       const creditorName = (
         creditor.creditor_name ||
         creditor.sender_name ||
@@ -124,47 +124,47 @@ class FirstRoundDocumentGenerator {
       )
         .replace(/[^a-zA-Z0-9äöüßÄÖÜ\s-]/g, "") // Remove special characters
         .replace(/\s+/g, "_") // Replace spaces with underscores
-        .substring(0, 50); // Limit length
+                .substring(0, 50); // Limit length
 
-      const filename = `${clientData.reference}_${creditorName}_Erstschreiben.docx`;
-      const outputPath = path.join(this.outputDir, filename);
+            const filename = `${clientData.reference}_${creditorName}_Erstschreiben.docx`;
+            const outputPath = path.join(this.outputDir, filename);
 
-      // Save the file
-      await fs.writeFile(outputPath, outputBuffer);
+            // Save the file
+            await fs.writeFile(outputPath, outputBuffer);
 
-      const stats = await fs.stat(outputPath);
+            const stats = await fs.stat(outputPath);
 
-      return {
-        success: true,
-        creditor_name: creditor.creditor_name || creditor.sender_name,
-        creditor_id: creditor.id,
-        filename: filename,
-        path: outputPath,
-        size: stats.size,
+            return {
+                success: true,
+                creditor_name: creditor.creditor_name || creditor.sender_name,
+                creditor_id: creditor.id,
+                filename: filename,
+                path: outputPath,
+                size: stats.size,
         generated_at: new Date().toISOString(),
-      };
-    } catch (error) {
+            };
+        } catch (error) {
       console.error(
         `❌ Error generating document for creditor: ${error.message}`
       );
-      throw error;
+            throw error;
+        }
     }
-  }
 
-  /**
-   * Fix German hyphenation issues in the rendered Word document
-   */
-  fixDocumentHyphenation(doc) {
-    try {
-      // Get the document XML
-      const zip = doc.getZip();
+    /**
+     * Fix German hyphenation issues in the rendered Word document
+     */
+    fixDocumentHyphenation(doc) {
+        try {
+            // Get the document XML
+            const zip = doc.getZip();
       let documentXml = zip.files["word/document.xml"].asText();
-
-      // Define hyphenation fixes
-      const hyphenationFixes = {
+            
+            // Define hyphenation fixes
+            const hyphenationFixes = {
         "Eini-gungsversuchs": "Einigungsversuchs",
         "Eini- gungsversuchs": "Einigungsversuchs",
-        "Eini-\ngungsversuchs": "Einigungsversuchs", 
+        "Eini-\ngungsversuchs": "Einigungsversuchs",
         "Eini- \ngungsversuchs": "Einigungsversuchs",
         "die-sem": "diesem",
         "die- sem": "diesem",
@@ -184,10 +184,10 @@ class FirstRoundDocumentGenerator {
         "Schuldner/in": "Schuldner/die Schuldnerin",
       };
 
-      for (const [broken, fixed] of Object.entries(hyphenationFixes)) {
+            for (const [broken, fixed] of Object.entries(hyphenationFixes)) {
         const regex = new RegExp(broken.replace(/[-\s]/g, "[-\\s]*"), "gi");
-        documentXml = documentXml.replace(regex, fixed);
-      }
+                documentXml = documentXml.replace(regex, fixed);
+            }
       console.log('   🔍 Fixing "Eini-" hyphenation across XML elements...');
 
       // First, let's find and log the exact XML structure around "Eini-"
@@ -251,7 +251,7 @@ class FirstRoundDocumentGenerator {
         fixesApplied++;
         return p1 + "Einigungsversuchs" + p2 + "</w:t>";
       });
-      
+
       const pattern4 =
         /(<w:t[^>]*>)Eini-(\s*&nbsp;?\s*<\/w:t><\/w:r>[\s\S]*?<w:r[^>]*><w:t[^>]*>)gungsversuchs([^<]*)/gi;
       documentXml = documentXml.replace(pattern4, (match, p1, p2, p3) => {
@@ -307,13 +307,13 @@ class FirstRoundDocumentGenerator {
             '   ⚠️ "Eini-" found but could not find "gungsversuchs" to merge with'
           );
         }
-      }
-
-      // Update the document XML
+            }
+            
+            // Update the document XML
       zip.file("word/document.xml", documentXml);
-
+            
       console.log("✅ Fixed German hyphenation issues in document");
-    } catch (error) {
+        } catch (error) {
       console.error(
         "⚠️ Warning: Could not fix hyphenation issues:",
         error.message
@@ -332,8 +332,6 @@ class FirstRoundDocumentGenerator {
       const zip = doc.getZip();
       let documentXml = zip.files["word/document.xml"].asText();
 
-      console.log("🔍 Analyzing document XML for spacing issues...");
-
       // Find all paragraphs in the document
       const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
       const paragraphs = [];
@@ -346,8 +344,6 @@ class FirstRoundDocumentGenerator {
           index: match.index,
         });
       }
-
-      console.log(`   Found ${paragraphs.length} paragraphs in document`);
 
       // Find the paragraph containing "Sehr geehrte Damen und Herren,"
       let salutationParagraphIndex = -1;
@@ -365,28 +361,18 @@ class FirstRoundDocumentGenerator {
 
           if (fullText.includes("Sehr geehrte Damen und Herren")) {
             salutationParagraphIndex = i;
-            console.log(`   ✅ Found salutation paragraph at index ${i}`);
-            console.log(
-              `   📝 Paragraph XML (first 300 chars): ${paragraphs[
-                i
-              ].fullMatch.substring(0, 300)}...`
-            );
             break;
           }
         }
       }
 
       if (salutationParagraphIndex === -1) {
-        console.log("   ⚠️ Could not find salutation paragraph");
         return;
       }
 
-      // First, check and fix the salutation paragraph itself for w:after spacing
-      console.log(`   🔍 Checking salutation paragraph for spacing issues...`);
       let spacingFixed = false;
-      const replacements = []; // Store all replacements to apply at once
+      const replacements = [];
 
-      // Get salutation paragraph (we'll use it later for moving)
       const salutationPara = paragraphs[salutationParagraphIndex];
       const salutationPPrMatch = salutationPara.fullMatch.match(
         /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
@@ -394,12 +380,6 @@ class FirstRoundDocumentGenerator {
 
       if (salutationPPrMatch) {
         const salutationPPrContent = salutationPPrMatch[1];
-        console.log(
-          `   📝 Salutation paragraph pPr XML: ${salutationPPrMatch[0].substring(
-            0,
-            400
-          )}...`
-        );
 
         // Check for w:after spacing in salutation paragraph
         const salutationAfterMatch =
@@ -409,13 +389,7 @@ class FirstRoundDocumentGenerator {
 
         if (salutationAfterMatch) {
           const afterValue = parseInt(salutationAfterMatch[1]);
-          console.log(
-            `   ⚠️ Salutation paragraph has w:after="${afterValue}" twips`
-          );
           // Remove ANY w:after spacing from salutation (should be 0)
-          console.log(
-            `   🔧 Removing w:after spacing from salutation paragraph (${afterValue} twips -> removed)`
-          );
           let updatedSalutationXml = salutationPara.fullMatch;
 
           // Check if spacing tag has other attributes
@@ -456,24 +430,13 @@ class FirstRoundDocumentGenerator {
           });
           spacingFixed = true;
         } else {
-          console.log(`   ✅ Salutation paragraph has no w:after spacing`);
         }
 
-        if (salutationBeforeMatch) {
-          const beforeValue = parseInt(salutationBeforeMatch[1]);
-          console.log(
-            `   📝 Salutation paragraph has w:before="${beforeValue}" twips`
-          );
-        }
       } else {
-        console.log(`   ℹ️ Salutation paragraph has no w:pPr`);
       }
 
       // Find the actual body text paragraph (not contact info or sidebar text)
       // Look for paragraphs containing body text indicators like "wird von uns", "geb. am", "test user", client name patterns
-      console.log(
-        `   🔍 Searching for body text paragraph (searching all paragraphs)...`
-      );
       let bodyParagraphIndex = -1;
       const contactInfoKeywords = [
         "Telefon",
@@ -550,18 +513,6 @@ class FirstRoundDocumentGenerator {
 
           if (isBodyText) {
             bodyParagraphIndex = i;
-            console.log(`   ✅ Found body text paragraph at index ${i}`);
-            console.log(
-              `   📄 Body text (first 150 chars): "${fullText.substring(
-                0,
-                150
-              )}..."`
-            );
-            if (hasStrongIndicator) {
-              console.log(`   🎯 Matched strong indicator (high priority)`);
-            } else if (hasMediumIndicator) {
-              console.log(`   🎯 Matched medium indicator`);
-            }
             break;
           }
         } else {
@@ -581,9 +532,6 @@ class FirstRoundDocumentGenerator {
         bodyParagraphIndex !== -1 &&
         bodyParagraphIndex > salutationParagraphIndex
       ) {
-        console.log(
-          `   🔄 Moving salutation paragraph from index ${salutationParagraphIndex} to before body paragraph at index ${bodyParagraphIndex}`
-        );
 
         const salutationPara = paragraphs[salutationParagraphIndex];
         const bodyPara = paragraphs[bodyParagraphIndex];
@@ -601,45 +549,42 @@ class FirstRoundDocumentGenerator {
           let updatedPPrContent = pPrContent;
 
           // Remove left indentation to ensure it's left-aligned (not in sidebar)
-          console.log(
-            `   🔧 Removing left indentation from salutation to ensure left alignment`
-          );
           updatedPPrContent = updatedPPrContent.replace(
             /<w:ind[^>]*w:left="\d+"[^>]*\/?>/g,
             ""
           );
           updatedPPrContent = updatedPPrContent.replace(/w:left="\d+"/g, "");
 
-          // Remove any existing w:after from spacing tags
+          // Remove ANY w:after spacing from salutation (should be 0 for no extra spacing)
           updatedPPrContent = updatedPPrContent.replace(
             /\s*w:after="\d+"/g,
             ""
           );
 
-          // Check if spacing tag exists (handle both self-closing and regular tags)
+          // Check if spacing tag exists and remove it if it's now empty
           const spacingTagMatch = updatedPPrContent.match(
             /<w:spacing([^>]*?)(\/?)>/
           );
           if (spacingTagMatch) {
-            // Spacing tag exists - add w:after to it
             let spacingAttrs = spacingTagMatch[1].trim();
-            // Remove any trailing / if it was self-closing
-            const wasSelfClosing = spacingTagMatch[2] === "/";
-            // Add w:after attribute
-            if (spacingAttrs && !spacingAttrs.endsWith(" ")) {
-              spacingAttrs += " ";
+            // Remove w:after if it still exists
+            spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
+            // If spacing tag is now empty or only has whitespace, remove it entirely
+            if (!spacingAttrs.trim() || spacingAttrs.trim() === "") {
+              // Remove the entire spacing tag
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                ""
+              );
+            } else {
+              // Keep the spacing tag but without w:after
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                `<w:spacing ${spacingAttrs.trim()}>`
+              );
             }
-            spacingAttrs += 'w:after="240"';
-            // Replace the spacing tag
-            updatedPPrContent = updatedPPrContent.replace(
-              /<w:spacing[^>]*?\/?>/,
-              `<w:spacing ${spacingAttrs}>`
-            );
-          } else {
-            // No spacing tag exists, add one
-            updatedPPrContent =
-              '<w:spacing w:after="240"/>' + updatedPPrContent;
           }
+          // Do NOT add any spacing tag - we want NO spacing after salutation
 
           // Ensure left alignment (remove any right alignment)
           updatedPPrContent = updatedPPrContent.replace(
@@ -657,20 +602,13 @@ class FirstRoundDocumentGenerator {
             `<w:pPr>${updatedPPrContent}</w:pPr>`
           );
         } else {
-          // No pPr exists, add one with spacing and left alignment
+          // No pPr exists, add one WITHOUT spacing (we want no extra spacing after salutation)
           salutationXml = salutationXml.replace(
             /<w:p>/,
-            '<w:p><w:pPr><w:spacing w:after="240"/></w:pPr>'
+            '<w:p><w:pPr></w:pPr>'
           );
         }
 
-        console.log(`   📝 Updated salutation XML with w:after="240" spacing`);
-        console.log(
-          `      Salutation XML (first 400 chars): ${salutationXml.substring(
-            0,
-            400
-          )}...`
-        );
 
         // Also reduce w:before spacing on body paragraph if it exists (before moving salutation)
         const bodyParaXml = bodyPara.fullMatch;
@@ -700,15 +638,9 @@ class FirstRoundDocumentGenerator {
         }
 
         // Remove the old salutation paragraph from its current position
-        console.log(
-          `   🗑️ Removing salutation from original position (index ${salutationParagraphIndex})`
-        );
         documentXml = documentXml.replace(salutationPara.fullMatch, "");
 
         // Insert the new salutation paragraph before the body paragraph (use updated body XML if it was modified)
-        console.log(
-          `   ➕ Inserting salutation before body paragraph (index ${bodyParagraphIndex})`
-        );
         const bodyParaToUse =
           updatedBodyParaXml !== bodyParaXml ? updatedBodyParaXml : bodyParaXml;
         documentXml = documentXml.replace(
@@ -717,22 +649,9 @@ class FirstRoundDocumentGenerator {
         );
 
         spacingFixed = true;
-        console.log(
-          `   ✅ Successfully moved salutation paragraph to be directly before body text`
-        );
       } else {
-        console.log(
-          `   ⚠️ Could not find body text paragraph or body is before salutation`
-        );
-        console.log(
-          `      Salutation index: ${salutationParagraphIndex}, Body index: ${bodyParagraphIndex}`
-        );
-
         // Fallback: just fix spacing issues without moving
         if (bodyParagraphIndex === -1) {
-          console.log(
-            `   🔍 Fallback: checking next few paragraphs for spacing issues...`
-          );
           const paragraphsToCheck = Math.min(
             10,
             paragraphs.length - salutationParagraphIndex - 1
@@ -774,9 +693,6 @@ class FirstRoundDocumentGenerator {
                 const beforeValue = parseInt(beforeMatch[1]);
                 // Lower threshold - anything over 100 twips is excessive
                 if (beforeValue > 100) {
-                  console.log(
-                    `   🔧 Reducing w:before spacing on paragraph ${paraIndex} (${beforeValue} twips -> 0)`
-                  );
                   updatedParaXml = updatedParaXml.replace(
                     /w:before="\d+"/,
                     'w:before="0"'
@@ -810,9 +726,6 @@ class FirstRoundDocumentGenerator {
 
         // Check if it's an empty paragraph (only whitespace or very short)
         if (!nextParaText.trim() || nextParaText.trim().length < 3) {
-          console.log(
-            `   🔧 Removing empty paragraph immediately after salutation`
-          );
           replacements.push({
             original: nextPara.fullMatch,
             updated: "", // Remove empty paragraph
@@ -821,39 +734,492 @@ class FirstRoundDocumentGenerator {
         }
       }
 
-      // Add console log to identify the salutation line
-      console.log(`   📍 SALUTATION LINE IDENTIFIED:`);
-      console.log(`      Paragraph Index: ${salutationParagraphIndex}`);
-      console.log(
-        `      Full XML (first 500 chars): ${salutationPara.fullMatch.substring(
-          0,
-          500
-        )}...`
-      );
 
       // Apply all replacements to document XML (if any were collected)
       if (replacements.length > 0) {
-        console.log(
-          `   🔧 Applying ${replacements.length} additional XML replacements...`
-        );
         for (const replacement of replacements) {
           if (replacement.updated === "") {
             // Remove empty paragraph
             documentXml = documentXml.replace(replacement.original, "");
-            console.log(`      ✅ Removed empty paragraph`);
           } else {
             // Replace paragraph with updated version
             documentXml = documentXml.replace(
               replacement.original,
               replacement.updated
             );
-            console.log(`      ✅ Updated paragraph XML`);
           }
         }
       }
 
+      // Remove excessive spacing between ALL body paragraphs
+      // Skip contact info and sidebar paragraphs - only fix body text paragraphs
+      const skipKeywords = [
+        "Telefon", "Telefax", "e-Mail", "Öffnungszeiten", 
+        "Bankverbindungen", "Aktenzeichen", "BLZ", "Konto-Nr", 
+        "Deutsche Bank", "Bei Schriftverkehr"
+      ];
+      let bodySpacingFixed = false;
+      let fixCount = 0;
+      
+      // First, collect ALL paragraphs (not just body paragraphs) to find adjacent paragraphs
+      const allParagraphsRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
+      let paraMatch;
+      const allParagraphs = [];
+      const bodyParagraphs = [];
+      
+      // Reset regex
+      allParagraphsRegex.lastIndex = 0;
+      
+      // First pass: collect ALL paragraphs
+      while ((paraMatch = allParagraphsRegex.exec(documentXml)) !== null) {
+        const match = paraMatch[0];
+        const textMatches = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+        const fullText = textMatches
+          ? textMatches
+              .map((m) => {
+                const textMatch = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                return textMatch ? textMatch[1] : "";
+              })
+              .join("")
+          : "";
+
+        allParagraphs.push({
+          original: match,
+          text: fullText,
+          index: allParagraphs.length
+        });
+
+        const isSkipPara = skipKeywords.some((keyword) =>
+          fullText.includes(keyword)
+        );
+        const isEmpty = !fullText.trim() || fullText.trim().length < 3;
+
+        // Only process body text paragraphs for the main fix
+        if (!isSkipPara && !isEmpty && fullText.length > 10) {
+          bodyParagraphs.push({
+            original: match,
+            text: fullText.substring(0, 100),
+            index: bodyParagraphs.length
+          });
+        }
+      }
+      
+      // Find the paragraph before "test user...strebt eine Schuldenbereinigung" and fix spacing
+      for (let i = 0; i < allParagraphs.length; i++) {
+        const para = allParagraphs[i];
+        if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
+          // Found the target paragraph, look backwards to find the actual content paragraph
+          // Skip empty paragraphs and find "Eine entsprechende Vollmacht liegt bei"
+          let foundPrevPara = false;
+          for (let j = i - 1; j >= 0 && j >= i - 5; j--) {
+            const prevPara = allParagraphs[j];
+            const prevText = prevPara.text.trim();
+            
+            // Skip empty paragraphs
+            if (!prevText || prevText.length < 3) {
+              // Remove empty paragraph
+              console.log(`\n   🗑️ Removing empty paragraph at index ${j}`);
+              documentXml = documentXml.replace(prevPara.original, "");
+              continue;
+            }
+            
+            // Check if this is the paragraph we're looking for
+            if (prevText.includes("Eine entsprechende Vollmacht liegt bei") || 
+                prevText.includes("Vollmacht liegt bei") ||
+                prevText.length > 20) {
+              console.log(`\n   🔍 Found paragraph before "test user...": "${prevText.substring(0, 80)}..."`);
+              console.log(`      Full XML: ${prevPara.original}`);
+              
+              // Check if previous paragraph has w:after spacing
+              const prevPPrMatch = prevPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+              if (prevPPrMatch) {
+                const prevAfterMatch = prevPPrMatch[1].match(/w:after="(\d+)"/);
+                if (prevAfterMatch) {
+                  console.log(`      ⚠️ Previous paragraph has w:after="${prevAfterMatch[1]}" twips - REMOVING`);
+                  
+                  // Remove w:after from previous paragraph
+                  let updatedPrev = prevPara.original;
+                  const prevSpacingMatch = prevPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+                  if (prevSpacingMatch) {
+                    let spacingTag = prevSpacingMatch[0];
+                    spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
+                    if (!/w:after=/.test(spacingTag)) {
+                      const isSelfClosing = prevSpacingMatch[2] === '/';
+                      if (isSelfClosing) {
+                        spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+                      } else {
+                        spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+                      }
+                    }
+                    let updatedPPrContent = prevPPrMatch[1].replace(prevSpacingMatch[0], spacingTag);
+                    updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  } else {
+                    // No spacing tag, add one with w:after="0"
+                    let updatedPPrContent = '<w:spacing w:after="0"/>' + prevPPrMatch[1];
+                    updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  }
+                  
+                  // Apply the fix to document XML
+                  documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                  console.log(`      ✅ Removed w:after spacing from previous paragraph`);
+                } else {
+                  // No w:after, but add one with w:after="0" to ensure no spacing
+                  let updatedPrev = prevPara.original;
+                  let updatedPPrContent = '<w:spacing w:after="0"/>' + prevPPrMatch[1];
+                  updatedPrev = updatedPrev.replace(prevPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+                  documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                  console.log(`      ✅ Added w:after="0" to previous paragraph to ensure no spacing`);
+                }
+              } else {
+                // No pPr, add one with w:after="0"
+                let updatedPrev = prevPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>');
+                documentXml = documentXml.replace(prevPara.original, updatedPrev);
+                console.log(`      ✅ Added pPr with w:after="0" to previous paragraph`);
+              }
+              
+              foundPrevPara = true;
+              break;
+            }
+          }
+          
+          if (!foundPrevPara) {
+            console.log(`\n   ⚠️ Could not find content paragraph before "test user..."`);
+          }
+          break;
+        }
+      }
+      
+      // Find and fix spacing between "Einigungsversuches mit den Gläubigern." and "Hierzu benötigen wir zunächst einen"
+      let einigungsversuchesParaIndex = -1;
+      let hierzuParaIndex = -1;
+      
+      for (let i = 0; i < allParagraphs.length; i++) {
+        const para = allParagraphs[i];
+        const paraText = para.text.trim();
+        
+        // Find paragraph ending with "Einigungsversuches mit den Gläubigern."
+        if (paraText.includes("Einigungsversuches mit den Gläubigern") && einigungsversuchesParaIndex === -1) {
+          einigungsversuchesParaIndex = i;
+          console.log(`\n   🔍 FOUND: Paragraph ending with "Einigungsversuches mit den Gläubigern." (index ${i})`);
+          console.log(`      Text: "${paraText.substring(Math.max(0, paraText.length - 80))}"`);
+          console.log(`      Full XML: ${para.original}`);
+        }
+        
+        // Find paragraph starting with "Hierzu benötigen wir zunächst einen"
+        if (paraText.includes("Hierzu benötigen wir zunächst einen") && hierzuParaIndex === -1) {
+          hierzuParaIndex = i;
+          console.log(`\n   🔍 FOUND: Paragraph starting with "Hierzu benötigen wir zunächst einen" (index ${i})`);
+          console.log(`      Text: "${paraText.substring(0, 80)}..."`);
+          console.log(`      Full XML: ${para.original}`);
+        }
+      }
+      
+      // Fix spacing between these two paragraphs
+      if (einigungsversuchesParaIndex !== -1 && hierzuParaIndex !== -1) {
+        const einigungsPara = allParagraphs[einigungsversuchesParaIndex];
+        const hierzuPara = allParagraphs[hierzuParaIndex];
+        
+        console.log(`\n   🔧 FIXING SPACING between paragraph ${einigungsversuchesParaIndex} and ${hierzuParaIndex}`);
+        
+        // Remove empty paragraphs between them
+        for (let j = einigungsversuchesParaIndex + 1; j < hierzuParaIndex; j++) {
+          const emptyPara = allParagraphs[j];
+          if (!emptyPara.text.trim() || emptyPara.text.trim().length < 3) {
+            console.log(`   🗑️ Removing empty paragraph at index ${j}`);
+            documentXml = documentXml.replace(emptyPara.original, "");
+          }
+        }
+        
+        // Fix w:after on "Einigungsversuches mit den Gläubigern." paragraph
+        const einigungsPPrMatch = einigungsPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (einigungsPPrMatch) {
+          const einigungsAfterMatch = einigungsPPrMatch[1].match(/w:after="(\d+)"/);
+          if (einigungsAfterMatch) {
+            console.log(`   ⚠️ "Einigungsversuches..." paragraph has w:after="${einigungsAfterMatch[1]}" twips`);
+          } else {
+            console.log(`   ✅ "Einigungsversuches..." paragraph has no w:after spacing`);
+          }
+          
+          // Always set w:after="0" to ensure no spacing
+          let updatedEinigungs = einigungsPara.original;
+          const einigungsSpacingMatch = einigungsPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+          if (einigungsSpacingMatch) {
+            let spacingTag = einigungsSpacingMatch[0];
+            spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
+            if (!/w:after=/.test(spacingTag)) {
+              const isSelfClosing = einigungsSpacingMatch[2] === '/';
+              if (isSelfClosing) {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+              } else {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+              }
+            }
+            let updatedPPrContent = einigungsPPrMatch[1].replace(einigungsSpacingMatch[0], spacingTag);
+            updatedEinigungs = updatedEinigungs.replace(einigungsPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          } else {
+            let updatedPPrContent = '<w:spacing w:after="0"/>' + einigungsPPrMatch[1];
+            updatedEinigungs = updatedEinigungs.replace(einigungsPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          }
+          documentXml = documentXml.replace(einigungsPara.original, updatedEinigungs);
+          console.log(`   ✅ Set w:after="0" on "Einigungsversuches..." paragraph`);
+        } else {
+          let updatedEinigungs = einigungsPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>');
+          documentXml = documentXml.replace(einigungsPara.original, updatedEinigungs);
+          console.log(`   ✅ Added pPr with w:after="0" to "Einigungsversuches..." paragraph`);
+        }
+        
+        // Fix w:before on "Hierzu benötigen wir zunächst einen" paragraph
+        const hierzuPPrMatch = hierzuPara.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+        if (hierzuPPrMatch) {
+          const hierzuBeforeMatch = hierzuPPrMatch[1].match(/w:before="(\d+)"/);
+          if (hierzuBeforeMatch) {
+            console.log(`   ⚠️ "Hierzu benötigen wir..." paragraph has w:before="${hierzuBeforeMatch[1]}" twips`);
+          } else {
+            console.log(`   ✅ "Hierzu benötigen wir..." paragraph has no w:before spacing`);
+          }
+          
+          // Always set w:before="0" to ensure no spacing
+          let updatedHierzu = hierzuPara.original;
+          const hierzuSpacingMatch = hierzuPPrMatch[1].match(/<w:spacing([^>]*?)(\/?)>/);
+          if (hierzuSpacingMatch) {
+            let spacingTag = hierzuSpacingMatch[0];
+            spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
+            if (!/w:before=/.test(spacingTag)) {
+              const isSelfClosing = hierzuSpacingMatch[2] === '/';
+              if (isSelfClosing) {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
+              } else {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
+              }
+            }
+            let updatedPPrContent = hierzuPPrMatch[1].replace(hierzuSpacingMatch[0], spacingTag);
+            updatedHierzu = updatedHierzu.replace(hierzuPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          } else {
+            let updatedPPrContent = '<w:spacing w:before="0"/>' + hierzuPPrMatch[1];
+            updatedHierzu = updatedHierzu.replace(hierzuPPrMatch[0], `<w:pPr>${updatedPPrContent}</w:pPr>`);
+          }
+          documentXml = documentXml.replace(hierzuPara.original, updatedHierzu);
+          console.log(`   ✅ Set w:before="0" on "Hierzu benötigen wir..." paragraph`);
+        } else {
+          let updatedHierzu = hierzuPara.original.replace(/<w:p>/, '<w:p><w:pPr><w:spacing w:before="0"/></w:pPr>');
+          documentXml = documentXml.replace(hierzuPara.original, updatedHierzu);
+          console.log(`   ✅ Added pPr with w:before="0" to "Hierzu benötigen wir..." paragraph`);
+        }
+      } else {
+        if (einigungsversuchesParaIndex === -1) {
+          console.log(`\n   ⚠️ Could not find paragraph ending with "Einigungsversuches mit den Gläubigern."`);
+        }
+        if (hierzuParaIndex === -1) {
+          console.log(`\n   ⚠️ Could not find paragraph starting with "Hierzu benötigen wir zunächst einen"`);
+        }
+      }
+
+      // Log XML for specific paragraphs BEFORE fixing
+      bodyParagraphs.forEach((para, idx) => {
+        // Check for "Eine entsprechende Vollmacht liegt bei."
+        if (para.text.includes("Eine entsprechende Vollmacht liegt bei")) {
+          console.log(`\n   🔍 BEFORE FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+          console.log(`      Full XML: ${para.original}`);
+          
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes (no spacing)`);
+          } else {
+            console.log(`      ✅ No pPr found (no spacing)`);
+          }
+        }
+        
+        if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
+          console.log(`\n   🔍 BEFORE FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+          console.log(`      Full XML: ${para.original}`);
+          
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes (no spacing)`);
+          } else {
+            console.log(`      ✅ No pPr found (no spacing)`);
+          }
+        }
+        
+        if (para.text.includes("Hierzu benötigen wir zunächst")) {
+          console.log(`\n   🔍 BEFORE FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+          console.log(`      Full XML: ${para.original}`);
+          
+          const pPrMatch = para.original.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+            const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+            if (beforeMatch) console.log(`      ⚠️ w:before="${beforeMatch[1]}" twips`);
+            if (afterMatch) console.log(`      ⚠️ w:after="${afterMatch[1]}" twips`);
+            if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes (no spacing)`);
+          } else {
+            console.log(`      ✅ No pPr found (no spacing)`);
+          }
+        }
+      });
+      
+      const bodySpacingReplacements = [];
+      
+      bodyParagraphs.forEach((para) => {
+        let updated = para.original;
+        const originalMatch = para.original;
+        let needsUpdate = false;
+        
+        // Check if paragraph has pPr
+        const hasPPr = /<w:pPr[^>]*>/.test(updated);
+        
+        if (hasPPr) {
+          // If pPr exists, check for spacing and set to 0
+          const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+          if (pPrMatch) {
+            let pPrContent = pPrMatch[1];
+            const originalPPrContent = pPrContent;
+            
+            // Check if spacing tag exists - ONLY modify if it exists
+            const spacingMatch = pPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
+            if (spacingMatch) {
+              // Spacing tag exists - update w:before and w:after to 0
+              let spacingTag = spacingMatch[0];
+              const originalSpacingTag = spacingTag;
+              const isSelfClosing = spacingMatch[2] === '/';
+              
+              // Replace existing w:before and w:after with "0"
+              spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
+              spacingTag = spacingTag.replace(/w:after="\d+"/g, 'w:after="0"');
+              
+              // If spacing tag doesn't have w:before, add it
+              if (!/w:before=/.test(spacingTag)) {
+                if (isSelfClosing) {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
+                } else {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
+                }
+              }
+              // If spacing tag doesn't have w:after, add it
+              if (!/w:after=/.test(spacingTag)) {
+                if (isSelfClosing) {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:after="0"$1/>');
+                } else {
+                  spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:after="0"$1>');
+                }
+              }
+              
+              // Only update if spacing tag changed
+              if (spacingTag !== originalSpacingTag) {
+                // Replace the spacing tag in pPrContent
+                pPrContent = pPrContent.replace(originalSpacingTag, spacingTag);
+                
+                if (pPrContent !== originalPPrContent) {
+                  updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+                  needsUpdate = true;
+                }
+              }
+            } else {
+              // No spacing tag exists - add one with w:before="0" w:after="0" to ensure no spacing
+              pPrContent = '<w:spacing w:before="0" w:after="0"/>' + pPrContent;
+              updated = updated.replace(pPrMatch[0], `<w:pPr>${pPrContent}</w:pPr>`);
+              needsUpdate = true;
+            }
+          }
+        } else {
+          // No pPr exists - add one with spacing=0 to ensure no spacing
+          const paraStartMatch = updated.match(/^<w:p([^>]*)>/);
+          if (paraStartMatch) {
+            const paraAttrs = paraStartMatch[1];
+            updated = updated.replace(/^<w:p[^>]*>/, `<w:p${paraAttrs}><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>`);
+            needsUpdate = true;
+          }
+        }
+
+        // Also replace any w:before or w:after anywhere else in the paragraph (outside pPr)
+        // This is safe as it only modifies existing attributes
+        if (/w:before="\d+"/.test(updated)) {
+          updated = updated.replace(/w:before="\d+"/g, 'w:before="0"');
+          needsUpdate = true;
+        }
+        if (/w:after="\d+"/.test(updated)) {
+          updated = updated.replace(/w:after="\d+"/g, 'w:after="0"');
+          needsUpdate = true;
+        }
+
+        if (needsUpdate && updated !== originalMatch) {
+          bodySpacingReplacements.push({
+            original: originalMatch,
+            updated: updated,
+            text: para.text
+          });
+          fixCount++;
+          bodySpacingFixed = true;
+          
+          // Log AFTER fix for specific paragraphs
+          if (para.text.includes("Eine entsprechende Vollmacht liegt bei")) {
+            console.log(`\n   ✅ AFTER FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+            console.log(`      Updated XML: ${updated}`);
+            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+            if (pPrMatch) {
+              const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+              const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+              if (beforeMatch) console.log(`      ✅ w:before="${beforeMatch[1]}" twips`);
+              if (afterMatch) console.log(`      ✅ w:after="${afterMatch[1]}" twips`);
+              if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes`);
+            }
+          }
+          
+          if (para.text.includes("test user") && para.text.includes("strebt eine Schuldenbereinigung")) {
+            console.log(`\n   ✅ AFTER FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+            console.log(`      Updated XML: ${updated}`);
+            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+            if (pPrMatch) {
+              const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+              const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+              if (beforeMatch) console.log(`      ✅ w:before="${beforeMatch[1]}" twips`);
+              if (afterMatch) console.log(`      ✅ w:after="${afterMatch[1]}" twips`);
+              if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes`);
+            }
+          }
+          
+          if (para.text.includes("Hierzu benötigen wir zunächst")) {
+            console.log(`\n   ✅ AFTER FIX - Paragraph "${para.text.substring(0, 50)}...":`);
+            console.log(`      Updated XML: ${updated}`);
+            const pPrMatch = updated.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
+            if (pPrMatch) {
+              const beforeMatch = pPrMatch[1].match(/w:before="(\d+)"/);
+              const afterMatch = pPrMatch[1].match(/w:after="(\d+)"/);
+              if (beforeMatch) console.log(`      ✅ w:before="${beforeMatch[1]}" twips`);
+              if (afterMatch) console.log(`      ✅ w:after="${afterMatch[1]}" twips`);
+              if (!beforeMatch && !afterMatch) console.log(`      ✅ No spacing attributes`);
+            }
+          }
+        }
+      });
+
+      // Apply all replacements to document XML (in reverse order to avoid index issues)
+      if (bodySpacingReplacements.length > 0) {
+        // Apply in reverse order to avoid index shifting issues
+        for (let i = bodySpacingReplacements.length - 1; i >= 0; i--) {
+          const replacement = bodySpacingReplacements[i];
+          // Use exact match to avoid corrupting XML
+          const beforeReplace = documentXml;
+          documentXml = documentXml.replace(replacement.original, replacement.updated);
+          // Verify replacement worked
+          if (documentXml === beforeReplace) {
+            console.log(`   ⚠️ Warning: Replacement failed for: "${replacement.text.substring(0, 50)}..."`);
+          }
+        }
+        console.log(`   ✅ Applied ${bodySpacingReplacements.length} spacing fixes`);
+        spacingFixed = true;
+      }
+
       // Update the document XML if any changes were made
-      if (spacingFixed || replacements.length > 0) {
+      if (spacingFixed || replacements.length > 0 || bodySpacingFixed) {
         zip.file("word/document.xml", documentXml);
         console.log(
           "✅ Fixed spacing issues and repositioned salutation in document"
@@ -864,138 +1230,137 @@ class FirstRoundDocumentGenerator {
     } catch (error) {
       console.error("⚠️ Warning: Could not fix spacing issues:", error.message);
       console.error("   Error stack:", error.stack);
-      // Don't throw error - document generation should continue
+        }
     }
-  }
 
-  /**
-   * Parse and format client address for proper line breaks
-   */
-  formatClientAddress(clientData) {
-    // Priority 1: Use structured address fields if available
-    if (clientData.street && clientData.zipCode && clientData.city) {
+    /**
+     * Parse and format client address for proper line breaks
+     */
+    formatClientAddress(clientData) {
+        // Priority 1: Use structured address fields if available
+        if (clientData.street && clientData.zipCode && clientData.city) {
       const streetLine = clientData.houseNumber
         ? `${clientData.street} ${clientData.houseNumber}`
         : clientData.street;
-      const address = `${streetLine} ${clientData.zipCode} ${clientData.city}`;
-      return formatAddress(address);
+            const address = `${streetLine} ${clientData.zipCode} ${clientData.city}`;
+            return formatAddress(address);
+        }
+
+        // Priority 2: Use address string
+        const address = clientData.address;
+        if (!address) {
+            return "Adresse nicht verfügbar";
+        }
+
+        // Use the shared formatAddress utility
+        return formatAddress(address);
     }
 
-    // Priority 2: Use address string
-    const address = clientData.address;
-    if (!address) {
-      return "Adresse nicht verfügbar";
-    }
-
-    // Use the shared formatAddress utility
-    return formatAddress(address);
-  }
-
-  /**
-   * Format creditor address using the same logic as client address
-   */
-  formatCreditorAddress(creditor) {
+    /**
+     * Format creditor address using the same logic as client address
+     */
+    formatCreditorAddress(creditor) {
     const address =
       creditor.creditor_address ||
-      creditor.address ||
-      creditor.sender_address ||
-      null;
+                       creditor.address ||
+                       creditor.sender_address ||
+                       null;
 
-    if (!address) {
-      return "Adresse nicht verfügbar";
+        if (!address) {
+            return "Adresse nicht verfügbar";
+        }
+
+        return formatAddress(address);
     }
 
-    return formatAddress(address);
-  }
+    /**
+     * Prepare template data for Word document
+     */
+    prepareTemplateData(clientData, creditor) {
+        const today = new Date();
+        const responseDate = new Date();
+        responseDate.setDate(today.getDate() + 14); // 14 days from today
 
-  /**
-   * Prepare template data for Word document
-   */
-  prepareTemplateData(clientData, creditor) {
-    const today = new Date();
-    const responseDate = new Date();
-    responseDate.setDate(today.getDate() + 14); // 14 days from today
-
-    const formatGermanDate = (date) => {
+        const formatGermanDate = (date) => {
       return date.toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
-      });
-    };
+            });
+        };
 
-    return {
-      // Creditor information
-      "Adresse des Creditors": this.formatCreditorAddress(creditor),
+        return {
+            // Creditor information
+            "Adresse des Creditors": this.formatCreditorAddress(creditor),
 
       Creditor:
         creditor.creditor_name ||
-        creditor.sender_name ||
-        "Unbekannter Gläubiger",
-
+                creditor.sender_name || 
+                "Unbekannter Gläubiger",
+            
       "Aktenzeichen des Credtiors":
         creditor.reference_number ||
-        creditor.creditor_reference ||
-        creditor.reference ||
-        creditor.aktenzeichen ||
-        "Nicht verfügbar",
+                creditor.creditor_reference || 
+                creditor.reference || 
+                creditor.aktenzeichen || 
+                "Nicht verfügbar",
 
-      // Client information
+            // Client information
       Name: clientData.name,
       Geburtstag:
         clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar",
       Adresse: this.formatClientAddress(clientData),
-      "Aktenzeichen des Mandanten": clientData.reference,
+            "Aktenzeichen des Mandanten": clientData.reference,
 
-      // Dates
-      "heutiges Datum": formatGermanDate(today),
+            // Dates
+            "heutiges Datum": formatGermanDate(today),
       "Datum in 14 Tagen": formatGermanDate(responseDate),
-    };
-  }
-
-  /**
-   * Ensure output directory exists
-   */
-  async ensureOutputDirectory() {
-    try {
-      await fs.access(this.outputDir);
-    } catch (error) {
-      // Directory doesn't exist, create it
-      await fs.mkdir(this.outputDir, { recursive: true });
-      console.log(`📁 Created output directory: ${this.outputDir}`);
+        };
     }
-  }
 
-  /**
-   * Clean up old generated files (optional utility method)
-   */
-  async cleanupOldFiles(olderThanDays = 30) {
-    try {
-      const files = await fs.readdir(this.outputDir);
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-      let deletedCount = 0;
-      for (const file of files) {
-        const filePath = path.join(this.outputDir, file);
-        const stats = await fs.stat(filePath);
-
-        if (stats.mtime < cutoffDate) {
-          await fs.unlink(filePath);
-          deletedCount++;
+    /**
+     * Ensure output directory exists
+     */
+    async ensureOutputDirectory() {
+        try {
+            await fs.access(this.outputDir);
+        } catch (error) {
+            // Directory doesn't exist, create it
+            await fs.mkdir(this.outputDir, { recursive: true });
+            console.log(`📁 Created output directory: ${this.outputDir}`);
         }
-      }
-
-      if (deletedCount > 0) {
-        console.log(`🗑️ Cleaned up ${deletedCount} old document files`);
-      }
-
-      return { deleted: deletedCount };
-    } catch (error) {
-      console.error(`❌ Error cleaning up old files: ${error.message}`);
-      return { deleted: 0, error: error.message };
     }
-  }
+
+    /**
+     * Clean up old generated files (optional utility method)
+     */
+    async cleanupOldFiles(olderThanDays = 30) {
+        try {
+            const files = await fs.readdir(this.outputDir);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+            let deletedCount = 0;
+            for (const file of files) {
+                const filePath = path.join(this.outputDir, file);
+                const stats = await fs.stat(filePath);
+                
+                if (stats.mtime < cutoffDate) {
+                    await fs.unlink(filePath);
+                    deletedCount++;
+                }
+            }
+
+            if (deletedCount > 0) {
+                console.log(`🗑️ Cleaned up ${deletedCount} old document files`);
+            }
+
+            return { deleted: deletedCount };
+        } catch (error) {
+            console.error(`❌ Error cleaning up old files: ${error.message}`);
+            return { deleted: 0, error: error.message };
+        }
+    }
 }
 
 module.exports = FirstRoundDocumentGenerator;
