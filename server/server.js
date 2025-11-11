@@ -505,6 +505,68 @@ const clientsData = new Proxy({}, {
   }
 });
 
+
+// Client: Set or update password
+app.post('/api/client/make-new-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const { aktenzeichen, file_number, new_password } = req.body || {};
+
+    if (!new_password || String(new_password).length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+
+    let client = null;
+
+    // 1) If Bearer token exists, verify and extract user
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+        const clientId = decoded.clientId || decoded.id || decoded.sessionId;
+        if (clientId) {
+          client = await getClient(clientId);
+          
+          // SECURITY: If token is provided, file_number must match the authenticated user's aktenzeichen
+          const fileNum = aktenzeichen || file_number;
+          if (fileNum && client && client.aktenzeichen !== fileNum) {
+            console.log(`❌ Security violation: Token user aktenzeichen=${client.aktenzeichen}, provided file_number=${fileNum}`);
+            return res.status(403).json({ error: 'Aktenzeichen stimmt nicht mit dem authentifizierten Benutzer überein' });
+          }
+        }
+      } catch (e) {
+        // If token invalid, continue to lookup by file number
+      }
+    }
+
+    // 2) If no token or not found, find by file_number/aktenzeichen
+    const fileNum = aktenzeichen || file_number;
+    if (!client && fileNum) {
+      client = await Client.findOne({ aktenzeichen: fileNum });
+    }
+
+    // 5) If no user is found, return a 404 error.
+    if (!client) {
+      return res.status(404).json({ error: 'Client nicht gefunden' });
+    }
+
+    // 3) Update password and flag
+    client.password_hash = new_password;
+    client.isPasswordSet = true;
+
+    // 4) Save and return success
+    await client.save();
+
+    return res.json({
+      success: true,
+      message: 'Password created successfully. You can now log in using email and password.'
+    });
+  } catch (error) {
+    console.error('Error in make-new-password:', error);
+    return res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
 // Pure MongoDB function - no fallback to in-memory
 async function getClient(clientId) {
   try {
@@ -2613,95 +2675,85 @@ app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
 // Portal login endpoint
 app.post('/api/portal/login', 
   rateLimits.auth, 
-  validateRequest([
-    validationRules.email,
-    validationRules.aktenzeichen
-  ]), 
+  async (req, res, next) => next(),
   async (req, res) => {
   try {
-    const { email, aktenzeichen } = req.body;
-    
-    if (!email || !aktenzeichen) {
+    const { email, aktenzeichen, file_number, fileNumber, password } = req.body;
+
+    // Normalize raw inputs first; don't infer meanings yet
+    const rawAktenzeichen = (aktenzeichen || file_number || fileNumber || '').toString().trim();
+    const rawPassword = password;
+
+    console.log(`🔐 Portal login attempt:`, { email, aktenzeichen: rawAktenzeichen, password: rawPassword ? '[PROVIDED]' : '[MISSING]' });
+
+    if (!email) {
       return res.status(400).json({ 
-        error: 'Email und Aktenzeichen sind erforderlich' 
+        error: 'E-Mail ist erforderlich' 
       });
     }
-    
-    console.log(`🔐 Portal login attempt: ${email} - Aktenzeichen: ${aktenzeichen}`);
-    
-    // Find client by email and aktenzeichen
+
+    // Find client by email first
     let foundClient = null;
     
     try {
       if (databaseService.isHealthy()) {
-        console.log(`🔍 Searching in MongoDB for client with email: ${email} and aktenzeichen: ${aktenzeichen}`);
-        
-        foundClient = await Client.findOne({ email: email, aktenzeichen: aktenzeichen });
+        console.log(`🔍 Searching in MongoDB for client with email: ${email}`);
+        foundClient = await Client.findOne({ email: email });
         
         if (foundClient) {
-          console.log(`✅ Client found in MongoDB: ${foundClient.aktenzeichen} | ${foundClient.email}`);
+          console.log(`✅ Client found by email: ${foundClient.aktenzeichen} | ${foundClient.email}`);
         } else {
-          console.log(`❌ No client found in MongoDB with exact match`);
-          
-          // Try to find similar clients for debugging
-          const byEmail = await Client.findOne({ email: email });
-          const byAktenzeichen = await Client.findOne({ aktenzeichen: aktenzeichen });
-          
-          if (byEmail) {
-            console.log(`🔍 Found client with same email but different aktenzeichen: ${byEmail.aktenzeichen}`);
-          }
-          if (byAktenzeichen) {
-            console.log(`🔍 Found client with same aktenzeichen but different email: ${byAktenzeichen.email}`);
-            
-            // SMART FIX: If we find a client with matching aktenzeichen but similar email, 
-            // check if it's a common typo (like missing dot or extra characters)
-            const dbEmail = byAktenzeichen.email.toLowerCase();
-            const loginEmail = email.toLowerCase();
-            
-            // Check if emails are similar (common typos: dot issues, extra characters)
-            const emailSimilar = (
-              dbEmail.replace(/\./g, '') === loginEmail.replace(/\./g, '') || // dot differences
-              dbEmail.replace(/[^a-z0-9@]/g, '') === loginEmail.replace(/[^a-z0-9@]/g, '') // special char differences
-            );
-            
-            if (emailSimilar) {
-              console.log(`🔧 Email similarity detected - accepting login with similar email`);
-              console.log(`   Database: ${byAktenzeichen.email}`);
-              console.log(`   Login attempt: ${email}`);
-              foundClient = byAktenzeichen;
-            }
-          }
+          console.log(`❌ No client found in MongoDB with email: ${email}`);
         }
       }
     } catch (error) {
       console.error('Error searching client in MongoDB:', error);
     }
     
-    // Fallback to in-memory search
     if (!foundClient) {
-      console.log(`🔍 Searching in-memory storage (${Object.keys(clientsData).length} clients)`);
-      for (const [clientId, client] of Object.entries(clientsData)) {
-        if (client.email === email && client.aktenzeichen === aktenzeichen) {
-          foundClient = client;
-          console.log(`✅ Client found in in-memory storage: ${foundClient.aktenzeichen} | ${foundClient.email}`);
-          break;
-        }
-      }
-      
-      if (!foundClient) {
-        console.log(`❌ No client found in in-memory storage either`);
-      }
-    }
-    
-    if (!foundClient) {
-      console.log(`❌ Login failed: No client found with email ${email} and Aktenzeichen ${aktenzeichen}`);
+      console.log(`❌ Login failed: No client found with email ${email}`);
       return res.status(401).json({ 
-        error: 'Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail und Ihr Aktenzeichen.' 
+        error: 'Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail.' 
       });
     }
     
-    // Portal access is always granted - removed access restriction
-    // This allows all valid users to access the portal immediately
+    // Determine login mode based on isPasswordSet
+    const isPasswordSet = !!foundClient.isPasswordSet;
+    console.log(`🔐 Client password status: isPasswordSet=${isPasswordSet}`);
+
+    if (isPasswordSet) {
+      // If password not sent explicitly, allow frontend that sends it via aktenzeichen field
+      const providedPassword = rawPassword || (rawAktenzeichen?.length > 0 ? rawAktenzeichen : null);
+
+      // Password is set: require password
+      if (!providedPassword) {
+        return res.status(400).json({ 
+          error: 'Passwort ist erforderlich' 
+        });
+      }
+
+      // Verify password using stored hash
+      if (typeof foundClient.comparePassword === 'function') {
+        const ok = await foundClient.comparePassword(providedPassword);
+        if (!ok) {
+          console.log(`❌ Password verification failed for ${email}`);
+          return res.status(401).json({ error: 'Ungültiges Passwort' });
+        }
+        console.log(`✅ Password verification successful for ${email}`);
+      } else {
+        return res.status(500).json({ error: 'Passwortprüfung nicht verfügbar' });
+      }
+    } else {
+      // Password not set yet: aktenzeichen is REQUIRED and must match DB
+      if (!rawAktenzeichen) {
+        return res.status(400).json({ error: 'Aktenzeichen ist erforderlich' });
+      }
+      if (foundClient.aktenzeichen !== rawAktenzeichen) {
+        console.log(`❌ Aktenzeichen mismatch: provided=${rawAktenzeichen}, stored=${foundClient.aktenzeichen}`);
+        return res.status(401).json({ error: 'Ungültiges Aktenzeichen' });
+      }
+      console.log(`✅ Aktenzeichen verified for ${email}`);
+    }
     
     // Generate JWT token instead of simple session token
     const jwtToken = generateClientToken(foundClient.id, foundClient.email);
@@ -2727,7 +2779,8 @@ app.post('/api/portal/login',
         aktenzeichen: foundClient.aktenzeichen,
         phase: foundClient.phase,
         workflow_status: foundClient.workflow_status,
-        documents_count: foundClient.documents?.length || 0
+        documents_count: foundClient.documents?.length || 0,
+        isPasswordSet: !!foundClient.isPasswordSet
       },
       session_token: sessionToken, // Backward compatibility
       token: jwtToken // New JWT token

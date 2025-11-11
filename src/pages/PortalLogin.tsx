@@ -14,6 +14,48 @@ const PortalLogin: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isPasswordSet, setIsPasswordSet] = useState<boolean | null>(null);
+  const [checkingPasswordStatus, setCheckingPasswordStatus] = useState(false);
+
+  // Check password status when email is entered
+  const checkPasswordStatus = async (email: string) => {
+    if (!email || !email.includes('@')) return;
+    
+    setCheckingPasswordStatus(true);
+    try {
+      // Try to login with just email to check password status
+      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, {
+        email: email,
+        aktenzeichen: 'dummy_check' // This will fail but we can check the response
+      });
+      
+      // If we get here, it means login succeeded (unlikely with dummy aktenzeichen)
+      setIsPasswordSet(false);
+    } catch (error: any) {
+      // Check if the error indicates password is required
+      if (error.response?.data?.error?.includes('Passwort') || 
+          error.response?.data?.error?.includes('password')) {
+        setIsPasswordSet(true);
+      } else if (error.response?.data?.error?.includes('Aktenzeichen')) {
+        setIsPasswordSet(false);
+      } else {
+        // If it's a different error, we can't determine the status
+        setIsPasswordSet(null);
+      }
+    } finally {
+      setCheckingPasswordStatus(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCredentials(prev => ({ ...prev, [name]: value }));
+    
+    // Check password status when email changes
+    if (name === 'email') {
+      checkPasswordStatus(value);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,11 +137,6 @@ const PortalLogin: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCredentials(prev => ({ ...prev, [name]: value }));
-  };
-
   // Load saved email on mount
   useEffect(() => {
     const savedEmail = localStorage.getItem('savedEmail');
@@ -117,7 +154,6 @@ const PortalLogin: React.FC = () => {
       localStorage.removeItem('savedEmail');
     }
   }, [rememberMe, credentials.email]);
-
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Header */}
