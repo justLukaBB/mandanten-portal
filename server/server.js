@@ -1497,7 +1497,7 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
       
       console.log(`✅ Client ${client.aktenzeichen} creditor confirmation processed successfully`);
       
-      // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLYy
+      // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
       let creditorContactResult = null;
       const creditors = client.final_creditor_list || [];
       

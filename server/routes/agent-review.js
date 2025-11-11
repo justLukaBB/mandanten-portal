@@ -503,6 +503,18 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       }
     }
 
+    // Run duplicate check on creditors after agent confirmation
+    const creditorDeduplication = require('../utils/creditorDeduplication');
+    if (action === 'confirm' && creditors.length > 0) {
+      const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(creditors, 'highest_amount');
+      
+      if (deduplicatedCreditors.length < creditors.length) {
+        console.log(`🔍 Duplicate check after agent confirmation for ${clientId}: ${creditors.length - deduplicatedCreditors.length} duplicates removed, ${deduplicatedCreditors.length} creditors remaining`);
+      }
+      
+      creditors = deduplicatedCreditors;
+    }
+
     // Update the client with corrected data
     console.log(`🔄 Updating client ${clientId} with corrected data...`);
     client.final_creditor_list = creditors;
@@ -576,6 +588,19 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
         error: 'Client not found',
         client_id: clientId
       });
+    }
+
+    // Run final duplicate check before completing agent review
+    const creditorDeduplication = require('../utils/creditorDeduplication');
+    const finalCreditors = client.final_creditor_list || [];
+    
+    if (finalCreditors.length > 0) {
+      const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(finalCreditors, 'highest_amount');
+      
+      if (deduplicatedCreditors.length < finalCreditors.length) {
+        console.log(`🔍 Final duplicate check during agent review completion for ${clientId}: ${finalCreditors.length - deduplicatedCreditors.length} duplicates removed, ${deduplicatedCreditors.length} creditors remaining`);
+        client.final_creditor_list = deduplicatedCreditors;
+      }
     }
 
     // Update client status - now requires client confirmation
