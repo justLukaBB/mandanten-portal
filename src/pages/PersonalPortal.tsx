@@ -732,9 +732,10 @@ export const PersonalPortal = ({
                     type="text"
                     id="fileNumber"
                     value={passwordForm.fileNumber}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, fileNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
                     required
+                    disabled
+                    readOnly
                   />
                 </div>
 
