@@ -326,6 +326,173 @@ class DelayedProcessingService {
   }
 
   /**
+   * Check for clients awaiting confirmation for 3+ minutes and auto-confirm them
+   * (Testing mode - normally 7 days)
+   */
+  async checkAndAutoConfirmCreditors() {
+    try {
+      console.log('🔍 Checking for clients awaiting confirmation for 3+ minutes (TEST MODE)...');
+
+      const threeMinutesAgo = new Date();
+      threeMinutesAgo.setMinutes(threeMinutesAgo.getMinutes() - 3);
+
+      // Find clients who have been awaiting confirmation for 3+ minutes (TEST MODE)
+      const pendingClients = await Client.find({
+        current_status: 'awaiting_client_confirmation',
+        admin_approved: true,
+        client_confirmed_creditors: { $ne: true },
+        admin_approved_at: { $lte: threeMinutesAgo }
+      });
+
+      console.log(`📋 Found ${pendingClients.length} clients ready for auto-confirmation`);
+
+      let successCount = 0;
+      let errorCount = 0;
+      let skippedCount = 0;
+
+      for (const client of pendingClients) {
+        try {
+          const minutesSinceApproval = Math.floor((new Date() - new Date(client.admin_approved_at)) / (1000 * 60));
+          
+          // Check if client has new unreviewed documents that would block auto-confirmation
+          if (this.hasUnreviewedDocumentsBlockingAutoConfirmation(client)) {
+            console.log(`⏸️ Skipping auto-confirmation for ${client.aktenzeichen} - has unreviewed documents requiring agent review`);
+            skippedCount++;
+            continue;
+          }
+          
+          console.log(`⏰ Auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - ${minutesSinceApproval} minutes since approval`);
+          
+          // Auto-confirm the creditors
+          client.client_confirmed_creditors = true;
+          client.client_confirmed_at = new Date();
+          client.current_status = 'creditor_contact_initiated';
+          
+          // Add to status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'creditors_auto_confirmed',
+            changed_by: 'system',
+            metadata: {
+              reason: '3-minute auto-confirmation - no client response (TEST MODE)',
+              admin_approved_at: client.admin_approved_at,
+              minutes_elapsed: minutesSinceApproval,
+              auto_confirmed_at: new Date(),
+              test_mode: true
+            }
+          });
+
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'creditor_contact_initiated',
+            changed_by: 'system',
+            metadata: {
+              reason: 'Auto-triggered after 3-minute creditor confirmation (TEST MODE)',
+              creditor_count: (client.final_creditor_list || []).length,
+              test_mode: true
+            }
+          });
+
+          await client.save();
+
+          // Trigger creditor contact process
+          await this.triggerCreditorContactService(client.id);
+          
+          successCount++;
+          console.log(`✅ Auto-confirmed and initiated creditor contact for ${client.aktenzeichen}`);
+
+        } catch (error) {
+          console.error(`❌ Error auto-confirming creditors for ${client.aktenzeichen}:`, error.message);
+          errorCount++;
+        }
+      }
+
+      console.log(`✅ Auto-confirmation check complete. Auto-confirmed: ${successCount}, Skipped: ${skippedCount}, Errors: ${errorCount}`);
+      
+      return {
+        totalChecked: pendingClients.length,
+        autoConfirmed: successCount,
+        skipped: skippedCount,
+        errors: errorCount
+      };
+
+    } catch (error) {
+      console.error('❌ Error in auto-confirmation service:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if client has unreviewed documents that would block auto-confirmation
+   */
+  hasUnreviewedDocumentsBlockingAutoConfirmation(client) {
+    const documents = client.documents || [];
+    const config = require('../config/config');
+    
+    // Check for documents that need manual review
+    const documentsNeedingReview = documents.filter(doc => {
+      const documentConfidence = doc.extracted_data?.confidence || 0;
+      const manualReviewRequired = doc.extracted_data?.manual_review_required === true;
+      const isCreditorDocument = doc.is_creditor_document === true;
+      const alreadyReviewed = doc.manually_reviewed === true;
+      
+      // Check if document was uploaded after admin approval
+      const uploadedAfterApproval = client.admin_approved_at && 
+        new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
+      
+      // Block auto-confirmation if:
+      // 1. Document was uploaded after admin approval AND
+      // 2. Document needs review (either manual flag or low confidence creditor doc) AND
+      // 3. Document hasn't been manually reviewed yet
+      return uploadedAfterApproval && 
+             !alreadyReviewed && 
+             (manualReviewRequired || (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD));
+    });
+
+    if (documentsNeedingReview.length > 0) {
+      console.log(`🔍 Client ${client.aktenzeichen} has ${documentsNeedingReview.length} unreviewed documents uploaded after admin approval:`);
+      documentsNeedingReview.forEach(doc => {
+        console.log(`   - ${doc.name} (uploaded: ${doc.uploadedAt}, confidence: ${doc.extracted_data?.confidence || 0})`);
+      });
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Trigger the creditor contact service after auto-confirmation
+   */
+  async triggerCreditorContactService(clientId) {
+    try {
+      const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
+      const webhookUrl = `${baseUrl}/api/zendesk-webhooks/client-creditor-confirmed`;
+      
+      console.log(`🔗 Triggering creditor contact service for client ${clientId}`);
+      
+      const response = await axios.post(webhookUrl, {
+        client_id: clientId,
+        timestamp: new Date().toISOString(),
+        triggered_by: 'auto_confirmation_service',
+        auto_confirmed: true
+      }, {
+        timeout: 15000,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'MandarenPortal-AutoConfirmation/1.0'
+        }
+      });
+      
+      console.log(`✅ Creditor contact service triggered successfully for client ${clientId}`);
+      return { success: true, data: response.data };
+      
+    } catch (error) {
+      console.error(`❌ Failed to trigger creditor contact service for client ${clientId}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Trigger the creditor review process (create ticket for agents)
    */
   async triggerCreditorReviewProcess(clientId) {
