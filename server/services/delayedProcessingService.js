@@ -427,7 +427,7 @@ class DelayedProcessingService {
    */
   hasUnreviewedDocumentsBlockingAutoConfirmation(client) {
     const documents = client.documents || [];
-    const config = require('../config/config');
+    const config = require('../config');
     
     // Check for documents that need manual review
     const documentsNeedingReview = documents.filter(doc => {
