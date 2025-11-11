@@ -9,6 +9,7 @@ import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
 import { ArrowPathIcon, EllipsisVerticalIcon, XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import api from '../config/api';
+import ClientAddressForm from '../components/ClientAddressForm';
 
 /**
  * Personal/Client Portal Function Component
@@ -47,6 +48,7 @@ export const PersonalPortal = ({
   const [creditorConfirmationData, setCreditorConfirmationData] = useState<any>(null);
   const [showingCreditorConfirmation, setShowingCreditorConfirmation] = useState(false);
   const [showingFinancialForm, setShowingFinancialForm] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
   
   // Password change modal state
@@ -108,14 +110,17 @@ export const PersonalPortal = ({
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
         setCreditorConfirmationData(creditorResponse.data);
 
-        // Show creditor confirmation if workflow is ready and not completed
+        // Show creditor confirmation only after 7-day review is triggered or explicitly in review status
+        // Do NOT show during the 7-day waiting period after payment + documents
         const shouldShowCreditorConfirmation =
           creditorResponse.data &&
           (
             creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
             creditorResponse.data.workflow_status === 'client_confirmation' ||
             creditorResponse.data.workflow_status === 'creditor_review' ||
-            clientData.first_payment_received
+            (clientData.first_payment_received &&
+              clientData.seven_day_review_triggered === true &&
+              clientData.current_status === 'creditor_review')
           ) &&
           !creditorResponse.data.client_confirmed;
 
@@ -145,9 +150,18 @@ export const PersonalPortal = ({
             responseReceived: true
           });
 
+          // setShowAddressForm(!responseData.)
+
           setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
           setFinancialDataSubmitted(alreadySubmitted);
           setCreditorResponsePeriod(periodInfo);
+
+          const clientHasAddress = Boolean(clientData?.address);
+          const shouldShowAddressForm =
+            (shouldShowFinancialForm && !alreadySubmitted && !clientHasAddress) ||
+            (alreadySubmitted && !clientHasAddress);
+
+          setShowAddressForm(shouldShowAddressForm);
         } else {
           console.warn('Invalid financial form status response structure');
           setShowingFinancialForm(false);
@@ -346,6 +360,13 @@ export const PersonalPortal = ({
           >
             Erneut versuchen
           </button>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-white rounded-lg ms-1"
+            style={{ backgroundColor: customColors.primary }}
+          >
+            Abmelden
+          </button>
         </div>
       </div>
     );
@@ -354,64 +375,64 @@ export const PersonalPortal = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-5">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
         <div className="flex items-center justify-between">
-          <div className="h-14 flex items-center justify-center">
-            <img
-              src={customLogo || "https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png"}
-              alt="Logo"
-              className="h-auto w-auto max-h-full max-w-[140px] object-contain"
-            />
-          </div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold" style={{ color: customColors.primary }}>
+            <div className="h-8 md:h-10">
+              <img
+                src={customLogo || "https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png"}
+                alt="Logo"
+                className="h-full object-contain"
+              />
+            </div>
+            <h1 className="text-lg md:text-2xl font-semibold" style={{ color: customColors.primary }}>
               {customTitle}
             </h1>
+          </div>
+          
+          {/* Three-dot dropdown menu */}
+          <div className="relative dropdown-container">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <EllipsisVerticalIcon className="h-6 w-6 text-gray-600" />
+            </button>
             
-            {/* Three-dot dropdown menu */}
-            <div className="relative dropdown-container">
-              <button
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                <EllipsisVerticalIcon className="h-6 w-6 text-gray-600" />
-              </button>
-              
-              {showDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                  <div className="py-1">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Kennwort ändern clicked');
-                        openPasswordModal();
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Kennwort ändern
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Abmelden clicked');
-                        handleLogout();
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Abmelden
-                    </button>
-                  </div>
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                <div className="py-1">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Kennwort ändern clicked');
+                      openPasswordModal();
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Kennwort ändern
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Abmelden clicked');
+                      handleLogout();
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Abmelden
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Progress tracker */}
         {/* <ClientProgressTracker 
           currentPhase={client?.phase || 2} 
@@ -427,8 +448,8 @@ export const PersonalPortal = ({
         {/* Previously uploaded documents viewer */}
         {/* <ClientDocumentsViewer client={client} /> */}
 
-        {/* Creditor upload component - conditional display based on workflow status */}
-        {client?.workflow_status !== 'completed' ? (
+        {/* Creditor upload component - conditional display based on workflow status and creditor confirmation */}
+        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors ? (
           <div className={`relative ${showingCreditorConfirmation ? 'pointer-events-none' : ''}`}>
             <div className={showingCreditorConfirmation ? 'filter blur-sm' : ''}>
               <CreditorUploadComponent
@@ -470,10 +491,14 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Dokumentensammlung abgeschlossen
+                {client?.client_confirmed_creditors
+                  ? 'Gläubigerliste bestätigt'
+                  : 'Dokumentensammlung abgeschlossen'}
               </h3>
               <p className="text-gray-600 mb-4">
-                Sie haben Ihre Gläubigerliste bestätigt. Die Dokumentensammlung ist damit abgeschlossen.
+                {client?.client_confirmed_creditors
+                  ? 'Sie haben Ihre Gläubigerliste bestätigt. Weitere Dokumenten-Uploads sind nicht mehr möglich.'
+                  : 'Der Workflow ist abgeschlossen. Die Dokumentensammlung ist beendet.'}
               </p>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start">
@@ -538,11 +563,23 @@ export const PersonalPortal = ({
 
         {/* Financial Data Form - shows after 30-day creditor response period */}
         {showingFinancialForm && (
-          <FinancialDataForm
-            clientId={clientId!}
-            onFormSubmitted={handleFinancialFormSubmitted}
-            customColors={customColors}
-          />
+          <>
+            <FinancialDataForm
+              clientId={clientId!}
+              onFormSubmitted={handleFinancialFormSubmitted}
+              customColors={customColors}
+            />
+            
+          </>
+        )} 
+
+        {showAddressForm && (
+            <ClientAddressForm
+              clientId={clientId!}
+              client={client}
+              customColors={customColors}
+              onFormSubmitted={() => console.log('✅ Address form submitted')}
+            />
         )}
 
         {/* Financial Data Submitted Status */}

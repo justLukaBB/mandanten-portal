@@ -10,6 +10,7 @@ class SideConversationMonitor {
     constructor() {
         this.zendeskService = new ZendeskService();
         this.creditorContactService = new CreditorContactService();
+        this.welcomeEmailService = null; // Will be set externally to avoid circular dependency
         this.activeMonitoringSessions = new Map(); // clientReference -> monitoring session
         this.processedMessages = new Set(); // Avoid double processing
         this.globalMonitorInterval = null;
@@ -30,10 +31,18 @@ class SideConversationMonitor {
         const clientSideConversations = this.getClientSideConversations(clientReference);
         
         if (clientSideConversations.length === 0) {
-            console.log(`⚠️ No Side Conversations found for client ${clientReference}`);
+            console.log(`❌ No Side Conversations found for client ${clientReference}`);
+            console.log(`🔍 Debugging: CreditorContactService configured: ${!!this.creditorContactService}`);
+            if (this.creditorContactService) {
+                console.log(`🔍 Total contacts in service: ${this.creditorContactService.creditorContacts.size}`);
+            }
             return {
                 success: false,
-                message: 'No Side Conversations found for this client'
+                message: 'No Side Conversations found for this client',
+                debug: {
+                    creditorContactService_available: !!this.creditorContactService,
+                    total_contacts: this.creditorContactService ? this.creditorContactService.creditorContacts.size : 0
+                }
             };
         }
 
@@ -66,25 +75,80 @@ class SideConversationMonitor {
     }
 
     /**
-     * Get Side Conversations for a specific client's creditor contacts
+     * Set welcome email service (to avoid circular dependency)
+     */
+    setWelcomeEmailService(welcomeEmailService) {
+        this.welcomeEmailService = welcomeEmailService;
+    }
+
+    /**
+     * Get Side Conversations for a specific client (creditor contacts + welcome emails)
      */
     getClientSideConversations(clientReference) {
-        const clientContacts = Array.from(this.creditorContactService.creditorContacts.values())
-            .filter(contact => 
-                contact.client_reference === clientReference &&
-                contact.contact_status === 'email_sent' && 
+        console.log(`🔍 Looking for side conversations for client: ${clientReference}`);
+        
+        const sideConversations = [];
+        
+        // Get creditor contact side conversations
+        if (this.creditorContactService) {
+            const allContacts = Array.from(this.creditorContactService.creditorContacts.values());
+            console.log(`📋 Total contacts in creditorContactService: ${allContacts.length}`);
+            
+            // Debug: Show all contacts for this client
+            const clientContacts = allContacts.filter(contact => contact.client_reference === clientReference);
+            console.log(`📋 Creditor contacts for client ${clientReference}:`, clientContacts.map(c => ({
+                id: c.id,
+                creditor_name: c.creditor_name,
+                contact_status: c.contact_status,
+                has_side_conversation_id: !!c.side_conversation_id,
+                has_main_ticket_id: !!c.main_zendesk_ticket_id,
+                side_conversation_id: c.side_conversation_id
+            })));
+            
+            const validContacts = clientContacts.filter(contact => 
+                contact.contact_status === 'email_sent_with_document' && 
                 contact.side_conversation_id &&
                 contact.main_zendesk_ticket_id
             );
-
-        return clientContacts.map(contact => ({
-            side_conversation_id: contact.side_conversation_id,
-            main_ticket_id: contact.main_zendesk_ticket_id,
-            creditor_name: contact.creditor_name,
-            creditor_email: contact.creditor_email,
-            reference_number: contact.reference_number,
-            contact: contact
-        }));
+            
+            console.log(`✅ Valid creditor side conversations for ${clientReference}: ${validContacts.length}`);
+            
+            sideConversations.push(...validContacts.map(contact => ({
+                side_conversation_id: contact.side_conversation_id,
+                main_ticket_id: contact.main_zendesk_ticket_id,
+                creditor_name: contact.creditor_name,
+                creditor_email: contact.creditor_email,
+                reference_number: contact.reference_number,
+                conversation_type: 'creditor_contact',
+                contact: contact
+            })));
+        } else {
+            console.error(`❌ CreditorContactService not set in SideConversationMonitor`);
+        }
+        
+        // Get welcome email side conversations
+        if (this.welcomeEmailService) {
+            const welcomeConversation = this.welcomeEmailService.getWelcomeEmailConversation(clientReference);
+            if (welcomeConversation && welcomeConversation.side_conversation_id) {
+                console.log(`📧 Found welcome email conversation for ${clientReference}:`, {
+                    side_conversation_id: welcomeConversation.side_conversation_id,
+                    contact_status: welcomeConversation.contact_status,
+                    email: welcomeConversation.email
+                });
+                
+                sideConversations.push({
+                    side_conversation_id: welcomeConversation.side_conversation_id,
+                    main_ticket_id: welcomeConversation.main_zendesk_ticket_id,
+                    conversation_type: 'welcome_email',
+                    email: welcomeConversation.email,
+                    name: welcomeConversation.name,
+                    contact: welcomeConversation
+                });
+            }
+        }
+        
+        console.log(`✅ Total side conversations for ${clientReference}: ${sideConversations.length}`);
+        return sideConversations;
     }
 
     /**

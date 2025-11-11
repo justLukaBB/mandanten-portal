@@ -1,0 +1,173 @@
+{
+  "dates": [
+    "05.05.2025",
+    "05.03.1967",
+    "02.06.2025",
+    "01.08.2025"
+  ],
+  "caseNumbers": [
+    "904/24 TS-JK"
+  ],
+  "amounts": [
+    "25.947,78 €",
+    "540,00 €",
+    "4.413,46 €",
+    "17,01"
+  ],
+  "names": [
+    "EOS Deutscher",
+    "Anke Laux",
+    "Thomas Scuric"
+  ],
+  "addresses": [
+    "Bongardstraße 33",
+    "44787 Bochum",
+    "Steindamm 7120085",
+    "Bongardstraße 3344787"
+  ],
+  "phones": [
+    "0234 9136810",
+    "0234 9136812"
+  ],
+  "bankDetails": [
+    "Konto-Nr.: 172 209 900",
+    "BLZ: 430 700 24"
+  ],
+  "recommendations": [
+    {
+      "variable": "{{LAWYER_NAME}}",
+      "current": "Thomas Scuric",
+      "description": "Lawyer name"
+    },
+    {
+      "variable": "{{LAWYER_FIRM}}",
+      "current": "Rechtsanwaltskanzlei Scuric",
+      "description": "Law firm name"
+    },
+    {
+      "variable": "{{LAWYER_ADDRESS}}",
+      "current": "Bongardstraße 33",
+      "description": "Lawyer address"
+    },
+    {
+      "variable": "{{LAWYER_CITY}}",
+      "current": "44787 Bochum",
+      "description": "Lawyer city"
+    },
+    {
+      "variable": "{{LAWYER_PHONE}}",
+      "current": "0234 9136810",
+      "description": "Lawyer phone"
+    },
+    {
+      "variable": "{{LAWYER_EMAIL}}",
+      "current": "info@ra-scuric.de",
+      "description": "Lawyer email"
+    },
+    {
+      "variable": "{{CREDITOR_NAME}}",
+      "current": "EOS Deutscher Inkasso Dienst",
+      "description": "Creditor name"
+    },
+    {
+      "variable": "{{CREDITOR_ADDRESS}}",
+      "current": "Steindamm 71",
+      "description": "Creditor address"
+    },
+    {
+      "variable": "{{CREDITOR_CITY}}",
+      "current": "20085 Hamburg",
+      "description": "Creditor city"
+    },
+    {
+      "variable": "{{DEBTOR_NAME}}",
+      "current": "Anke Laux",
+      "description": "Debtor name"
+    },
+    {
+      "variable": "{{DEBTOR_FIRST_NAME}}",
+      "current": "Anke",
+      "description": "Debtor first name"
+    },
+    {
+      "variable": "{{DEBTOR_LAST_NAME}}",
+      "current": "Laux",
+      "description": "Debtor last name"
+    },
+    {
+      "variable": "{{DEBTOR_ID}}",
+      "current": "42883554201",
+      "description": "Debtor ID number"
+    },
+    {
+      "variable": "{{CASE_NUMBER}}",
+      "current": "904/24 TS-JK",
+      "description": "Case/file number"
+    },
+    {
+      "variable": "{{DOCUMENT_DATE}}",
+      "current": "05.05.2025",
+      "description": "Document creation date"
+    },
+    {
+      "variable": "{{DEADLINE_DATE}}",
+      "current": "02.06.2025",
+      "description": "Response deadline date"
+    },
+    {
+      "variable": "{{PLAN_DATE}}",
+      "current": "01.08.2025",
+      "description": "Plan start date"
+    },
+    {
+      "variable": "{{DEBTOR_BIRTH_DATE}}",
+      "current": "05.03.1967",
+      "description": "Debtor birth date"
+    },
+    {
+      "variable": "{{TOTAL_DEBT}}",
+      "current": "25.947,78 €",
+      "description": "Total debt amount"
+    },
+    {
+      "variable": "{{CLAIM_AMOUNT}}",
+      "current": "4.413,46 €",
+      "description": "Individual claim amount"
+    },
+    {
+      "variable": "{{CLAIM_QUOTE}}",
+      "current": "17,01%",
+      "description": "Claim quote percentage"
+    },
+    {
+      "variable": "{{DEBTOR_INCOME}}",
+      "current": "540,00 €",
+      "description": "Debtor monthly income"
+    },
+    {
+      "variable": "{{CREDITOR_COUNT}}",
+      "current": "8",
+      "description": "Number of creditors"
+    },
+    {
+      "variable": "{{CLAIM_NUMBER}}",
+      "current": "8",
+      "description": "Claim number in list"
+    },
+    {
+      "variable": "{{BANK_NAME}}",
+      "current": "Deutsche Bank",
+      "description": "Bank name"
+    },
+    {
+      "variable": "{{ACCOUNT_NUMBER}}",
+      "current": "172 209 900",
+      "description": "Account number"
+    },
+    {
+      "variable": "{{BANK_CODE}}",
+      "current": "430 700 24",
+      "description": "Bank code (BLZ)"
+    }
+  ]
+}

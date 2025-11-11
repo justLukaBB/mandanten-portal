@@ -147,7 +147,7 @@ const statusHistorySchema = new mongoose.Schema({
   status: { type: String, required: true },
   changed_by: {
     type: String,
-    enum: ['system', 'agent', 'client'],
+    enum: ['system', 'agent', 'client', 'admin'],
     required: true
   },
   zendesk_ticket_id: String,
@@ -166,6 +166,7 @@ const clientSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: String,
   address: String,
+  geburtstag: String,
   
   // Portal access
   portal_link_sent: { type: Boolean, default: false },
@@ -179,6 +180,11 @@ const clientSchema = new mongoose.Schema({
   password_hash: { type: String },
   isPasswordSet: { type: Boolean, default: false },
   
+  // Welcome email
+  welcome_email_sent: { type: Boolean, default: false },
+  welcome_email_sent_at: Date,
+  welcome_side_conversation_id: String,
+  
   // Zendesk integration
   zendesk_user_id: String,
   zendesk_ticket_id: String,
@@ -186,7 +192,7 @@ const clientSchema = new mongoose.Schema({
     ticket_id: String,
     ticket_type: {
       type: String,
-      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact', 'payment_review', 'main_ticket']
+      enum: ['portal_access', 'glaeubieger_process', 'creditor_contact', 'payment_review', 'main_ticket', 'creditor_review']
     },
     ticket_scenario: String, // For tracking specific scenarios like document_request, manual_review, etc.
     status: String,
@@ -242,7 +248,7 @@ const clientSchema = new mongoose.Schema({
   // Payment and Review Tracking
   payment_ticket_type: {
     type: String,
-    enum: ['document_request', 'processing_wait', 'manual_review', 'auto_approved', 'no_creditors_found', 'creditor_contact_initiated']
+    enum: ['document_request', 'processing_wait', 'manual_review', 'auto_approved', 'no_creditors_found', 'creditor_contact_initiated', 'document_reminder_side_conversation']
   },
   payment_processed_at: Date,
   document_request_sent_at: Date,

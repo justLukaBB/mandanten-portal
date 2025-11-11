@@ -225,14 +225,26 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
       // Check if document needs manual review based on Claude AI confidence or manual_review_required flag
       const documentConfidence = doc.extracted_data?.confidence || 0;
       const manualReviewRequired = doc.extracted_data?.manual_review_required === true;
+      const isCreditorDocument = doc.is_creditor_document === true;
+      const alreadyReviewed = doc.manually_reviewed === true;
+      
+      const needsReview = !alreadyReviewed && (manualReviewRequired || 
+        (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD));
+      
+      // Debug logging for each document
+      console.log(`📄 Document ${doc.name || doc.id}:`, {
+        is_creditor_document: isCreditorDocument,
+        confidence: documentConfidence,
+        manual_review_required: manualReviewRequired,
+        manually_reviewed: alreadyReviewed,
+        needsReview: needsReview
+      });
       
       // Include if:
-      // 1. It's a creditor document AND
-      // 2. Either manual review is explicitly required OR document confidence is low
-      return (
-        doc.is_creditor_document === true && 
-        (manualReviewRequired || documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
-      );
+      // 1. Not already manually reviewed AND
+      // 2. Either manual review is explicitly required OR 
+      //    (it's a creditor document AND document confidence is low)
+      return needsReview;
     });
 
     // Get creditors that need review

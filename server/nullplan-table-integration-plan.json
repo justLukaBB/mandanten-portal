@@ -1,0 +1,104 @@
+{
+  "templateAnalysis": {
+    "templateType": "Außergerichtlicher Schuldenbereinigungsplan - Quotenplan",
+    "variables": [
+      "Heutiges Datum",
+      "Name Mandant",
+      "Datum in 3 Monaten"
+    ],
+    "tableStructure": {
+      "columns": [
+        "Nr.",
+        "Gläubiger",
+        "Forderung",
+        "Quote von Gesamtverschuldung"
+      ],
+      "maxRows": 8,
+      "hasSummaryRow": true
+    },
+    "quotaSystem": {
+      "type": "percentage-based",
+      "recalculation": "monthly",
+      "distribution": "annual",
+      "rounding": "2 decimal places"
+    },
+    "fixedValues": {
+      "duration": "36 Monate",
+      "startDateOffset": "3 months from document date"
+    }
+  },
+  "integrationPlan": {
+    "templateFile": {
+      "current": "templates/Nullplan_Text_Template.docx",
+      "new": "templates/Tabelle Nullplan Template.docx",
+      "action": "Replace or add alongside existing"
+    },
+    "variableMapping": {
+      "description": "Map new template variables to existing data structure",
+      "mappings": [
+        {
+          "templateVar": "Heutiges Datum",
+          "source": "new Date().toLocaleDateString(\"de-DE\")",
+          "current": "clientData.currentDate"
+        },
+        {
+          "templateVar": "Name Mandant",
+          "source": "client.firstName + \" \" + client.lastName",
+          "current": "clientData.fullName"
+        },
+        {
+          "templateVar": "Datum in 3 Monaten",
+          "source": "new Date(Date.now() + 3*30*24*60*60*1000).toLocaleDateString(\"de-DE\")",
+          "current": "calculated based on currentDate + 3 months"
+        }
+      ]
+    },
+    "tableGeneration": {
+      "description": "Generate creditor table with quota calculations",
+      "requirements": [
+        "Extract creditor data from settlementData.creditor_payments or client.creditors",
+        "Calculate total debt from all creditors",
+        "Calculate quota percentage for each creditor (debt_amount / total_debt * 100)",
+        "Format currency amounts in German format (1.234,56 EUR)",
+        "Round quota percentages to 2 decimal places",
+        "Ensure sum of quotas approximately equals 100%",
+        "Handle up to 8 creditors (template limit)",
+        "Add summary row with totals"
+      ]
+    },
+    "codeChanges": {
+      "description": "Required code modifications",
+      "changes": [
+        {
+          "file": "services/wordTemplateProcessor.js",
+          "action": "Add new method processNullplanTableTemplate()",
+          "details": "Process the new table template with creditor data"
+        },
+        {
+          "file": "services/documentGenerator.js",
+          "action": "Update generateNullplanRatenplanDocument()",
+          "details": "Route to new table template processor"
+        },
+        {
+          "file": "services/wordTemplateProcessor.js",
+          "action": "Add template path property",
+          "details": "this.nullplanTableTemplatePath for new template"
+        }
+      ]
+    },
+    "quotaCalculation": {
+      "description": "Quota calculation system",
+      "algorithm": [
+        "1. Get all creditor amounts from settlementData.creditor_payments",
+        "2. Calculate totalDebt = sum of all creditor amounts",
+        "3. For each creditor: quota = (creditor.debt_amount / totalDebt) * 100",
+        "4. Round quota to 2 decimal places",
+        "5. Handle rounding discrepancies (sum may not equal exactly 100%)",
+        "6. Format amounts as German currency (1.234,56 EUR)",
+        "7. Fill table rows (max 8 creditors, numbered 1-8)",
+        "8. Add summary row with total amounts"
+      ]
+    }
+  },
+  "timestamp": "2025-10-09T17:03:25.723Z"
+}

@@ -101,7 +101,7 @@ const ManualCreditorManager: React.FC<Props> = ({
   const fetchCreditors = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/admin/clients/${clientId}/creditors`);
+      const response = await api.get(`/api/admin/clients/${clientId}/creditors`);
       if (response.data.success) {
         setCreditors(response.data.creditors);
         setClient(response.data.client);
@@ -167,7 +167,7 @@ const ManualCreditorManager: React.FC<Props> = ({
 
       if (editingId) {
         // Update existing creditor
-        const response = await api.put(`/admin/clients/${clientId}/creditors/${editingId}`, payload);
+        const response = await api.put(`/api/admin/clients/${clientId}/creditors/${editingId}`, payload);
         if (response.data.success) {
           await fetchCreditors();
           handleCancel();
@@ -175,7 +175,7 @@ const ManualCreditorManager: React.FC<Props> = ({
         }
       } else {
         // Add new creditor
-        const response = await api.post(`/admin/clients/${clientId}/add-creditor`, payload);
+        const response = await api.post(`/api/admin/clients/${clientId}/add-creditor`, payload);
         if (response.data.success) {
           await fetchCreditors();
           handleCancel();
@@ -197,7 +197,7 @@ const ManualCreditorManager: React.FC<Props> = ({
     }
 
     try {
-      const response = await api.delete(`/admin/clients/${clientId}/creditors/${creditorId}`);
+      const response = await api.delete(`/api/admin/clients/${clientId}/creditors/${creditorId}`);
       if (response.data.success) {
         await fetchCreditors();
         onCreditorDeleted?.();

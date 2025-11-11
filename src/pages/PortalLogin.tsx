@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ScaleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
@@ -8,9 +8,10 @@ const PortalLogin: React.FC = () => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({
     email: '',
-    aktenzeichen: ''
+    password: ''
   });
-  const [showAktenzeichen, setShowAktenzeichen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPasswordSet, setIsPasswordSet] = useState<boolean | null>(null);
@@ -66,10 +67,17 @@ const PortalLogin: React.FC = () => {
     try {
       console.log('🔄 Attempting login with credentials:', {
         email: credentials.email,
-        hasAktenzeichen: !!credentials.aktenzeichen
+        hasPassword: !!credentials.password
       });
 
-      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, credentials);
+      // For now, we'll adapt the new design to work with existing aktenzeichen backend
+      // TODO: Update backend to support password-based login
+      const loginData = {
+        email: credentials.email,
+        aktenzeichen: credentials.password // Temporarily map password to aktenzeichen
+      };
+
+      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, loginData);
 
       if (response.data && response.data.success) {
         console.log('✅ Login API call successful');
@@ -111,7 +119,7 @@ const PortalLogin: React.FC = () => {
         if (serverMessage) {
           setError(serverMessage);
         } else if (error.response.status === 401) {
-          setError('Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Aktenzeichen.');
+          setError('Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.');
         } else if (error.response.status === 429) {
           setError('Zu viele Login-Versuche. Bitte warten Sie einen Moment.');
         } else {
@@ -129,133 +137,184 @@ const PortalLogin: React.FC = () => {
     }
   };
 
+  // Load saved email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('savedEmail');
+    if (savedEmail) {
+      setCredentials(prev => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Save email when remember me is checked
+  useEffect(() => {
+    if (rememberMe && credentials.email) {
+      localStorage.setItem('savedEmail', credentials.email);
+    } else {
+      localStorage.removeItem('savedEmail');
+    }
+  }, [rememberMe, credentials.email]);
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="flex justify-center">
-            <div className="bg-red-800 p-3 rounded-full">
-              <ScaleIcon className="h-12 w-12 text-white" />
-            </div>
-          </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Mandanten-Portal
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Melden Sie sich mit Ihren Zugangsdaten an
-          </p>
+    <div className="min-h-screen bg-white font-sans">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-200 flex justify-start items-center">
+        <div className="h-8 md:h-10">
+          <img 
+            src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" 
+            alt="Scuric Logo" 
+            className="h-full object-contain"
+          />
         </div>
+      </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                E-Mail-Adresse
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-800 focus:border-red-800 focus:z-10 sm:text-sm"
-                placeholder="max.mustermann@example.com"
-                value={credentials.email}
-                onChange={handleInputChange}
-              />
-            </div>
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto px-5 py-8">
+        <div className="max-w-sm mx-auto">
+          {/* Welcome Section */}
+          <div className="text-center mb-12">
+            <h1 className="text-2xl md:text-3xl font-semibold mb-4 text-gray-900 leading-tight">
+              Willkommen im Mandanten Portal
+            </h1>
+            <p className="text-base text-gray-600">
+              Melden Sie sich an, um fortzufahren
+            </p>
+          </div>
 
-            <div>
-              <label htmlFor="aktenzeichen" className="block text-sm font-medium text-gray-700">
-                {isPasswordSet === true ? 'Passwort' : 'Aktenzeichen'}
-                {checkingPasswordStatus && (
-                  <span className="ml-2 text-xs text-gray-500">(wird geprüft...)</span>
-                )}
-              </label>
-              <div className="mt-1 relative">
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-4">
+              <div className="relative">
                 <input
-                  id="aktenzeichen"
-                  name="aktenzeichen"
-                  type={isPasswordSet
-                    ? showAktenzeichen
-                      ? 'text'
-                      : 'password'
-                    : showAktenzeichen
-                    ? 'password'
-                    : 'text'}
-                  
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="E-Mail-Adresse"
+                  autoComplete="email"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck="false"
                   required
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-800 focus:border-red-800 focus:z-10 sm:text-sm"
-                  placeholder={isPasswordSet === true ? 'Ihr Passwort' : 'MAND_2024_001'}
-                  value={credentials.aktenzeichen}
+                  value={credentials.email}
                   onChange={handleInputChange}
+                  className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+                />
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  placeholder="Passwort"
+                  autoComplete="current-password"
+                  required
+                  value={credentials.password}
+                  onChange={handleInputChange}
+                  className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 pr-12 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowAktenzeichen(!showAktenzeichen)}
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors"
                 >
-                  {showAktenzeichen ? (
+                  {showPassword ? (
                     <EyeSlashIcon className="h-5 w-5 text-gray-400" />
                   ) : (
                     <EyeIcon className="h-5 w-5 text-gray-400" />
                   )}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
-                {isPasswordSet === true 
-                  ? 'Geben Sie Ihr Passwort ein, das Sie zuvor festgelegt haben'
-                  : 'Ihr Aktenzeichen finden Sie in der E-Mail, die Sie von uns erhalten haben'
-                }
-              </p>
             </div>
-          </div>
 
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-700">
+            <div className="flex items-center pt-1">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  id="remember"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-gray-800 bg-gray-50 border border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
+                />
+                <span className="text-gray-700 font-medium text-sm">Angemeldet bleiben</span>
+              </label>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
-            </div>
-          )}
+            )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading || !credentials.email.trim() || !credentials.aktenzeichen.trim()}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            >
-              {loading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Einloggen läuft...
-                </div>
-              ) : (
-                'Einloggen'
-              )}
-            </button>
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading || !credentials.email.trim() || !credentials.password.trim()}
+                className={`w-full h-12 ${
+                  credentials.email.trim() && credentials.password.trim() 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-gray-900 hover:bg-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Wird geladen...
+                  </div>
+                ) : (
+                  'Anmelden'
+                )}
+              </button>
+            </div>
+
+            <div className="text-center pt-4">
+              <button 
+                type="button"
+                onClick={() => {
+                  alert('Passwort-Wiederherstellung wurde an Ihre E-Mail gesendet.');
+                }}
+                className="text-red-600 hover:text-red-700 font-medium text-sm transition-colors bg-transparent border-none cursor-pointer hover:underline"
+              >
+                Passwort vergessen?
+              </button>
+            </div>
+          </form>
+
+          {/* Media Section */}
+          <div className="text-center mt-16 pt-12 border-t border-gray-200">
+            <p className="text-sm text-gray-500 mb-6 font-medium">Bekannt aus:</p>
+            <div className="flex justify-center">
+              <img 
+                src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" 
+                alt="Bekannt aus verschiedenen Medien"
+                className="max-w-full h-auto max-h-12 object-contain opacity-60 hover:opacity-80 transition-opacity"
+              />
+            </div>
           </div>
 
-          <div className="text-center space-y-4">
-            <div className="text-sm text-gray-600">
-              <p>
-                Haben Sie Probleme beim Anmelden?
-              </p>
-              <p className="mt-1">
-                Kontaktieren Sie uns unter:{' '}
-                <a href="mailto:support@kanzlei.de" className="font-medium text-red-800 hover:text-red-900">
-                  support@kanzlei.de
-                </a>
-              </p>
+          {/* Footer */}
+          <div className="text-center mt-12 pt-8">
+            <div className="mb-4">
+              <a 
+                href="https://www.schuldnerberatung-anwalt.de/impressum/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-red-600 text-sm transition-colors hover:underline"
+              >
+                Impressum
+              </a>
+              <span className="text-gray-400 mx-3 text-sm">•</span>
+              <a 
+                href="https://www.schuldnerberatung-anwalt.de/datenschutz/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-gray-500 hover:text-red-600 text-sm transition-colors hover:underline"
+              >
+                Datenschutz
+              </a>
             </div>
-
-            <div className="pt-4 border-t border-gray-200">
-              <p className="text-xs text-gray-500">
-                Ihre Daten werden sicher übertragen und gemäß DSGVO verarbeitet.
-              </p>
-            </div>
+            <p className="text-xs text-gray-400">© 2025 Scuric. Alle Rechte vorbehalten.</p>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

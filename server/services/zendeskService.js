@@ -260,7 +260,7 @@ class ZendeskService {
   }
 
   // Create side conversation to send email to customer - IMPROVED
-  async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, internalNote = true }) {
+  async createSideConversation(ticketId, { recipientEmail, recipientName, subject, body, htmlBody = null, internalNote = true }) {
     try {
       console.log(`📧 Creating Side Conversation on ticket ${ticketId} to send email to ${recipientEmail}...`);
       
@@ -293,19 +293,24 @@ class ZendeskService {
         }
       }
       
+      // Zendesk Side Conversation API payload structure
       const sideConversationData = {
         message: {
+          subject: subject,
+          body: body,
           to: [
             {
               email: recipientEmail,
               name: recipientName
             }
-          ],
-          subject: subject,
-          body: body,
-          html_body: body.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          ]
         }
       };
+      
+      // Add HTML body if provided (this will be processed by Zendesk)
+      if (htmlBody) {
+        sideConversationData.message.html_body = htmlBody;
+      }
 
       console.log(`📤 Creating side conversation with data:`, {
         ticketId,
@@ -391,16 +396,25 @@ class ZendeskService {
   }
 
   // Add public comment to ticket (visible to customer)
-  async addPublicComment(ticketId, { content, status = null, tags = [] }) {
+  async addPublicComment(ticketId, { content, htmlContent = null, status = null, tags = [] }) {
     try {
       console.log('💬 Adding public comment to Zendesk ticket:', ticketId);
 
+      const commentData = {
+        public: true // Public comment visible to customer
+      };
+
+      // Use html_body if HTML content is provided, otherwise use body
+      if (htmlContent) {
+        commentData.html_body = htmlContent;
+        commentData.body = content; // Fallback plain text
+      } else {
+        commentData.body = content;
+      }
+
       const updateData = {
         ticket: {
-          comment: {
-            body: content,
-            public: true // Public comment visible to customer
-          }
+          comment: commentData
         }
       };
 

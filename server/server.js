@@ -20,6 +20,7 @@ const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
 const insolvenzantragRoutes = require('./routes/insolvenzantrag');
+const secondRoundApiRoutes = require('./routes/second-round-api');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -58,6 +59,7 @@ app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
+app.use('/api/second-round', secondRoundApiRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -270,7 +272,7 @@ const processingMutex = new Map();
 // Helper function to trigger processing-complete webhook
 async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
   try {
-    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+    const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
     const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
     
     console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
@@ -653,6 +655,19 @@ app.post('/api/clients/:clientId/documents',
       return res.status(404).json({ error: 'Client not found' });
     }
     
+    console.log(`\n📤 ================================`);
+    console.log(`📤 DOCUMENT UPLOAD STARTED`);
+    console.log(`📤 ================================`);
+    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+    console.log(`📄 Files uploaded: ${req.files.length}`);
+    console.log(`⏰ Upload time: ${new Date().toISOString()}`);
+    
+    // Log uploaded files
+    console.log(`\n📋 UPLOADED FILES:`);
+    req.files.forEach((file, index) => {
+      console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+    });
+    
     const uploadedDocuments = [];
     
     // Process each uploaded file
@@ -836,7 +851,7 @@ app.post('/api/clients/:clientId/documents',
             if (existingDoc) {
               isDuplicate = true;
               duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
-              documentStatus = 'duplicate_detected';
+              documentStatus = 'duplicate';
             }
           }
           
@@ -938,37 +953,74 @@ app.post('/api/clients/:clientId/documents',
             
             // Check if all documents are processed and trigger webhook for clients with payment received
             if (allDocsCompleted && client.first_payment_received) {
-              console.log(`🎯 All documents completed for client ${clientId} with payment received - triggering webhook`);
+              console.log(`\n🎯 ================================`);
+              console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
+              console.log(`🎯 ================================`);
+              console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+              console.log(`💰 Payment received: ${client.first_payment_received}`);
+              console.log(`📄 All documents completed: ${allDocsCompleted}`);
+              console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
               
-              // Update final creditor list if needed
+              // Update final creditor list with deduplication
               const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
-              const extractedCreditors = [];
+              console.log(`\n📊 DOCUMENT ANALYSIS:`);
+              console.log(`📄 Total completed documents: ${completedDocs.length}`);
+              console.log(`📄 Creditor documents found: ${creditorDocuments.length}`);
               
-              creditorDocuments.forEach(doc => {
-                if (doc.extracted_data?.creditor_data) {
-                  const creditorData = doc.extracted_data.creditor_data;
-                  extractedCreditors.push({
-                    id: uuidv4(),
-                    sender_name: creditorData.sender_name,
-                    sender_address: creditorData.sender_address,
-                    sender_email: creditorData.sender_email,
-                    reference_number: creditorData.reference_number,
-                    claim_amount: creditorData.claim_amount || 0,
-                    is_representative: creditorData.is_representative || false,
-                    actual_creditor: creditorData.actual_creditor,
-                    source_document: doc.name,
-                    source_document_id: doc.id,
-                    ai_confidence: doc.confidence || 0,
-                    status: 'confirmed',
-                    created_at: new Date(),
-                    confirmed_at: new Date()
-                  });
-                }
-              });
-              
-              if (extractedCreditors.length > 0) {
-                client.final_creditor_list = extractedCreditors;
-                console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
+              if (creditorDocuments.length > 0) {
+                console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
+                creditorDocuments.forEach((doc, index) => {
+                  console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
+                  console.log(`      - Processing status: ${doc.processing_status}`);
+                  console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
+                  if (doc.extracted_data?.creditor_data) {
+                    const creditorData = doc.extracted_data.creditor_data;
+                    console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
+                  }
+                });
+                
+                console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
+                
+                // Use deduplication utility to handle duplicate creditors
+                const creditorDeduplication = require('./utils/creditorDeduplication');
+                const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+                  creditorDocuments, 
+                  'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
+                );
+                
+                // Merge with existing final_creditor_list if any
+                const existingCreditors = client.final_creditor_list || [];
+                console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
+                
+                const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+                  existingCreditors, 
+                  deduplicatedCreditors, 
+                  'highest_amount'
+                );
+                
+                client.final_creditor_list = mergedCreditors;
+                
+                console.log(`\n✅ ================================`);
+                console.log(`✅ FINAL CREDITOR LIST UPDATED`);
+                console.log(`✅ ================================`);
+                console.log(`👤 Client: ${clientId}`);
+                console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+                console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
+                console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
+                console.log(`⏰ Updated at: ${new Date().toISOString()}`);
+                
+                // Log final creditor list for monitoring
+                console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
+                mergedCreditors.forEach((creditor, index) => {
+                  console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+                  console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+                  console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+                  console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
+                  console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+                });
+                console.log(`\n`);
+              } else {
+                console.log(`⚠️ No creditor documents found in completed documents`);
               }
               
               // Trigger the processing-complete webhook asynchronously
@@ -1078,6 +1130,15 @@ app.post('/api/clients/:clientId/documents',
       
       return client;
     });
+    
+    console.log(`\n✅ ================================`);
+    console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
+    console.log(`✅ ================================`);
+    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+    console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
+    console.log(`🔄 AI processing started for all documents`);
+    console.log(`⏰ Completed at: ${new Date().toISOString()}`);
+    console.log(`\n`);
     
     res.json({
       success: true,
@@ -1436,7 +1497,7 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
       
       console.log(`✅ Client ${client.aktenzeichen} creditor confirmation processed successfully`);
       
-      // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
+      // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLYy
       let creditorContactResult = null;
       const creditors = client.final_creditor_list || [];
       
@@ -1642,6 +1703,117 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
     res.status(500).json({ 
       error: 'Error resetting payment status',
       details: error.message 
+    });
+  }
+});
+
+// Admin: Trigger 7-day review manually (skip waiting period)
+app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    
+    // Find client by ID or Aktenzeichen
+    let client = await Client.findOne({ id: clientId });
+    if (!client) {
+      client = await Client.findOne({ aktenzeichen: clientId });
+    }
+    
+    if (!client) {
+      return res.status(404).json({ 
+        error: 'Client not found',
+        client_id: clientId 
+      });
+    }
+
+    console.log(`🔄 Manual trigger of 7-day review for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+    // Check if both conditions are met (payment + documents)
+    const hasPayment = client.first_payment_received;
+    const hasDocuments = (client.documents || []).length > 0;
+
+    if (!hasPayment || !hasDocuments) {
+      return res.status(400).json({
+        error: 'Prerequisites not met for 7-day review',
+        missing: {
+          payment: !hasPayment,
+          documents: !hasDocuments
+        },
+        current_status: client.current_status
+      });
+    }
+
+    // Check if already triggered
+    if (client.seven_day_review_triggered) {
+      return res.status(400).json({
+        error: '7-day review already triggered',
+        triggered_at: client.seven_day_review_triggered_at
+      });
+    }
+
+    // Trigger the review immediately
+    const DelayedProcessingService = require('./services/delayedProcessingService');
+    const delayedService = new DelayedProcessingService();
+    
+    // Mark as triggered
+    client.seven_day_review_triggered = true;
+    client.seven_day_review_triggered_at = new Date();
+    client.current_status = 'creditor_review';
+    
+    // Prepare status history entry
+    const statusHistoryEntry = {
+      id: require('uuid').v4(),
+      status: 'seven_day_review_manually_triggered',
+      changed_by: 'admin',
+      metadata: {
+        admin_action: 'Manual trigger via admin panel',
+        originally_scheduled_at: client.seven_day_review_scheduled_at,
+        triggered_at: new Date(),
+        days_skipped: client.seven_day_review_scheduled_at 
+          ? Math.ceil((new Date(client.seven_day_review_scheduled_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          : 0
+      }
+    };
+
+    // Use direct update to avoid document validation issues
+    await Client.updateOne(
+      { _id: client._id },
+      {
+        $set: {
+          seven_day_review_triggered: true,
+          seven_day_review_triggered_at: new Date(),
+          current_status: 'creditor_review'
+        },
+        $push: {
+          status_history: statusHistoryEntry
+        }
+      }
+    );
+    
+    // Trigger the creditor review process
+    console.log(`🔄 Triggering creditor review process for client.id: "${client.id}" (${client.aktenzeichen})`);
+    const result = await delayedService.triggerCreditorReviewProcess(client.id);
+    
+    res.json({
+      success: true,
+      message: '7-day review manually triggered',
+      client: {
+        id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        name: `${client.firstName} ${client.lastName}`,
+        status: client.current_status
+      },
+      review_trigger: {
+        triggered_at: client.seven_day_review_triggered_at,
+        originally_scheduled: client.seven_day_review_scheduled_at,
+        zendesk_result: result
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error triggering 7-day review:', error);
+    res.status(500).json({
+      error: 'Failed to trigger 7-day review',
+      details: error.message
     });
   }
 });
@@ -2046,7 +2218,7 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
     }
     
     // Validate the new status
-    const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate_detected'];
+    const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate'];
     if (!validStatuses.includes(document_status)) {
       return res.status(400).json({ error: 'Invalid document status' });
     }
@@ -5573,19 +5745,30 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       
       if (settlementResult.success) {
         console.log(`✅ Generated Nullplan documents:`);
-        console.log(`   - Nullplan: ${settlementResult.nullplan.document_info.filename}`);
-        console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
-        if (settlementResult.ratenplan_nullplan) {
-          console.log(`   - Ratenplan (Nullplan): ${settlementResult.ratenplan_nullplan.document_info.filename}`);
+        
+        // Log individual Nullplan letters
+        if (settlementResult.nullplan_letters && settlementResult.nullplan_letters.documents) {
+          console.log(`   - Nullplan Letters: ${settlementResult.nullplan_letters.documents.length} individual letters`);
+          settlementResult.nullplan_letters.documents.forEach((doc, index) => {
+            console.log(`     ${index + 1}. ${doc.filename} (${doc.creditor_name})`);
+          });
+        }
+        
+        // Log Forderungsübersicht
+        if (settlementResult.forderungsuebersicht && settlementResult.forderungsuebersicht.document_info) {
+          console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
+        }
+        
+        // Log Schuldenbereinigungsplan (quota table)
+        if (settlementResult.schuldenbereinigungsplan && settlementResult.schuldenbereinigungsplan.filename) {
+          console.log(`   - Schuldenbereinigungsplan: ${settlementResult.schuldenbereinigungsplan.filename}`);
         } else {
           console.warn(`   ⚠️ Ratenplan (Nullplan) generation failed - continuing with 2 documents`);
         }
         // Store all documents in client for creditor emails
-        client.nullplan_document = settlementResult.nullplan;
+        client.nullplan_letters = settlementResult.nullplan_letters;
         client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
-        if (settlementResult.ratenplan_nullplan) {
-          client.ratenplan_nullplan_document = settlementResult.ratenplan_nullplan;
-        }
+        client.schuldenbereinigungsplan_document = settlementResult.schuldenbereinigungsplan;
         
         // Automatically send Nullplan to creditors
         console.log(`📧 Automatically sending Nullplan to creditors...`);
@@ -5601,6 +5784,10 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
           
           // Convert Nullplan document structure to expected format
           const nullplanDocuments = {
+            nullplan_letters: settlementResult.nullplan_letters, // Include individual letters
+            forderungsuebersicht: settlementResult.forderungsuebersicht,
+            schuldenbereinigungsplan: settlementResult.schuldenbereinigungsplan,
+            // Fallback for legacy format
             settlementResult: settlementResult.nullplan,
             overviewResult: settlementResult.forderungsuebersicht,
             ratenplanResult: settlementResult.ratenplan_nullplan
@@ -5979,6 +6166,69 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
     console.error('❌ Error saving client financial data:', error.message);
     res.status(500).json({
       error: 'Failed to save financial data',
+      details: error.message
+    });
+  }
+});
+
+// Submit personal data from client portal (client-accessible endpoint)
+app.post('/api/clients/:clientId/address', authenticateClient, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { city, house_number, phone, street, zip_code } = req.body;
+    
+    // Get the client to verify authentication
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Verify that the authenticated client matches the requested client
+    // Check against both id and aktenzeichen fields
+    const isAuthorized = req.clientId === client.id || 
+                        req.clientId === client.aktenzeichen || 
+                        req.clientId === clientId;
+    
+    if (!isAuthorized) {
+      console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
+      return res.status(403).json({ error: 'Access denied - client ID mismatch' });
+    }
+    
+    // Validate required parameters
+    if (!city || !house_number || !street || !zip_code) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: city, house number, street and zip code' 
+      });
+    }
+    
+    // Find and update client using the safe helper
+    const updatedClient = await safeClientUpdate(clientId, async (client) => {
+      client.address = `${street} ${house_number}, ${zip_code} ${city}`.trim();
+      client.ort = city;
+      client.plz = zip_code;
+      client.hausnummer = house_number;
+      client.strasse = street;
+      client.phone = phone;
+
+      return client;
+    });
+    
+    if (!updatedClient) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log(`✅ Personal data saved for ${updatedClient.aktenzeichen}:`);
+    
+    res.json({
+      success: true,
+      client_id: updatedClient.id,
+      aktenzeichen: updatedClient.aktenzeichen,
+    });
+    
+  } catch (error) {
+    console.error('❌ Error saving client personal data:', error.message);
+    res.status(500).json({
+      error: 'Failed to save personal data',
       details: error.message
     });
   }
@@ -6390,13 +6640,24 @@ app.post('/api/admin/clients/:clientId/add-creditor',
     }
 
     // Find client (any client, no workflow restrictions)
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6502,13 +6763,24 @@ app.get('/api/admin/clients/:clientId/creditors',
     console.log(`📋 Admin requesting creditors for client ${clientId}`);
 
     // Find client (any client, no workflow restrictions)
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6578,13 +6850,24 @@ app.put('/api/admin/clients/:clientId/creditors/:creditorId',
     console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6677,13 +6960,24 @@ app.post('/api/admin/clients/:clientId/skip-seven-day-delay',
     console.log(`⚡ Admin skipping 7-day delay for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({
@@ -6783,13 +7077,24 @@ app.delete('/api/admin/clients/:clientId/creditors/:creditorId',
     console.log(`🗑️ Admin deleting creditor ${creditorId} for client ${clientId}`);
 
     // Find client
-    const client = await Client.findOne({ 
-      $or: [
-        { id: clientId },
-        { aktenzeichen: clientId },
-        { _id: clientId }
-      ]
-    });
+    let client;
+    try {
+      // First try with string fields
+      client = await Client.findOne({ 
+        $or: [
+          { id: clientId },
+          { aktenzeichen: clientId }
+        ]
+      });
+      
+      // If not found and clientId looks like a MongoDB ObjectId, try _id
+      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+        client = await Client.findOne({ _id: clientId });
+      }
+    } catch (findError) {
+      console.error('Error finding client:', findError);
+      client = null;
+    }
 
     if (!client) {
       return res.status(404).json({

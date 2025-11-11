@@ -48,7 +48,9 @@ class CreditorContactService {
                     name: `${client.firstName} ${client.lastName}`,
                     email: client.email,
                     phone: client.phone || '',
-                    address: client.address || ''
+                    address: client.address || '',
+                    birthdate: client.geburtstag || '',
+                    dateOfBirth: client.geburtstag || ''
                 };
             }
 
@@ -1113,9 +1115,46 @@ class CreditorContactService {
             const fs = require('fs');
             const path = require('path');
 
-            // PRIORITY 1: Use provided document paths from generation (most reliable)
-            if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
-                console.log(`✅ Using provided document info from generation`);
+            // PRIORITY 1: Handle Nullplan documents (individual letters + table)
+            if (generatedDocuments && generatedDocuments.nullplan_letters) {
+                console.log(`✅ Processing Nullplan documents with individual letters`);
+                
+                // Add individual Nullplan letters
+                if (generatedDocuments.nullplan_letters.documents) {
+                    generatedDocuments.nullplan_letters.documents.forEach(doc => {
+                        if (fs.existsSync(doc.path)) {
+                            documentFiles.push({ 
+                                path: doc.path, 
+                                type: 'nullplan_letter',
+                                creditor_name: doc.creditor_name,
+                                creditor_id: doc.creditor_id
+                            });
+                            console.log(`  ✓ Nullplan letter: ${path.basename(doc.path)} (${doc.creditor_name})`);
+                        }
+                    });
+                }
+                
+                // Add Forderungsübersicht
+                if (generatedDocuments.forderungsuebersicht && generatedDocuments.forderungsuebersicht.document_info) {
+                    const overviewPath = generatedDocuments.forderungsuebersicht.document_info.path;
+                    if (overviewPath && fs.existsSync(overviewPath)) {
+                        documentFiles.push({ path: overviewPath, type: 'creditor_overview' });
+                        console.log(`  ✓ Forderungsübersicht: ${path.basename(overviewPath)}`);
+                    }
+                }
+                
+                // Add Schuldenbereinigungsplan (quota table)
+                if (generatedDocuments.schuldenbereinigungsplan && generatedDocuments.schuldenbereinigungsplan.path) {
+                    const tablePath = generatedDocuments.schuldenbereinigungsplan.path;
+                    if (fs.existsSync(tablePath)) {
+                        documentFiles.push({ path: tablePath, type: 'schuldenbereinigungsplan' });
+                        console.log(`  ✓ Schuldenbereinigungsplan: ${path.basename(tablePath)}`);
+                    }
+                }
+            }
+            // PRIORITY 2: Use provided document paths from regular generation (most reliable)
+            else if (generatedDocuments && generatedDocuments.settlementResult && generatedDocuments.overviewResult) {
+                console.log(`✅ Using provided document info from regular generation`);
                 const settlementPath = generatedDocuments.settlementResult.document_info?.path;
                 const overviewPath = generatedDocuments.overviewResult.document_info?.path;
                 const ratenplanPath = generatedDocuments.ratenplanResult?.document_info?.path;
@@ -1134,12 +1173,50 @@ class CreditorContactService {
                     console.warn(`  ⚠️ Creditor overview not found at: ${overviewPath}`);
                 }
 
-                if (ratenplanPath && fs.existsSync(ratenplanPath)) {
+                // Handle single ratenplan OR multiple individual documents per creditor
+                // First check if there are multiple individual documents (preferred)
+                if (generatedDocuments.ratenplanResult && generatedDocuments.ratenplanResult.documents && Array.isArray(generatedDocuments.ratenplanResult.documents)) {
+                    console.log(`📄 Found ${generatedDocuments.ratenplanResult.documents.length} individual Ratenplan documents`);
+                    
+                    generatedDocuments.ratenplanResult.documents.forEach((doc, index) => {
+                        if (fs.existsSync(doc.path)) {
+                            documentFiles.push({ 
+                                path: doc.path, 
+                                type: 'ratenplan_pfaendbares_einkommen',
+                                creditor_name: doc.creditor_name,
+                                creditor_index: doc.creditor_index || index + 1
+                            });
+                            console.log(`  ✓ Ratenplan (${doc.creditor_name}): ${path.basename(doc.filename)}`);
+                        } else {
+                            console.warn(`  ⚠️ Ratenplan document not found: ${doc.path}`);
+                        }
+                    });
+                } 
+                // Fall back to single ratenplan document only if no individual documents exist
+                else if (ratenplanPath && fs.existsSync(ratenplanPath)) {
                     documentFiles.push({ path: ratenplanPath, type: 'ratenplan_pfaendbares_einkommen' });
                     console.log(`  ✓ Ratenplan: ${path.basename(ratenplanPath)}`);
                 } else if (ratenplanPath) {
                     console.warn(`  ⚠️ Ratenplan not found at: ${ratenplanPath}`);
                 }
+            }
+            // PRIORITY 3: Handle 2nd round individual creditor documents (NEW)
+            else if (generatedDocuments && generatedDocuments.documents && Array.isArray(generatedDocuments.documents)) {
+                console.log(`✅ Using 2nd round document generation with individual creditor documents`);
+                
+                generatedDocuments.documents.forEach(doc => {
+                    if (fs.existsSync(doc.path)) {
+                        documentFiles.push({ 
+                            path: doc.path, 
+                            type: doc.document_type,
+                            creditor_name: doc.creditor_name,
+                            creditor_index: doc.creditor_index
+                        });
+                        console.log(`  ✓ ${doc.document_type}: ${path.basename(doc.filename)} (${doc.creditor_name || 'General'})`);
+                    } else {
+                        console.warn(`  ⚠️ Document not found at: ${doc.path}`);
+                    }
+                });
             }
 
             // FALLBACK: Search documents folder by pattern (less reliable)
@@ -1195,7 +1272,9 @@ class CreditorContactService {
                         type: docFile.type,
                         filename: filename,
                         token: uploadResult.token,
-                        size: uploadResult.size
+                        size: uploadResult.size,
+                        creditor_name: docFile.creditor_name,  // Preserve creditor name for filtering
+                        creditor_index: docFile.creditor_index  // Preserve creditor index for filtering
                     });
                     console.log(`✅ ${docFile.type} uploaded: ${uploadResult.token}`);
                 } else {
@@ -1404,17 +1483,25 @@ class CreditorContactService {
         for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
             const creditorName = creditor.sender_name || creditor.creditor_name || 'Unknown Creditor';
+            
+            // Add creditor index for proper document matching
+            creditor.creditor_index = i + 1;
 
             try {
                 console.log(`💬 Creating Side Conversation ${i + 1}/${creditors.length} for ${creditorName}...`);
 
-                // Create Side Conversation with download links
+                // Filter download URLs for this specific creditor (for Nullplan individual letters)
+                const creditorSpecificUrls = this.filterUrlsForCreditor(downloadUrls, creditor, creditorName);
+                
+                console.log(`📎 Creditor ${creditorName} gets ${creditorSpecificUrls.length}/${downloadUrls.length} documents`);
+                
+                // Create Side Conversation with creditor-specific download links
                 const result = await this.zendesk.createSideConversationWithDownloadLinks(
                     settlementTicketId,
                     creditor,
                     clientData,
                     settlementData,
-                    downloadUrls
+                    creditorSpecificUrls
                 );
 
                 emailResults.push({
@@ -1452,6 +1539,76 @@ class CreditorContactService {
         }
 
         return emailResults;
+    }
+
+    /**
+     * Filter download URLs for a specific creditor (for individual Nullplan letters and Ratenplan documents)
+     */
+    filterUrlsForCreditor(downloadUrls, creditor, creditorName) {
+        const filteredUrls = [];
+        const seenRatenplanDocs = new Set(); // Track which Ratenplan documents we've already included
+        
+        // Get creditor index from the creditor list
+        const creditorIndex = creditor.creditor_index || creditor.index;
+        
+        downloadUrls.forEach(doc => {
+            // Include general documents (Forderungsübersicht, Schuldenbereinigungsplan)
+            if (doc.type === 'creditor_overview' || doc.type === 'schuldenbereinigungsplan' || doc.type === 'settlement_plan') {
+                filteredUrls.push(doc);
+            }
+            // Include only this creditor's specific Nullplan letter
+            else if (doc.type === 'nullplan_letter') {
+                // Match by creditor name (normalize for comparison)
+                const docCreditorName = (doc.creditor_name || '').toLowerCase().trim();
+                const targetCreditorName = creditorName.toLowerCase().trim();
+                
+                if (docCreditorName === targetCreditorName) {
+                    filteredUrls.push(doc);
+                    console.log(`  ✓ Including individual Nullplan letter for ${creditorName}`);
+                } else {
+                    console.log(`  ⚠️ Excluding Nullplan letter for ${doc.creditor_name || 'undefined'} (looking for ${creditorName})`);
+                }
+            }
+            // Include only this creditor's specific Ratenplan document
+            else if (doc.type === 'ratenplan_pfaendbares_einkommen' && doc.creditor_name) {
+                // Create a unique key for this document to avoid duplicates
+                const docKey = `${doc.filename}-${doc.path}`;
+                
+                // Skip if we've already seen this exact document
+                if (seenRatenplanDocs.has(docKey)) {
+                    console.log(`  ⚠️ Skipping duplicate Ratenplan document: ${doc.filename}`);
+                    return;
+                }
+                
+                // Match by creditor name (normalize for comparison)
+                const docCreditorName = (doc.creditor_name || '').toLowerCase().trim();
+                const targetCreditorName = creditorName.toLowerCase().trim();
+                
+                // Also check creditor_index if available to handle same-name creditors
+                const indexMatch = creditorIndex && doc.creditor_index && 
+                                 doc.creditor_index === creditorIndex;
+                
+                if (docCreditorName === targetCreditorName || indexMatch) {
+                    filteredUrls.push(doc);
+                    seenRatenplanDocs.add(docKey);
+                    console.log(`  ✓ Including individual Ratenplan for ${creditorName}${indexMatch ? ' (matched by index)' : ''}`);
+                } else {
+                    console.log(`  ⚠️ Excluding Ratenplan for ${doc.creditor_name || 'undefined'} (looking for ${creditorName})`);
+                }
+            }
+            // If Ratenplan has no creditor_name, it's a general document for all creditors
+            else if (doc.type === 'ratenplan_pfaendbares_einkommen' && !doc.creditor_name) {
+                filteredUrls.push(doc);
+            }
+        });
+        
+        // Log if no Ratenplan was found for this creditor
+        const hasRatenplan = filteredUrls.some(doc => doc.type === 'ratenplan_pfaendbares_einkommen');
+        if (!hasRatenplan) {
+            console.warn(`  ⚠️ No Ratenplan document found for creditor ${creditorName}`);
+        }
+        
+        return filteredUrls;
     }
 
     /**

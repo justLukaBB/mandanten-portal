@@ -8,9 +8,9 @@ require('dotenv').config();
 class ZendeskManager {
     constructor() {
         this.config = {
-            subdomain: process.env.ZENDESK_SUBDOMAIN || 'your-law-firm',
-            email: process.env.ZENDESK_EMAIL || 'api@your-law-firm.com',
-            token: process.env.ZENDESK_TOKEN || 'your-zendesk-api-token',
+            subdomain: process.env.ZENDESK_SUBDOMAIN || 'scuric.zendesk.com',
+            email: process.env.ZENDESK_EMAIL || 'luka@ra-scuric.de',
+            token: process.env.ZENDESK_TOKEN || 'oludqO1aMiSTuhsUimWDfXcqTKIdtvcgiEzEhvIC',
         };
         
         this.apiUrl = `https://${this.config.subdomain}.zendesk.com/api/v2/`;
@@ -26,12 +26,12 @@ class ZendeskManager {
 
         // Custom field IDs - these need to be created in Zendesk first
         this.customFields = {
-            creditor_name: process.env.ZENDESK_FIELD_CREDITOR_NAME || 'custom_field_12345',
-            reference_number: process.env.ZENDESK_FIELD_REFERENCE_NUMBER || 'custom_field_12346',
-            original_claim_amount: process.env.ZENDESK_FIELD_ORIGINAL_CLAIM_AMOUNT || 'custom_field_12347',
-            current_debt_amount: process.env.ZENDESK_FIELD_CURRENT_DEBT_AMOUNT || 'custom_field_12348',
-            amount_source: process.env.ZENDESK_FIELD_AMOUNT_SOURCE || 'custom_field_12349',
-            client_reference: process.env.ZENDESK_FIELD_CLIENT_REFERENCE || 'custom_field_12350'
+            creditor_name: process.env.ZENDESK_FIELD_CREDITOR_NAME || '28892969481245',
+            reference_number: process.env.ZENDESK_FIELD_REFERENCE_NUMBER || '29010052728733',
+            original_claim_amount: process.env.ZENDESK_FIELD_ORIGINAL_CLAIM_AMOUNT || '29010090630045',
+            current_debt_amount: process.env.ZENDESK_FIELD_CURRENT_DEBT_AMOUNT || '29010081527197',
+            amount_source: process.env.ZENDESK_FIELD_AMOUNT_SOURCE || '29010067871133',
+            client_reference: process.env.ZENDESK_FIELD_CLIENT_REFERENCE || '29010115438877'
         };
     }
 
@@ -406,6 +406,8 @@ wir vertreten ${clientName} in einem Privatinsolvenzverfahren und bitten Sie um 
 
 📋 MANDANTENDATEN:
 • Name: ${clientName}
+• Geburtsdatum: ${clientData.birthdate || clientData.dateOfBirth || '[NICHT ANGEGEBEN]'}
+• Adresse: ${clientData.address || '[NICHT ANGEGEBEN]'}
 • Ihr Aktenzeichen: ${creditorData.reference_number}
 
 📊 BENÖTIGTE INFORMATIONEN:

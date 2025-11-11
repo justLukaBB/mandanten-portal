@@ -1,0 +1,35 @@
+{
+  "templatePath": "/Users/luka/Documents/Development/Mandanten-Portal/server/templates/Tabelle Nullplan Template.docx",
+  "templateName": "Tabelle Nullplan Template",
+  "analyzedAt": "2025-10-10T08:37:58.772Z",
+  "totalVariablesFound": 3,
+  "variables": [
+    "Name Mandant",
+    "Heutiges Datum",
+    "Datum in 3 Monaten"
+  ],
+  "variablesByLength": [
+    "Name Mandant",
+    "Heutiges Datum",
+    "Datum in 3 Monaten"
+  ],
+  "variablesByCategory": {
+    "client": [
+      "Name Mandant"
+    ],
+    "creditor": [],
+    "financial": [],
+    "dates": [
+      "Heutiges Datum",
+      "Datum in 3 Monaten"
+    ],
+    "contact": [],
+    "case": [],
+    "other": []
+  },
+  "analysisFiles": {
+    "rawXml": "/Users/luka/Documents/Development/Mandanten-Portal/server/Tabelle Nullplan Template-raw.xml",
+    "cleanText": "/Users/luka/Documents/Development/Mandanten-Portal/server/Tabelle Nullplan Template-clean.txt",
+    "report": "/Users/luka/Documents/Development/Mandanten-Portal/server/Tabelle Nullplan Template-variables.json"
+  }
+}

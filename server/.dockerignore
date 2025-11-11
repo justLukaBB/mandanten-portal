@@ -5,3 +5,5 @@ npm-debug.log
 *.log
 documents/*.pdf
 documents/*.docx
+# Keep template files - they are needed for document generation
+!templates/*.docx

@@ -36,7 +36,7 @@ interface Document {
   is_creditor_document?: boolean;
   confidence?: number;
   manual_review_required?: boolean;
-  document_status?: 'creditor_confirmed' | 'non_creditor_confirmed' | 'needs_review' | 'duplicate_detected' | 'processing_failed' | 'unknown';
+  document_status?: 'creditor_confirmed' | 'non_creditor_confirmed' | 'needs_review' | 'duplicate' | 'processing_failed' | 'unknown';
   status_reason?: string;
   is_duplicate?: boolean;
   duplicate_reason?: string;
@@ -194,7 +194,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
       case 'non_creditor':
         return doc.document_status === 'non_creditor_confirmed';
       case 'duplicates':
-        return doc.document_status === 'duplicate_detected';
+        return doc.document_status === 'duplicate';
       default:
         return true;
     }
@@ -265,7 +265,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Duplikate ({documents.filter(d => d.document_status === 'duplicate_detected').length})
+              Duplikate ({documents.filter(d => d.document_status === 'duplicate').length})
             </button>
           </div>
         </div>

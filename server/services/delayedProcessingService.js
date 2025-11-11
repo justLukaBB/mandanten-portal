@@ -177,7 +177,7 @@ class DelayedProcessingService {
    */
   async triggerProcessingCompleteWebhook(clientId, documentId = null) {
     try {
-      const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+      const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
       
       console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
@@ -334,6 +334,8 @@ class DelayedProcessingService {
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/creditor-review-ready`;
       
       console.log(`🔗 Triggering creditor review for client ${clientId}`);
+      console.log(`📡 Webhook URL: ${webhookUrl}`);
+      console.log(`📋 Payload: { client_id: "${clientId}", triggered_by: "seven_day_review_service", review_type: "scheduled_7_day" }`);
       
       const response = await axios.post(webhookUrl, {
         client_id: clientId,
