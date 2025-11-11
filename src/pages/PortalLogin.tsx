@@ -72,9 +72,12 @@ const PortalLogin: React.FC = () => {
 
       // For now, we'll adapt the new design to work with existing aktenzeichen backend
       // TODO: Update backend to support password-based login
+      // Replace "/" with "_" in password before sending to backend
+      const processedPassword = credentials.password.replace(/\//g, '_');
+      
       const loginData = {
         email: credentials.email,
-        aktenzeichen: credentials.password // Temporarily map password to aktenzeichen
+        aktenzeichen: processedPassword // Temporarily map password to aktenzeichen
       };
 
       const response = await axios.post(`${API_BASE_URL}/api/portal/login`, loginData);
