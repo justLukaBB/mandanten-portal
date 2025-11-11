@@ -396,7 +396,7 @@ class DelayedProcessingService {
           await client.save();
 
           // Trigger creditor contact process
-          await this.triggerCreditorContactService(client.id);
+          await this.triggerCreditorContactService(client);
           
           successCount++;
           console.log(`✅ Auto-confirmed and initiated creditor contact for ${client.aktenzeichen}`);
@@ -463,16 +463,18 @@ class DelayedProcessingService {
   /**
    * Trigger the creditor contact service after auto-confirmation
    */
-  async triggerCreditorContactService(clientId) {
+  async triggerCreditorContactService(client) {
     try {
       const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/client-creditor-confirmed`;
       
-      console.log(`🔗 Triggering creditor contact service for client ${clientId}`);
+      console.log(`🔗 Triggering creditor contact service for client ${client.aktenzeichen}`);
       
+      // Send payload that matches the webhook endpoint expectations
       const response = await axios.post(webhookUrl, {
-        client_id: clientId,
-        timestamp: new Date().toISOString(),
+        aktenzeichen: client.aktenzeichen,
+        confirmed_at: new Date().toISOString(),
+        creditors_confirmed: (client.final_creditor_list || []).length,
         triggered_by: 'auto_confirmation_service',
         auto_confirmed: true
       }, {
@@ -483,11 +485,11 @@ class DelayedProcessingService {
         }
       });
       
-      console.log(`✅ Creditor contact service triggered successfully for client ${clientId}`);
+      console.log(`✅ Creditor contact service triggered successfully for client ${client.aktenzeichen}`);
       return { success: true, data: response.data };
       
     } catch (error) {
-      console.error(`❌ Failed to trigger creditor contact service for client ${clientId}:`, error.message);
+      console.error(`❌ Failed to trigger creditor contact service for client ${client.aktenzeichen}:`, error.message);
       return { success: false, error: error.message };
     }
   }
