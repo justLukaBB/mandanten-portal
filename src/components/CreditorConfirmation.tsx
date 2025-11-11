@@ -34,9 +34,10 @@ interface CreditorConfirmationData {
 
 interface CreditorConfirmationProps {
   clientId: string;
+  onConfirmationComplete?: () => void;
 }
 
-const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId }) => {
+const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, onConfirmationComplete }) => {
   const [confirmationData, setConfirmationData] = useState<CreditorConfirmationData | null>(null);
   const [selectedCreditors, setSelectedCreditors] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -105,7 +106,12 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId })
       });
 
       // Refresh data to show updated status
-      // await fetchConfirmationData();
+      await fetchConfirmationData();
+      
+      // Trigger parent component refresh
+      if (onConfirmationComplete) {
+        onConfirmationComplete();
+      }
 
       // alert(`✅ ${response.data.confirmed_count} Gläubiger erfolgreich bestätigt!`);
 

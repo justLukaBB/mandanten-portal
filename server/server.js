@@ -1029,6 +1029,70 @@ app.post('/api/clients/:clientId/documents',
               }, 1000); // Small delay to ensure database save completes first
             }
             
+            // CHECK FOR AUTO-CONFIRMATION TIMER RESET - After document processing
+            // If client is awaiting confirmation and new documents require review, reset the timer
+            if (client.current_status === 'awaiting_client_confirmation' && 
+                client.admin_approved && 
+                client.admin_approved_at) {
+              
+              console.log(`🔍 Checking if new documents require agent review for client ${clientId}...`);
+              
+              // Check if any newly processed documents need review
+              const documentsNeedingReview = client.documents.filter(doc => {
+                // Only check documents uploaded after the last admin approval
+                const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
+                const needsReview = doc.document_status === 'needs_review' || 
+                                   doc.extracted_data?.manual_review_required === true ||
+                                   (doc.is_creditor_document && 
+                                    (doc.extracted_data?.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+                const notReviewed = !doc.manually_reviewed;
+                
+                return uploadedAfterApproval && needsReview && notReviewed;
+              });
+              
+              if (documentsNeedingReview.length > 0) {
+                console.log(`🔄 ${documentsNeedingReview.length} new documents require agent review - resetting auto-confirmation timer`);
+                
+                // Reset status to require agent review again
+                client.current_status = 'creditor_review';
+                client.admin_approved = false;  // Reset approval flag
+                
+                const previousApprovalTime = client.admin_approved_at;
+                client.admin_approved_at = null; // Reset approval timestamp to restart timer
+                
+                // Add status history to track the change
+                client.status_history.push({
+                  id: uuidv4(),
+                  status: 'reverted_to_creditor_review',
+                  changed_by: 'system',
+                  metadata: {
+                    reason: 'New documents processed requiring agent review',
+                    documents_needing_review: documentsNeedingReview.length,
+                    document_names: documentsNeedingReview.map(doc => doc.name),
+                    previous_approval_at: previousApprovalTime,
+                    auto_confirmation_timer_reset: true,
+                    review_required_reasons: documentsNeedingReview.map(doc => ({
+                      document: doc.name,
+                      confidence: doc.extracted_data?.confidence || 0,
+                      manual_review_required: doc.extracted_data?.manual_review_required,
+                      is_creditor: doc.is_creditor_document,
+                      status: doc.document_status
+                    }))
+                  },
+                  created_at: new Date()
+                });
+                
+                console.log(`⏰ Auto-confirmation timer reset for client ${clientId} - new agent review required`);
+                
+                // Log details for monitoring
+                documentsNeedingReview.forEach(doc => {
+                  console.log(`   📄 ${doc.name}: confidence=${doc.extracted_data?.confidence || 0}, manual_review=${doc.extracted_data?.manual_review_required}, creditor=${doc.is_creditor_document}`);
+                });
+              } else {
+                console.log(`✅ All new documents for client ${clientId} are auto-approved - no timer reset needed`);
+              }
+            }
+            
             return client;
           });
           
@@ -1127,6 +1191,9 @@ app.post('/api/clients/:clientId/documents',
           }
         }, 1000);
       }
+
+      // Note: Check for documents requiring agent review will happen after processing
+      // in the document processing completion logic below
       
       return client;
     });
@@ -4520,6 +4587,21 @@ function startScheduledTasks() {
     }
   }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
   
+  // Run auto-confirmation check every 6 hours  
+  const AUTO_CONFIRMATION_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+  
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Running scheduled auto-confirmation check...');
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+      const result = await delayedService.checkAndAutoConfirmCreditors();
+      console.log(`✅ Auto-confirmation check complete: ${result.autoConfirmed} creditors auto-confirmed\n`);
+    } catch (error) {
+      console.error('❌ Error in scheduled auto-confirmation check:', error);
+    }
+  }, AUTO_CONFIRMATION_CHECK_INTERVAL);
+  
   // Run initial checks after 1 minute
   setTimeout(async () => {
     try {
@@ -4555,10 +4637,25 @@ function startScheduledTasks() {
     }
   }, 180000); // 3 minutes
   
+  // Run initial auto-confirmation check after 4 minutes
+  setTimeout(async () => {
+    try {
+      console.log('\n⏰ Running initial auto-confirmation check...');
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+      const result = await delayedService.checkAndAutoConfirmCreditors();
+      console.log(`✅ Initial auto-confirmation check complete: ${result.autoConfirmed} creditors auto-confirmed\n`);
+    } catch (error) {
+      console.error('❌ Error in initial auto-confirmation check:', error);
+    }
+  }, 240000); // 4 minutes
+  
   console.log('📅 Scheduled tasks started:');
   console.log('  • Document reminders: every hour');
   console.log('  • Delayed processing webhooks: every 30 minutes');
   console.log('  • Login reminders: every 6 hours (7-day cycle)');
+  console.log('  • 7-day reviews: every hour');
+  console.log('  • Auto-confirmation: every 6 hours');
 }
 
 // ============================================================================

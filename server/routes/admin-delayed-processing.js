@@ -372,4 +372,187 @@ router.post('/admin/login-reminders/check-now', async (req, res) => {
   }
 });
 
+/**
+ * Get clients awaiting confirmation (for monitoring auto-confirmation)
+ * TEST MODE: 3 minutes instead of 7 days
+ */
+router.get('/admin/auto-confirmation/pending', async (req, res) => {
+  try {
+    const threeMinutesAgo = new Date();
+    threeMinutesAgo.setMinutes(threeMinutesAgo.getMinutes() - 3);
+    
+    // Find clients awaiting confirmation
+    const awaitingClients = await Client.find({
+      current_status: 'awaiting_client_confirmation',
+      admin_approved: true,
+      client_confirmed_creditors: { $ne: true }
+    })
+    .select({
+      id: 1,
+      aktenzeichen: 1,
+      firstName: 1,
+      lastName: 1,
+      email: 1,
+      admin_approved_at: 1,
+      final_creditor_list: 1
+    })
+    .sort({ admin_approved_at: 1 });
+
+    const clientsWithTimeInfo = awaitingClients.map(client => {
+      const approvalTime = new Date(client.admin_approved_at);
+      const minutesSinceApproval = Math.floor((new Date() - approvalTime) / (1000 * 60));
+      const readyForAutoConfirmation = minutesSinceApproval >= 3;
+      const minutesUntilAutoConfirmation = Math.max(0, 3 - minutesSinceApproval);
+
+      return {
+        ...client.toObject(),
+        minutesSinceApproval,
+        readyForAutoConfirmation,
+        minutesUntilAutoConfirmation,
+        creditorCount: (client.final_creditor_list || []).length,
+        testMode: true
+      };
+    });
+
+    res.json({
+      success: true,
+      clients: clientsWithTimeInfo,
+      summary: {
+        total: clientsWithTimeInfo.length,
+        readyForAutoConfirmation: clientsWithTimeInfo.filter(c => c.readyForAutoConfirmation).length,
+        stillWaiting: clientsWithTimeInfo.filter(c => !c.readyForAutoConfirmation).length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching pending auto-confirmations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch pending auto-confirmations',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Manual trigger of auto-confirmation check (for testing)
+ */
+router.post('/admin/auto-confirmation/check-now', async (req, res) => {
+  try {
+    console.log('⏰ Admin triggered manual auto-confirmation check');
+    
+    const result = await delayedProcessingService.checkAndAutoConfirmCreditors();
+    
+    res.json({
+      success: true,
+      message: 'Auto-confirmation check completed',
+      totalChecked: result.totalChecked,
+      autoConfirmed: result.autoConfirmed,
+      errors: result.errors
+    });
+    
+  } catch (error) {
+    console.error('Error in manual auto-confirmation check:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check auto-confirmations',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Force auto-confirm a specific client (admin override)
+ */
+router.post('/admin/auto-confirmation/:clientId/force-confirm', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    const client = await Client.findOne({ id: clientId });
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    if (client.current_status !== 'awaiting_client_confirmation') {
+      return res.status(400).json({
+        success: false,
+        error: 'Client is not awaiting confirmation'
+      });
+    }
+
+    if (client.client_confirmed_creditors) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client has already confirmed creditors'
+      });
+    }
+
+    const minutesSinceApproval = Math.floor((new Date() - new Date(client.admin_approved_at)) / (1000 * 60));
+    
+    console.log(`⚡ Force auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - admin override (TEST MODE)`);
+    
+    // Auto-confirm the creditors
+    client.client_confirmed_creditors = true;
+    client.client_confirmed_at = new Date();
+    client.current_status = 'creditor_contact_initiated';
+    
+    // Add to status history
+    client.status_history.push({
+      id: require('uuid').v4(),
+      status: 'creditors_auto_confirmed',
+      changed_by: 'admin',
+      metadata: {
+        reason: 'Admin force auto-confirmation (TEST MODE)',
+        admin_approved_at: client.admin_approved_at,
+        minutes_elapsed: minutesSinceApproval,
+        force_confirmed_at: new Date(),
+        admin_override: true,
+        test_mode: true
+      }
+    });
+
+    client.status_history.push({
+      id: require('uuid').v4(),
+      status: 'creditor_contact_initiated',
+      changed_by: 'admin',
+      metadata: {
+        reason: 'Auto-triggered after force confirmation (TEST MODE)',
+        creditor_count: (client.final_creditor_list || []).length,
+        admin_override: true,
+        test_mode: true
+      }
+    });
+
+    await client.save();
+
+    // Trigger creditor contact process
+    const triggerResult = await delayedProcessingService.triggerCreditorContactService(client.id);
+    
+    res.json({
+      success: true,
+      message: 'Client creditors force auto-confirmed',
+      client: {
+        id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        name: `${client.firstName} ${client.lastName}`,
+        minutesSinceApproval,
+        creditorCount: (client.final_creditor_list || []).length,
+        testMode: true
+      },
+      creditorContactTriggered: triggerResult.success
+    });
+    
+  } catch (error) {
+    console.error('Error force auto-confirming client:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to force auto-confirm client',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

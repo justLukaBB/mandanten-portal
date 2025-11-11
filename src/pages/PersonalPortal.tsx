@@ -449,7 +449,7 @@ export const PersonalPortal = ({
         {/* <ClientDocumentsViewer client={client} /> */}
 
         {/* Creditor upload component - conditional display based on workflow status and creditor confirmation */}
-        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors ? (
+        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors && !creditorConfirmationData?.client_confirmed ? (
           <div className={`relative ${showingCreditorConfirmation ? 'pointer-events-none' : ''}`}>
             <div className={showingCreditorConfirmation ? 'filter blur-sm' : ''}>
               <CreditorUploadComponent
@@ -491,12 +491,12 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {client?.client_confirmed_creditors
+                {(client?.client_confirmed_creditors || creditorConfirmationData?.client_confirmed)
                   ? 'Gläubigerliste bestätigt'
                   : 'Dokumentensammlung abgeschlossen'}
               </h3>
               <p className="text-gray-600 mb-4">
-                {client?.client_confirmed_creditors
+                {(client?.client_confirmed_creditors || creditorConfirmationData?.client_confirmed)
                   ? 'Sie haben Ihre Gläubigerliste bestätigt. Weitere Dokumenten-Uploads sind nicht mehr möglich.'
                   : 'Der Workflow ist abgeschlossen. Die Dokumentensammlung ist beendet.'}
               </p>
@@ -519,7 +519,10 @@ export const PersonalPortal = ({
         )}
 
         {/* Creditor confirmation component - shows when ready for client confirmation */}
-        <CreditorConfirmation clientId={clientId!} />
+        <CreditorConfirmation 
+          clientId={clientId!} 
+          onConfirmationComplete={fetchClientData}
+        />
 
         {/* Creditor Response Period Status - shows during 30-day waiting period */}
         {creditorResponsePeriod && creditorResponsePeriod.status === 'active' && (
