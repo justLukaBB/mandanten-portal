@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * New Word Template Processor for "Template Word Pfändbares Einkommen"
@@ -195,11 +196,25 @@ class NewWordTemplateProcessor {
                     if (variable === "Name des Gläubigers") {
                         actualValue = creditorData?.name || creditorData?.creditor_name || "Gläubiger";
                     } else if (variable === "Adresse des Creditors") {
-                        actualValue = creditorData?.address || "Adresse nicht verfügbar";
+                        // Format address and replace line breaks with Word XML breaks
+                        const rawAddress = creditorData?.address || '';
+                        const creditorName = creditorData?.name || creditorData?.creditor_name || 'Gläubiger';
+
+                        // Clean address (remove creditor name if already present in address)
+                        const addressOnly = this.cleanCreditorAddress(rawAddress, creditorName);
+
+                        // Format address if needed
+                        const formattedAddressOnly = addressOnly.includes('\n')
+                            ? addressOnly  // Already formatted, use as-is
+                            : (addressOnly ? formatAddress(addressOnly) : 'Adresse nicht verfügbar');
+
+                        // Combine name with address (Name on first line)
+                        const fullAddress = `${creditorName}\n${formattedAddressOnly}`;
+                        actualValue = fullAddress.replace(/\n/g, '<w:br/>');
                     } else {
                         actualValue = replacements[variable] || placeholder;
                     }
-                    
+
                     processedXml = processedXml.replace(pattern, actualValue);
                     console.log(`✅ Replaced split XML pattern "${variable}" with "${actualValue}"`);
                     totalReplacements++;
@@ -534,7 +549,17 @@ class NewWordTemplateProcessor {
                 "Immer der erste in 3 Monaten": this.formatDate(paymentStartDate),
                 
                 // Creditor info
-                "Adresse des Creditors": creditorData?.address || "Adresse nicht verfügbar",
+                "Adresse des Creditors": creditorData?.address
+                    ? (() => {
+                        const creditorName = creditorData?.name || creditorData?.creditor_name || 'Gläubiger';
+                        const addressOnly = this.cleanCreditorAddress(creditorData.address, creditorName);
+                        const formattedAddressOnly = addressOnly.includes('\n')
+                            ? addressOnly
+                            : formatAddress(addressOnly);
+                        const fullAddress = `${creditorName}\n${formattedAddressOnly}`;
+                        return fullAddress.replace(/\n/g, '<w:br/>');
+                    })()
+                    : "Adresse nicht verfügbar",
                 "Name des Creditors": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Name des Gläubigers": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
                 "Gläubiger Name": creditorData?.name || creditorData?.creditor_name || "Gläubiger",
@@ -677,7 +702,17 @@ class NewWordTemplateProcessor {
 
         // Template Variables - based on actual template analysis
         // REAL VARIABLES from the document (not placeholders!)
-        replacements["Adresse des Creditors"] = creditorData?.address || "Gläubiger Adresse";
+        replacements["Adresse des Creditors"] = creditorData?.address
+            ? (() => {
+                const creditorName = creditorData?.name || creditorData?.creditor_name || 'Gläubiger';
+                const addressOnly = this.cleanCreditorAddress(creditorData.address, creditorName);
+                const formattedAddressOnly = addressOnly.includes('\n')
+                    ? addressOnly
+                    : formatAddress(addressOnly);
+                const fullAddress = `${creditorName}\n${formattedAddressOnly}`;
+                return fullAddress.replace(/\n/g, '<w:br/>');
+            })()
+            : "Gläubiger Adresse";
         replacements["Name des Creditors"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
         replacements["Creditor"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
         replacements["Gläubiger"] = creditorData?.name || creditorData?.creditor_name || "Gläubiger Name";
@@ -872,6 +907,39 @@ class NewWordTemplateProcessor {
      */
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    /**
+     * Clean creditor address by removing creditor name if present
+     * @param {string} address - The address string that may contain creditor name
+     * @param {string} creditorName - The creditor name to remove
+     * @returns {string} - Cleaned address without creditor name
+     */
+    cleanCreditorAddress(address, creditorName) {
+        if (!address || !creditorName) return address;
+
+        // Handle formatted addresses (with \n line breaks)
+        if (address.includes('\n')) {
+            const lines = address.split('\n');
+            const firstLine = lines[0].trim().toLowerCase();
+            const nameLower = creditorName.toLowerCase().trim();
+
+            // If first line is the creditor name, remove it
+            if (firstLine === nameLower || firstLine.startsWith(nameLower)) {
+                // Return all lines except the first one
+                return lines.slice(1).join('\n').trim();
+            }
+        }
+
+        // Handle single-line addresses
+        const addressLower = address.toLowerCase().trim();
+        const nameLower = creditorName.toLowerCase().trim();
+
+        if (addressLower.startsWith(nameLower)) {
+            // Remove name from start and trim
+            return address.substring(creditorName.length).trim();
+        }
+
+        return address;
     }
 }
 

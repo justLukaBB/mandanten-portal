@@ -66,6 +66,13 @@ export const PersonalPortal = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    loading?: boolean;
+    url?: string;
+    name?: string;
+    type?: string;
+  } | null>(null);
+
 
   // Default progress phases
   const defaultProgressPhases = [
@@ -108,6 +115,7 @@ export const PersonalPortal = ({
       // Check for creditor confirmation status
       try {
         const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
+        console.log('🔍 Creditor confirmation API response:', creditorResponse.data);
         setCreditorConfirmationData(creditorResponse.data);
 
         // Show creditor confirmation only after 7-day review is triggered or explicitly in review status
@@ -123,6 +131,13 @@ export const PersonalPortal = ({
               clientData.current_status === 'creditor_review')
           ) &&
           !creditorResponse.data.client_confirmed;
+
+        console.log('🎯 Should show creditor confirmation:', shouldShowCreditorConfirmation, {
+          workflow_status: creditorResponse.data?.workflow_status,
+          client_confirmed: creditorResponse.data?.client_confirmed,
+          current_status: clientData.current_status,
+          admin_approved: clientData.admin_approved
+        });
 
         setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
       } catch (creditorErr) {
@@ -155,11 +170,7 @@ export const PersonalPortal = ({
           setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
           setFinancialDataSubmitted(alreadySubmitted);
           setCreditorResponsePeriod(periodInfo);
-
-          const clientHasAddress = Boolean(clientData?.address);
-          const shouldShowAddressForm =
-            (shouldShowFinancialForm && !alreadySubmitted && !clientHasAddress) ||
-            (alreadySubmitted && !clientHasAddress);
+          const shouldShowAddressForm = shouldShowFinancialForm || alreadySubmitted;
 
           setShowAddressForm(shouldShowAddressForm);
         } else {
@@ -230,6 +241,20 @@ export const PersonalPortal = ({
       fetchClientData();
     }
   }, [clientId]);
+
+  // Add polling to check for status updates
+  useEffect(() => {
+    if (!clientId) return;
+
+    // Poll every 30 seconds when creditor confirmation or financial form is not showing
+    const interval = setInterval(() => {
+      if (!showingCreditorConfirmation && !showingFinancialForm && !previewFile) {
+        fetchClientData();
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [clientId, showingCreditorConfirmation, showingFinancialForm, previewFile]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
@@ -457,6 +482,8 @@ export const PersonalPortal = ({
                 onUploadComplete={handleUploadComplete}
                 showingCreditorConfirmation={showingCreditorConfirmation}
                 documents={documents}
+                previewFile={previewFile}
+                setPreviewFile={setPreviewFile}
               />
             </div>
 
@@ -476,6 +503,24 @@ export const PersonalPortal = ({
                   <p className="text-sm text-gray-500">
                     Falls Sie weitere Gläubigerdokumente haben, schreiben Sie uns bitte eine E-Mail.
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Info banner when creditor confirmation is pending */}
+            {showingCreditorConfirmation && (
+              <div className="mt-4 bg-blue-50 border-l-4 border-blue-400 rounded-lg p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-800">
+                      <strong className="font-semibold">💡 Weitere Dokumente hochladen:</strong> Falls Ihnen auffällt, dass noch Gläubigerbriefe fehlen, können Sie diese jederzeit hier hochladen. Nach dem Upload werden die neuen Dokumente von unserem Team geprüft und Sie erhalten eine aktualisierte Gläubigerliste zur Bestätigung.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -572,17 +617,17 @@ export const PersonalPortal = ({
               onFormSubmitted={handleFinancialFormSubmitted}
               customColors={customColors}
             />
-            
+
           </>
-        )} 
+        )}
 
         {showAddressForm && (
-            <ClientAddressForm
-              clientId={clientId!}
-              client={client}
-              customColors={customColors}
-              onFormSubmitted={() => console.log('✅ Address form submitted')}
-            />
+          <ClientAddressForm
+            clientId={clientId!}
+            client={client}
+            customColors={customColors}
+            onFormSubmitted={() => console.log('✅ Address form submitted')}
+          />
         )}
 
         {/* Financial Data Submitted Status */}
@@ -622,40 +667,43 @@ export const PersonalPortal = ({
 
 
 
-        {/* Rating prompt */}
-        <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start flex-1">
-              <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
-                style={{ backgroundColor: `${customColors.primary}10` }}>
-                <img
-                  src="https://www.provenexpert.com/favicon.ico"
-                  alt="ProvenExpert"
-                  className="h-6 w-6 object-contain"
-                />
+        {/* Rating prompt - only show when NOT showing creditor confirmation */}
+        {console.log('🎯 ProvenExpert display check:', { showingCreditorConfirmation, showingFinancialForm, clientConfirmed: client?.client_confirmed_creditors })}
+        {!showingCreditorConfirmation && !showingFinancialForm && (
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start flex-1">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-3"
+                  style={{ backgroundColor: `${customColors.primary}10` }}>
+                  <img
+                    src="https://cdn.brandfetch.io/idk-hgfUQ2/w/400/h/400/theme/dark/icon.jpeg?c=1dxbfHSJFAPEGdCLU4o5B"
+                    alt="ProvenExpert"
+                    className="h-10 w-10 object-cover rounded-full"
+                  />
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900 text-sm">Ihre Erfahrung zählt</h4>
+                  <p className="text-gray-600 text-xs mt-1">
+                    Mit Ihrer Bewertung helfen Sie uns, unseren Service kontinuierlich zu verbessern.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-medium text-gray-900 text-sm">Ihre Erfahrung zählt</h4>
-                <p className="text-gray-600 text-xs mt-1">
-                  Mit Ihrer Bewertung helfen Sie uns, unseren Service kontinuierlich zu verbessern.
-                </p>
-              </div>
+              <a
+                href="https://www.provenexpert.com/rechtsanwalt-thomas-scuric/9298/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
+                style={{
+                  backgroundColor: '#047857',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#065f46'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+              >
+                Jetzt bewerten
+              </a>
             </div>
-            <a
-              href="https://www.provenexpert.com/rechtsanwalt-thomas-scuric/9298/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-full text-white text-xs font-medium transition-colors ml-4 whitespace-nowrap"
-              style={{
-                backgroundColor: '#047857',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#065f46'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-            >
-              Jetzt bewerten
-            </a>
           </div>
-        </div>
+        )}
 
         {/* Footer note */}
         <div className="text-center text-xs text-gray-500 pt-4 pb-16">

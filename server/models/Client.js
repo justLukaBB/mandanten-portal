@@ -15,7 +15,7 @@ const documentSchema = new mongoose.Schema({
   },
   document_status: {
     type: String,
-    enum: ['pending', 'creditor_confirmed', 'non_creditor', 'non_creditor_confirmed', 'duplicate', 'unclear', 'needs_review'],
+    enum: ['pending', 'creditor_confirmed', 'non_creditor', 'non_creditor_confirmed', 'not_a_creditor', 'duplicate', 'unclear', 'needs_review'],
     default: 'pending'
   },
   status_reason: String,
@@ -210,17 +210,21 @@ const clientSchema = new mongoose.Schema({
       'portal_access_sent',
       'documents_uploaded',
       'documents_processing',
+      'documents_completed',
       'waiting_for_payment',
       'payment_confirmed',
       'creditor_review',
       'manual_review_complete',
       'creditor_contact_initiated',
+      'creditor_calculation_ready',
       'creditor_contact_failed',
       'awaiting_client_confirmation',
+      'additional_documents_review',
       'creditor_contact_active',
       'settlement_documents_generated',
       'settlement_plan_sent_to_creditors',
-      'completed'
+      'completed',
+      'no_creditors_found'
     ],
     default: 'created'
   },
@@ -292,6 +296,11 @@ const clientSchema = new mongoose.Schema({
   client_confirmed_creditors: { type: Boolean, default: false },
   client_confirmed_at: Date,
   processing_notes: String,
+
+  // Iterative document upload tracking (additional documents after initial review)
+  additional_documents_uploaded_after_review: { type: Boolean, default: false },
+  additional_documents_uploaded_at: Date,
+  review_iteration_count: { type: Number, default: 0 }, // Track how many review cycles have been completed
   
   // Creditor contact
   creditor_contact_started: { type: Boolean, default: false },
@@ -299,7 +308,11 @@ const clientSchema = new mongoose.Schema({
   
   // Settlement plan tracking
   settlement_plan_sent_at: Date,
-  
+
+  // Financial data reminder email tracking (sent after 30-day simulation)
+  financial_data_reminder_sent_at: Date,
+  financial_data_reminder_side_conversation_id: String,
+
   // Financial data for Schuldenbereinigungsplan (client input after 30-day creditor response period)
   financial_data: {
     monthly_net_income: Number, // Monthly net income in euros

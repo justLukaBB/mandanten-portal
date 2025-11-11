@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const Client = require("../models/Client");
 const { rateLimits } = require("../middleware/security");
+const { sanitizeAktenzeichen } = require("../utils/sanitizeAktenzeichen");
 const ZendeskService = require("../services/zendeskService");
 const CreditorContactService = require("../services/creditorContactService");
 const SideConversationMonitor = require("../services/sideConversationMonitor");
@@ -51,6 +52,32 @@ const parseZendeskPayload = (req, res, next) => {
   next();
 };
 
+// Helper function to sanitize aktenzeichen from webhook payload
+function sanitizeAktenzeichenFromPayload(aktenzeichen, res) {
+  if (!aktenzeichen) {
+    return null;
+  }
+
+  const original = aktenzeichen;
+  try {
+    const sanitized = sanitizeAktenzeichen(aktenzeichen);
+    if (original !== sanitized) {
+      console.log(`🔧 Sanitized aktenzeichen: "${original}" → "${sanitized}"`);
+    }
+    return sanitized;
+  } catch (error) {
+    console.error(`❌ Failed to sanitize aktenzeichen "${original}":`, error.message);
+    if (res) {
+      res.status(400).json({
+        error: "Invalid aktenzeichen format",
+        message: error.message,
+        received: original
+      });
+    }
+    return null;
+  }
+}
+
 // Zendesk Webhook: Portal Link Sent
 // Triggered when agent uses "Portal-Link senden" macro
 router.post(
@@ -60,6 +87,14 @@ router.post(
   async (req, res) => {
     try {
       console.log("🔗 Zendesk Webhook: Portal-Link-Sent received", req.body);
+      console.log("🔍 Portal-Link-Sent webhook triggered details:", {
+        userAgent: req.headers['user-agent'],
+        sourceIP: req.ip,
+        timestamp: new Date().toISOString(),
+        triggeredBy: req.body.trigger_id || req.body.automation_id || 'manual',
+        webhookSource: req.headers['x-zendesk-webhook-signature'] ? 'zendesk' : 'external',
+        hasZendeskFormat: !!(req.body.ticket && req.body.ticket.requester)
+      });
 
       // Handle both direct format and Zendesk webhook format
       let email,
@@ -115,6 +150,24 @@ router.post(
         } = req.body);
       }
 
+      // Sanitize aktenzeichen: Replace / with _ and other dangerous characters
+      if (aktenzeichen) {
+        const originalAktenzeichen = aktenzeichen;
+        try {
+          aktenzeichen = sanitizeAktenzeichen(aktenzeichen);
+          if (originalAktenzeichen !== aktenzeichen) {
+            console.log(`🔧 Sanitized aktenzeichen: "${originalAktenzeichen}" → "${aktenzeichen}"`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to sanitize aktenzeichen "${originalAktenzeichen}":`, error.message);
+          return res.status(400).json({
+            error: "Invalid aktenzeichen format",
+            message: error.message,
+            received: originalAktenzeichen
+          });
+        }
+      }
+
       // Validate required fields
       if (!email || !aktenzeichen || !firstName || !lastName) {
         return res.status(400).json({
@@ -140,9 +193,17 @@ router.post(
             zendesk_user_id: zendesk_user_id,
             portal_link_sent: true,
             portal_link_sent_at: new Date(),
-            current_status: "portal_access_sent",
             updated_at: new Date(),
           };
+
+          // Don't override current_status if client is already in a more advanced status
+          const advancedStatuses = ['awaiting_client_confirmation', 'client_confirmation', 'creditor_review', 'creditor_contact_initiated', 'creditor_contact_active', 'settlement_documents_generated', 'settlement_plan_sent_to_creditors', 'completed'];
+          if (!advancedStatuses.includes(client.current_status)) {
+            console.log(`⚠️ Status would be reset from ${client.current_status} to portal_access_sent for client ${client.aktenzeichen} - ALLOWING because not in advanced status`);
+            updateData.current_status = "portal_access_sent";
+          } else {
+            console.log(`✅ Status protection: Client ${client.aktenzeichen} stays at ${client.current_status} (advanced status)`);
+          }
 
           // Update address and geburtstag if provided
           if (address) updateData.address = address;
@@ -192,7 +253,14 @@ router.post(
           client.zendesk_user_id = zendesk_user_id;
           client.portal_link_sent = true;
           client.portal_link_sent_at = new Date();
-          client.current_status = "portal_access_sent";
+          // Don't override current_status if client is already in a more advanced status
+          const advancedStatuses = ['awaiting_client_confirmation', 'client_confirmation', 'creditor_review', 'creditor_contact_initiated', 'creditor_contact_active', 'settlement_documents_generated', 'settlement_plan_sent_to_creditors', 'completed'];
+          if (!advancedStatuses.includes(client.current_status)) {
+            console.log(`⚠️ FALLBACK: Status would be reset from ${client.current_status} to portal_access_sent for client ${client.aktenzeichen} - ALLOWING because not in advanced status`);
+            client.current_status = "portal_access_sent";
+          } else {
+            console.log(`✅ FALLBACK: Status protection: Client ${client.aktenzeichen} stays at ${client.current_status} (advanced status)`);
+          }
           client.updated_at = new Date();
           if (address) client.address = address;
           if (geburtstag) client.geburtstag = geburtstag;
@@ -560,6 +628,22 @@ router.post(
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
           hint: "Make sure ticket.requester.aktenzeichen is populated in Zendesk webhook",
+        });
+      }
+
+      // Sanitize aktenzeichen: Replace / with _ and other dangerous characters
+      const originalAktenzeichen = aktenzeichen;
+      try {
+        aktenzeichen = sanitizeAktenzeichen(aktenzeichen);
+        if (originalAktenzeichen !== aktenzeichen) {
+          console.log(`🔧 Sanitized aktenzeichen: "${originalAktenzeichen}" → "${aktenzeichen}"`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to sanitize aktenzeichen "${originalAktenzeichen}":`, error.message);
+        return res.status(400).json({
+          error: "Invalid aktenzeichen format",
+          message: error.message,
+          received: originalAktenzeichen
         });
       }
 
@@ -987,9 +1071,7 @@ Um mit der Bearbeitung Ihres Falls fortzufahren, benötigen wir noch Ihre Gläub
 
 📎 **Bitte laden Sie Ihre Dokumente hoch:**
 
-${
-  process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"
-}/portal?token=${client.portal_token}
+https://mandanten-portal.onrender.com/login
 
 **Was Sie hochladen sollten:**
 
@@ -1411,13 +1493,17 @@ router.post("/start-manual-review", rateLimits.general, async (req, res) => {
   try {
     console.log("🔍 Zendesk Webhook: Start-Manual-Review received", req.body);
 
-    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+    let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
     if (!aktenzeichen) {
       return res.status(400).json({
         error: "Missing required field: aktenzeichen",
       });
     }
+
+    // Sanitize aktenzeichen
+    aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+    if (!aktenzeichen) return;
 
     const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -1485,13 +1571,17 @@ router.post("/manual-review-complete", rateLimits.general, async (req, res) => {
       req.body
     );
 
-    const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+    let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
     if (!aktenzeichen) {
       return res.status(400).json({
         error: "Missing required field: aktenzeichen",
       });
     }
+
+    // Sanitize aktenzeichen
+    aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+    if (!aktenzeichen) return;
 
     const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -1953,13 +2043,17 @@ router.post(
         req.body
       );
 
-      const { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
+      let { aktenzeichen, zendesk_ticket_id, agent_email } = req.body;
 
       if (!aktenzeichen) {
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
         });
       }
+
+      // Sanitize aktenzeichen
+      aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+      if (!aktenzeichen) return;
 
       const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 
@@ -2088,13 +2182,17 @@ router.post(
         req.body
       );
 
-      const { aktenzeichen, confirmed_at, creditors_confirmed } = req.body;
+      let { aktenzeichen, confirmed_at, creditors_confirmed } = req.body;
 
       if (!aktenzeichen) {
         return res.status(400).json({
           error: "Missing required field: aktenzeichen",
         });
       }
+
+      // Sanitize aktenzeichen
+      aktenzeichen = sanitizeAktenzeichenFromPayload(aktenzeichen, res);
+      if (!aktenzeichen) return;
 
       const client = await Client.findOne({ aktenzeichen: aktenzeichen });
 

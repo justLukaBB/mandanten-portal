@@ -16,6 +16,7 @@ interface CorrectionFormProps {
       creditor_data?: {
         sender_name?: string;
         sender_email?: string;
+        sender_address?: string;
         reference_number?: string;
         claim_amount?: number;
       };
@@ -33,6 +34,7 @@ interface CorrectionFormProps {
 interface FormData {
   sender_name: string;
   sender_email: string;
+  sender_address: string;
   reference_number: string;
   claim_amount: string;
   notes: string;
@@ -49,6 +51,7 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
   const [formData, setFormData] = useState<FormData>({
     sender_name: '',
     sender_email: '',
+    sender_address: '',
     reference_number: '',
     claim_amount: '',
     notes: ''
@@ -64,6 +67,7 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
       setFormData({
         sender_name: aiData.sender_name || '',
         sender_email: aiData.sender_email || '',
+        sender_address: aiData.sender_address || '',
         reference_number: aiData.reference_number || '',
         claim_amount: aiData.claim_amount?.toString() || '',
         notes: ''
@@ -80,11 +84,13 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
     const corrections = {
       sender_name: formData.sender_name.trim(),
       sender_email: formData.sender_email.trim(),
+      sender_address: formData.sender_address.trim(),
       reference_number: formData.reference_number.trim(),
       claim_amount: parseFloat(formData.claim_amount) || 0,
       notes: formData.notes.trim()
     };
     
+    console.log('📤 CorrectionForm sending corrections:', corrections);
     onSave(corrections);
   };
 
@@ -109,7 +115,20 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
   const confidenceColor = confidence >= 0.8 ? 'text-green-600' : confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
   const confidenceIcon = confidence >= 0.8 ? CheckIcon : confidence >= 0.5 ? ExclamationTriangleIcon : XMarkIcon;
 
-  const isFormValid = formData.sender_name.trim() && formData.claim_amount.trim() && !isNaN(parseFloat(formData.claim_amount));
+  // Form is valid if we have at least a sender name and a valid claim amount
+  const isFormValid = formData.sender_name.trim().length > 0 && 
+                      formData.claim_amount.trim().length > 0 && 
+                      !isNaN(parseFloat(formData.claim_amount)) &&
+                      parseFloat(formData.claim_amount) >= 0;
+  
+  // Debug log for form validation
+  console.log('📋 Form validation:', {
+    sender_name: formData.sender_name,
+    claim_amount: formData.claim_amount,
+    isFormValid,
+    disabled,
+    buttonDisabled: disabled || !isFormValid
+  });
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${className}`}>
@@ -175,6 +194,23 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
                 disabled={disabled}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-50 disabled:text-gray-500"
                 placeholder="forderungen@deutsche-bank.de"
+              />
+            </div>
+
+            {/* Adresse */}
+            <div>
+              <label htmlFor="sender_address" className="block text-sm font-medium text-gray-700 mb-1">
+                Adresse
+              </label>
+              <textarea
+                id="sender_address"
+                name="sender_address"
+                value={formData.sender_address}
+                onChange={handleInputChange}
+                disabled={disabled}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-50 disabled:text-gray-500"
+                placeholder="Musterstraße 123, 12345 Musterstadt"
               />
             </div>
 

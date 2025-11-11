@@ -44,11 +44,33 @@ class CreditorContactService {
                 if (!client) {
                     throw new Error(`Client not found: ${clientReference}`);
                 }
+                // Use direct fields from client data if available, otherwise parse address string
+                let street = client.strasse || '';
+                let houseNumber = client.hausnummer || '';
+                let zipCode = client.plz || '';
+                let city = client.ort || '';
+
+                // Fallback: Parse address string if individual fields aren't available
+                if (!street && !zipCode && client.address) {
+                    const addressParts = client.address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+                    if (addressParts) {
+                        street = addressParts[1];
+                        houseNumber = addressParts[2];
+                        zipCode = addressParts[3];
+                        city = addressParts[4];
+                    }
+                }
+
                 clientData = {
                     name: `${client.firstName} ${client.lastName}`,
                     email: client.email,
                     phone: client.phone || '',
                     address: client.address || '',
+                    // Provide structured address fields if available
+                    street: street,
+                    houseNumber: houseNumber,
+                    zipCode: zipCode,
+                    city: city,
                     birthdate: client.geburtstag || '',
                     dateOfBirth: client.geburtstag || ''
                 };
@@ -145,6 +167,11 @@ class CreditorContactService {
                     name: clientData.name,
                     reference: clientReference,
                     address: clientData.address,
+                    // Pass structured address fields if available
+                    street: clientData.street,
+                    houseNumber: clientData.houseNumber,
+                    zipCode: clientData.zipCode,
+                    city: clientData.city,
                     birthdate: clientData.birthdate || clientData.dateOfBirth
                 },
                 creditors
@@ -977,11 +1004,33 @@ class CreditorContactService {
                 throw new Error(`Client not found: ${clientReference}`);
             }
 
+            // Use direct fields from client data if available, otherwise parse address string
+            let street = client.strasse || '';
+            let houseNumber = client.hausnummer || '';
+            let zipCode = client.plz || '';
+            let city = client.ort || '';
+
+            // Fallback: Parse address string if individual fields aren't available
+            if (!street && !zipCode && client.address) {
+                const addressParts = client.address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+                if (addressParts) {
+                    street = addressParts[1];
+                    houseNumber = addressParts[2];
+                    zipCode = addressParts[3];
+                    city = addressParts[4];
+                }
+            }
+
             const clientData = {
                 name: `${client.firstName} ${client.lastName}`,
                 email: client.email,
                 phone: client.phone || '',
                 address: client.address || '',
+                // Provide structured address fields if available
+                street: street,
+                houseNumber: houseNumber,
+                zipCode: zipCode,
+                city: city,
                 reference: clientReference
             };
 

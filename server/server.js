@@ -12,6 +12,7 @@ const config = require('./config');
 const { uploadsDir, upload } = require('./middleware/upload');
 const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
 const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
+const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
 const healthRoutes = require('./routes/health');
 const zendeskWebhooks = require('./routes/zendesk-webhooks');
 const portalWebhooks = require('./routes/portal-webhooks');
@@ -33,12 +34,16 @@ const SettlementResponseMonitor = require('./services/settlementResponseMonitor'
 const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
+const FinancialDataReminderService = require('./services/financialDataReminderService');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
 
 // Initialize global settlement response monitor
 const globalSettlementResponseMonitor = new SettlementResponseMonitor();
+
+// Initialize financial data reminder service
+const financialDataReminderService = new FinancialDataReminderService();
 
 const app = express();
 const PORT = config.PORT;
@@ -880,6 +885,9 @@ app.post('/api/clients/:clientId/documents',
             if (docIndex !== -1) {
               client.documents[docIndex] = {
                 ...client.documents[docIndex],
+                id: client.documents[docIndex].id,
+                name: client.documents[docIndex].name,
+                filename: client.documents[docIndex].filename,
                 processing_status: classificationSuccess ? 'completed' : 'failed',
                 classification_success: classificationSuccess,
                 is_creditor_document: extractedData.is_creditor_document || false,
@@ -1249,17 +1257,29 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
 
     // Find the document by ID
     const document = client.documents.find(doc => doc.id === documentId);
-    
+
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Sanitize aktenzeichen to prevent path traversal attacks
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
+    } catch (error) {
+      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
+      return res.status(400).json({
+        error: 'Invalid aktenzeichen format',
+        message: 'The aktenzeichen contains invalid characters'
+      });
     }
 
     // Construct file path - try different possible paths
     const possiblePaths = [
       path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
+      path.join(uploadsDir, safeAktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
       path.join(uploadsDir, clientId, document.filename || document.name),
-      path.join(uploadsDir, client.aktenzeichen, document.filename || document.name),
+      path.join(uploadsDir, safeAktenzeichen, document.filename || document.name),
     ];
 
     let filePath = null;
@@ -1350,9 +1370,11 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', (req, res) => {
     return res.status(400).json({ error: 'Erste Rate muss erst als erhalten markiert werden' });
   }
   
-  // Get all confirmed creditor documents (not duplicates, not failed)
-  const creditorDocs = client.documents.filter(doc => 
-    doc.document_status === 'creditor_confirmed' && !doc.is_duplicate
+  // Get all confirmed creditor documents (not duplicates, not failed, not marked as non-creditor)
+  const creditorDocs = client.documents.filter(doc =>
+    doc.document_status === 'creditor_confirmed' &&
+    !doc.is_duplicate &&
+    doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
   );
   
   // Create deduplicated creditor list
@@ -1414,11 +1436,12 @@ app.get('/api/admin/clients/:clientId/workflow-status', async (req, res) => {
       return res.status(404).json({ error: 'Client not found' });
     }
     
-    const creditorDocuments = (client.documents || []).filter(doc => 
-      doc.document_status === 'creditor_confirmed'
+    const creditorDocuments = (client.documents || []).filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
-    
-    const needsReview = (client.documents || []).filter(doc => 
+
+    const needsReview = (client.documents || []).filter(doc =>
       doc.document_status === 'needs_review'
     );
     
@@ -1460,6 +1483,17 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     // Check current_status (new field) or workflow_status (legacy field)
     const status = client.current_status || client.workflow_status;
     
+    console.log(`🔍 Creditor confirmation check for ${client.aktenzeichen}:`, {
+      current_status: client.current_status,
+      workflow_status: client.workflow_status,
+      admin_approved: client.admin_approved,
+      client_confirmed_creditors: client.client_confirmed_creditors,
+      first_payment_received: client.first_payment_received,
+      seven_day_review_triggered: client.seven_day_review_triggered,
+      creditors_count: (client.final_creditor_list || []).length,
+      status: status
+    });
+    
     // For new clients, return empty state
     if (status === 'portal_access_sent' || status === 'created') {
       return res.json({
@@ -1472,7 +1506,10 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     }
     
     // Check if agent has approved (required before client can see creditors)
-    if (!client.admin_approved) {
+    // Auto-approve for cases where 7-day review has been triggered and payment received
+    const isAutoApproved = client.first_payment_received && client.seven_day_review_triggered && status === 'creditor_review';
+    
+    if (!client.admin_approved && !isAutoApproved) {
       return res.json({
         workflow_status: status,
         creditors: [],
@@ -1483,10 +1520,26 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     }
     
     // If agent approved and status is awaiting_client_confirmation, show creditors
-    if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed') {
+    // Also include creditor_review status when 7-day review has been triggered and payment received
+    if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
+        (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
+
+      // Filter out creditors that belong to documents marked as "not a creditor"
+      const validCreditors = (client.final_creditor_list || []).filter(creditor => {
+        // Find the document this creditor is associated with
+        const doc = client.documents.find(d =>
+          d.id === creditor.document_id ||
+          d.id === creditor.source_document_id ||
+          d.name === creditor.source_document
+        );
+
+        // Only include if document is still marked as a creditor document
+        return !doc || doc.is_creditor_document !== false;
+      });
+
       return res.json({
         workflow_status: status,
-        creditors: client.final_creditor_list || [],
+        creditors: validCreditors,
         client_confirmed: client.client_confirmed_creditors || false,
         confirmation_deadline: null
       });
@@ -1904,9 +1957,10 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
     }
     
     // Generate creditor list from confirmed creditor documents
-    const creditorDocuments = (client.documents || []).filter(doc => 
-      doc.document_status === 'creditor_confirmed' && 
-      doc.extracted_data?.creditor_data
+    const creditorDocuments = (client.documents || []).filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
+      doc.extracted_data?.creditor_data &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
     
     const finalCreditorList = creditorDocuments.map(doc => ({
@@ -3814,7 +3868,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
       // Phase 1 status
       document_processing: {
         total_documents: client.documents.length,
-        creditor_documents: client.documents.filter(d => d.document_status === 'creditor_confirmed').length,
+        creditor_documents: client.documents.filter(d => d.document_status === 'creditor_confirmed' && d.is_creditor_document !== false).length,
         admin_approved: client.admin_approved,
         client_confirmed: client.client_confirmed_creditors
       },
@@ -4244,11 +4298,12 @@ app.post('/api/clients/:clientId/process-documents-to-creditors', (req, res) => 
     console.log(`📋 Processing documents to final creditor list for client: ${clientId}`);
 
     // Find all completed creditor documents
-    const creditorDocs = client.documents.filter(doc => 
-      doc.document_status === 'creditor_confirmed' && 
+    const creditorDocs = client.documents.filter(doc =>
+      doc.document_status === 'creditor_confirmed' &&
       doc.processing_status === 'completed' &&
       doc.extracted_data &&
-      doc.extracted_data.creditor_data
+      doc.extracted_data.creditor_data &&
+      doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
 
     console.log(`Found ${creditorDocs.length} creditor documents`);
@@ -5156,10 +5211,55 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     });
     
     console.log(`🎯 Financial data form activated for ${finalUpdatedClient.aktenzeichen} - form should be available in client portal`);
-    
+
+    // Send financial data reminder email to client
+    let emailResult = null;
+    if (finalUpdatedClient.zendesk_ticket_id && finalUpdatedClient.email) {
+      try {
+        console.log(`📧 Sending financial data reminder email to ${finalUpdatedClient.email}...`);
+
+        emailResult = await financialDataReminderService.sendReminder(
+          finalUpdatedClient.zendesk_ticket_id,
+          {
+            firstName: finalUpdatedClient.firstName,
+            lastName: finalUpdatedClient.lastName,
+            email: finalUpdatedClient.email,
+            aktenzeichen: finalUpdatedClient.aktenzeichen
+          }
+        );
+
+        if (emailResult.success) {
+          console.log(`✅ Financial data reminder email sent successfully`);
+
+          // Update client with email tracking information
+          await safeClientUpdate(clientId, async (client) => {
+            client.financial_data_reminder_sent_at = new Date();
+            if (emailResult.side_conversation_id) {
+              client.financial_data_reminder_side_conversation_id = emailResult.side_conversation_id;
+            }
+            return client;
+          });
+        } else {
+          console.error(`⚠️ Failed to send financial data reminder email: ${emailResult.error}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Error sending financial data reminder email:`, emailError);
+        emailResult = { success: false, error: emailError.message };
+      }
+    } else {
+      console.log(`⚠️ Skipping email - missing ticket ID or email address`);
+      emailResult = {
+        success: false,
+        error: 'Missing zendesk_ticket_id or email address',
+        skipped: true
+      };
+    }
+
     res.json({
       success: true,
-      message: `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.`,
+      message: `30-Day simulation complete! Creditor calculation table created for ${finalUpdatedClient.firstName} ${finalUpdatedClient.lastName}. Financial data form is now available in client portal.${emailResult?.success ? ' Email reminder sent to client.' : ''}`,
+      email_sent: emailResult?.success || false,
+      email_details: emailResult || null,
       client_id: finalUpdatedClient.id,
       aktenzeichen: finalUpdatedClient.aktenzeichen,
       creditor_count: creditorCalculationTable.length,
@@ -5501,10 +5601,49 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     // Add document to client
     client.documents = client.documents || [];
     client.documents.push(documentRecord);
-    
-    // Update client status to documents_uploaded if needed
-    if (client.current_status === 'created' || client.current_status === 'portal_access_sent') {
+
+    // ===== ITERATIVE LOOP: Check if client is in confirmation phase =====
+    // IMPORTANT: Check BEFORE changing status!
+    // Include both awaiting_client_confirmation AND additional_documents_review
+    // (additional_documents_review can occur when multiple documents are uploaded in succession)
+    const previousStatus = client.current_status; // Store for Zendesk ticket logic
+    const isInConfirmationPhase = (client.current_status === 'awaiting_client_confirmation' ||
+                                    client.current_status === 'additional_documents_review') &&
+                                    client.admin_approved === true;
+
+    // Update client status to documents_uploaded if needed (but NOT if in confirmation phase)
+    if (!isInConfirmationPhase && (client.current_status === 'created' || client.current_status === 'portal_access_sent')) {
       client.current_status = 'documents_uploaded';
+    }
+
+    // If in confirmation phase, mark additional documents uploaded
+    if (isInConfirmationPhase) {
+      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id}`, {
+        previousStatus,
+        newStatus: 'additional_documents_review',
+        admin_approved: client.admin_approved,
+        review_iteration: client.review_iteration_count || 0
+      });
+
+      client.additional_documents_uploaded_after_review = true;
+      client.additional_documents_uploaded_at = new Date();
+      client.current_status = 'additional_documents_review';
+
+      // Add status history
+      client.status_history = client.status_history || [];
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'additional_documents_uploaded',
+        changed_by: 'client',
+        metadata: {
+          documents_count: client.documents.length,
+          upload_type: 'additional_after_review',
+          previous_status: 'awaiting_client_confirmation',
+          iteration: (client.review_iteration_count || 0) + 1,
+          document_name: originalName
+        },
+        created_at: new Date()
+      });
     }
 
     await saveClient(client);
@@ -5571,9 +5710,19 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
               created_at: new Date()
             });
           }
-          
-          // If payment is also received, populate creditor list and schedule delayed webhook
-          if (allDocsCompleted && updatedClient.first_payment_received) {
+
+          // ===== ITERATIVE LOOP: Check if client is in confirmation phase BEFORE scheduling webhook =====
+          const clientStatus = updatedClient.current_status;
+          const inConfirmationPhase = (clientStatus === 'awaiting_client_confirmation' ||
+                                        clientStatus === 'additional_documents_review') &&
+                                       updatedClient.admin_approved === true;
+
+          if (inConfirmationPhase) {
+            console.log(`🔄 Client ${clientId} is in confirmation phase (${clientStatus}) - skipping processing-complete webhook (iterative loop active)`);
+          }
+
+          // If payment is also received AND NOT in confirmation phase, populate creditor list and schedule delayed webhook
+          if (allDocsCompleted && updatedClient.first_payment_received && !inConfirmationPhase) {
             console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
             
             // Update final creditor list
@@ -5648,6 +5797,83 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
         }
       }
     });
+
+    // ===== ITERATIVE LOOP: Create Zendesk ticket for additional documents =====
+    // Only create ticket on FIRST upload (transition from awaiting_client_confirmation)
+    // Subsequent uploads while already in additional_documents_review should not create duplicate tickets
+    const shouldCreateTicket = isInConfirmationPhase && previousStatus === 'awaiting_client_confirmation';
+
+    console.log(`🔍 Zendesk ticket decision for ${client.aktenzeichen}:`, {
+      isInConfirmationPhase,
+      previousStatus,
+      currentStatus: client.current_status,
+      admin_approved: client.admin_approved,
+      shouldCreateTicket
+    });
+
+    if (shouldCreateTicket) {
+      try {
+        const ZendeskService = require('./services/zendeskService');
+        const zendeskService = new ZendeskService();
+
+        if (zendeskService.isConfigured()) {
+          console.log(`🎫 Creating Zendesk ticket for additional documents upload...`);
+
+          const ticketResult = await zendeskService.createTicket({
+            subject: `🔄 Zusätzliche Dokumente hochgeladen: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+            content: `**🔄 ZUSÄTZLICHE DOKUMENTE NACH AGENT REVIEW**
+
+👤 **Client:** ${client.firstName} ${client.lastName}
+📧 **Email:** ${client.email}
+📁 **Aktenzeichen:** ${client.aktenzeichen}
+📅 **Hochgeladen:** ${new Date().toLocaleString('de-DE')}
+📄 **Dokument:** ${originalName}
+
+📊 **Situation:**
+• Status: War in Client-Bestätigung (awaiting_client_confirmation)
+• Vorherige Agent-Review: Abgeschlossen am ${client.admin_approved_at?.toLocaleString('de-DE') || 'N/A'}
+• Anzahl bereits bestätigter Gläubiger: ${(client.final_creditor_list || []).length}
+• **NEUES** Dokument hochgeladen: ${originalName}
+• Review-Iteration: ${(client.review_iteration_count || 0) + 1}
+
+⚠️ **AKTION ERFORDERLICH:**
+1. Bitte das neue Dokument im Agent Portal prüfen
+2. Neue Gläubiger extrahieren und bestätigen
+3. Diese werden zur bestehenden Gläubigerliste hinzugefügt
+4. Client erhält automatisch aktualisierte Liste zur erneuten Bestätigung
+
+🔗 **Agent Portal:** ${process.env.FRONTEND_URL || process.env.BACKEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${clientId}
+
+📋 **STATUS:** Zusätzliche Dokumente - Review erforderlich`,
+            requesterEmail: client.email,
+            tags: ['additional-documents', 'agent-review-required', 'creditor-documents', 'iterative-review'],
+            priority: 'normal'
+          });
+
+          if (ticketResult.success) {
+            console.log(`✅ Zendesk ticket created for additional documents: ${ticketResult.ticket_id}`);
+
+            // Store new ticket
+            client.zendesk_tickets = client.zendesk_tickets || [];
+            client.zendesk_tickets.push({
+              ticket_id: ticketResult.ticket_id,
+              ticket_type: 'additional_creditor_review',
+              ticket_scenario: 'additional_documents_after_confirmation',
+              status: 'open',
+              created_at: new Date()
+            });
+
+            await saveClient(client);
+          } else {
+            console.error(`❌ Failed to create Zendesk ticket:`, ticketResult.error);
+          }
+        } else {
+          console.log(`⚠️ Zendesk not configured - skipping ticket creation`);
+        }
+      } catch (zendeskError) {
+        console.error(`❌ Error creating Zendesk ticket:`, zendeskError.message);
+      }
+    }
 
     res.json({
       success: true,
@@ -5826,7 +6052,9 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     client.calculated_settlement_plan = settlementPlan;
     
     // Generate document based on plan type
-    console.log(`📄 Generating ${planType === 'nullplan' ? 'Nullplan' : 'Schuldenbereinigungsplan'} for ${client.aktenzeichen}...`);
+    console.log(`📄 [DOCUMENT GENERATION] Plan Type: ${planType} for ${client.aktenzeichen}`);
+    console.log(`📄 [DOCUMENT GENERATION] Monthly Payment: ${garnishmentResult.garnishableAmount} EUR`);
+    console.log(`📄 [DOCUMENT GENERATION] Is Nullplan: ${planType === 'nullplan' ? 'YES → generateNullplanDocuments()' : 'NO → generateSchuldenbereinigungsplan()'}`);
     
     // Prepare client data for document generation
     const clientData = {
@@ -5837,6 +6065,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     
     let settlementResult;
     if (planType === 'nullplan') {
+      console.log(`📄 [DOCUMENT GENERATION] Calling generateNullplanDocuments()...`);
       // Generate Nullplan document for clients with no garnishable income
       settlementResult = await documentGenerator.generateNullplanDocuments(client.aktenzeichen);
       
@@ -5933,11 +6162,22 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       }
     } else {
       // Generate Schuldenbereinigungsplan document for clients with garnishable income
+      console.log(`📄 [DOCUMENT GENERATION] Calling generateSchuldenbereinigungsplan()...`);
+      console.log(`📄 [DOCUMENT GENERATION] Client Data: ${JSON.stringify(clientData)}`);
+      console.log(`📄 [DOCUMENT GENERATION] Settlement Plan: ${JSON.stringify({
+        plan_type: settlementPlan.plan_type,
+        monthly_payment: settlementPlan.monthly_payment,
+        creditors: settlementPlan.creditors?.length || 0,
+        creditor_payments: settlementPlan.creditor_payments?.length || 0
+      })}`);
+      
       settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
         clientData,
         settlementPlan,
         settlementPlan // calculation result is part of settlement data
       );
+      
+      console.log(`📄 [DOCUMENT GENERATION] generateSchuldenbereinigungsplan() result: ${settlementResult.success ? 'SUCCESS' : 'FAILED'}`);
       
       if (settlementResult.success) {
         console.log(`✅ Generated settlement plan: ${settlementResult.document_info.filename}`);

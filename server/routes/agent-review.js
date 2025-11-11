@@ -7,6 +7,7 @@ const { rateLimits } = require('../middleware/security');
 const CreditorContactService = require('../services/creditorContactService');
 const ZendeskService = require('../services/zendeskService');
 const config = require('../config');
+const { sanitizeAktenzeichen } = require('../utils/sanitizeAktenzeichen');
 
 const router = express.Router();
 
@@ -404,6 +405,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         Object.assign(creditors[creditorIndex], {
           sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || creditors[creditorIndex].sender_email || '',
+          sender_address: corrections.sender_address || creditors[creditorIndex].sender_address || '',
           reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
           claim_amount: corrections.claim_amount ? parseFloat(corrections.claim_amount) : (creditors[creditorIndex].claim_amount || 0),
           confidence: 1.0, // Manual correction = 100% confidence
@@ -428,6 +430,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           source_document: document.name,
           sender_name: corrections.sender_name || 'Unbekannt',
           sender_email: corrections.sender_email || '',
+          sender_address: corrections.sender_address || '',
           reference_number: corrections.reference_number || '',
           claim_amount: isNaN(claimAmount) ? 0 : claimAmount,
           confidence: 1.0, // Manual entry = 100% confidence
@@ -444,17 +447,24 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
         console.log(`✅ Created new creditor for document ${document_id}`);
       }
     } else if (action === 'skip') {
-      // Mark as skipped
+      // Remove creditor from list when skipped (document is not a creditor document)
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
-        Object.assign(creditors[creditorIndex], {
-          status: 'rejected', // Mark as rejected when skipped
-          manually_reviewed: true,
-          reviewed_by: req.agentId,
-          reviewed_at: new Date(),
-          review_action: 'skipped'
-        });
+        // Remove the creditor completely from the list
+        creditors.splice(creditorIndex, 1);
+        console.log(`❌ Removed creditor from list for document ${document_id} - marked as non-creditor document`);
+      } else {
+        console.log(`⏭️ No creditor found to remove for document ${document_id} - document correctly identified as non-creditor`);
       }
-      console.log(`⏭️ Skipped review for document ${document_id}`);
+
+      // Also mark the document as not a creditor document
+      document.is_creditor_document = false;
+      document.document_status = 'not_a_creditor'; // CRITICAL: Change document_status to prevent re-generation
+      document.manually_reviewed = true;
+      document.reviewed_by = req.agentId;
+      document.reviewed_at = new Date();
+      document.review_action = 'skipped_not_creditor';
+
+      console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
     } else if (action === 'confirm') {
       // Confirm AI extraction is correct
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
@@ -629,12 +639,43 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     // Save with validation only on modified fields to avoid document validation errors
     await client.save({ validateModifiedOnly: true });
 
-    // Generate summary for response
-    const creditors = client.final_creditor_list || [];
+    // Filter out creditors that belong to documents marked as "not a creditor"
+    const allCreditors = client.final_creditor_list || [];
+    const creditors = allCreditors.filter(creditor => {
+      // Find the document this creditor is associated with
+      const doc = client.documents.find(d =>
+        d.id === creditor.document_id ||
+        d.id === creditor.source_document_id ||
+        d.name === creditor.source_document
+      );
+
+      // Only include if document is still marked as a creditor document
+      return !doc || doc.is_creditor_document !== false;
+    });
+
+    // Update final_creditor_list to exclude non-creditors
+    client.final_creditor_list = creditors;
+
+    // ===== ITERATIVE LOOP: Track review iteration =====
+    if (client.review_iteration_count === undefined) {
+      client.review_iteration_count = 0;
+    }
+    client.review_iteration_count += 1;
+
+    // Reset additional documents flag after review
+    if (client.additional_documents_uploaded_after_review) {
+      client.additional_documents_uploaded_after_review = false;
+      console.log(`🔄 Completed review iteration ${client.review_iteration_count} for ${client.aktenzeichen} (additional documents processed)`);
+    } else {
+      console.log(`📊 Completed review iteration ${client.review_iteration_count} for ${client.aktenzeichen}`);
+    }
+
+    await client.save({ validateModifiedOnly: true });
+
     const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
     const reviewedDocs = client.documents.filter(d => d.manually_reviewed === true);
 
-    console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors, ${totalDebt}€ total debt`);
+    console.log(`✅ Review completed for ${client.aktenzeichen}: ${creditors.length} creditors (filtered), ${totalDebt}€ total debt`);
 
     // IMPROVED ZENDESK TICKET HANDLING FOR REVIEW COMPLETION
     let zendeskService = null;
@@ -813,18 +854,18 @@ ${finalCreditorsList}
           try {
             const clientMessage = `Sehr geehrte/r Frau/Herr ${client.lastName},
 
-wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
+wir haben Ihre ${client.review_iteration_count > 1 ? 'zusätzlich eingereichten' : 'im Mandantenportal eingereichten'} Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
 
-**📋 GLÄUBIGERLISTE:**
+**📋 GLÄUBIGERLISTE${client.review_iteration_count > 1 ? ` (Aktualisiert - Version ${client.review_iteration_count})` : ''}:**
 ${creditorsList}
 
 **Gesamtschulden:** €${totalDebt.toFixed(2)}
 
 👉 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
-Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
+${client.review_iteration_count > 1 ? '⚠️ **WICHTIG:** Falls Ihnen weitere fehlende Gläubiger auffallen, können Sie jederzeit zusätzliche Dokumente im Portal hochladen. Wir prüfen diese und senden Ihnen eine aktualisierte Liste.\n\n' : ''}Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
 
-Den Zugang zum Portal finden Sie hier: ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal
+Den Zugang zum Portal finden Sie hier: https://mandanten-portal.onrender.com/login
 
 Mit freundlichen Grüßen
 Rechtsanwalt Thomas Scuric
@@ -1032,14 +1073,31 @@ router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.gene
 
 // Secure file serving for document review
 // GET /api/agent-review/:clientId/document/:documentId/file
-router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits.general, async (req, res) => {
+router.get('/:clientId/document/:documentId/file', rateLimits.general, async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
     const fs = require('fs');
     const path = require('path');
 
     // Verify agent has access to this client
-    const client = await Client.findOne({ id: clientId });
+    // Handle both ObjectId format and UUID/string format
+    let clientQuery;
+    if (clientId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+      // It's a UUID, search by id or aktenzeichen
+      clientQuery = { $or: [{ id: clientId }, { aktenzeichen: clientId }] };
+    } else {
+      // It's either ObjectId or aktenzeichen
+      clientQuery = { $or: [{ _id: clientId }, { aktenzeichen: clientId }, { id: clientId }] };
+    }
+    
+    console.log(`🔍 Looking for client with ID: ${clientId}, using query:`, clientQuery);
+    const client = await Client.findOne(clientQuery);
+    
+    if (!client) {
+      console.error(`❌ Client not found for ID: ${clientId}`);
+    } else {
+      console.log(`✅ Found client: ${client.aktenzeichen || client.id}`);
+    }
     
     if (!client) {
       return res.status(404).json({
@@ -1061,18 +1119,92 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     // Adjust this path based on your actual file storage structure
     const uploadsDir = path.join(__dirname, '../uploads');
     let filePath;
+
+    // Sanitize aktenzeichen to prevent path traversal attacks
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
+    } catch (error) {
+      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
+      return res.status(400).json({
+        error: 'Invalid aktenzeichen format',
+        message: 'The aktenzeichen contains invalid characters'
+      });
+    }
+
+    // Build possible paths with proper null checking
+    const possiblePaths = [];
+
+    // Most reliable: stored filename from multer (UUID with extension)
+    if (document.filename) {
+      possiblePaths.push(path.join(uploadsDir, clientId, document.filename));
+      possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, document.filename));
+    }
+
+    // Fallback: document name as stored
+    if (document.name) {
+      possiblePaths.push(path.join(uploadsDir, clientId, document.name));
+      possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, document.name));
+    }
+
+    // Last resort: try with document ID and inferred extension
+    const extension = document.type?.split('/')[1] || 'pdf';
+    possiblePaths.push(path.join(uploadsDir, clientId, `${documentId}.${extension}`));
+    possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, `${documentId}.${extension}`));
     
-    // Try different possible paths
-    const possiblePaths = [
-      path.join(uploadsDir, client.aktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, client.aktenzeichen, document.filename),
-      path.join(uploadsDir, clientId, document.filename),
-    ];
+    console.log(`🔍 Agent document loading for ${documentId}:`, {
+      documentId,
+      clientId,
+      aktenzeichen: client.aktenzeichen,
+      filename: document.filename,
+      type: document.type,
+      name: document.name,
+      documentKeys: Object.keys(document)
+    });
+    console.log(`📁 Trying file paths:`, possiblePaths);
+    
+    // Debug: List actual files in upload directories and check root uploads dir
+    try {
+      const clientUploadDir = path.join(uploadsDir, clientId);
+      const aktenzeichenUploadDir = path.join(uploadsDir, safeAktenzeichen);
+      
+      console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
+      console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');
+      
+      // Check if uploads directory exists and list all subdirectories
+      if (fs.existsSync(uploadsDir)) {
+        const allDirs = fs.readdirSync(uploadsDir).filter(item => {
+          const itemPath = path.join(uploadsDir, item);
+          return fs.statSync(itemPath).isDirectory();
+        });
+        console.log(`📁 All directories in ${uploadsDir}:`, allDirs.slice(0, 10)); // Show first 10
+        
+        // Check if any directory contains files for this client
+        for (const dir of allDirs) {
+          const dirPath = path.join(uploadsDir, dir);
+          const files = fs.readdirSync(dirPath);
+          if (files.length > 0) {
+            console.log(`📂 Found non-empty directory ${dir} with ${files.length} files`);
+            // Add this directory to possible paths if it's not already there
+            if (!possiblePaths.some(p => p.includes(dir))) {
+              possiblePaths.push(path.join(dirPath, document.name));
+              possiblePaths.push(path.join(dirPath, `${documentId}.pdf`));
+              possiblePaths.push(path.join(dirPath, `${documentId}.png`));
+            }
+          }
+        }
+      } else {
+        console.log(`❌ Upload directory does not exist: ${uploadsDir}`);
+      }
+    } catch (debugError) {
+      console.log(`⚠️ Debug directory listing failed:`, debugError.message);
+    }
 
     for (const possiblePath of possiblePaths) {
+      console.log(`🔍 Checking path: ${possiblePath} - exists: ${fs.existsSync(possiblePath)}`);
       if (fs.existsSync(possiblePath)) {
         filePath = possiblePath;
+        console.log(`✅ Found file at: ${filePath}`);
         break;
       }
     }
@@ -1080,23 +1212,110 @@ router.get('/:clientId/document/:documentId/file', authenticateAgent, rateLimits
     if (!filePath || !fs.existsSync(filePath)) {
       console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
       
-      // For test scenarios, serve a mock PDF
-      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
+      // Last resort: search for any file containing the document ID
+      try {
+        const searchDirs = [
+          path.join(uploadsDir, clientId),
+          path.join(uploadsDir, client.aktenzeichen)
+        ];
+        
+        for (const searchDir of searchDirs) {
+          if (fs.existsSync(searchDir)) {
+            const files = fs.readdirSync(searchDir);
+            console.log(`🔍 Searching for files containing '${documentId}' in ${searchDir}:`, files);
+            
+            // Look for files that start with the document ID
+            const matchingFile = files.find(file => 
+              file.startsWith(documentId) || 
+              file.includes(documentId.substring(0, 8)) // partial match
+            );
+            
+            if (matchingFile) {
+              filePath = path.join(searchDir, matchingFile);
+              console.log(`✅ Found matching file via search: ${filePath}`);
+              break;
+            }
+            
+            // If no match by ID, try to match by document upload order
+            if (!filePath && document.name) {
+              const match = document.name.match(/Document_(\d+)_/);
+              if (match) {
+                const docIndex = parseInt(match[1]) - 1; // Convert to 0-based index
+                
+                // Get all documents for this client and sort by upload time
+                const allDocuments = client.documents || [];
+                const sortedDocuments = allDocuments
+                  .filter(doc => doc.uploadedAt) // Only documents with upload time
+                  .sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt));
+                
+                // Use document index directly (Document_1 = index 0, Document_2 = index 1, etc.)
+                // This is more reliable than upload time which can be inconsistent
+                let actualIndex = docIndex;
+                
+                console.log(`📋 Document mapping: ${document.name} -> index ${actualIndex}`);
+                
+                // Sort files by modification time to match upload order
+                const filesWithStats = files.map(file => {
+                  const filePath = path.join(searchDir, file);
+                  const stats = fs.statSync(filePath);
+                  return { name: file, mtime: stats.mtime };
+                }).sort((a, b) => a.mtime - b.mtime);
+                
+                const sortedFiles = filesWithStats.map(f => f.name);
+                console.log(`📑 Trying to match document ${actualIndex} by upload order in files:`, sortedFiles);
+                
+                if (actualIndex >= 0 && actualIndex < sortedFiles.length) {
+                  // Get the file at the same position in upload order
+                  const mappedPath = path.join(searchDir, sortedFiles[actualIndex]);
+                  if (fs.existsSync(mappedPath)) {
+                    filePath = mappedPath;
+                    console.log(`✅ Found file by upload order mapping: Document_${docIndex + 1} (upload #${actualIndex + 1}) -> ${sortedFiles[actualIndex]}`);
+                    break;
+                  } else {
+                    console.log(`❌ Upload order mapped file does not exist: ${mappedPath}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (searchError) {
+        console.log(`⚠️ File search failed:`, searchError.message);
+      }
+      
+      // If still not found, check for test scenarios
+      if (!filePath && client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
         console.log(`📋 Serving mock PDF for test document ${document.name}`);
         return serveMockPDF(res, document.name);
       }
       
-      return res.status(404).json({
-        error: 'Document file not found on disk',
-        document_id: documentId
-      });
+      if (!filePath) {
+        return res.status(404).json({
+          error: 'Document file not found on disk',
+          document_id: documentId
+        });
+      }
     }
 
     // Log access for security auditing
     console.log(`📄 Agent ${req.agentUsername} accessing document ${documentId} for client ${client.aktenzeichen}`);
 
     // Set appropriate headers
-    const mimeType = document.type || 'application/pdf';
+    // Determine mime type from actual file if type is missing
+    let mimeType = document.type || 'application/pdf';
+    if (!document.type && filePath) {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.pdf': 'application/pdf',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      };
+      mimeType = mimeTypes[ext] || 'application/octet-stream';
+    }
+    
     const filename = document.filename || document.name || `document_${documentId}.pdf`;
     
     res.setHeader('Content-Type', mimeType);

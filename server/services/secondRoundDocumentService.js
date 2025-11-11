@@ -2,6 +2,7 @@ const DocumentGenerator = require('./documentGenerator');
 const CreditorDocumentPackageGenerator = require('./creditorDocumentPackageGenerator');
 const fs = require('fs');
 const path = require('path');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * Second Round Document Service
@@ -311,7 +312,7 @@ class SecondRoundDocumentService {
             debt_amount: creditor.claim_amount || creditor.final_amount || creditor.amount || 0,
             final_amount: creditor.claim_amount || creditor.final_amount || creditor.amount || 0,
             amount: creditor.claim_amount || creditor.final_amount || creditor.amount || 0,
-            creditor_address: creditor.creditor_address || this.buildCreditorAddress(creditor),
+            creditor_address: (creditor.creditor_address && formatAddress(creditor.creditor_address)) || this.buildCreditorAddress(creditor),
             creditor_street: creditor.creditor_street,
             creditor_postal_code: creditor.creditor_postal_code,
             creditor_city: creditor.creditor_city,
@@ -333,15 +334,17 @@ class SecondRoundDocumentService {
      */
     buildCreditorAddress(creditor) {
         const parts = [];
-        
+
         if (creditor.creditor_street) parts.push(creditor.creditor_street);
-        
+
         const cityPart = [];
         if (creditor.creditor_postal_code) cityPart.push(creditor.creditor_postal_code);
         if (creditor.creditor_city) cityPart.push(creditor.creditor_city);
         if (cityPart.length > 0) parts.push(cityPart.join(' '));
-        
-        return parts.length > 0 ? parts.join(', ') : 'Adresse nicht verfügbar';
+
+        // Build address string and format it using the shared utility
+        const builtAddress = parts.length > 0 ? parts.join(' ') : '';
+        return builtAddress ? formatAddress(builtAddress) : 'Adresse nicht verfügbar';
     }
 
     /**

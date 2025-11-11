@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
+const { formatAddress } = require('../utils/addressFormatter');
 
 /**
  * Nullplan Creditor Letter Generator
@@ -152,7 +153,7 @@ class NullplanCreditorLetterGenerator {
                 "Forderungssumme", 
                 "Quote des Gläubigers",
                 "Forderungsnummer in der Forderungsliste",
-                "Gläuibgeranzahl",
+                "Gläubigeranzahl",
                 "Einkommen",
                 "Geburtstag",
                 "Familienstand"
@@ -226,10 +227,23 @@ class NullplanCreditorLetterGenerator {
         const creditorAmount = creditor.debt_amount || creditor.final_amount || creditor.amount || 0;
         const creditorQuote = totalDebt > 0 ? (creditorAmount / totalDebt) * 100 : 0;
         
-        // Build creditor address
-        const creditorAddress = creditor.address || 
-            `${creditor.creditor_street || ''}, ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
-            'Gläubiger Adresse';
+        // Build creditor name
+        const creditorName = creditor.name || creditor.creditor_name || creditor.sender_name || 'Gläubiger';
+
+        // Build creditor address (without name) - street on first line, PLZ and city on second line
+        // Get raw address from creditor data
+        let rawAddress = creditor.address ||
+            `${creditor.creditor_street || ''} ${creditor.creditor_postal_code || ''} ${creditor.creditor_city || ''}`.trim() ||
+            '';
+
+        // Format address using utility (handles various input formats)
+        const formattedAddressOnly = rawAddress ? formatAddress(rawAddress) : 'Adresse nicht verfügbar';
+
+        // Combine name with address (Name on first line, then address)
+        const fullAddress = `${creditorName}\n${formattedAddressOnly}`;
+
+        // Replace \n with Word XML line breaks for proper .docx formatting
+        const creditorAddress = fullAddress.replace(/\n/g, '<w:br/>');
 
         const replacements = {
             // EXACT variables from template analysis
@@ -239,7 +253,7 @@ class NullplanCreditorLetterGenerator {
             "Forderungsnummer in der Forderungsliste": creditorPosition.toString(),
             "Aktenzeichen der Forderung": `${clientData.reference || clientData.aktenzeichen}/TS-JK`,
             "Schuldsumme Insgesamt": this.formatGermanCurrency(totalDebt),
-            "Gläuibgeranzahl": totalCreditors.toString(),
+            "Gläubigeranzahl": totalCreditors.toString(),
             
             // Client variables
             "Name Mandant": clientData.fullName || `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Max Mustermann',
