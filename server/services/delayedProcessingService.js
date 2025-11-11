@@ -4,8 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 
 class DelayedProcessingService {
   constructor() {
-    this.delayHours = 24; // Default 24 hour delay
-    this.sevenDayDelayHours = 168; // 7 days delay for payment + documents
+    this.delayHours = 0.05; // 3 minutes delay for testing (was 24 hours)
+    this.sevenDayDelayHours = 0.05; // 3 minutes delay for testing (was 168 hours / 7 days)
     this.checkIntervalMinutes = 30; // Check every 30 minutes for pending webhooks
   }
 
@@ -232,8 +232,8 @@ class DelayedProcessingService {
         changed_by: 'system',
         metadata: {
           scheduled_for: scheduledTime,
-          delay_days: 7,
-          reason: 'Giving client 7 days to upload additional documents after payment and initial upload',
+          delay_minutes: 3,
+          reason: 'Giving client 3 minutes to upload additional documents after payment and initial upload (TEST MODE)',
           payment_received: client.first_payment_received,
           documents_count: (client.documents || []).length
         }
@@ -241,12 +241,12 @@ class DelayedProcessingService {
 
       await client.save();
 
-      console.log(`⏰ Scheduled 7-day review for client ${clientId} at ${scheduledTime.toISOString()}`);
+      console.log(`⏰ Scheduled 3-minute review for client ${clientId} at ${scheduledTime.toISOString()} (TEST MODE)`);
       
       return {
         success: true,
         scheduledFor: scheduledTime,
-        delayDays: 7
+        delayMinutes: 3
       };
 
     } catch (error) {
@@ -260,7 +260,7 @@ class DelayedProcessingService {
    */
   async checkAndTriggerSevenDayReviews() {
     try {
-      console.log('🔍 Checking for pending 7-day reviews...');
+      console.log('🔍 Checking for pending 3-minute reviews (TEST MODE)...');
 
       // Find all clients with scheduled reviews that haven't been triggered yet
       const pendingClients = await Client.find({
@@ -269,14 +269,14 @@ class DelayedProcessingService {
         seven_day_review_scheduled_at: { $lte: new Date() }
       });
 
-      console.log(`📋 Found ${pendingClients.length} clients with pending 7-day reviews`);
+      console.log(`📋 Found ${pendingClients.length} clients with pending 3-minute reviews`);
 
       let successCount = 0;
       let errorCount = 0;
 
       for (const client of pendingClients) {
         try {
-          console.log(`🚀 Triggering 7-day review for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+          console.log(`🚀 Triggering 3-minute review for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) (TEST MODE)`);
           
           // Mark as triggered
           client.seven_day_review_triggered = true;
@@ -291,7 +291,7 @@ class DelayedProcessingService {
               scheduled_at: client.seven_day_review_scheduled_at,
               triggered_at: new Date(),
               documents_at_trigger: (client.documents || []).length,
-              delay_days: 7
+              delay_minutes: 3
             }
           });
 
@@ -306,12 +306,12 @@ class DelayedProcessingService {
           successCount++;
 
         } catch (error) {
-          console.error(`❌ Error processing 7-day review for ${client.aktenzeichen}:`, error.message);
+          console.error(`❌ Error processing 3-minute review for ${client.aktenzeichen}:`, error.message);
           errorCount++;
         }
       }
 
-      console.log(`✅ 7-day review check complete. Triggered: ${successCount}, Errors: ${errorCount}`);
+      console.log(`✅ 3-minute review check complete. Triggered: ${successCount}, Errors: ${errorCount}`);
       
       return {
         totalChecked: pendingClients.length,
@@ -320,7 +320,7 @@ class DelayedProcessingService {
       };
 
     } catch (error) {
-      console.error('❌ Error in 7-day review service:', error);
+      console.error('❌ Error in 3-minute review service:', error);
       throw error;
     }
   }
