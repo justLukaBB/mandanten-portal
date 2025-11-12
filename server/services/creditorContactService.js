@@ -38,9 +38,10 @@ class CreditorContactService {
             console.log(`\n🚀 Starting creditor contact process for client: ${clientReference}`);
 
             // If clientData not provided, fetch from database
+            let client;
             if (!clientData) {
                 const Client = require('../models/Client');
-                const client = await Client.findOne({ aktenzeichen: clientReference });
+                client = await Client.findOne({ aktenzeichen: clientReference });
                 if (!client) {
                     throw new Error(`Client not found: ${clientReference}`);
                 }
@@ -174,7 +175,8 @@ class CreditorContactService {
                     city: clientData.city,
                     birthdate: clientData.birthdate || clientData.dateOfBirth
                 },
-                creditors
+                creditors,
+                client
             );
 
             if (!documentResults.success) {

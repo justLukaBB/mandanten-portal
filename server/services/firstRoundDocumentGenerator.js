@@ -17,7 +17,7 @@ class FirstRoundDocumentGenerator {
   /**
    * Generate DOCX files for all creditors
    */
-  async generateCreditorDocuments(clientData, creditors) {
+  async generateCreditorDocuments(clientData, creditors, client) {
     try {
       console.log(
         `📄 Generating first round documents for ${creditors.length} creditors...`
@@ -35,6 +35,21 @@ class FirstRoundDocumentGenerator {
           `   Processing ${i + 1}/${creditors.length}: ${creditor.creditor_name || creditor.sender_name
           }`
         );
+
+        // Find matching document by reference_number
+        const matchedDoc = client.documents?.find(
+          (doc) =>
+            doc.extracted_data?.creditor_data?.reference_number &&
+            doc.extracted_data.creditor_data.reference_number === creditor.reference_number
+        );
+
+        // If found, and creditor has no actual_creditor, copy it from the document
+        if (
+          (!creditor.actual_creditor || creditor.actual_creditor.trim() === '') &&
+          matchedDoc?.extracted_data?.creditor_data?.actual_creditor
+        ) {
+          creditor.actual_creditor = matchedDoc.extracted_data.creditor_data.actual_creditor;
+        }
 
         try {
           const result = await this.generateSingleCreditorDocument(
