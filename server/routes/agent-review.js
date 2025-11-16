@@ -526,17 +526,20 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     const creditorDeduplication = require('../utils/creditorDeduplication');
     if (action === 'confirm' && creditors.length > 0) {
       const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(creditors, 'highest_amount');
-      
+
       if (deduplicatedCreditors.length < creditors.length) {
         console.log(`🔍 Duplicate check after agent confirmation for ${clientId}: ${creditors.length - deduplicatedCreditors.length} duplicates removed, ${deduplicatedCreditors.length} creditors remaining`);
       }
-      
-      creditors = deduplicatedCreditors;
+
+      // Update the client's final_creditor_list with deduplicated creditors
+      client.final_creditor_list = deduplicatedCreditors;
+    } else {
+      // Update the client with corrected data (no deduplication needed)
+      client.final_creditor_list = creditors;
     }
 
     // Update the client with corrected data
     console.log(`🔄 Updating client ${clientId} with corrected data...`);
-    client.final_creditor_list = creditors;
     client.updated_at = new Date();
 
     // Mark document as reviewed
