@@ -85,8 +85,11 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
       impersonationRecord._id.toString()
     );
 
-    // Construct portal URL
-    const portalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/impersonate?token=${jwtToken}`;
+    // Construct portal URL - use PORTAL_BASE_URL or FRONTEND_URL from env
+    const frontendUrl = process.env.PORTAL_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    const portalUrl = `${frontendUrl}/auth/impersonate?token=${jwtToken}`;
+
+    console.log(`🌐 Generated portal URL:`, portalUrl);
 
     // Log the impersonation event
     console.log(`🔐 Admin impersonation initiated:`, {
