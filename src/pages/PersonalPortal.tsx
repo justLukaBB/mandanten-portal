@@ -395,15 +395,16 @@ export const PersonalPortal = ({
   };
 
   // Force password change on first login (if backend indicates no password yet)
+  // Skip password requirement during admin impersonation
   useEffect(() => {
-    if (client && client.isPasswordSet === false) {
+    if (client && client.isPasswordSet === false && !isImpersonating) {
       setForcePasswordChange(true);
       setShowPasswordModal(true);
       setPasswordForm({ fileNumber: client?.aktenzeichen || '', newPassword: '', confirmPassword: '' });
     } else {
       setForcePasswordChange(false);
     }
-  }, [client]);
+  }, [client, isImpersonating]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
