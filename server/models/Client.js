@@ -53,6 +53,7 @@ const documentSchema = new mongoose.Schema({
   validation: {
     is_valid: Boolean,
     warnings: [String],
+    review_reasons: [String], // Specific reasons why manual review is required
     confidence: Number,
     claude_confidence: Number,
     data_completeness: Number,

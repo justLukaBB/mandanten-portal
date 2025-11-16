@@ -803,13 +803,37 @@ router.post(
         }
       });
 
+      // Filter creditor documents that DON'T require manual review (auto-approved only)
       const creditorDocuments = allDocuments.filter(
-        (doc) => doc.is_creditor_document === true
+        (doc) => doc.is_creditor_document === true &&
+                 !doc.validation?.requires_manual_review &&
+                 !doc.extracted_data?.manual_review_required
+      );
+
+      const creditorDocumentsNeedingReview = allDocuments.filter(
+        (doc) => doc.is_creditor_document === true &&
+                 (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
       );
 
       console.log(
-        `📊 Found ${creditorDocuments.length} creditor documents out of ${allDocuments.length} total documents`
+        `📊 Found ${creditorDocuments.length} auto-approved creditor documents out of ${allDocuments.length} total documents`
       );
+      console.log(
+        `⚠️ Found ${creditorDocumentsNeedingReview.length} creditor documents requiring manual review`
+      );
+
+      // Log documents needing review with reasons
+      if (creditorDocumentsNeedingReview.length > 0) {
+        console.log(`\n⚠️ DOCUMENTS REQUIRING MANUAL REVIEW:`);
+        creditorDocumentsNeedingReview.forEach((doc, index) => {
+          console.log(`   ${index + 1}. ${doc.name}`);
+          console.log(`      - Confidence: ${doc.extracted_data?.confidence || 0}`);
+          console.log(`      - Manual Review Required: ${doc.extracted_data?.manual_review_required || doc.validation?.requires_manual_review}`);
+          if (doc.validation?.review_reasons && doc.validation.review_reasons.length > 0) {
+            console.log(`      - Reasons: ${doc.validation.review_reasons.join(', ')}`);
+          }
+        });
+      }
 
       const manualExtractedCreditors = [];
 

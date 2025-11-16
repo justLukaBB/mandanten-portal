@@ -497,7 +497,6 @@ const ReviewDashboard: React.FC = () => {
               document={currentDoc}
               onSave={(corrections) => handleSaveCorrections(corrections, 'correct')}
               onSkip={(reason) => handleSaveCorrections({ skip_reason: reason }, 'skip')}
-              onConfirm={() => handleSaveCorrections({}, 'confirm')}
               disabled={saving}
               className="h-full"
             />

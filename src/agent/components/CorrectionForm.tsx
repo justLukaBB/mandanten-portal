@@ -26,7 +26,6 @@ interface CorrectionFormProps {
   };
   onSave: (corrections: any) => void;
   onSkip: (reason: string) => void;
-  onConfirm: () => void;
   disabled?: boolean;
   className?: string;
 }
@@ -44,7 +43,6 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
   document,
   onSave,
   onSkip,
-  onConfirm,
   disabled = false,
   className = ''
 }) => {
@@ -99,16 +97,10 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
       alert('Bitte geben Sie einen Grund für das Überspringen an.');
       return;
     }
-    
+
     onSkip(skipReason.trim());
     setShowSkipForm(false);
     setSkipReason('');
-  };
-
-  const handleConfirm = () => {
-    if (window.confirm('Sind Sie sicher, dass die AI-Extraktion korrekt ist?')) {
-      onConfirm();
-    }
   };
 
   const confidence = document.extracted_data?.confidence || 0;
@@ -281,19 +273,8 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
                 style={{backgroundColor: '#9f1a1d'}}
               >
                 <CheckIcon className="h-4 w-4 mr-2" />
-                Korrekturen speichern & weiter
+                Speichern und weiter
               </button>
-
-              {confidence >= 0.8 && (
-                <button
-                  onClick={handleConfirm}
-                  disabled={disabled}
-                  className="flex items-center justify-center px-4 py-3 text-sm font-medium text-green-700 bg-green-50 border border-green-300 rounded-md hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <CheckIcon className="h-4 w-4 mr-2" />
-                  AI-Extraktion bestätigen
-                </button>
-              )}
 
               <button
                 onClick={() => setShowSkipForm(true)}

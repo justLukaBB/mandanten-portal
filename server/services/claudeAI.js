@@ -65,8 +65,31 @@ ANALYSEAUFTRAG:
       - E-Mail-Adresse (falls vorhanden)
       - Telefonnummer (falls vorhanden)
    
-   b) AKTENZEICHEN/REFERENZ:
-      Suchen Sie nach: "Aktenzeichen:", "Az:", "Unser Zeichen:", "Ref:", "Zeichen:", "Kundennummer:"
+   b) AKTENZEICHEN/REFERENZ - KRITISCHE EXTRAKTIONSREGELN:
+
+      **Was zu suchen ist:**
+      - "Aktenzeichen:", "Az:", "Unser Zeichen:", "Ref:", "Zeichen:", "Kundennummer:", "Forderungsnummer:", "Vorgangsnummer:"
+
+      **WICHTIG - Was NICHT als Aktenzeichen gelten darf:**
+      ❌ Kreditkartennummern (typisch: 16 Ziffern, oft in 4er-Blöcken)
+      ❌ IBAN/Bankkontonummern (beginnt mit DE, AT, etc.)
+      ❌ Vertragsnummern die wie Kreditkarten aussehen
+      ❌ Datumsangaben
+      ❌ Telefonnummern
+      ❌ Rechnungsnummern (wenn "Rechnung Nr." davor steht)
+
+      **Format der Rückgabe:**
+      - Gebe NUR die Nummer/das Zeichen zurück, OHNE Label
+      - NICHT: "Aktenzeichen: 12345" oder "Az: 12345" oder "Forderungsnummer: 12345"
+      - SONDERN: "12345"
+      - Falls mehrere Aktenzeichen vorhanden: Wähle das primäre (meist nach "Aktenzeichen:" oder "Az:")
+      - Falls kein eindeutiges Aktenzeichen gefunden: null
+
+      **Erkennungslogik:**
+      1. Suche nach expliziten Labels wie "Aktenzeichen:", "Az:", "Unser Zeichen:"
+      2. Extrahiere nur den Wert NACH dem Label
+      3. Prüfe ob der Wert plausibel ist (nicht zu lang, kein Kreditkartenformat)
+      4. Entferne alle Labels und gebe nur den reinen Wert zurück
    
    c) GLÄUBIGER-VERTRETUNGS-VERHÄLTNIS:
       - Handelt der Absender für sich selbst oder vertritt er einen anderen Gläubiger?
@@ -119,16 +142,16 @@ AUSGABE als strukturiertes JSON:
   
   "creditor_data": {
     "sender_name": "Vollständiger Name des Absenders",
-    "sender_address": "Komplette Anschrift", 
+    "sender_address": "Komplette Anschrift",
     "sender_email": "email@domain.de",
-    "reference_number": "Aktenzeichen/Referenz",
+    "reference_number": "NUR die reine Nummer/Zeichen ohne Label - z.B. '12345' NICHT 'Az: 12345'",
     "is_representative": boolean,
     "actual_creditor": "Ursprünglicher Gläubiger falls Vertreter",
     "claim_amount": float
   }
 }
 
-WICHTIG: 
+WICHTIG:
 - Antworte NUR mit dem JSON-Objekt
 - Sei ehrlich und realistisch bei der Confidence-Bewertung - lieber vorsichtig als überoptimistisch
 - Alle 4 Confidence-Faktoren einzeln bewerten, dann gewichteten Durchschnitt als finale confidence
@@ -137,7 +160,9 @@ WICHTIG:
 - confidence_breakdown IMMER vollständig ausfüllen für Transparenz
 - status_reason soll die Confidence-Faktoren erklären
 - Bei schlechter Textqualität oder fehlenden Daten: niedrigere Scores
-- Fokus auf Briefkopf und ersten Absatz für Absenderinformationen`;
+- Fokus auf Briefkopf und ersten Absatz für Absenderinformationen
+- **KRITISCH**: reference_number darf NIEMALS eine Kreditkartennummer, IBAN oder ähnliches enthalten
+- **KRITISCH**: reference_number muss OHNE jegliches Label zurückgegeben werden (nur die Nummer selbst)`;
 
       console.log('=== SENDING REQUEST TO CLAUDE API ===');
       
@@ -269,6 +294,7 @@ WICHTIG:
     const validation = {
       is_valid: result.processing_status === 'completed',
       warnings: [],
+      review_reasons: [], // Track specific reasons for manual review
       confidence: result.confidence || 0.0, // Keep Claude's original confidence
       claude_confidence: result.confidence || 0.0, // Store original Claude confidence
       data_completeness: 0.0,
@@ -329,28 +355,37 @@ WICHTIG:
       const essentialScore = (essentialFieldsFound / totalEssentialFields) * 0.8;
       const optionalScore = (optionalFieldsFound / totalOptionalFields) * 0.2;
       validation.data_completeness = essentialScore + optionalScore;
-      
+
       // Determine if manual review is needed based on Claude confidence AND data completeness
       const lowClaudeConfidence = validation.claude_confidence < 0.8;
       const lowDataCompleteness = essentialFieldsFound < 2;
       const noEssentialData = essentialFieldsFound === 0;
-      
-      if (lowClaudeConfidence || lowDataCompleteness || noEssentialData) {
+      const missingEmail = !senderEmail || senderEmail.trim() === '' || !senderEmail.includes('@');
+
+      // CRITICAL: Email is REQUIRED for auto-approval - without it, always manual review
+      if (lowClaudeConfidence || lowDataCompleteness || noEssentialData || missingEmail) {
         validation.requires_manual_review = true;
-        
+
         if (lowClaudeConfidence) {
           validation.warnings.push('⚠️ Claude AI ist unsicher bei der Klassifikation');
+          validation.review_reasons.push('Niedrige AI-Konfidenz');
         }
-        if (lowDataCompleteness) {
+        if (missingEmail) {
+          validation.warnings.push('❌ E-Mail-Adresse fehlt - manuelle Prüfung erforderlich');
+          validation.review_reasons.push('Fehlende Gläubiger-E-Mail');
+        }
+        if (lowDataCompleteness && !missingEmail) {
           validation.warnings.push('⚠️ Wichtige Kontaktdaten fehlen');
+          validation.review_reasons.push('Unvollständige Kontaktdaten');
         }
         if (noEssentialData) {
           validation.warnings.push('❌ Keine essentiellen Daten extrahiert');
+          validation.review_reasons.push('Keine Daten extrahiert');
         }
       }
 
-      // Add success message if all essential fields found AND high Claude confidence
-      if (essentialFieldsFound === totalEssentialFields && validation.claude_confidence >= 0.8) {
+      // Add success message if all essential fields found AND high Claude confidence AND email present
+      if (essentialFieldsFound === totalEssentialFields && validation.claude_confidence >= 0.8 && !missingEmail) {
         validation.warnings.push('✅ Alle wichtigen Daten erfolgreich extrahiert');
         validation.warnings.push(`📋 Gefunden: ${foundFields.join(', ')}`);
       } else if (essentialFieldsFound > 0) {
@@ -369,7 +404,11 @@ WICHTIG:
       console.log(`Claude Confidence: ${Math.round(validation.claude_confidence * 100)}%`);
       console.log(`Data Completeness: ${Math.round(validation.data_completeness * 100)}%`);
       console.log(`Essential Fields: ${essentialFieldsFound}/${totalEssentialFields}`);
+      console.log(`Email Present: ${!missingEmail}`);
       console.log(`Manual Review Required: ${validation.requires_manual_review}`);
+      if (validation.review_reasons.length > 0) {
+        console.log(`Review Reasons: ${validation.review_reasons.join(', ')}`);
+      }
     }
 
     // For non-creditor documents, just confirm classification

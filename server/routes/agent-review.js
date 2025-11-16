@@ -129,15 +129,20 @@ router.get('/available-clients', authenticateAgent, rateLimits.general, async (r
       
       // Find documents that need review
       const documentsToReview = documents.filter(doc => {
-        const relatedCreditor = creditors.find(c => 
-          c.document_id === doc.id || 
+        const relatedCreditor = creditors.find(c =>
+          c.document_id === doc.id ||
           c.source_document === doc.name
         );
-        
+
+        const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
+                                     doc.validation?.requires_manual_review === true;
+
         return (
-          doc.is_creditor_document === true && 
-          (!relatedCreditor || (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) &&
-          !doc.manually_reviewed
+          doc.is_creditor_document === true &&
+          !doc.manually_reviewed &&
+          (manualReviewRequired ||
+           !relatedCreditor ||
+           (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
         );
       });
 
@@ -225,25 +230,29 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
     const documentsToReview = documents.filter(doc => {
       // Check if document needs manual review based on Claude AI confidence or manual_review_required flag
       const documentConfidence = doc.extracted_data?.confidence || 0;
-      const manualReviewRequired = doc.extracted_data?.manual_review_required === true;
+      const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
+                                   doc.validation?.requires_manual_review === true; // ✅ ALSO CHECK validation flag
       const isCreditorDocument = doc.is_creditor_document === true;
       const alreadyReviewed = doc.manually_reviewed === true;
-      
-      const needsReview = !alreadyReviewed && (manualReviewRequired || 
+
+      const needsReview = !alreadyReviewed && (manualReviewRequired ||
         (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD));
-      
+
       // Debug logging for each document
       console.log(`📄 Document ${doc.name || doc.id}:`, {
         is_creditor_document: isCreditorDocument,
         confidence: documentConfidence,
         manual_review_required: manualReviewRequired,
+        validation_requires_review: doc.validation?.requires_manual_review,
+        extracted_data_requires_review: doc.extracted_data?.manual_review_required,
+        review_reasons: doc.validation?.review_reasons || [],
         manually_reviewed: alreadyReviewed,
         needsReview: needsReview
       });
-      
+
       // Include if:
       // 1. Not already manually reviewed AND
-      // 2. Either manual review is explicitly required OR 
+      // 2. Either manual review is explicitly required (from validation OR extracted_data) OR
       //    (it's a creditor document AND document confidence is low)
       return needsReview;
     });
@@ -517,17 +526,20 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     const creditorDeduplication = require('../utils/creditorDeduplication');
     if (action === 'confirm' && creditors.length > 0) {
       const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(creditors, 'highest_amount');
-      
+
       if (deduplicatedCreditors.length < creditors.length) {
         console.log(`🔍 Duplicate check after agent confirmation for ${clientId}: ${creditors.length - deduplicatedCreditors.length} duplicates removed, ${deduplicatedCreditors.length} creditors remaining`);
       }
-      
-      creditors = deduplicatedCreditors;
+
+      // Update the client's final_creditor_list with deduplicated creditors
+      client.final_creditor_list = deduplicatedCreditors;
+    } else {
+      // Update the client with corrected data (no deduplication needed)
+      client.final_creditor_list = creditors;
     }
 
     // Update the client with corrected data
     console.log(`🔄 Updating client ${clientId} with corrected data...`);
-    client.final_creditor_list = creditors;
     client.updated_at = new Date();
 
     // Mark document as reviewed

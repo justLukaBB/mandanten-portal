@@ -22,6 +22,9 @@ const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
 const insolvenzantragRoutes = require('./routes/insolvenzantrag');
 const secondRoundApiRoutes = require('./routes/second-round-api');
+const adminImpersonationRoutes = require('./routes/admin-impersonation');
+const authImpersonationRoutes = require('./routes/auth-impersonation');
+const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -65,6 +68,9 @@ app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 app.use('/api/second-round', secondRoundApiRoutes);
+app.use('/api/admin', adminImpersonationRoutes);
+app.use('/api/auth', authImpersonationRoutes);
+app.use('/api/admin', adminUserDeletionRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -872,7 +878,10 @@ app.post('/api/clients/:clientId/documents',
           if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
           console.log(`⏱️  Processing Time: ${processingTime}ms`);
           console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-          console.log(`👁️  Manual Review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
+          console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
+          if (validation?.requires_manual_review) {
+            console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
+          }
           console.log(`📊 Summary: ${summary}`);
           console.log(`✅ =========================\n`);
           
@@ -892,7 +901,7 @@ app.post('/api/clients/:clientId/documents',
                 classification_success: classificationSuccess,
                 is_creditor_document: extractedData.is_creditor_document || false,
                 confidence: extractedData.confidence || 0.0,
-                manual_review_required: extractedData.manual_review_required || false,
+                manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
                 document_status: documentStatus,
                 status_reason: statusReason,
                 is_duplicate: isDuplicate,
@@ -970,10 +979,22 @@ app.post('/api/clients/:clientId/documents',
               console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
               
               // Update final creditor list with deduplication
-              const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
+              // Filter creditor documents that DON'T require manual review (auto-approved only)
+              const creditorDocuments = completedDocs.filter(doc =>
+                doc.is_creditor_document === true &&
+                !doc.validation?.requires_manual_review &&
+                !doc.extracted_data?.manual_review_required
+              );
+
+              const creditorDocsNeedingReview = completedDocs.filter(doc =>
+                doc.is_creditor_document === true &&
+                (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+              );
+
               console.log(`\n📊 DOCUMENT ANALYSIS:`);
               console.log(`📄 Total completed documents: ${completedDocs.length}`);
-              console.log(`📄 Creditor documents found: ${creditorDocuments.length}`);
+              console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
+              console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
               
               if (creditorDocuments.length > 0) {
                 console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
@@ -4642,9 +4663,9 @@ function startScheduledTasks() {
     }
   }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
   
-  // Run auto-confirmation check every 3 minutes (TEST MODE)
-  const AUTO_CONFIRMATION_CHECK_INTERVAL = 3 * 60 * 1000; // 3 minutes in milliseconds
-  
+  // Run auto-confirmation check every 7 hours (PRODUCTION MODE)
+  const AUTO_CONFIRMATION_CHECK_INTERVAL = 7 * 60 * 60 * 1000; // 7 hours in milliseconds (25200000 ms)
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled auto-confirmation check...');
@@ -4692,10 +4713,10 @@ function startScheduledTasks() {
     }
   }, 180000); // 3 minutes
   
-  // Run initial auto-confirmation check after 1 minute (TEST MODE)
+  // Run initial auto-confirmation check after 5 minutes (PRODUCTION MODE)
   setTimeout(async () => {
     try {
-      console.log('\n⏰ Running initial auto-confirmation check (TEST MODE)...');
+      console.log('\n⏰ Running initial auto-confirmation check (PRODUCTION MODE)...');
       const DelayedProcessingService = require('./services/delayedProcessingService');
       const delayedService = new DelayedProcessingService();
       const result = await delayedService.checkAndAutoConfirmCreditors();
@@ -4703,14 +4724,14 @@ function startScheduledTasks() {
     } catch (error) {
       console.error('❌ Error in initial auto-confirmation check:', error);
     }
-  }, 60000); // 1 minute (TEST MODE)
+  }, 300000); // 5 minutes (PRODUCTION MODE)
   
   console.log('📅 Scheduled tasks started:');
   console.log('  • Document reminders: every hour');
   console.log('  • Delayed processing webhooks: every 30 minutes');
   console.log('  • Login reminders: every 6 hours (7-day cycle)');
   console.log('  • 3-minute reviews: every hour (TEST MODE)');
-  console.log('  • Auto-confirmation: every 3 minutes (TEST MODE)');
+  console.log('  • Auto-confirmation: every 7 hours (PRODUCTION MODE)');
 }
 
 // ============================================================================
@@ -5726,8 +5747,20 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
             
             // Update final creditor list
-            const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
-            console.log(`📊 Found ${creditorDocuments.length} creditor documents for extraction`);
+            // Filter creditor documents that DON'T require manual review (auto-approved only)
+            const creditorDocuments = completedDocs.filter(doc =>
+              doc.is_creditor_document === true &&
+              !doc.validation?.requires_manual_review &&
+              !doc.extracted_data?.manual_review_required
+            );
+
+            const creditorDocsNeedingReview = completedDocs.filter(doc =>
+              doc.is_creditor_document === true &&
+              (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+            );
+
+            console.log(`📊 Found ${creditorDocuments.length} auto-approved creditor documents for extraction`);
+            console.log(`⚠️ Found ${creditorDocsNeedingReview.length} creditor documents requiring manual review`);
             const extractedCreditors = [];
             
             creditorDocuments.forEach(doc => {
