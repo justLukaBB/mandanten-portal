@@ -73,6 +73,9 @@ export const PersonalPortal = ({
     type?: string;
   } | null>(null);
 
+  // Impersonation state
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonationData, setImpersonationData] = useState<any>(null);
 
   // Default progress phases
   const defaultProgressPhases = [
@@ -242,6 +245,25 @@ export const PersonalPortal = ({
     }
   }, [clientId]);
 
+  // Check if we're in impersonation mode
+  useEffect(() => {
+    const impersonating = localStorage.getItem('is_impersonating') === 'true';
+    const impersonationDataStr = localStorage.getItem('impersonation_data');
+
+    if (impersonating && impersonationDataStr) {
+      try {
+        const data = JSON.parse(impersonationDataStr);
+        setIsImpersonating(true);
+        setImpersonationData(data);
+        console.log('🔐 Impersonation mode active:', data);
+      } catch (error) {
+        console.error('Error parsing impersonation data:', error);
+        setIsImpersonating(false);
+        setImpersonationData(null);
+      }
+    }
+  }, []);
+
   // Add polling to check for status updates
   useEffect(() => {
     if (!clientId) return;
@@ -281,6 +303,41 @@ export const PersonalPortal = ({
     } else {
       navigate('/login');
     }
+  };
+
+  // Handle exit impersonation
+  const handleExitImpersonation = async () => {
+    try {
+      // Call backend to end impersonation session
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        await api.post('/api/auth/end-impersonation', {}, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error ending impersonation session:', error);
+    }
+
+    // Clear impersonation data
+    localStorage.removeItem('is_impersonating');
+    localStorage.removeItem('impersonation_data');
+
+    // Clear portal session
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('portal_session_token');
+    localStorage.removeItem('active_role');
+    localStorage.removeItem('portal_client_data');
+
+    // Close window (since it was opened in a new tab)
+    window.close();
+
+    // If window.close() doesn't work (some browsers prevent it), redirect
+    setTimeout(() => {
+      window.location.href = '/admin';
+    }, 100);
   };
 
   // Password change functions
@@ -455,6 +512,37 @@ export const PersonalPortal = ({
           </div>
         </div>
       </header>
+
+      {/* Impersonation Banner */}
+      {isImpersonating && impersonationData && (
+        <div className="bg-yellow-100 border-b-2 border-yellow-600 px-4 py-3">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Admin-Modus: Sie betrachten das Portal als Benutzer
+                  </p>
+                  <p className="text-xs text-yellow-700">
+                    {client?.firstName} {client?.lastName} ({client?.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleExitImpersonation}
+                className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 transition-colors"
+              >
+                Admin-Modus beenden
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">

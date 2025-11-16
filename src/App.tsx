@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PersonalPortal from './pages/PersonalPortal';
 import PortalLogin from './pages/PortalLogin';
 import ConfirmCreditors from './pages/ConfirmCreditors';
+import ImpersonationAuth from './pages/ImpersonationAuth';
 import AdminApp from './admin/AdminApp';
 import AgentApp from './agent/AgentApp';
 import AgentLogin from './agent/pages/AgentLogin';
@@ -69,6 +70,11 @@ function App() {
                 <PortalLogin />
               </PublicRoute>
             }
+          />
+
+          <Route
+            path="/auth/impersonate"
+            element={<ImpersonationAuth />}
           />
 
           <Route

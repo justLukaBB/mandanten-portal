@@ -155,15 +155,71 @@ const authenticateAgent = (req, res, next) => {
 // Generate JWT token for agent
 const generateAgentToken = (agentId, username, role) => {
   return jwt.sign(
-    { 
-      agentId, 
+    {
+      agentId,
       username,
       role,
-      type: 'agent' 
+      type: 'agent'
     },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
+};
+
+// Generate JWT token for admin impersonation
+// This creates a client token with impersonation metadata
+const generateImpersonationToken = (clientId, email, adminId, tokenId) => {
+  return jwt.sign(
+    {
+      clientId,
+      email,
+      type: 'client',
+      impersonation: true,
+      impersonatedBy: adminId,
+      impersonationTokenId: tokenId  // Reference to audit log entry
+    },
+    JWT_SECRET,
+    { expiresIn: '1h' }  // Shorter expiration for security
+  );
+};
+
+// Middleware to check if current session is an impersonation
+const isImpersonationSession = (req) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return false;
+
+    const token = authHeader.split(' ')[1];
+    if (!token) return false;
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return decoded.impersonation === true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// Get impersonation metadata from token
+const getImpersonationMetadata = (req) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return null;
+
+    const token = authHeader.split(' ')[1];
+    if (!token) return null;
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.impersonation) return null;
+
+    return {
+      isImpersonating: true,
+      adminId: decoded.impersonatedBy,
+      clientId: decoded.clientId,
+      tokenId: decoded.impersonationTokenId
+    };
+  } catch (error) {
+    return null;
+  }
 };
 
 module.exports = {
@@ -172,5 +228,8 @@ module.exports = {
   authenticateAgent,
   generateClientToken,
   generateAdminToken,
-  generateAgentToken
+  generateAgentToken,
+  generateImpersonationToken,
+  isImpersonationSession,
+  getImpersonationMetadata
 };

@@ -22,6 +22,8 @@ const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
 const insolvenzantragRoutes = require('./routes/insolvenzantrag');
 const secondRoundApiRoutes = require('./routes/second-round-api');
+const adminImpersonationRoutes = require('./routes/admin-impersonation');
+const authImpersonationRoutes = require('./routes/auth-impersonation');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -65,6 +67,8 @@ app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 app.use('/api/second-round', secondRoundApiRoutes);
+app.use('/api/admin', adminImpersonationRoutes);
+app.use('/api/auth', authImpersonationRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));

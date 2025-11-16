@@ -265,10 +265,48 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
+  const handleImpersonation = async () => {
+    if (!user) return;
+
+    // eslint-disable-next-line no-restricted-globals
+    if (!confirm(`🔐 Login as User\n\nYou are about to log in as:\n${user.firstName} ${user.lastName} (${user.email})\n\nThis will open their portal in a new tab.\n\nContinue?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/impersonate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({
+          client_id: userId,
+          reason: 'Admin support and troubleshooting'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate impersonation token');
+      }
+
+      const result = await response.json();
+      console.log('✅ Impersonation token generated:', result);
+
+      // Open portal in new tab with the impersonation token
+      window.open(result.portal_url, '_blank');
+
+    } catch (error: any) {
+      console.error('❌ Error generating impersonation token:', error);
+      alert(`Failed to login as user: ${error.message}`);
+    }
+  };
+
   const calculatePfaendbarAmount = async (netIncome: number, maritalStatus: string, dependents: number) => {
     try {
       console.log('🧮 Calculating pfändbar amount:', { netIncome, maritalStatus, dependents });
-      
+
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/calculate-garnishable-income`, {
         method: 'POST',
         headers: {
@@ -281,13 +319,13 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           numberOfChildren: dependents
         })
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Pfändbar calculation failed:', response.status, errorText);
         throw new Error(`Failed to calculate garnishable income: ${response.status}`);
       }
-      
+
       const result = await response.json();
       console.log('✅ Pfändbar calculation result:', result);
       return result.garnishable_amount || 0;
@@ -711,6 +749,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             >
               <ArrowPathIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Refresh
+            </button>
+            <button
+              onClick={handleImpersonation}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-yellow-600 text-white hover:bg-yellow-700 transition-colors shadow-sm"
+              title="Login as this user to access their portal"
+            >
+              <UserIcon className="w-4 h-4 mr-1" />
+              Login as User
             </button>
             {/* Debug info */}
             {process.env.NODE_ENV === 'development' && (
