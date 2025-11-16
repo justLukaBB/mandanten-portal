@@ -878,7 +878,10 @@ app.post('/api/clients/:clientId/documents',
           if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
           console.log(`⏱️  Processing Time: ${processingTime}ms`);
           console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-          console.log(`👁️  Manual Review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
+          console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
+          if (validation?.requires_manual_review) {
+            console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
+          }
           console.log(`📊 Summary: ${summary}`);
           console.log(`✅ =========================\n`);
           
@@ -898,7 +901,7 @@ app.post('/api/clients/:clientId/documents',
                 classification_success: classificationSuccess,
                 is_creditor_document: extractedData.is_creditor_document || false,
                 confidence: extractedData.confidence || 0.0,
-                manual_review_required: extractedData.manual_review_required || false,
+                manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
                 document_status: documentStatus,
                 status_reason: statusReason,
                 is_duplicate: isDuplicate,
