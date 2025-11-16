@@ -107,6 +107,11 @@ The Admin Impersonation feature allows administrators to securely access any use
    - User information displayed
    - Easy exit mechanism
 
+6. **Password Requirements Bypass**:
+   - Admins can impersonate users who haven't set passwords yet
+   - Password setup modal is skipped during impersonation
+   - Allows full troubleshooting for new/inactive users
+
 ## 📋 How to Use
 
 ### For Admins:
@@ -166,21 +171,23 @@ const metadata = getImpersonationMetadata(req);
 ## 🧪 Testing Checklist
 
 - [x] Backend files syntax validation
-- [ ] Admin can generate impersonation token
-- [ ] Token opens portal in new tab
-- [ ] Portal shows impersonation banner
-- [ ] User functionality works normally
+- [x] Admin can generate impersonation token
+- [x] Token opens portal in new tab
+- [x] Portal shows impersonation banner
+- [x] Password requirement bypassed for impersonation
+- [ ] User functionality works normally during impersonation
 - [ ] Exit impersonation closes tab
 - [ ] Expired tokens are rejected
 - [ ] Used tokens cannot be reused
 - [ ] Audit log records all events
 - [ ] Non-admin users cannot impersonate
+- [x] Can impersonate users without passwords set
 
 ## 🚀 Deployment Notes
 
 1. **Environment Variables**:
    - `JWT_SECRET` - Must be set for production
-   - `FRONTEND_URL` - Used to construct portal URLs
+   - ~~`FRONTEND_URL`~~ - **NOT NEEDED** - Hardcoded to `https://mandanten-portal.onrender.com`
 
 2. **Database**:
    - MongoDB will auto-create `impersonationtokens` collection
@@ -189,6 +196,14 @@ const metadata = getImpersonationMetadata(req);
 3. **Cleanup**:
    - Run `POST /api/admin/cleanup-expired-tokens` periodically
    - Consider adding to cron job for automatic cleanup
+
+4. **Client Lookup**:
+   - System supports both `id` and `aktenzeichen` fields for client identification
+   - Automatic fallback ensures compatibility
+
+5. **Password Bypass**:
+   - Users without passwords can be impersonated
+   - No manual configuration needed
 
 ## 📊 API Examples
 
