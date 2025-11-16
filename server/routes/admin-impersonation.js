@@ -20,16 +20,29 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     const { client_id, reason } = req.body;
     const adminId = req.adminId;
 
+    console.log(`🔐 Impersonation request received:`, { client_id, adminId });
+
     // Validate request
     if (!client_id) {
       return res.status(400).json({ error: 'client_id is required' });
     }
 
-    // Find the client
-    const client = await Client.findOne({ id: client_id });
+    // Find the client - try by id first, then by aktenzeichen
+    let client = await Client.findOne({ id: client_id });
     if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
+      console.log(`⚠️ Client not found by id: ${client_id}, trying aktenzeichen...`);
+      client = await Client.findOne({ aktenzeichen: client_id });
     }
+
+    if (!client) {
+      console.log(`❌ Client not found: ${client_id}`);
+      return res.status(404).json({
+        error: 'Client not found',
+        message: `No client found with id or aktenzeichen: ${client_id}`
+      });
+    }
+
+    console.log(`✅ Client found:`, { id: client.id, aktenzeichen: client.aktenzeichen, email: client.email });
 
     // Check if client has email
     if (!client.email) {

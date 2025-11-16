@@ -70,12 +70,16 @@ router.get('/impersonate', async (req, res) => {
       });
     }
 
-    // Get client data
-    const client = await Client.findOne({ id: decoded.clientId });
+    // Get client data - try by id first, then by aktenzeichen
+    let client = await Client.findOne({ id: decoded.clientId });
+    if (!client) {
+      client = await Client.findOne({ aktenzeichen: decoded.clientId });
+    }
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
-        message: 'The client associated with this token was not found'
+        message: `The client associated with this token was not found: ${decoded.clientId}`
       });
     }
 
