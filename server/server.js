@@ -24,6 +24,7 @@ const insolvenzantragRoutes = require('./routes/insolvenzantrag');
 const secondRoundApiRoutes = require('./routes/second-round-api');
 const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
+const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -69,6 +70,7 @@ app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 app.use('/api/second-round', secondRoundApiRoutes);
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
+app.use('/api/admin', adminUserDeletionRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));

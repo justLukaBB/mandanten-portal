@@ -120,7 +120,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [nullplanSummary, setNullplanSummary] = useState<any>(null);
   const [loadingNullplan, setLoadingNullplan] = useState(false);
   const [skippingDelay, setSkippingDelay] = useState(false);
-  
+
+  // Delete user state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
   // Financial data form state
   const [financialForm, setFinancialForm] = useState({
     net_income: '',
@@ -300,6 +305,55 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error: any) {
       console.error('❌ Error generating impersonation token:', error);
       alert(`Failed to login as user: ${error.message}`);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!user) return;
+
+    // Validate confirmation text
+    const expectedText = user.email;
+    if (deleteConfirmText !== expectedText) {
+      alert(`Please type "${expectedText}" to confirm deletion`);
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      console.log('🗑️ Deleting user:', userId);
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({
+          reason: 'Admin-initiated deletion via dashboard'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+
+      const result = await response.json();
+      console.log('✅ User deleted successfully:', result);
+
+      // Show success message
+      alert(`✅ User deleted successfully!\n\nDeleted:\n- Documents: ${result.deletion_summary.documents}\n- Creditors: ${result.deletion_summary.creditors}\n- Files: ${result.deletion_summary.files}\n\nDuration: ${result.duration_ms}ms`);
+
+      // Close modal and parent
+      setShowDeleteModal(false);
+      onClose();
+
+    } catch (error: any) {
+      console.error('❌ Error deleting user:', error);
+      alert(`Failed to delete user: ${error.message}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1405,6 +1459,25 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           />
         </div>
         
+        {/* Delete User Section - Danger Zone */}
+        <div className="mt-8 border-t-2 border-red-200 pt-6">
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6">
+            <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Danger Zone</h3>
+            <p className="text-sm text-red-700 mb-4">
+              Permanently delete this user and all associated data. This action cannot be undone.
+            </p>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-6 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 transition-colors inline-flex items-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete User Permanently
+            </button>
+          </div>
+        </div>
+
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
@@ -1645,6 +1718,123 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           onClose={() => setShowSettlementPlan(false)}
           onBack={() => setShowSettlementPlan(false)}
         />
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {showDeleteModal && user && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-red-600 text-white p-6 rounded-t-lg">
+              <div className="flex items-center space-x-3">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <h2 className="text-2xl font-bold">Delete User Account - Permanent Action</h2>
+                  <p className="text-red-100 text-sm mt-1">This action cannot be undone</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Warning Message */}
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p className="text-lg font-bold text-yellow-900 mb-2">
+                  Are you sure you want to permanently delete this user?
+                </p>
+                <div className="text-yellow-800">
+                  <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
+                  <p className="font-semibold mb-1">Email: {user.email}</p>
+                  <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
+                </div>
+              </div>
+
+              {/* What will be deleted */}
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                <h3 className="font-bold text-red-900 text-lg mb-3">⚠️ WARNING: This will permanently delete:</h3>
+                <ul className="space-y-2 text-red-800">
+                  <li className="flex items-start">
+                    <span className="mr-2">🗑️</span>
+                    <span><strong>User account</strong> and login credentials</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">📄</span>
+                    <span><strong>{user.documents?.length || 0} documents</strong> and all uploaded files</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">🏢</span>
+                    <span><strong>{user.final_creditor_list?.length || 0} creditors</strong> and all creditor data</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">💰</span>
+                    <span><strong>Financial data</strong> {user.has_financial_data ? '(exists)' : '(none)'}</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">📋</span>
+                    <span><strong>Workflow status</strong> and all processing history</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">💬</span>
+                    <span><strong>Communication records</strong> and notes</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Confirmation Input */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  To confirm deletion, type the user's email address exactly:
+                  <span className="text-red-600 ml-2">{user.email}</span>
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={user.email}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
+                  disabled={deleting}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmText('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  disabled={deleting || deleteConfirmText !== user.email}
+                  className="flex-1 px-6 py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                >
+                  {deleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete Permanently
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                This deletion will be logged in the audit trail for compliance purposes.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
