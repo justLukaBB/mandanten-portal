@@ -264,19 +264,20 @@ export const PersonalPortal = ({
     }
   }, []);
 
-  // Add polling to check for status updates
-  useEffect(() => {
-    if (!clientId) return;
+  // DISABLED: Auto-reload polling every 30 seconds
+  // This was causing unwanted page refreshes in the user portal
+  // useEffect(() => {
+  //   if (!clientId) return;
 
-    // Poll every 30 seconds when creditor confirmation or financial form is not showing
-    const interval = setInterval(() => {
-      if (!showingCreditorConfirmation && !showingFinancialForm && !previewFile) {
-        fetchClientData();
-      }
-    }, 30000); // 30 seconds
+  //   // Poll every 30 seconds when creditor confirmation or financial form is not showing
+  //   const interval = setInterval(() => {
+  //     if (!showingCreditorConfirmation && !showingFinancialForm && !previewFile) {
+  //       fetchClientData();
+  //     }
+  //   }, 30000); // 30 seconds
 
-    return () => clearInterval(interval);
-  }, [clientId, showingCreditorConfirmation, showingFinancialForm, previewFile]);
+  //   return () => clearInterval(interval);
+  // }, [clientId, showingCreditorConfirmation, showingFinancialForm, previewFile]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
