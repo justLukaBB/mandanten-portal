@@ -4663,9 +4663,9 @@ function startScheduledTasks() {
     }
   }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
   
-  // Run auto-confirmation check every 3 minutes (TEST MODE)
-  const AUTO_CONFIRMATION_CHECK_INTERVAL = 3 * 60 * 1000; // 3 minutes in milliseconds
-  
+  // Run auto-confirmation check every 7 hours (PRODUCTION MODE)
+  const AUTO_CONFIRMATION_CHECK_INTERVAL = 7 * 60 * 60 * 1000; // 7 hours in milliseconds (25200000 ms)
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled auto-confirmation check...');
@@ -4713,10 +4713,10 @@ function startScheduledTasks() {
     }
   }, 180000); // 3 minutes
   
-  // Run initial auto-confirmation check after 1 minute (TEST MODE)
+  // Run initial auto-confirmation check after 5 minutes (PRODUCTION MODE)
   setTimeout(async () => {
     try {
-      console.log('\n⏰ Running initial auto-confirmation check (TEST MODE)...');
+      console.log('\n⏰ Running initial auto-confirmation check (PRODUCTION MODE)...');
       const DelayedProcessingService = require('./services/delayedProcessingService');
       const delayedService = new DelayedProcessingService();
       const result = await delayedService.checkAndAutoConfirmCreditors();
@@ -4724,14 +4724,14 @@ function startScheduledTasks() {
     } catch (error) {
       console.error('❌ Error in initial auto-confirmation check:', error);
     }
-  }, 60000); // 1 minute (TEST MODE)
+  }, 300000); // 5 minutes (PRODUCTION MODE)
   
   console.log('📅 Scheduled tasks started:');
   console.log('  • Document reminders: every hour');
   console.log('  • Delayed processing webhooks: every 30 minutes');
   console.log('  • Login reminders: every 6 hours (7-day cycle)');
   console.log('  • 3-minute reviews: every hour (TEST MODE)');
-  console.log('  • Auto-confirmation: every 3 minutes (TEST MODE)');
+  console.log('  • Auto-confirmation: every 7 hours (PRODUCTION MODE)');
 }
 
 // ============================================================================
