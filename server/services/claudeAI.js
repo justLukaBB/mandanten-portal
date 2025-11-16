@@ -65,8 +65,31 @@ ANALYSEAUFTRAG:
       - E-Mail-Adresse (falls vorhanden)
       - Telefonnummer (falls vorhanden)
    
-   b) AKTENZEICHEN/REFERENZ:
-      Suchen Sie nach: "Aktenzeichen:", "Az:", "Unser Zeichen:", "Ref:", "Zeichen:", "Kundennummer:"
+   b) AKTENZEICHEN/REFERENZ - KRITISCHE EXTRAKTIONSREGELN:
+
+      **Was zu suchen ist:**
+      - "Aktenzeichen:", "Az:", "Unser Zeichen:", "Ref:", "Zeichen:", "Kundennummer:", "Forderungsnummer:", "Vorgangsnummer:"
+
+      **WICHTIG - Was NICHT als Aktenzeichen gelten darf:**
+      ❌ Kreditkartennummern (typisch: 16 Ziffern, oft in 4er-Blöcken)
+      ❌ IBAN/Bankkontonummern (beginnt mit DE, AT, etc.)
+      ❌ Vertragsnummern die wie Kreditkarten aussehen
+      ❌ Datumsangaben
+      ❌ Telefonnummern
+      ❌ Rechnungsnummern (wenn "Rechnung Nr." davor steht)
+
+      **Format der Rückgabe:**
+      - Gebe NUR die Nummer/das Zeichen zurück, OHNE Label
+      - NICHT: "Aktenzeichen: 12345" oder "Az: 12345" oder "Forderungsnummer: 12345"
+      - SONDERN: "12345"
+      - Falls mehrere Aktenzeichen vorhanden: Wähle das primäre (meist nach "Aktenzeichen:" oder "Az:")
+      - Falls kein eindeutiges Aktenzeichen gefunden: null
+
+      **Erkennungslogik:**
+      1. Suche nach expliziten Labels wie "Aktenzeichen:", "Az:", "Unser Zeichen:"
+      2. Extrahiere nur den Wert NACH dem Label
+      3. Prüfe ob der Wert plausibel ist (nicht zu lang, kein Kreditkartenformat)
+      4. Entferne alle Labels und gebe nur den reinen Wert zurück
    
    c) GLÄUBIGER-VERTRETUNGS-VERHÄLTNIS:
       - Handelt der Absender für sich selbst oder vertritt er einen anderen Gläubiger?
@@ -119,16 +142,16 @@ AUSGABE als strukturiertes JSON:
   
   "creditor_data": {
     "sender_name": "Vollständiger Name des Absenders",
-    "sender_address": "Komplette Anschrift", 
+    "sender_address": "Komplette Anschrift",
     "sender_email": "email@domain.de",
-    "reference_number": "Aktenzeichen/Referenz",
+    "reference_number": "NUR die reine Nummer/Zeichen ohne Label - z.B. '12345' NICHT 'Az: 12345'",
     "is_representative": boolean,
     "actual_creditor": "Ursprünglicher Gläubiger falls Vertreter",
     "claim_amount": float
   }
 }
 
-WICHTIG: 
+WICHTIG:
 - Antworte NUR mit dem JSON-Objekt
 - Sei ehrlich und realistisch bei der Confidence-Bewertung - lieber vorsichtig als überoptimistisch
 - Alle 4 Confidence-Faktoren einzeln bewerten, dann gewichteten Durchschnitt als finale confidence
@@ -137,7 +160,9 @@ WICHTIG:
 - confidence_breakdown IMMER vollständig ausfüllen für Transparenz
 - status_reason soll die Confidence-Faktoren erklären
 - Bei schlechter Textqualität oder fehlenden Daten: niedrigere Scores
-- Fokus auf Briefkopf und ersten Absatz für Absenderinformationen`;
+- Fokus auf Briefkopf und ersten Absatz für Absenderinformationen
+- **KRITISCH**: reference_number darf NIEMALS eine Kreditkartennummer, IBAN oder ähnliches enthalten
+- **KRITISCH**: reference_number muss OHNE jegliches Label zurückgegeben werden (nur die Nummer selbst)`;
 
       console.log('=== SENDING REQUEST TO CLAUDE API ===');
       
