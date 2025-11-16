@@ -294,6 +294,7 @@ WICHTIG:
     const validation = {
       is_valid: result.processing_status === 'completed',
       warnings: [],
+      review_reasons: [], // Track specific reasons for manual review
       confidence: result.confidence || 0.0, // Keep Claude's original confidence
       claude_confidence: result.confidence || 0.0, // Store original Claude confidence
       data_completeness: 0.0,
@@ -354,28 +355,37 @@ WICHTIG:
       const essentialScore = (essentialFieldsFound / totalEssentialFields) * 0.8;
       const optionalScore = (optionalFieldsFound / totalOptionalFields) * 0.2;
       validation.data_completeness = essentialScore + optionalScore;
-      
+
       // Determine if manual review is needed based on Claude confidence AND data completeness
       const lowClaudeConfidence = validation.claude_confidence < 0.8;
       const lowDataCompleteness = essentialFieldsFound < 2;
       const noEssentialData = essentialFieldsFound === 0;
-      
-      if (lowClaudeConfidence || lowDataCompleteness || noEssentialData) {
+      const missingEmail = !senderEmail || senderEmail.trim() === '' || !senderEmail.includes('@');
+
+      // CRITICAL: Email is REQUIRED for auto-approval - without it, always manual review
+      if (lowClaudeConfidence || lowDataCompleteness || noEssentialData || missingEmail) {
         validation.requires_manual_review = true;
-        
+
         if (lowClaudeConfidence) {
           validation.warnings.push('⚠️ Claude AI ist unsicher bei der Klassifikation');
+          validation.review_reasons.push('Niedrige AI-Konfidenz');
         }
-        if (lowDataCompleteness) {
+        if (missingEmail) {
+          validation.warnings.push('❌ E-Mail-Adresse fehlt - manuelle Prüfung erforderlich');
+          validation.review_reasons.push('Fehlende Gläubiger-E-Mail');
+        }
+        if (lowDataCompleteness && !missingEmail) {
           validation.warnings.push('⚠️ Wichtige Kontaktdaten fehlen');
+          validation.review_reasons.push('Unvollständige Kontaktdaten');
         }
         if (noEssentialData) {
           validation.warnings.push('❌ Keine essentiellen Daten extrahiert');
+          validation.review_reasons.push('Keine Daten extrahiert');
         }
       }
 
-      // Add success message if all essential fields found AND high Claude confidence
-      if (essentialFieldsFound === totalEssentialFields && validation.claude_confidence >= 0.8) {
+      // Add success message if all essential fields found AND high Claude confidence AND email present
+      if (essentialFieldsFound === totalEssentialFields && validation.claude_confidence >= 0.8 && !missingEmail) {
         validation.warnings.push('✅ Alle wichtigen Daten erfolgreich extrahiert');
         validation.warnings.push(`📋 Gefunden: ${foundFields.join(', ')}`);
       } else if (essentialFieldsFound > 0) {
@@ -394,7 +404,11 @@ WICHTIG:
       console.log(`Claude Confidence: ${Math.round(validation.claude_confidence * 100)}%`);
       console.log(`Data Completeness: ${Math.round(validation.data_completeness * 100)}%`);
       console.log(`Essential Fields: ${essentialFieldsFound}/${totalEssentialFields}`);
+      console.log(`Email Present: ${!missingEmail}`);
       console.log(`Manual Review Required: ${validation.requires_manual_review}`);
+      if (validation.review_reasons.length > 0) {
+        console.log(`Review Reasons: ${validation.review_reasons.join(', ')}`);
+      }
     }
 
     // For non-creditor documents, just confirm classification
