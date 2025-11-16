@@ -411,7 +411,20 @@ router.post('/document-processing-complete', rateLimits.general, async (req, res
     // If this was the last document to be processed
     if (processingDocs.length === 0 && completedDocs.length === allDocuments.length && allDocuments.length > 0) {
       // All documents are now processed
-      const creditorDocs = allDocuments.filter(d => d.is_creditor_document === true);
+      // Filter creditor documents that DON'T require manual review (auto-approved only)
+      const creditorDocs = allDocuments.filter(d =>
+        d.is_creditor_document === true &&
+        !d.validation?.requires_manual_review &&
+        !d.extracted_data?.manual_review_required
+      );
+
+      const creditorDocsNeedingReview = allDocuments.filter(d =>
+        d.is_creditor_document === true &&
+        (d.validation?.requires_manual_review || d.extracted_data?.manual_review_required)
+      );
+
+      console.log(`📊 Auto-approved creditor documents: ${creditorDocs.length}`);
+      console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
       
       if (client.current_status === 'documents_processing') {
         client.current_status = 'waiting_for_payment';

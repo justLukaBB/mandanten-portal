@@ -976,10 +976,22 @@ app.post('/api/clients/:clientId/documents',
               console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
               
               // Update final creditor list with deduplication
-              const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
+              // Filter creditor documents that DON'T require manual review (auto-approved only)
+              const creditorDocuments = completedDocs.filter(doc =>
+                doc.is_creditor_document === true &&
+                !doc.validation?.requires_manual_review &&
+                !doc.extracted_data?.manual_review_required
+              );
+
+              const creditorDocsNeedingReview = completedDocs.filter(doc =>
+                doc.is_creditor_document === true &&
+                (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+              );
+
               console.log(`\n📊 DOCUMENT ANALYSIS:`);
               console.log(`📄 Total completed documents: ${completedDocs.length}`);
-              console.log(`📄 Creditor documents found: ${creditorDocuments.length}`);
+              console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
+              console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
               
               if (creditorDocuments.length > 0) {
                 console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
@@ -5732,8 +5744,20 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
             
             // Update final creditor list
-            const creditorDocuments = completedDocs.filter(doc => doc.is_creditor_document === true);
-            console.log(`📊 Found ${creditorDocuments.length} creditor documents for extraction`);
+            // Filter creditor documents that DON'T require manual review (auto-approved only)
+            const creditorDocuments = completedDocs.filter(doc =>
+              doc.is_creditor_document === true &&
+              !doc.validation?.requires_manual_review &&
+              !doc.extracted_data?.manual_review_required
+            );
+
+            const creditorDocsNeedingReview = completedDocs.filter(doc =>
+              doc.is_creditor_document === true &&
+              (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+            );
+
+            console.log(`📊 Found ${creditorDocuments.length} auto-approved creditor documents for extraction`);
+            console.log(`⚠️ Found ${creditorDocsNeedingReview.length} creditor documents requiring manual review`);
             const extractedCreditors = [];
             
             creditorDocuments.forEach(doc => {
