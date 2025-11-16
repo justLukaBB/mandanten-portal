@@ -85,8 +85,8 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
       impersonationRecord._id.toString()
     );
 
-    // Construct portal URL - use PORTAL_BASE_URL or FRONTEND_URL from env
-    const frontendUrl = process.env.PORTAL_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Construct portal URL - hardcoded production URL
+    const frontendUrl = 'https://mandanten-portal.onrender.com';
     const portalUrl = `${frontendUrl}/auth/impersonate?token=${jwtToken}`;
 
     console.log(`🌐 Generated portal URL:`, portalUrl);
