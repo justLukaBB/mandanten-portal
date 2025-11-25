@@ -1264,153 +1264,9 @@ app.get('/api/clients/:clientId/documents/:filename', (req, res) => {
   }
 });
 
-// Download document by document ID
-app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdmin, async (req, res) => {
-  try {
-    const { clientId, documentId } = req.params;
-    
-    console.log(`📥 Admin document download request: Client ${clientId}, Document ${documentId}`);
-    
-    const client = await getClient(clientId);
-    
-    if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-
-    // Find the document by ID
-    const document = client.documents.find(doc => doc.id === documentId);
-
-    if (!document) {
-      return res.status(404).json({ error: 'Document not found' });
-    }
-
-    // Sanitize aktenzeichen to prevent path traversal attacks
-    let safeAktenzeichen;
-    try {
-      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
-    } catch (error) {
-      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
-      return res.status(400).json({
-        error: 'Invalid aktenzeichen format',
-        message: 'The aktenzeichen contains invalid characters'
-      });
-    }
-
-    // Detect file extension from MIME type or filename
-    let detectedExtension = 'pdf'; // Default
-    if (document.type && document.type !== 'unknown') {
-      const mimeExtension = document.type.split('/')[1];
-      if (mimeExtension) {
-        detectedExtension = mimeExtension;
-      }
-    } else if (document.filename || document.name) {
-      // Try to get extension from filename
-      const filenameMatch = (document.filename || document.name).match(/\.([a-zA-Z0-9]+)$/);
-      if (filenameMatch) {
-        detectedExtension = filenameMatch[1].toLowerCase();
-      }
-    }
-
-    // Possible extensions to try if MIME type is unknown
-    const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
-    const uniqueExtensions = [...new Set(extensionsToTry)];
-
-    // Construct file path - try different possible paths
-    const possiblePaths = [];
-    const baseDirectories = [
-      path.join(uploadsDir, clientId),
-      path.join(uploadsDir, safeAktenzeichen),
-      path.join(uploadsDir, client.id || clientId)
-    ];
-
-    // Try with document ID + various extensions
-    for (const baseDir of baseDirectories) {
-      for (const ext of uniqueExtensions) {
-        possiblePaths.push(path.join(baseDir, `${documentId}.${ext}`));
-      }
-    }
-
-    // Try with stored filename
-    if (document.filename) {
-      for (const baseDir of baseDirectories) {
-        possiblePaths.push(path.join(baseDir, document.filename));
-      }
-    }
-
-    // Try with document name
-    if (document.name && document.name !== document.filename) {
-      for (const baseDir of baseDirectories) {
-        possiblePaths.push(path.join(baseDir, document.name));
-      }
-    }
-
-    // Find the first path that exists
-    let filePath = null;
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        filePath = possiblePath;
-        console.log(`✅ Found file at: ${filePath}`);
-        break;
-      }
-    }
-
-    if (!filePath) {
-      console.error(`❌ File not found for document ${documentId} (${document.name})`);
-      console.error(`   Document metadata:`, {
-        id: document.id,
-        name: document.name,
-        filename: document.filename,
-        type: document.type
-      });
-      console.error(`   Tried ${possiblePaths.length} paths (showing first 10):`, possiblePaths.slice(0, 10));
-
-      // For test scenarios, serve a mock PDF
-      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
-        console.log(`📋 Serving mock PDF for test document ${document.name}`);
-        return serveMockPDFDownload(res, document.name);
-      }
-
-      return res.status(404).json({
-        error: 'File not found',
-        message: 'The document file could not be found on the server. It may have been deleted or the upload may have failed.',
-        document_name: document.name,
-        document_id: documentId,
-        suggestions: [
-          'The file may need to be re-uploaded',
-          'Check if the file exists in the uploads directory',
-          'Contact support if the issue persists'
-        ]
-      });
-    }
-
-    // Log download for security auditing
-    console.log(`📄 Admin downloading document ${documentId} (${document.name}) for client ${client.aktenzeichen}`);
-
-    // Set appropriate headers for download
-    const mimeType = document.type || 'application/pdf';
-    const filename = document.filename || document.name || `document_${documentId}.pdf`;
-
-    // Encode filename properly for special characters (RFC 5987)
-    const encodedFilename = encodeURIComponent(filename);
-    const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_'); // Fallback for non-RFC5987 browsers
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
-    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    
-    // Send the file
-    res.sendFile(path.resolve(filePath));
-
-  } catch (error) {
-    console.error('❌ Error downloading document:', error);
-    res.status(500).json({
-      error: 'Failed to download document',
-      details: error.message
-    });
-  }
-});
 
 // Bulk download - Download all documents for a client as ZIP
+// NOTE: This route MUST come BEFORE the :documentId/download route due to Express routing order
 app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
@@ -1569,6 +1425,151 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
         details: error.message
       });
     }
+  }
+});
+// Download document by document ID
+app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId, documentId } = req.params;
+    
+    console.log(`📥 Admin document download request: Client ${clientId}, Document ${documentId}`);
+    
+    const client = await getClient(clientId);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Find the document by ID
+    const document = client.documents.find(doc => doc.id === documentId);
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Sanitize aktenzeichen to prevent path traversal attacks
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
+    } catch (error) {
+      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
+      return res.status(400).json({
+        error: 'Invalid aktenzeichen format',
+        message: 'The aktenzeichen contains invalid characters'
+      });
+    }
+
+    // Detect file extension from MIME type or filename
+    let detectedExtension = 'pdf'; // Default
+    if (document.type && document.type !== 'unknown') {
+      const mimeExtension = document.type.split('/')[1];
+      if (mimeExtension) {
+        detectedExtension = mimeExtension;
+      }
+    } else if (document.filename || document.name) {
+      // Try to get extension from filename
+      const filenameMatch = (document.filename || document.name).match(/\.([a-zA-Z0-9]+)$/);
+      if (filenameMatch) {
+        detectedExtension = filenameMatch[1].toLowerCase();
+      }
+    }
+
+    // Possible extensions to try if MIME type is unknown
+    const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+    const uniqueExtensions = [...new Set(extensionsToTry)];
+
+    // Construct file path - try different possible paths
+    const possiblePaths = [];
+    const baseDirectories = [
+      path.join(uploadsDir, clientId),
+      path.join(uploadsDir, safeAktenzeichen),
+      path.join(uploadsDir, client.id || clientId)
+    ];
+
+    // Try with document ID + various extensions
+    for (const baseDir of baseDirectories) {
+      for (const ext of uniqueExtensions) {
+        possiblePaths.push(path.join(baseDir, `${documentId}.${ext}`));
+      }
+    }
+
+    // Try with stored filename
+    if (document.filename) {
+      for (const baseDir of baseDirectories) {
+        possiblePaths.push(path.join(baseDir, document.filename));
+      }
+    }
+
+    // Try with document name
+    if (document.name && document.name !== document.filename) {
+      for (const baseDir of baseDirectories) {
+        possiblePaths.push(path.join(baseDir, document.name));
+      }
+    }
+
+    // Find the first path that exists
+    let filePath = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        filePath = possiblePath;
+        console.log(`✅ Found file at: ${filePath}`);
+        break;
+      }
+    }
+
+    if (!filePath) {
+      console.error(`❌ File not found for document ${documentId} (${document.name})`);
+      console.error(`   Document metadata:`, {
+        id: document.id,
+        name: document.name,
+        filename: document.filename,
+        type: document.type
+      });
+      console.error(`   Tried ${possiblePaths.length} paths (showing first 10):`, possiblePaths.slice(0, 10));
+
+      // For test scenarios, serve a mock PDF
+      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
+        console.log(`📋 Serving mock PDF for test document ${document.name}`);
+        return serveMockPDFDownload(res, document.name);
+      }
+
+      return res.status(404).json({
+        error: 'File not found',
+        message: 'The document file could not be found on the server. It may have been deleted or the upload may have failed.',
+        document_name: document.name,
+        document_id: documentId,
+        suggestions: [
+          'The file may need to be re-uploaded',
+          'Check if the file exists in the uploads directory',
+          'Contact support if the issue persists'
+        ]
+      });
+    }
+
+    // Log download for security auditing
+    console.log(`📄 Admin downloading document ${documentId} (${document.name}) for client ${client.aktenzeichen}`);
+
+    // Set appropriate headers for download
+    const mimeType = document.type || 'application/pdf';
+    const filename = document.filename || document.name || `document_${documentId}.pdf`;
+
+    // Encode filename properly for special characters (RFC 5987)
+    const encodedFilename = encodeURIComponent(filename);
+    const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_'); // Fallback for non-RFC5987 browsers
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    
+    // Send the file
+    res.sendFile(path.resolve(filePath));
+
+  } catch (error) {
+    console.error('❌ Error downloading document:', error);
+    res.status(500).json({
+      error: 'Failed to download document',
+      details: error.message
+    });
   }
 });
 
