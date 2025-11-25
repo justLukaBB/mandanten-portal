@@ -201,7 +201,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
-      
+
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
@@ -222,11 +222,63 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       console.log(`✅ Document downloaded successfully`);
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    }
+  };
+
+  const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
+
+  const downloadAllDocuments = async () => {
+    if (!user) return;
+
+    try {
+      setDownloadingAllDocuments(true);
+      console.log(`📦 Downloading all documents for client ${userId}`);
+
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/download-all`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.message || errorData.error || `Download failed: ${response.status}`);
+      }
+
+      // Get blob and trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      // Extract filename from Content-Disposition header if available
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `Client_${user.aktenzeichen || userId}_Documents.zip`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log(`✅ All documents downloaded successfully as ${filename}`);
+      alert(`✅ Alle Dokumente erfolgreich heruntergeladen als ${filename}`);
+    } catch (error) {
+      console.error('❌ Error downloading all documents:', error);
+      alert(`Fehler beim Herunterladen aller Dokumente: ${error}`);
+    } finally {
+      setDownloadingAllDocuments(false);
     }
   };
 
@@ -907,9 +959,36 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
           {/* Documents */}
           <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center mb-4">
-              <DocumentTextIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-              <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <DocumentTextIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
+                <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+              </div>
+              {user.documents && user.documents.length > 0 && (
+                <button
+                  onClick={downloadAllDocuments}
+                  disabled={downloadingAllDocuments}
+                  className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    downloadingAllDocuments
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'text-white hover:opacity-90'
+                  }`}
+                  style={downloadingAllDocuments ? {} : {backgroundColor: '#9f1a1d'}}
+                  title="Download all documents as ZIP archive"
+                >
+                  {downloadingAllDocuments ? (
+                    <>
+                      <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                      Wird vorbereitet...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                      Alle Dokumente herunterladen
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {user?.documents && user?.documents?.length > 0 ? (

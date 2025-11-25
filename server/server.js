@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const archiver = require('archiver');
 require('dotenv').config();
 
 // Import configuration and middleware
@@ -1332,9 +1333,13 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
     // Set appropriate headers for download
     const mimeType = document.type || 'application/pdf';
     const filename = document.filename || document.name || `document_${documentId}.pdf`;
-    
+
+    // Encode filename properly for special characters (RFC 5987)
+    const encodedFilename = encodeURIComponent(filename);
+    const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_'); // Fallback for non-RFC5987 browsers
+
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     
     // Send the file
@@ -1346,6 +1351,168 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
       error: 'Failed to download document',
       details: error.message
     });
+  }
+});
+
+// Bulk download - Download all documents for a client as ZIP
+app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    console.log(`📦 Admin bulk download request for client ${clientId}`);
+
+    const client = await getClient(clientId);
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Check if client has any documents
+    if (!client.documents || client.documents.length === 0) {
+      return res.status(404).json({
+        error: 'No documents available',
+        message: 'This client has no documents to download'
+      });
+    }
+
+    // Sanitize aktenzeichen
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen || clientId);
+    } catch (error) {
+      safeAktenzeichen = clientId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    // Create ZIP filename
+    const clientName = `${client.firstName || 'Client'}_${client.lastName || ''}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const zipFilename = `${clientName}_${safeAktenzeichen}_Documents_${dateStr}.zip`;
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+    // Create archiver instance
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
+    });
+
+    // Handle archiver warnings and errors
+    archive.on('warning', (err) => {
+      if (err.code === 'ENOENT') {
+        console.warn('⚠️ Archive warning:', err);
+      } else {
+        throw err;
+      }
+    });
+
+    archive.on('error', (err) => {
+      console.error('❌ Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create ZIP archive' });
+      }
+    });
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Track statistics
+    let addedFilesCount = 0;
+    let missingFilesCount = 0;
+    const manifestLines = [];
+    const missingFiles = [];
+
+    // Add documents to ZIP
+    for (const doc of client.documents) {
+      // Determine folder based on document type/status
+      let folderName = 'Other_Documents';
+      if (doc.document_status && doc.document_status.includes('creditor')) {
+        folderName = 'Creditor_Documents';
+      } else if (doc.processing_status === 'completed' &&
+                 (doc.document_status === 'non_creditor' || doc.document_status === 'non_creditor_confirmed')) {
+        folderName = 'Non_Creditor_Documents';
+      }
+
+      // Try to find the file
+      const possiblePaths = [
+        path.join(uploadsDir, clientId, `${doc.id}.${doc.type?.split('/')[1] || 'pdf'}`),
+        path.join(uploadsDir, safeAktenzeichen, `${doc.id}.${doc.type?.split('/')[1] || 'pdf'}`),
+        path.join(uploadsDir, clientId, doc.filename || doc.name),
+        path.join(uploadsDir, safeAktenzeichen, doc.filename || doc.name),
+      ];
+
+      let filePath = null;
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          filePath = possiblePath;
+          break;
+        }
+      }
+
+      if (filePath) {
+        try {
+          // Sanitize filename for ZIP
+          const sanitizedFilename = (doc.name || doc.filename || `document_${doc.id}`).replace(/[<>:"|?*]/g, '_');
+          const zipPath = `${folderName}/${sanitizedFilename}`;
+
+          // Add file to ZIP
+          archive.file(filePath, { name: zipPath });
+
+          addedFilesCount++;
+
+          // Add to manifest
+          const uploadDate = doc.uploadedAt ? new Date(doc.uploadedAt).toISOString().split('T')[0] : 'Unknown';
+          manifestLines.push(`${sanitizedFilename} | ${doc.type || 'unknown'} | ${uploadDate} | ${folderName}`);
+        } catch (fileError) {
+          console.error(`⚠️ Error adding file ${doc.name} to ZIP:`, fileError);
+          missingFilesCount++;
+          missingFiles.push(doc.name);
+        }
+      } else {
+        console.warn(`⚠️ File not found for document ${doc.id} (${doc.name})`);
+        missingFilesCount++;
+        missingFiles.push(doc.name);
+      }
+    }
+
+    // Create manifest file
+    const manifestContent = [
+      `Documents Archive for ${client.firstName} ${client.lastName}`,
+      `Aktenzeichen: ${client.aktenzeichen || 'N/A'}`,
+      `Generated: ${new Date().toISOString()}`,
+      `Total Documents: ${client.documents.length}`,
+      `Files Included: ${addedFilesCount}`,
+      `Files Missing: ${missingFilesCount}`,
+      '',
+      'Files in this archive:',
+      '─────────────────────────────────────────────────────────────',
+      'Filename | Type | Upload Date | Folder',
+      '─────────────────────────────────────────────────────────────',
+      ...manifestLines
+    ];
+
+    if (missingFiles.length > 0) {
+      manifestContent.push('', 'Missing Files:', '─────────────────────────────────────────────────────────────');
+      manifestContent.push(...missingFiles);
+    }
+
+    archive.append(manifestContent.join('\n'), { name: 'manifest.txt' });
+
+    // Log audit trail
+    console.log(`📦 Admin ${req.user?.email || 'unknown'} downloading ${addedFilesCount} documents for client ${client.aktenzeichen}`);
+
+    // Finalize the archive
+    await archive.finalize();
+
+  } catch (error) {
+    console.error('❌ Error creating bulk download:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to create document archive',
+        details: error.message
+      });
+    }
   }
 });
 
