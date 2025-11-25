@@ -237,9 +237,6 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
-  const [reprocessingDocuments, setReprocessingDocuments] = useState(false);
-  const [showReprocessModal, setShowReprocessModal] = useState(false);
-  const [reprocessConfirmText, setReprocessConfirmText] = useState('');
 
   const downloadAllDocuments = async () => {
     if (!user) return;
