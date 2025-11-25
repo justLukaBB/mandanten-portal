@@ -2342,6 +2342,255 @@ app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, r
   }
 });
 
+// Bulk reprocess ALL documents for a client
+app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { confirmation, admin_id, reason } = req.body;
+
+    // Require explicit confirmation
+    if (!confirmation) {
+      return res.status(400).json({
+        error: 'Confirmation required',
+        message: 'You must explicitly confirm this destructive action'
+      });
+    }
+
+    const client = await getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (!client.documents || client.documents.length === 0) {
+      return res.status(400).json({
+        error: 'No documents to reprocess',
+        message: 'Client has no documents'
+      });
+    }
+
+    const documentsCount = client.documents.length;
+    const documentIds = client.documents.map(doc => doc.id);
+
+    console.log(`♻️ Starting bulk reprocess for client ${clientId}: ${documentsCount} documents`);
+
+    // Store original metadata (CRITICAL for consistency)
+    const originalMetadata = client.documents.map(doc => ({
+      id: doc.id,
+      name: doc.name,
+      filename: doc.filename,
+      type: doc.type,
+      size: doc.size,
+      uploadedAt: doc.uploadedAt
+    }));
+
+    // Reset all documents - clear AI results but preserve original metadata
+    client.documents = client.documents.map((doc, index) => ({
+      // Preserve ORIGINAL metadata (CRITICAL)
+      id: doc.id, // KEEP SAME ID
+      name: doc.name,
+      filename: doc.filename,
+      type: doc.type,
+      size: doc.size,
+      uploadedAt: doc.uploadedAt, // KEEP ORIGINAL UPLOAD DATE
+
+      // Reset processing state
+      processing_status: 'pending',
+      document_status: 'pending',
+
+      // Clear AI extraction results
+      extracted_data: null,
+      validation: null,
+      summary: null,
+      processing_error: null,
+      processed_at: null,
+
+      // Clear flags
+      is_creditor_document: undefined,
+      confidence: undefined,
+      classification_success: undefined,
+      manual_review_required: false,
+
+      // Add reprocess tracking
+      reprocessed: true,
+      reprocessed_at: new Date().toISOString(),
+      reprocessed_by: admin_id || 'admin',
+      reprocess_reason: reason || 'Bulk reprocess requested'
+    }));
+
+    // IMPORTANT: Remove creditors from final_creditor_list that came from these documents
+    // But keep manually-added creditors (those with created_via === 'manual_entry')
+    const removedCreditorsCount = client.final_creditor_list ? client.final_creditor_list.length : 0;
+    if (client.final_creditor_list && client.final_creditor_list.length > 0) {
+      client.final_creditor_list = client.final_creditor_list.filter(creditor => {
+        // Keep manually-added creditors
+        if (creditor.created_via === 'manual_entry') {
+          return true;
+        }
+        // Remove creditors that came from the reprocessed documents
+        return !documentIds.includes(creditor.document_id);
+      });
+    }
+
+    // Add audit log entry
+    const auditEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      status: 'documents_reprocessed_bulk',
+      changed_by: 'admin',
+      metadata: {
+        action: 'bulk_reprocess_documents',
+        admin_id: admin_id || 'unknown',
+        documents_count: documentsCount,
+        document_ids: documentIds,
+        reason: reason || 'Not provided',
+        timestamp: new Date().toISOString(),
+        creditors_removed: removedCreditorsCount - (client.final_creditor_list ? client.final_creditor_list.length : 0)
+      },
+      created_at: new Date()
+    };
+
+    if (!client.status_history) {
+      client.status_history = [];
+    }
+    client.status_history.push(auditEntry);
+
+    await saveClient(client);
+
+    console.log(`✅ Documents reset to pending. Starting reprocessing in background...`);
+
+    // Queue all documents for reprocessing in background
+    setImmediate(async () => {
+      let successCount = 0;
+      let failureCount = 0;
+      const results = [];
+
+      for (let i = 0; i < client.documents.length; i++) {
+        const doc = client.documents[i];
+        const filePath = path.join(__dirname, 'uploads', clientId, doc.filename);
+
+        console.log(`Processing document ${i + 1}/${client.documents.length}: ${doc.name}`);
+
+        try {
+          if (!fs.existsSync(filePath)) {
+            throw new Error('File not found');
+          }
+
+          // Process document through AI pipeline
+          const extractedData = await documentProcessor.processDocument(filePath, doc.name);
+          const validation = documentProcessor.validateExtraction(extractedData);
+          const summary = documentProcessor.generateSummary(extractedData);
+
+          // Get fresh client data to avoid race conditions
+          const finalClient = await getClient(clientId);
+          const finalDocIndex = finalClient.documents.findIndex(d => d.id === doc.id);
+
+          if (finalDocIndex !== -1) {
+            // Update with new results while preserving original metadata
+            finalClient.documents[finalDocIndex] = {
+              // PRESERVE original metadata
+              id: doc.id,
+              name: doc.name,
+              filename: doc.filename,
+              type: doc.type,
+              size: doc.size,
+              uploadedAt: doc.uploadedAt,
+
+              // NEW processing results
+              processing_status: 'completed',
+              extracted_data: extractedData,
+              validation: validation,
+              summary: summary,
+              processed_at: new Date().toISOString(),
+              is_creditor_document: extractedData?.is_creditor_document,
+              confidence: extractedData?.confidence || validation?.confidence,
+              classification_success: true,
+              manual_review_required: validation?.requires_manual_review || false,
+              processing_error: null,
+
+              // Reprocess tracking
+              reprocessed: true,
+              reprocessed_at: doc.reprocessed_at,
+              reprocessed_by: doc.reprocessed_by,
+              reprocess_reason: doc.reprocess_reason
+            };
+
+            await saveClient(finalClient);
+            successCount++;
+            results.push({ document_id: doc.id, status: 'success' });
+            console.log(`✅ Completed ${i + 1}/${client.documents.length}: ${doc.name}`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to reprocess ${doc.name}:`, error);
+
+          // Mark as failed
+          const finalClient = await getClient(clientId);
+          const finalDocIndex = finalClient.documents.findIndex(d => d.id === doc.id);
+
+          if (finalDocIndex !== -1) {
+            finalClient.documents[finalDocIndex] = {
+              ...finalClient.documents[finalDocIndex],
+              processing_status: 'failed',
+              processing_error: error.message,
+              processed_at: new Date().toISOString()
+            };
+            await saveClient(finalClient);
+          }
+
+          failureCount++;
+          results.push({ document_id: doc.id, status: 'failed', error: error.message });
+        }
+
+        // Add 1-second delay between documents to avoid overwhelming the system
+        if (i < client.documents.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      // Add completion audit log
+      const completionAudit = {
+        id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        status: 'documents_reprocessed_complete',
+        changed_by: 'system',
+        metadata: {
+          action: 'bulk_reprocess_complete',
+          documents_total: documentsCount,
+          documents_success: successCount,
+          documents_failed: failureCount,
+          admin_id: admin_id || 'unknown',
+          timestamp: new Date().toISOString(),
+          results: results
+        },
+        created_at: new Date()
+      };
+
+      const finalClient = await getClient(clientId);
+      if (!finalClient.status_history) {
+        finalClient.status_history = [];
+      }
+      finalClient.status_history.push(completionAudit);
+      await saveClient(finalClient);
+
+      console.log(`♻️ Bulk reprocess complete: ${successCount} succeeded, ${failureCount} failed`);
+    });
+
+    // Return immediate response
+    res.json({
+      success: true,
+      message: 'Bulk document reprocessing started',
+      client_id: clientId,
+      documents_count: documentsCount,
+      estimated_time_minutes: Math.ceil(documentsCount * 0.5), // Rough estimate: 30 seconds per document
+      status: 'processing'
+    });
+
+  } catch (error) {
+    console.error('❌ Error starting bulk reprocessing:', error);
+    res.status(500).json({
+      error: 'Error starting bulk reprocessing',
+      details: error.message
+    });
+  }
+});
+
 // Admin: Manual document review
 app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (req, res) => {
   try {

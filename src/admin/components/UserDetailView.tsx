@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   XMarkIcon,
   UserIcon,
   DocumentTextIcon,
@@ -13,7 +13,8 @@ import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
   CalculatorIcon,
-  CurrencyEuroIcon
+  CurrencyEuroIcon,
+  ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
@@ -198,6 +199,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   }, [isNullplanClient, hasNullplanSent, userId]);
 
+  // Re-process documents state
+  const [reprocessingDocuments, setReprocessingDocuments] = useState(false);
+  const [showReprocessModal, setShowReprocessModal] = useState(false);
+  const [reprocessConfirmText, setReprocessConfirmText] = useState('');
+
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
@@ -227,6 +233,68 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    }
+  };
+
+  const reprocessAllDocuments = async () => {
+    if (!user) return;
+
+    try {
+      setReprocessingDocuments(true);
+      console.log(`♻️ Re-processing all documents for client ${userId}`);
+
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/reprocess-all`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          confirmation: true,
+          admin_id: localStorage.getItem('admin_id') || 'admin',
+          reason: reprocessConfirmText || 'Admin-initiated bulk reprocessing'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.message || errorData.error || `Reprocessing failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Bulk reprocessing started:`, result);
+
+      alert(`✅ Dokumenten-Neuverarbeitung gestartet!\n\n📄 Dokumente: ${result.documents_count}\n⏱️ Geschätzte Zeit: ${result.estimated_time_minutes} Minuten\n\n✓ Alle AI-Ergebnisse werden gelöscht\n✓ Dokumente werden neu verarbeitet\n✓ Gläubiger-Liste wird aktualisiert\n\nDie Seite wird automatisch aktualisiert, wenn die Verarbeitung abgeschlossen ist.`);
+
+      // Close modal
+      setShowReprocessModal(false);
+      setReprocessConfirmText('');
+
+      // Set up polling to refresh user data
+      const pollInterval = setInterval(async () => {
+        await fetchUserDetails();
+
+        // Check if all documents are processed
+        const allProcessed = user?.documents?.every(doc =>
+          doc.processing_status === 'completed' || doc.processing_status === 'failed'
+        );
+
+        if (allProcessed) {
+          clearInterval(pollInterval);
+          alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
+        }
+      }, 10000); // Poll every 10 seconds
+
+      // Stop polling after estimated time + buffer
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, (result.estimated_time_minutes * 60 * 1000) + 60000); // estimated time + 1 minute buffer
+
+    } catch (error: any) {
+      console.error('❌ Error reprocessing documents:', error);
+      alert(`Fehler beim Neuverarbeiten der Dokumente: ${error.message}`);
+    } finally {
+      setReprocessingDocuments(false);
     }
   };
 
@@ -907,9 +975,33 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
           {/* Documents */}
           <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center mb-4">
-              <DocumentTextIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-              <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <DocumentTextIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
+                <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+              </div>
+              {user.documents && user.documents.length > 0 && (
+                <button
+                  onClick={() => setShowReprocessModal(true)}
+                  disabled={reprocessingDocuments}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border bg-orange-50 text-orange-700 border-orange-400 hover:bg-orange-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {reprocessingDocuments ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-orange-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUturnLeftIcon className="w-4 h-4 mr-2" />
+                      Alle neu verarbeiten
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {user?.documents && user?.documents?.length > 0 ? (
@@ -1718,6 +1810,137 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           onClose={() => setShowSettlementPlan(false)}
           onBack={() => setShowSettlementPlan(false)}
         />
+      )}
+
+      {/* Re-Process All Documents Confirmation Modal */}
+      {showReprocessModal && user && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-orange-600 text-white p-6 rounded-t-lg">
+              <div className="flex items-center space-x-3">
+                <ExclamationTriangleIcon className="w-10 h-10" />
+                <div>
+                  <h2 className="text-2xl font-bold">Re-Process All Documents</h2>
+                  <p className="text-orange-100 text-sm mt-1">This will re-analyze all documents with AI</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Warning Message */}
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p className="text-lg font-bold text-yellow-900 mb-2">
+                  Are you sure you want to re-process all documents?
+                </p>
+                <div className="text-yellow-800">
+                  <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
+                  <p className="font-semibold mb-1">Documents: {user.documents?.length || 0}</p>
+                  <p className="font-semibold">This will trigger AI re-analysis for all documents</p>
+                </div>
+              </div>
+
+              {/* What will be DELETED/RE-CREATED */}
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                <h3 className="font-bold text-orange-900 text-lg mb-3">What will be DELETED and RE-CREATED:</h3>
+                <ul className="space-y-2 text-orange-800">
+                  <li className="flex items-start">
+                    <span className="mr-2">🔄</span>
+                    <span><strong>AI-extracted data</strong> from all documents will be re-analyzed</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">🏢</span>
+                    <span><strong>Creditor list</strong> will be regenerated from re-processed documents</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">📊</span>
+                    <span><strong>Document classifications</strong> and confidence scores will be recalculated</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">💰</span>
+                    <span><strong>Extracted amounts</strong> and financial data will be re-extracted</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* What will be PRESERVED */}
+              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                <h3 className="font-bold text-green-900 text-lg mb-3">What will be PRESERVED:</h3>
+                <ul className="space-y-2 text-green-800">
+                  <li className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span><strong>Original document files</strong> will remain unchanged</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span><strong>User account</strong> and login credentials</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span><strong>Upload dates</strong> and document metadata</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span><strong>Financial data</strong> entered by user or admin</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✅</span>
+                    <span><strong>Workflow status</strong> and case progression</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Confirmation Input */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  To confirm re-processing, type exactly:
+                  <span className="text-orange-600 ml-2">REPROCESS</span>
+                </label>
+                <input
+                  type="text"
+                  value={reprocessConfirmText}
+                  onChange={(e) => setReprocessConfirmText(e.target.value)}
+                  placeholder="REPROCESS"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono"
+                  disabled={reprocessingDocuments}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowReprocessModal(false);
+                    setReprocessConfirmText('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={reprocessingDocuments}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={reprocessAllDocuments}
+                  disabled={reprocessingDocuments || reprocessConfirmText !== 'REPROCESS'}
+                  className="flex-1 px-6 py-3 bg-orange-600 text-white font-bold rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                >
+                  {reprocessingDocuments ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Re-Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUturnLeftIcon className="w-5 h-5 mr-2" />
+                      Re-Process All Documents
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete User Confirmation Modal */}
