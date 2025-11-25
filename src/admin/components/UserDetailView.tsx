@@ -199,6 +199,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   }, [isNullplanClient, hasNullplanSent, userId]);
 
+  // Re-process documents state
+  const [reprocessingDocuments, setReprocessingDocuments] = useState(false);
+  const [showReprocessModal, setShowReprocessModal] = useState(false);
+  const [reprocessConfirmText, setReprocessConfirmText] = useState('');
+
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
