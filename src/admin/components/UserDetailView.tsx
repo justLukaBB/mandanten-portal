@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   XMarkIcon,
   UserIcon,
   DocumentTextIcon,
@@ -13,7 +13,8 @@ import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
   CalculatorIcon,
-  CurrencyEuroIcon
+  CurrencyEuroIcon,
+  ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
@@ -231,6 +232,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
+  const [reprocessingDocuments, setReprocessingDocuments] = useState(false);
+  const [showReprocessModal, setShowReprocessModal] = useState(false);
+  const [reprocessConfirmText, setReprocessConfirmText] = useState('');
 
   const downloadAllDocuments = async () => {
     if (!user) return;
@@ -282,9 +286,71 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
+  const reprocessAllDocuments = async () => {
+    if (!user) return;
+
+    try {
+      setReprocessingDocuments(true);
+      console.log(`♻️ Re-processing all documents for client ${userId}`);
+
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/reprocess-all`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          confirmation: true,
+          admin_id: localStorage.getItem('admin_id') || 'admin',
+          reason: reprocessConfirmText || 'Admin-initiated bulk reprocessing'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.message || errorData.error || `Reprocessing failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Bulk reprocessing started:`, result);
+
+      alert(`✅ Dokumenten-Neuverarbeitung gestartet!\n\n📄 Dokumente: ${result.documents_count}\n⏱️ Geschätzte Zeit: ${result.estimated_time_minutes} Minuten\n\n✓ Alle AI-Ergebnisse werden gelöscht\n✓ Dokumente werden neu verarbeitet\n✓ Gläubiger-Liste wird aktualisiert\n\nDie Seite wird automatisch aktualisiert, wenn die Verarbeitung abgeschlossen ist.`);
+
+      // Close modal
+      setShowReprocessModal(false);
+      setReprocessConfirmText('');
+
+      // Set up polling to refresh user data
+      const pollInterval = setInterval(async () => {
+        await fetchUserDetails();
+
+        // Check if all documents are processed
+        const allProcessed = user?.documents?.every(doc =>
+          doc.processing_status === 'completed' || doc.processing_status === 'failed'
+        );
+
+        if (allProcessed) {
+          clearInterval(pollInterval);
+          alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
+        }
+      }, 10000); // Poll every 10 seconds
+
+      // Stop polling after estimated time + buffer
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, (result.estimated_time_minutes * 60 * 1000) + 60000); // estimated time + 1 minute buffer
+
+    } catch (error: any) {
+      console.error('❌ Error reprocessing documents:', error);
+      alert(`Fehler beim Neuverarbeiten der Dokumente: ${error.message}`);
+    } finally {
+      setReprocessingDocuments(false);
+    }
+  };
+
   const skipSevenDayDelay = async () => {
     if (!user) return;
-    
+
     // eslint-disable-next-line no-restricted-globals
     if (!confirm(`⚡ 7-Day Delay Skip\n\nDies überspringt die 7-Tage-Wartezeit für ${user.firstName} ${user.lastName} (${user.aktenzeichen}) und startet sofort die Gläubiger-Überprüfung.\n\n⚠️ Nur für Testing verwenden!\n\nFortfahren?`)) {
       return;
