@@ -1031,29 +1031,53 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
               </div>
               {user.documents && user.documents.length > 0 && (
-                <button
-                  onClick={downloadAllDocuments}
-                  disabled={downloadingAllDocuments}
-                  className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    downloadingAllDocuments
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'text-white hover:opacity-90'
-                  }`}
-                  style={downloadingAllDocuments ? {} : {backgroundColor: '#9f1a1d'}}
-                  title="Download all documents as ZIP archive"
-                >
-                  {downloadingAllDocuments ? (
-                    <>
-                      <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                      Wird vorbereitet...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                      Alle Dokumente herunterladen
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={downloadAllDocuments}
+                    disabled={downloadingAllDocuments}
+                    className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      downloadingAllDocuments
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'text-white hover:opacity-90'
+                    }`}
+                    style={downloadingAllDocuments ? {} : {backgroundColor: '#9f1a1d'}}
+                    title="Download all documents as ZIP archive"
+                  >
+                    {downloadingAllDocuments ? (
+                      <>
+                        <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                        Wird vorbereitet...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                        Alle Dokumente herunterladen
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowReprocessModal(true)}
+                    disabled={reprocessingDocuments}
+                    className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors border-2 ${
+                      reprocessingDocuments
+                        ? 'bg-gray-300 text-gray-500 border-gray-300 cursor-not-allowed'
+                        : 'bg-orange-50 text-orange-700 border-orange-400 hover:bg-orange-100'
+                    }`}
+                    title="Re-process all documents through AI pipeline (DESTRUCTIVE)"
+                  >
+                    {reprocessingDocuments ? (
+                      <>
+                        <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                        Wird neu verarbeitet...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUturnLeftIcon className="w-4 h-4 mr-2" />
+                        Alle neu verarbeiten
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -1863,6 +1887,133 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           onClose={() => setShowSettlementPlan(false)}
           onBack={() => setShowSettlementPlan(false)}
         />
+      )}
+
+      {/* Re-Process All Documents Confirmation Modal */}
+      {showReprocessModal && user && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-orange-600 text-white p-6 rounded-t-lg">
+              <div className="flex items-center space-x-3">
+                <ExclamationTriangleIcon className="w-10 h-10" />
+                <div>
+                  <h2 className="text-2xl font-bold">Re-Process All Documents - Destructive Action</h2>
+                  <p className="text-orange-100 text-sm mt-1">This will delete all current AI processing results</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Warning Message */}
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p className="text-lg font-bold text-yellow-900 mb-2">
+                  Are you sure you want to re-process all documents?
+                </p>
+                <div className="text-yellow-800">
+                  <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
+                  <p className="font-semibold mb-1">Documents: {user.documents?.length || 0}</p>
+                  <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
+                </div>
+              </div>
+
+              {/* What will happen */}
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                <h3 className="font-bold text-orange-900 text-lg mb-3">This will DELETE and RE-CREATE:</h3>
+                <ul className="space-y-2 text-orange-800">
+                  <li className="flex items-start">
+                    <span className="mr-2">♻️</span>
+                    <span><strong>All AI extraction results</strong> (creditor data, confidence scores, summaries)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">♻️</span>
+                    <span><strong>Document processing status</strong> (will be reset to 'pending')</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">♻️</span>
+                    <span><strong>Creditor list</strong> (AI-extracted creditors will be removed and re-created)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">♻️</span>
+                    <span><strong>Document classifications</strong> (creditor vs. non-creditor)</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* What will be preserved */}
+              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                <h3 className="font-bold text-green-900 text-lg mb-3">✅ PRESERVED (will NOT be changed):</h3>
+                <ul className="space-y-2 text-green-800">
+                  <li className="flex items-start">
+                    <span className="mr-2">✓</span>
+                    <span><strong>Original uploaded files</strong> (same file IDs, filenames, upload dates)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✓</span>
+                    <span><strong>User account data</strong> (profile, email, credentials)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✓</span>
+                    <span><strong>Manually-added creditors</strong> (only AI-extracted ones are removed)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">✓</span>
+                    <span><strong>Workflow status</strong> and history</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Confirmation Input */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  To confirm, type "REPROCESS" in the box below:
+                </label>
+                <input
+                  type="text"
+                  value={reprocessConfirmText}
+                  onChange={(e) => setReprocessConfirmText(e.target.value)}
+                  placeholder="REPROCESS"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono"
+                  disabled={reprocessingDocuments}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowReprocessModal(false);
+                    setReprocessConfirmText('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={reprocessingDocuments}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={reprocessAllDocuments}
+                  disabled={reprocessingDocuments || reprocessConfirmText !== 'REPROCESS'}
+                  className="flex-1 px-6 py-3 bg-orange-600 text-white font-bold rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                >
+                  {reprocessingDocuments ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUturnLeftIcon className="w-5 h-5 mr-2" />
+                      Re-Process All Documents
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                This action will be logged in the audit trail. Original files and metadata will be preserved.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete User Confirmation Modal */}
