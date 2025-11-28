@@ -1252,17 +1252,6 @@ app.post('/api/clients/:clientId/documents',
   }
 });
 
-// Serve uploaded documents
-app.get('/api/clients/:clientId/documents/:filename', (req, res) => {
-  const { clientId, filename } = req.params;
-  const filePath = path.join(uploadsDir, clientId, filename);
-  
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
-  }
-});
 
 
 // Bulk download - Download all documents for a client as ZIP
@@ -1274,6 +1263,8 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
     console.log(`📦 Admin bulk download request for client ${clientId}`);
 
     const client = await getClient(clientId);
+
+    console.log(`👤 Client: ${client}`);
 
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
@@ -1346,18 +1337,60 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
         folderName = 'Non_Creditor_Documents';
       }
 
-      // Try to find the file
-      const possiblePaths = [
-        path.join(uploadsDir, clientId, `${doc.id}.${doc.type?.split('/')[1] || 'pdf'}`),
-        path.join(uploadsDir, safeAktenzeichen, `${doc.id}.${doc.type?.split('/')[1] || 'pdf'}`),
-        path.join(uploadsDir, clientId, doc.filename || doc.name),
-        path.join(uploadsDir, safeAktenzeichen, doc.filename || doc.name),
-      ];
+      // Detect file extension from MIME type or filename
+      let detectedExtension = 'pdf'; // Default
+      if (doc.type && doc.type !== 'unknown') {
+        const mimeExtension = doc.type.split('/')[1];
+        if (mimeExtension) {
+          detectedExtension = mimeExtension;
+        }
+      } else if (doc.filename || doc.name) {
+        const filenameMatch = (doc.filename || doc.name).match(/\.([a-zA-Z0-9]+)$/);
+        if (filenameMatch) {
+          detectedExtension = filenameMatch[1].toLowerCase();
+        }
+      }
+
+      // Possible extensions to try
+      const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+      const uniqueExtensions = [...new Set(extensionsToTry)];
+
+      // Base directories to search (include client.id which is the actual UUID folder)
+      const baseDirectories = [
+        path.join(uploadsDir, client.id || clientId),
+        path.join(uploadsDir, clientId),
+        path.join(uploadsDir, safeAktenzeichen),
+      ].filter(Boolean);
+
+      // Build possible paths - matching the individual download logic
+      const possiblePaths = [];
+
+      // Try with document ID + various extensions
+      for (const baseDir of baseDirectories) {
+        for (const ext of uniqueExtensions) {
+          possiblePaths.push(path.join(baseDir, `${doc.id}.${ext}`));
+        }
+      }
+
+      // Try with stored filename (this is the actual file on disk)
+      if (doc.filename) {
+        for (const baseDir of baseDirectories) {
+          possiblePaths.push(path.join(baseDir, doc.filename));
+        }
+      }
+
+      // Try with document name
+      if (doc.name && doc.name !== doc.filename) {
+        for (const baseDir of baseDirectories) {
+          possiblePaths.push(path.join(baseDir, doc.name));
+        }
+      }
 
       let filePath = null;
       for (const possiblePath of possiblePaths) {
         if (fs.existsSync(possiblePath)) {
           filePath = possiblePath;
+          console.log(`✅ Found file for ZIP: ${filePath}`);
           break;
         }
       }
@@ -1427,6 +1460,21 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
     }
   }
 });
+
+
+// Serve uploaded documents
+app.get('/api/clients/:clientId/documents/:filename', (req, res) => {
+  const { clientId, filename } = req.params;
+  console.log(`📄 Serving document ${filename} for client ${clientId}`);
+  const filePath = path.join(uploadsDir, clientId, filename);
+  
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
 // Download document by document ID
 app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdmin, async (req, res) => {
   try {
