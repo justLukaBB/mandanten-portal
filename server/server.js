@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const archiver = require('archiver');
 require('dotenv').config();
 
 // Import configuration and middleware
@@ -1251,9 +1252,220 @@ app.post('/api/clients/:clientId/documents',
   }
 });
 
+
+
+// Bulk download - Download all documents for a client as ZIP
+// NOTE: This route MUST come BEFORE the :documentId/download route due to Express routing order
+app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    console.log(`📦 Admin bulk download request for client ${clientId}`);
+
+    const client = await getClient(clientId);
+
+    console.log(`👤 Client: ${client}`);
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Check if client has any documents
+    if (!client.documents || client.documents.length === 0) {
+      return res.status(404).json({
+        error: 'No documents available',
+        message: 'This client has no documents to download'
+      });
+    }
+
+    // Sanitize aktenzeichen
+    let safeAktenzeichen;
+    try {
+      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen || clientId);
+    } catch (error) {
+      safeAktenzeichen = clientId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    // Create ZIP filename
+    const clientName = `${client.firstName || 'Client'}_${client.lastName || ''}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const zipFilename = `${clientName}_${safeAktenzeichen}_Documents_${dateStr}.zip`;
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+    // Create archiver instance
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
+    });
+
+    // Handle archiver warnings and errors
+    archive.on('warning', (err) => {
+      if (err.code === 'ENOENT') {
+        console.warn('⚠️ Archive warning:', err);
+      } else {
+        throw err;
+      }
+    });
+
+    archive.on('error', (err) => {
+      console.error('❌ Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create ZIP archive' });
+      }
+    });
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Track statistics
+    let addedFilesCount = 0;
+    let missingFilesCount = 0;
+    const manifestLines = [];
+    const missingFiles = [];
+
+    // Add documents to ZIP
+    for (const doc of client.documents) {
+      // Determine folder based on document type/status
+      let folderName = 'Other_Documents';
+      if (doc.document_status && doc.document_status.includes('creditor')) {
+        folderName = 'Creditor_Documents';
+      } else if (doc.processing_status === 'completed' &&
+                 (doc.document_status === 'non_creditor' || doc.document_status === 'non_creditor_confirmed')) {
+        folderName = 'Non_Creditor_Documents';
+      }
+
+      // Detect file extension from MIME type or filename
+      let detectedExtension = 'pdf'; // Default
+      if (doc.type && doc.type !== 'unknown') {
+        const mimeExtension = doc.type.split('/')[1];
+        if (mimeExtension) {
+          detectedExtension = mimeExtension;
+        }
+      } else if (doc.filename || doc.name) {
+        const filenameMatch = (doc.filename || doc.name).match(/\.([a-zA-Z0-9]+)$/);
+        if (filenameMatch) {
+          detectedExtension = filenameMatch[1].toLowerCase();
+        }
+      }
+
+      // Possible extensions to try
+      const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+      const uniqueExtensions = [...new Set(extensionsToTry)];
+
+      // Base directories to search (include client.id which is the actual UUID folder)
+      const baseDirectories = [
+        path.join(uploadsDir, client.id || clientId),
+        path.join(uploadsDir, clientId),
+        path.join(uploadsDir, safeAktenzeichen),
+      ].filter(Boolean);
+
+      // Build possible paths - matching the individual download logic
+      const possiblePaths = [];
+
+      // Try with document ID + various extensions
+      for (const baseDir of baseDirectories) {
+        for (const ext of uniqueExtensions) {
+          possiblePaths.push(path.join(baseDir, `${doc.id}.${ext}`));
+        }
+      }
+
+      // Try with stored filename (this is the actual file on disk)
+      if (doc.filename) {
+        for (const baseDir of baseDirectories) {
+          possiblePaths.push(path.join(baseDir, doc.filename));
+        }
+      }
+
+      // Try with document name
+      if (doc.name && doc.name !== doc.filename) {
+        for (const baseDir of baseDirectories) {
+          possiblePaths.push(path.join(baseDir, doc.name));
+        }
+      }
+
+      let filePath = null;
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          filePath = possiblePath;
+          console.log(`✅ Found file for ZIP: ${filePath}`);
+          break;
+        }
+      }
+
+      if (filePath) {
+        try {
+          // Sanitize filename for ZIP
+          const sanitizedFilename = (doc.name || doc.filename || `document_${doc.id}`).replace(/[<>:"|?*]/g, '_');
+          const zipPath = `${folderName}/${sanitizedFilename}`;
+
+          // Add file to ZIP
+          archive.file(filePath, { name: zipPath });
+
+          addedFilesCount++;
+
+          // Add to manifest
+          const uploadDate = doc.uploadedAt ? new Date(doc.uploadedAt).toISOString().split('T')[0] : 'Unknown';
+          manifestLines.push(`${sanitizedFilename} | ${doc.type || 'unknown'} | ${uploadDate} | ${folderName}`);
+        } catch (fileError) {
+          console.error(`⚠️ Error adding file ${doc.name} to ZIP:`, fileError);
+          missingFilesCount++;
+          missingFiles.push(doc.name);
+        }
+      } else {
+        console.warn(`⚠️ File not found for document ${doc.id} (${doc.name})`);
+        missingFilesCount++;
+        missingFiles.push(doc.name);
+      }
+    }
+
+    // Create manifest file
+    const manifestContent = [
+      `Documents Archive for ${client.firstName} ${client.lastName}`,
+      `Aktenzeichen: ${client.aktenzeichen || 'N/A'}`,
+      `Generated: ${new Date().toISOString()}`,
+      `Total Documents: ${client.documents.length}`,
+      `Files Included: ${addedFilesCount}`,
+      `Files Missing: ${missingFilesCount}`,
+      '',
+      'Files in this archive:',
+      '─────────────────────────────────────────────────────────────',
+      'Filename | Type | Upload Date | Folder',
+      '─────────────────────────────────────────────────────────────',
+      ...manifestLines
+    ];
+
+    if (missingFiles.length > 0) {
+      manifestContent.push('', 'Missing Files:', '─────────────────────────────────────────────────────────────');
+      manifestContent.push(...missingFiles);
+    }
+
+    archive.append(manifestContent.join('\n'), { name: 'manifest.txt' });
+
+    // Log audit trail
+    console.log(`📦 Admin ${req.user?.email || 'unknown'} downloading ${addedFilesCount} documents for client ${client.aktenzeichen}`);
+
+    // Finalize the archive
+    await archive.finalize();
+
+  } catch (error) {
+    console.error('❌ Error creating bulk download:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to create document archive',
+        details: error.message
+      });
+    }
+  }
+});
+
+
 // Serve uploaded documents
 app.get('/api/clients/:clientId/documents/:filename', (req, res) => {
   const { clientId, filename } = req.params;
+  console.log(`📄 Serving document ${filename} for client ${clientId}`);
   const filePath = path.join(uploadsDir, clientId, filename);
   
   if (fs.existsSync(filePath)) {
@@ -1295,34 +1507,90 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
       });
     }
 
+    // Detect file extension from MIME type or filename
+    let detectedExtension = 'pdf'; // Default
+    if (document.type && document.type !== 'unknown') {
+      const mimeExtension = document.type.split('/')[1];
+      if (mimeExtension) {
+        detectedExtension = mimeExtension;
+      }
+    } else if (document.filename || document.name) {
+      // Try to get extension from filename
+      const filenameMatch = (document.filename || document.name).match(/\.([a-zA-Z0-9]+)$/);
+      if (filenameMatch) {
+        detectedExtension = filenameMatch[1].toLowerCase();
+      }
+    }
+
+    // Possible extensions to try if MIME type is unknown
+    const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+    const uniqueExtensions = [...new Set(extensionsToTry)];
+
     // Construct file path - try different possible paths
-    const possiblePaths = [
-      path.join(uploadsDir, clientId, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, safeAktenzeichen, `${documentId}.${document.type?.split('/')[1] || 'pdf'}`),
-      path.join(uploadsDir, clientId, document.filename || document.name),
-      path.join(uploadsDir, safeAktenzeichen, document.filename || document.name),
+    const possiblePaths = [];
+    const baseDirectories = [
+      path.join(uploadsDir, clientId),
+      path.join(uploadsDir, safeAktenzeichen),
+      path.join(uploadsDir, client.id || clientId)
     ];
 
+    // Try with document ID + various extensions
+    for (const baseDir of baseDirectories) {
+      for (const ext of uniqueExtensions) {
+        possiblePaths.push(path.join(baseDir, `${documentId}.${ext}`));
+      }
+    }
+
+    // Try with stored filename
+    if (document.filename) {
+      for (const baseDir of baseDirectories) {
+        possiblePaths.push(path.join(baseDir, document.filename));
+      }
+    }
+
+    // Try with document name
+    if (document.name && document.name !== document.filename) {
+      for (const baseDir of baseDirectories) {
+        possiblePaths.push(path.join(baseDir, document.name));
+      }
+    }
+
+    // Find the first path that exists
     let filePath = null;
     for (const possiblePath of possiblePaths) {
       if (fs.existsSync(possiblePath)) {
         filePath = possiblePath;
+        console.log(`✅ Found file at: ${filePath}`);
         break;
       }
     }
 
     if (!filePath) {
-      console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
-      
+      console.error(`❌ File not found for document ${documentId} (${document.name})`);
+      console.error(`   Document metadata:`, {
+        id: document.id,
+        name: document.name,
+        filename: document.filename,
+        type: document.type
+      });
+      console.error(`   Tried ${possiblePaths.length} paths (showing first 10):`, possiblePaths.slice(0, 10));
+
       // For test scenarios, serve a mock PDF
       if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
         console.log(`📋 Serving mock PDF for test document ${document.name}`);
         return serveMockPDFDownload(res, document.name);
       }
-      
-      return res.status(404).json({ 
-        error: 'Document file not found on disk',
-        document_id: documentId 
+
+      return res.status(404).json({
+        error: 'File not found',
+        message: 'The document file could not be found on the server. It may have been deleted or the upload may have failed.',
+        document_name: document.name,
+        document_id: documentId,
+        suggestions: [
+          'The file may need to be re-uploaded',
+          'Check if the file exists in the uploads directory',
+          'Contact support if the issue persists'
+        ]
       });
     }
 
@@ -1332,9 +1600,13 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
     // Set appropriate headers for download
     const mimeType = document.type || 'application/pdf';
     const filename = document.filename || document.name || `document_${documentId}.pdf`;
-    
+
+    // Encode filename properly for special characters (RFC 5987)
+    const encodedFilename = encodeURIComponent(filename);
+    const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_'); // Fallback for non-RFC5987 browsers
+
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     
     // Send the file
@@ -2338,6 +2610,281 @@ app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, r
     res.status(500).json({ 
       error: 'Error starting reprocessing',
       details: error.message 
+    });
+  }
+});
+
+// Bulk reprocess ALL documents for a client
+app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { confirmation, admin_id, reason } = req.body;
+
+    // Require explicit confirmation
+    if (!confirmation) {
+      return res.status(400).json({
+        error: 'Confirmation required',
+        message: 'You must explicitly confirm this destructive action'
+      });
+    }
+
+    const client = await getClient(clientId);
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Check if documents exist
+    if (!client.documents || client.documents.length === 0) {
+      return res.status(400).json({
+        error: 'No documents found',
+        message: 'This client has no documents to reprocess'
+      });
+    }
+
+    // Get documents count before reprocessing
+    const documentsCount = client.documents.length;
+    const documentIds = client.documents.map(doc => doc.id);
+
+    // Store original metadata for each document (CRITICAL for consistency)
+    const originalMetadata = client.documents.map(doc => ({
+      id: doc.id,
+      name: doc.name,
+      filename: doc.filename,
+      type: doc.type,
+      size: doc.size,
+      uploadedAt: doc.uploadedAt
+    }));
+
+    // Reset all documents - clear AI results but preserve original metadata
+    client.documents = client.documents.map((doc, index) => ({
+      // Preserve ORIGINAL metadata (CRITICAL)
+      id: doc.id, // KEEP SAME ID
+      name: doc.name,
+      filename: doc.filename,
+      type: doc.type,
+      size: doc.size,
+      uploadedAt: doc.uploadedAt, // KEEP ORIGINAL UPLOAD DATE
+
+      // Reset processing state
+      processing_status: 'pending',
+      document_status: 'pending',
+
+      // Clear AI extraction results
+      extracted_data: null,
+      validation: null,
+      summary: null,
+
+      // Clear processing metadata
+      processing_error: null,
+      processing_time_ms: null,
+      processed_at: null,
+
+      // Reset review flags
+      confidence: null,
+      classification_success: null,
+      manual_review_required: false,
+      is_creditor_document: null,
+      is_duplicate: false,
+      duplicate_reason: null,
+
+      // Clear manual review data
+      manually_reviewed: false,
+      reviewed_at: null,
+      reviewed_by: null,
+
+      // Add reprocess tracking
+      reprocessed: true,
+      reprocessed_at: new Date().toISOString(),
+      reprocessed_by: admin_id || 'admin',
+      reprocess_reason: reason || 'Bulk reprocess requested'
+    }));
+
+    // IMPORTANT: Remove creditors from final_creditor_list that came from these documents
+    const removedCreditorsCount = client.final_creditor_list ? client.final_creditor_list.length : 0;
+    if (client.final_creditor_list && client.final_creditor_list.length > 0) {
+      client.final_creditor_list = client.final_creditor_list.filter(creditor => {
+        // Keep creditors that were manually added or from other sources
+        return creditor.created_via === 'manual_entry' ||
+               !documentIds.includes(creditor.document_id);
+      });
+
+      console.log(`Removed ${removedCreditorsCount - client.final_creditor_list.length} creditors from final list`);
+    }
+
+    // Add audit log entry to status_history
+    const auditEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      status: 'documents_reprocessed_bulk',
+      changed_by: 'admin',
+      metadata: {
+        action: 'bulk_reprocess_documents',
+        admin_id: admin_id || 'unknown',
+        documents_count: documentsCount,
+        document_ids: documentIds,
+        reason: reason || 'Not provided',
+        timestamp: new Date().toISOString(),
+        creditors_removed: removedCreditorsCount - (client.final_creditor_list ? client.final_creditor_list.length : 0)
+      },
+      created_at: new Date()
+    };
+
+    if (!client.status_history) {
+      client.status_history = [];
+    }
+    client.status_history.push(auditEntry);
+
+    // Save client with reset documents
+    await saveClient(client);
+
+    console.log(`\n========================================`);
+    console.log(`📋 BULK REPROCESS INITIATED`);
+    console.log(`========================================`);
+    console.log(`Client: ${client.firstName} ${client.lastName} (${clientId})`);
+    console.log(`Documents: ${documentsCount}`);
+    console.log(`Admin: ${admin_id || 'unknown'}`);
+    console.log(`Reason: ${reason || 'Not provided'}`);
+    console.log(`========================================\n`);
+
+    // Queue all documents for reprocessing in background
+    setImmediate(async () => {
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let i = 0; i < client.documents.length; i++) {
+        const doc = client.documents[i];
+        const filePath = path.join(__dirname, 'uploads', clientId, doc.filename);
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+          console.error(`❌ File not found for reprocessing: ${doc.name}`);
+
+          // Update document status to error
+          const updatedClient = await getClient(clientId);
+          const docIndex = updatedClient.documents.findIndex(d => d.id === doc.id);
+          if (docIndex !== -1) {
+            updatedClient.documents[docIndex].processing_status = 'error';
+            updatedClient.documents[docIndex].processing_error = 'File not found';
+            await saveClient(updatedClient);
+          }
+          failureCount++;
+          continue;
+        }
+
+        try {
+          // Update status to processing
+          const updatedClient = await getClient(clientId);
+          const docIndex = updatedClient.documents.findIndex(d => d.id === doc.id);
+          if (docIndex !== -1) {
+            updatedClient.documents[docIndex].processing_status = 'processing';
+            await saveClient(updatedClient);
+          }
+
+          console.log(`🔄 Reprocessing [${i + 1}/${documentsCount}]: ${doc.name}`);
+
+          // Process document through AI pipeline
+          const extractedData = await documentProcessor.processDocument(filePath, doc.name);
+          const validation = documentProcessor.validateExtraction(extractedData);
+          const summary = documentProcessor.generateSummary(extractedData);
+
+          // Update document with new results
+          const finalClient = await getClient(clientId);
+          const finalDocIndex = finalClient.documents.findIndex(d => d.id === doc.id);
+
+          if (finalDocIndex !== -1) {
+            // CRITICAL: Preserve original metadata while updating results
+            finalClient.documents[finalDocIndex] = {
+              ...finalClient.documents[finalDocIndex],
+
+              // Update processing results
+              processing_status: 'completed',
+              extracted_data: extractedData,
+              validation: validation,
+              summary: summary,
+              processed_at: new Date().toISOString(),
+
+              // Update flags based on new extraction
+              is_creditor_document: extractedData?.is_creditor_document,
+              confidence: extractedData?.confidence || validation?.confidence,
+              classification_success: true,
+              manual_review_required: validation?.requires_manual_review || false,
+
+              // Clear any previous errors
+              processing_error: null
+            };
+
+            await saveClient(finalClient);
+            successCount++;
+            console.log(`✅ Completed [${i + 1}/${documentsCount}]: ${doc.name}`);
+          }
+
+        } catch (error) {
+          console.error(`❌ Failed to reprocess ${doc.name}:`, error.message);
+
+          // Update document with error
+          const errorClient = await getClient(clientId);
+          const errorDocIndex = errorClient.documents.findIndex(d => d.id === doc.id);
+          if (errorDocIndex !== -1) {
+            errorClient.documents[errorDocIndex].processing_status = 'error';
+            errorClient.documents[errorDocIndex].processing_error = error.message;
+            errorClient.documents[errorDocIndex].processed_at = new Date().toISOString();
+            await saveClient(errorClient);
+          }
+          failureCount++;
+        }
+
+        // Small delay between documents to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      console.log(`\n========================================`);
+      console.log(`📊 BULK REPROCESS COMPLETED`);
+      console.log(`========================================`);
+      console.log(`Client: ${client.firstName} ${client.lastName}`);
+      console.log(`Total Documents: ${documentsCount}`);
+      console.log(`✅ Success: ${successCount}`);
+      console.log(`❌ Failed: ${failureCount}`);
+      console.log(`========================================\n`);
+
+      // Add completion audit log
+      const completionAudit = {
+        id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        status: 'documents_reprocessed_complete',
+        changed_by: 'system',
+        metadata: {
+          action: 'bulk_reprocess_complete',
+          documents_total: documentsCount,
+          documents_success: successCount,
+          documents_failed: failureCount,
+          admin_id: admin_id || 'unknown',
+          timestamp: new Date().toISOString()
+        },
+        created_at: new Date()
+      };
+
+      const finalClient = await getClient(clientId);
+      if (!finalClient.status_history) {
+        finalClient.status_history = [];
+      }
+      finalClient.status_history.push(completionAudit);
+      await saveClient(finalClient);
+    });
+
+    // Return immediate response
+    res.json({
+      success: true,
+      message: 'Bulk document reprocessing started',
+      client_id: clientId,
+      documents_count: documentsCount,
+      estimated_time_minutes: Math.ceil(documentsCount * 0.5), // ~30 seconds per document
+      status: 'processing'
+    });
+
+  } catch (error) {
+    console.error('❌ Error starting bulk reprocessing:', error);
+    res.status(500).json({
+      error: 'Error starting bulk reprocessing',
+      details: error.message
     });
   }
 });
