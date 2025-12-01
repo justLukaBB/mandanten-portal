@@ -26,6 +26,7 @@ const secondRoundApiRoutes = require('./routes/second-round-api');
 const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
+const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -72,8 +73,9 @@ app.use('/api/second-round', secondRoundApiRoutes);
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
+app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
 
-// Serve generated documents statically for Make.com webhook downloads
+// Serve generated documents statically
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
 
 // Serve docs folder for visual flowcharts

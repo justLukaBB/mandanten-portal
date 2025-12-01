@@ -9,11 +9,12 @@ import {
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
+import { DatabaseIcon } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  currentPage: 'analytics' | 'settings' | 'create-user' | 'user-list';
-  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'user-list') => void;
+  currentPage: 'analytics' | 'settings' | 'create-user' | 'user-list' | 'creditor-database';
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'user-list' | 'creditor-database') => void;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavigate }) => {
@@ -31,6 +32,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
       key: 'create-user' as const, 
       icon: UserGroupIcon,
       description: '➕ Test-User manuell anlegen'
+    },
+    {
+      name: 'Gläubiger-Datenbank',   
+      key: 'creditor-database' as const,
+      icon: DatabaseIcon,          
+      description: 'Verwalten Sie Ihre Gläubigerdaten' 
     },
     { 
       name: 'Einstellungen', 
@@ -116,7 +123,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onNavi
 const SidebarContent: React.FC<{
   navigation: any[];
   currentPage: string;
-  onNavigate: (page: 'analytics' | 'settings' | 'create-user') => void;
+  onNavigate: (page: 'analytics' | 'settings' | 'create-user' | 'creditor-database') => void;
   onLogout: () => void;
 }> = ({ navigation, currentPage, onNavigate, onLogout }) => {
   return (
