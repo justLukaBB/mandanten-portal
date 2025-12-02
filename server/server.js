@@ -2630,6 +2630,8 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
 
     const client = await getClient(clientId);
 
+    console.log(client.id);
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -2645,6 +2647,11 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
     // Get documents count before reprocessing
     const documentsCount = client.documents.length;
     const documentIds = client.documents.map(doc => doc.id);
+
+    console.log('Documents count:', documentsCount);
+    console.log('Document:', client.documents);
+
+
 
     // Store original metadata for each document (CRITICAL for consistency)
     const originalMetadata = client.documents.map(doc => ({
@@ -2753,7 +2760,19 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
 
       for (let i = 0; i < client.documents.length; i++) {
         const doc = client.documents[i];
-        const filePath = path.join(__dirname, 'uploads', clientId, doc.filename);
+        
+        // Skip documents without filename
+        if (!doc.filename) {
+          console.error(`❌ Document has no filename, skipping: ${doc.name} (${doc.id})`);
+          failureCount++;
+          continue;
+        }
+
+        const filePath = path.join(__dirname, 'uploads', client.id, doc.filename);
+
+        console.log(clientId);
+
+        console.log(filePath)
 
         // Check if file exists
         if (!fs.existsSync(filePath)) {
@@ -2793,8 +2812,19 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
 
           if (finalDocIndex !== -1) {
             // CRITICAL: Preserve original metadata while updating results
+            const existingDoc = finalClient.documents[finalDocIndex];
+            // Convert to object if it's a mongoose document to ensure we get all fields
+            const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
+
             finalClient.documents[finalDocIndex] = {
-              ...finalClient.documents[finalDocIndex],
+              ...existingDocObj,
+              // Explicitly ensure key metadata fields are preserved
+              id: existingDoc.id,
+              filename: existingDoc.filename,
+              name: existingDoc.name, 
+              type: existingDoc.type,
+              size: existingDoc.size,
+              uploadedAt: existingDoc.uploadedAt,
 
               // Update processing results
               processing_status: 'completed',
