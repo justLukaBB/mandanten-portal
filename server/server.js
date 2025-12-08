@@ -39,6 +39,7 @@ const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
+const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
@@ -685,18 +686,26 @@ app.post('/api/clients/:clientId/documents',
     // Process each uploaded file
     for (const file of req.files) {
       const documentId = uuidv4();
-      const filePath = file.path;
+      
+      let gcsUrl;
+      try {
+        gcsUrl = await uploadToGCS(file);
+        console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
+      } catch (uploadError) {
+        console.error(`❌ Failed to upload ${file.originalname} to GCS:`, uploadError);
+        continue;
+      }
       
       // Create basic document record
       const documentRecord = {
         id: documentId,
         name: file.originalname,
-        filename: file.filename,
+        filename: gcsUrl.split('/').pop(), // Use GCS filename
         type: file.mimetype,
         size: file.size,
         uploadedAt: new Date().toISOString(),
         category: 'creditor',
-        url: `/api/clients/${clientId}/documents/${file.filename}`,
+        url: gcsUrl, // GCS URL
         processing_status: 'processing',
         extracted_data: null
       };
@@ -763,7 +772,7 @@ app.post('/api/clients/:clientId/documents',
           });
           
           console.log(`🤖 Calling Google Document AI processor...`);
-          const extractedData = await documentProcessor.processDocument(filePath, file.originalname);
+          const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
           
           console.log(`✅ Google Document AI processing completed!`);
           console.log(`📝 Extracted data keys:`, Object.keys(extractedData));
@@ -1351,71 +1360,48 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
         }
       }
 
-      // Possible extensions to try
-      const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
-      const uniqueExtensions = [...new Set(extensionsToTry)];
-
-      // Base directories to search (include client.id which is the actual UUID folder)
-      const baseDirectories = [
-        path.join(uploadsDir, client.id || clientId),
-        path.join(uploadsDir, clientId),
-        path.join(uploadsDir, safeAktenzeichen),
-      ].filter(Boolean);
-
-      // Build possible paths - matching the individual download logic
-      const possiblePaths = [];
-
-      // Try with document ID + various extensions
-      for (const baseDir of baseDirectories) {
-        for (const ext of uniqueExtensions) {
-          possiblePaths.push(path.join(baseDir, `${doc.id}.${ext}`));
+      // Try with stored filename (this is likely the GCS key if migrated)
+      // If filename is a URL or contains slashes, extract the actual filename
+      let gcsFilename = doc.filename;
+      
+      // If filename is missing, try to construct it from name or id
+      if (!gcsFilename) {
+        if (doc.name) {
+           gcsFilename = doc.name;
+        } else {
+           gcsFilename = `${doc.id}.${detectedExtension}`;
         }
       }
+      
+      // Sanitize filename for ZIP
+      const sanitizedFilename = (doc.name || doc.filename || `document_${doc.id}`).replace(/[<>:"|?*]/g, '_');
+      const zipPath = `${folderName}/${sanitizedFilename}`;
 
-      // Try with stored filename (this is the actual file on disk)
-      if (doc.filename) {
-        for (const baseDir of baseDirectories) {
-          possiblePaths.push(path.join(baseDir, doc.filename));
-        }
-      }
+      try {
+        // Get read stream from GCS
+        const fileStream = getGCSFileStream(gcsFilename);
+        
+        // Add error listener to the stream immediately
+        // This is crucial because if the file doesn't exist, GCS stream emits error
+        // and if unhandled, it crashes the Node process
+        fileStream.on('error', (err) => {
+           console.warn(`⚠️ GCS stream error for ${gcsFilename}:`, err.message);
+           // We can't easily remove it from archiver once appended, but archiver handles stream errors gracefully 
+           // IF the error is emitted on the stream.
+           // However, we also track missing files manually for the manifest
+           // missingFilesCount++; // Can't update these reliably inside async event without complexity
+        });
 
-      // Try with document name
-      if (doc.name && doc.name !== doc.filename) {
-        for (const baseDir of baseDirectories) {
-          possiblePaths.push(path.join(baseDir, doc.name));
-        }
-      }
+        // Add stream to ZIP
+        archive.append(fileStream, { name: zipPath });
 
-      let filePath = null;
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          filePath = possiblePath;
-          console.log(`✅ Found file for ZIP: ${filePath}`);
-          break;
-        }
-      }
+        addedFilesCount++;
 
-      if (filePath) {
-        try {
-          // Sanitize filename for ZIP
-          const sanitizedFilename = (doc.name || doc.filename || `document_${doc.id}`).replace(/[<>:"|?*]/g, '_');
-          const zipPath = `${folderName}/${sanitizedFilename}`;
-
-          // Add file to ZIP
-          archive.file(filePath, { name: zipPath });
-
-          addedFilesCount++;
-
-          // Add to manifest
-          const uploadDate = doc.uploadedAt ? new Date(doc.uploadedAt).toISOString().split('T')[0] : 'Unknown';
-          manifestLines.push(`${sanitizedFilename} | ${doc.type || 'unknown'} | ${uploadDate} | ${folderName}`);
-        } catch (fileError) {
-          console.error(`⚠️ Error adding file ${doc.name} to ZIP:`, fileError);
-          missingFilesCount++;
-          missingFiles.push(doc.name);
-        }
-      } else {
-        console.warn(`⚠️ File not found for document ${doc.id} (${doc.name})`);
+        // Add to manifest
+        const uploadDate = doc.uploadedAt ? new Date(doc.uploadedAt).toISOString().split('T')[0] : 'Unknown';
+        manifestLines.push(`${sanitizedFilename} | ${doc.type || 'unknown'} | ${uploadDate} | ${folderName}`);
+      } catch (fileError) {
+        console.error(`⚠️ Error adding file ${doc.name} to ZIP from GCS:`, fileError);
         missingFilesCount++;
         missingFiles.push(doc.name);
       }
@@ -1463,15 +1449,25 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
 
 
 // Serve uploaded documents
-app.get('/api/clients/:clientId/documents/:filename', (req, res) => {
+app.get('/api/clients/:clientId/documents/:filename', async (req, res) => {
   const { clientId, filename } = req.params;
-  console.log(`📄 Serving document ${filename} for client ${clientId}`);
-  const filePath = path.join(uploadsDir, clientId, filename);
+  console.log(`📄 Serving document ${filename} for client ${clientId} from GCS`);
   
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
+  try {
+    const fileStream = getGCSFileStream(filename);
+    
+    fileStream.on('error', (err) => {
+        if (!res.headersSent) {
+            res.status(404).json({ error: 'File not found' });
+        }
+    });
+
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error serving file from GCS:', error);
+    if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
   }
 });
 
@@ -1495,129 +1491,61 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Sanitize aktenzeichen to prevent path traversal attacks
-    let safeAktenzeichen;
-    try {
-      safeAktenzeichen = sanitizeAktenzeichen(client.aktenzeichen);
-    } catch (error) {
-      console.error(`⚠️ Invalid aktenzeichen for client ${clientId}:`, error.message);
-      return res.status(400).json({
-        error: 'Invalid aktenzeichen format',
-        message: 'The aktenzeichen contains invalid characters'
-      });
-    }
-
-    // Detect file extension from MIME type or filename
-    let detectedExtension = 'pdf'; // Default
-    if (document.type && document.type !== 'unknown') {
-      const mimeExtension = document.type.split('/')[1];
-      if (mimeExtension) {
-        detectedExtension = mimeExtension;
-      }
-    } else if (document.filename || document.name) {
-      // Try to get extension from filename
-      const filenameMatch = (document.filename || document.name).match(/\.([a-zA-Z0-9]+)$/);
-      if (filenameMatch) {
-        detectedExtension = filenameMatch[1].toLowerCase();
-      }
-    }
-
-    // Possible extensions to try if MIME type is unknown
-    const extensionsToTry = [detectedExtension, 'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
-    const uniqueExtensions = [...new Set(extensionsToTry)];
-
-    // Construct file path - try different possible paths
-    const possiblePaths = [];
-    const baseDirectories = [
-      path.join(uploadsDir, clientId),
-      path.join(uploadsDir, safeAktenzeichen),
-      path.join(uploadsDir, client.id || clientId)
-    ];
-
-    // Try with document ID + various extensions
-    for (const baseDir of baseDirectories) {
-      for (const ext of uniqueExtensions) {
-        possiblePaths.push(path.join(baseDir, `${documentId}.${ext}`));
-      }
-    }
-
-    // Try with stored filename
-    if (document.filename) {
-      for (const baseDir of baseDirectories) {
-        possiblePaths.push(path.join(baseDir, document.filename));
-      }
-    }
-
-    // Try with document name
-    if (document.name && document.name !== document.filename) {
-      for (const baseDir of baseDirectories) {
-        possiblePaths.push(path.join(baseDir, document.name));
-      }
-    }
-
-    // Find the first path that exists
-    let filePath = null;
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        filePath = possiblePath;
-        console.log(`✅ Found file at: ${filePath}`);
-        break;
-      }
-    }
-
-    if (!filePath) {
-      console.error(`❌ File not found for document ${documentId} (${document.name})`);
-      console.error(`   Document metadata:`, {
-        id: document.id,
-        name: document.name,
-        filename: document.filename,
-        type: document.type
-      });
-      console.error(`   Tried ${possiblePaths.length} paths (showing first 10):`, possiblePaths.slice(0, 10));
-
-      // For test scenarios, serve a mock PDF
-      if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
+    // For test scenarios, serve a mock PDF
+    if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
         console.log(`📋 Serving mock PDF for test document ${document.name}`);
         return serveMockPDFDownload(res, document.name);
-      }
+    }
 
-      return res.status(404).json({
-        error: 'File not found',
-        message: 'The document file could not be found on the server. It may have been deleted or the upload may have failed.',
-        document_name: document.name,
-        document_id: documentId,
-        suggestions: [
-          'The file may need to be re-uploaded',
-          'Check if the file exists in the uploads directory',
-          'Contact support if the issue persists'
-        ]
-      });
+    const filename = document.filename || document.name;
+    if (!filename) {
+       return res.status(404).json({ error: 'Document filename not found' });
     }
 
     // Log download for security auditing
-    console.log(`📄 Admin downloading document ${documentId} (${document.name}) for client ${client.aktenzeichen}`);
+    console.log(`📄 Admin downloading document ${documentId} (${filename}) for client ${client.aktenzeichen}`);
 
     // Set appropriate headers for download
     const mimeType = document.type || 'application/pdf';
-    const filename = document.filename || document.name || `document_${documentId}.pdf`;
-
+    
     // Encode filename properly for special characters (RFC 5987)
-    const encodedFilename = encodeURIComponent(filename);
-    const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_'); // Fallback for non-RFC5987 browsers
+    const downloadName = document.name || filename || `document_${documentId}.pdf`;
+    const encodedFilename = encodeURIComponent(downloadName);
+    const asciiFilename = downloadName.replace(/[^\x00-\x7F]/g, '_');
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     
-    // Send the file
-    res.sendFile(path.resolve(filePath));
+    try {
+        const fileStream = getGCSFileStream(filename);
+        
+        fileStream.on('error', (err) => {
+            console.error(`❌ GCS stream error for ${filename}:`, err.message);
+            if (!res.headersSent) {
+                res.status(404).json({ 
+                    error: 'File not found in storage',
+                    details: err.message
+                });
+            }
+        });
+
+        fileStream.pipe(res);
+    } catch (streamError) {
+        console.error('Error creating GCS stream:', streamError);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to retrieve file' });
+        }
+    }
 
   } catch (error) {
     console.error('❌ Error downloading document:', error);
-    res.status(500).json({
-      error: 'Failed to download document',
-      details: error.message
-    });
+    if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Failed to download document',
+          details: error.message
+        });
+    }
   }
 });
 
@@ -2762,28 +2690,31 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
         const doc = client.documents[i];
         
         // Skip documents without filename
-        if (!doc.filename) {
-          console.error(`❌ Document has no filename, skipping: ${doc.name} (${doc.id})`);
+        // Use stored filename (GCS object name)
+        // If filename is missing (legacy), try name
+        const gcsFilename = doc.filename || doc.name;
+        
+        if (!gcsFilename) {
+          console.warn(`⚠️ Skipping document ${doc.id} - no filename`);
           failureCount++;
           continue;
         }
 
-        const filePath = path.join(__dirname, 'uploads', client.id, doc.filename);
-
-        console.log(clientId);
-
-        console.log(filePath)
-
-        // Check if file exists
-        if (!fs.existsSync(filePath)) {
-          console.error(`❌ File not found for reprocessing: ${doc.name}`);
-
-          // Update document status to error
+        // Fetch the file from GCS into a buffer for processing
+        let fileBuffer;
+        try {
+          fileBuffer = await getGCSFileBuffer(gcsFilename);
+          if (!fileBuffer) {
+             throw new Error('File buffer is empty');
+          }
+        } catch (gcsFetchError) {
+          console.error(`❌ Failed to fetch file from GCS for reprocessing: ${doc.name} (${gcsFilename})`, gcsFetchError.message);
+          
           const updatedClient = await getClient(clientId);
           const docIndex = updatedClient.documents.findIndex(d => d.id === doc.id);
           if (docIndex !== -1) {
             updatedClient.documents[docIndex].processing_status = 'error';
-            updatedClient.documents[docIndex].processing_error = 'File not found';
+            updatedClient.documents[docIndex].processing_error = `Failed to fetch from GCS: ${gcsFetchError.message}`;
             await saveClient(updatedClient);
           }
           failureCount++;
@@ -2802,7 +2733,7 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
           console.log(`🔄 Reprocessing [${i + 1}/${documentsCount}]: ${doc.name}`);
 
           // Process document through AI pipeline
-          const extractedData = await documentProcessor.processDocument(filePath, doc.name);
+          const extractedData = await documentProcessor.processDocument(fileBuffer, doc.name);
           const validation = documentProcessor.validateExtraction(extractedData);
           const summary = documentProcessor.generateSummary(extractedData);
 
@@ -2813,7 +2744,6 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
           if (finalDocIndex !== -1) {
             // CRITICAL: Preserve original metadata while updating results
             const existingDoc = finalClient.documents[finalDocIndex];
-            // Convert to object if it's a mongoose document to ensure we get all fields
             const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
 
             finalClient.documents[finalDocIndex] = {
@@ -2863,7 +2793,7 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
           failureCount++;
         }
 
-        // Small delay between documents to avoid overwhelming the system
+        // Small delay between documents
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
@@ -2915,6 +2845,43 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
     res.status(500).json({
       error: 'Error starting bulk reprocessing',
       details: error.message
+    });
+  }
+});
+
+// Delete ALL documents for a client (Database only)
+app.delete('/api/clients/:clientId/documents/delete-all', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    console.log(`🗑️ Deleting ALL documents for client ${clientId}`);
+
+    const client = await getClient(clientId);
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    const docCount = client.documents ? client.documents.length : 0;
+
+    // Clear documents array
+    client.documents = [];
+    
+    await saveClient(client);
+
+    console.log(`✅ Deleted ${docCount} documents for client ${clientId}`);
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${docCount} documents from database`,
+      deleted_count: docCount
+    });
+
+  } catch (error) {
+    console.error('Error deleting documents:', error);
+    res.status(500).json({ 
+      error: 'Error deleting documents',
+      details: error.message 
     });
   }
 });

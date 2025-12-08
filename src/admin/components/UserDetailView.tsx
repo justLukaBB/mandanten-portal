@@ -211,9 +211,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [showReprocessModal, setShowReprocessModal] = useState(false);
   const [reprocessConfirmText, setReprocessConfirmText] = useState('');
 
+  const [downloadingDocs, setDownloadingDocs] = useState<Record<string, boolean>>({});
+
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
+      setDownloadingDocs(prev => ({ ...prev, [documentId]: true }));
 
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}/download`, {
         headers: {
@@ -240,6 +243,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    } finally {
+      setDownloadingDocs(prev => ({ ...prev, [documentId]: false }));
     }
   };
 
@@ -340,7 +345,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
         if (allProcessed) {
           clearInterval(pollInterval);
-          alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
+          // alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
         }
       }, 10000); // Poll every 10 seconds
 
@@ -1160,10 +1165,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                           <div className="flex-shrink-0 space-x-2">
                             <button
                               onClick={() => downloadDocument(doc.id, doc.name)}
-                              className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300"
+                              disabled={downloadingDocs[doc.id]}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <ArrowDownTrayIcon className="w-3 h-3 mr-1" />
-                              Download
+                              {downloadingDocs[doc.id] ? (
+                                <ArrowPathIcon className="w-3 h-3 mr-1 animate-spin" />
+                              ) : (
+                                <ArrowDownTrayIcon className="w-3 h-3 mr-1" />
+                              )}
+                              {downloadingDocs[doc.id] ? 'Loading...' : 'Download'}
                             </button>
                             <button
                               onClick={() => {
@@ -1690,28 +1700,31 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
         {/* Document Detail Modal */}
         <Dialog open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white" showCloseButton={false}>
+          <DialogContent className=" w-[700px]  max-h-[90vh] p-0 bg-white flex flex-col" showCloseButton={false}>
             {selectedDocument && (
               <>
-                <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200 -m-6 mb-0">
-                  <div className="flex items-center space-x-3">
-                    <InformationCircleIcon className="w-8 h-8" style={{ color: '#9f1a1d' }} />
-                    <div>
+                {/* Fixed Header */}
+                <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center space-x-3 pr-8">
+                    <InformationCircleIcon className="w-8 h-8 flex-shrink-0" style={{ color: '#9f1a1d' }} />
+                    <div className="min-w-0">
                       <DialogTitle className="text-xl font-semibold text-gray-900">Dokument Details</DialogTitle>
-                      <DialogDescription className="text-sm text-gray-600">{selectedDocument.name}</DialogDescription>
+                      <DialogDescription className="text-sm text-gray-600 truncate">{selectedDocument.name}</DialogDescription>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedDocument(null)}
-                    className="text-gray-400 hover:text-gray-600 absolute top-0"
+                    className="text-gray-400 hover:text-gray-600 absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    title="Close"
                   >
                     <XMarkIcon className="w-6 h-6" />
                   </button>
                 </DialogHeader>
 
-                <div className="p-6 -mx-6 space-y-6">
+                {/* Scrollable Content */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
                   {/* Document Status & Basic Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col  gap-3">
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 text-gray-900">📄 Dokument Information</h3>
                       <div className="space-y-2">
@@ -1872,17 +1885,17 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   {selectedDocument.extracted_data && (
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h3 className="text-lg font-semibold mb-3 text-gray-900">⚙️ Technische Details</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="flex flex-col gap-4 text-sm">
                         {selectedDocument.extracted_data.processing_method && (
                           <div>
                             <span className="font-medium text-gray-600">Verarbeitungsmethode:</span>
-                            <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.processing_method}</p>
+                            <p className="text-gray-900 mt-1 break-all">{selectedDocument.extracted_data.processing_method}</p>
                           </div>
                         )}
                         {selectedDocument.extracted_data.workflow_status && (
                           <div>
                             <span className="font-medium text-gray-600">Workflow-Status:</span>
-                            <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.workflow_status}</p>
+                            <p className="text-gray-900 mt-1 break-words">{selectedDocument.extracted_data.workflow_status}</p>
                           </div>
                         )}
                         {selectedDocument.extracted_data.token_usage && (
@@ -1926,20 +1939,32 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             setReprocessConfirmText('');
           }
         }}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 bg-white" showCloseButton={false}>
+          <DialogContent className="max-w-2xl max-h-[90vh] p-0 bg-white flex flex-col" showCloseButton={false}>
             {user && (
               <>
-                <DialogHeader className="bg-orange-600 text-white p-6 rounded-t-lg">
-                  <div className="flex items-center space-x-3">
-                    <ExclamationTriangleIcon className="w-10 h-10" />
+                {/* Fixed Header */}
+                <div className="bg-orange-600 text-white p-6 rounded-t-lg flex-shrink-0 relative">
+                  <div className="flex items-center space-x-3 pr-8">
+                    <ExclamationTriangleIcon className="w-10 h-10 flex-shrink-0" />
                     <div>
-                      <DialogTitle className="text-2xl font-bold text-white">Re-Process All Documents - Destructive Action</DialogTitle>
-                      <DialogDescription className="text-orange-100 text-sm mt-1">This will delete all current AI processing results</DialogDescription>
+                      <DialogTitle className="text-2xl font-bold text-white">Re-Process All Documents</DialogTitle>
+                      <DialogDescription className="text-orange-100 text-sm mt-1">Destructive Action: This will delete all current AI processing results</DialogDescription>
                     </div>
                   </div>
-                </DialogHeader>
+                  <button
+                    onClick={() => {
+                      setShowReprocessModal(false);
+                      setReprocessConfirmText('');
+                    }}
+                    className="absolute top-4 right-4 text-white/80 hover:text-white bg-orange-700/30 hover:bg-orange-700/50 rounded-full p-1 transition-colors"
+                    title="Close modal"
+                  >
+                    <XMarkIcon className="w-6 h-6" />
+                  </button>
+                </div>
 
-                <div className="p-6 space-y-6">
+                {/* Scrollable Content */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
                   {/* Warning Message */}
                   <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
                     <p className="text-lg font-bold text-yellow-900 mb-2">

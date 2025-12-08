@@ -10,6 +10,11 @@ const uploadsDir = path.join(__dirname, '../uploads');
 fs.ensureDirSync(uploadsDir);
 
 // Configure multer for file uploads
+// Changed to memory storage for GCS upload
+const storage = multer.memoryStorage();
+
+// Legacy disk storage - disabled
+/*
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const clientId = req.params.clientId || 'default';
@@ -24,6 +29,7 @@ const storage = multer.diskStorage({
         cb(null, filename);
     }
 });
+*/
 
 const fileFilter = (req, file, cb) => {
     // Accept only specific file types
