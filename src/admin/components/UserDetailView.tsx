@@ -212,6 +212,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [reprocessConfirmText, setReprocessConfirmText] = useState('');
 
   const [downloadingDocs, setDownloadingDocs] = useState<Record<string, boolean>>({});
+  const [deletingDocs, setDeletingDocs] = useState<Record<string, boolean>>({});
 
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
@@ -297,6 +298,49 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       alert(`Fehler beim Herunterladen aller Dokumente: ${error}`);
     } finally {
       setDownloadingAllDocuments(false);
+    }
+  };
+
+  const deleteDocument = async (documentId: string, documentName: string) => {
+    if (!user) return;
+
+    // Confirm deletion
+    const confirmDelete = window.confirm(
+      `Möchten Sie das Dokument "${documentName}" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      console.log(`🗑️ Deleting document ${documentId} (${documentName})`);
+      setDeletingDocs(prev => ({ ...prev, [documentId]: true }));
+
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Delete failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Document deleted successfully:`, result);
+      alert(`✅ Dokument "${documentName}" wurde erfolgreich gelöscht.`);
+
+      // Close the modal if it's open
+      setSelectedDocument(null);
+
+      // Refresh user data to update the documents list
+      await fetchUserDetails();
+    } catch (error) {
+      console.error('❌ Error deleting document:', error);
+      alert(`Fehler beim Löschen des Dokuments: ${error}`);
+    } finally {
+      setDeletingDocs(prev => ({ ...prev, [documentId]: false }));
     }
   };
 
@@ -1908,7 +1952,19 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     </div>
                   )}
 
-                  <div className="flex justify-end pt-4 border-t border-gray-200">
+                  <div className="flex justify-between pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => deleteDocument(selectedDocument.id, selectedDocument.name)}
+                      disabled={deletingDocs[selectedDocument.id]}
+                      className={`px-6 py-2 text-white rounded-md transition-colors ${
+                        deletingDocs[selectedDocument.id]
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-red-600 hover:bg-red-700'
+                      }`}
+                      title="Dokument unwiderruflich löschen"
+                    >
+                      {deletingDocs[selectedDocument.id] ? 'Wird gelöscht...' : 'Dokument löschen'}
+                    </button>
                     <button
                       onClick={() => setSelectedDocument(null)}
                       className="px-6 py-2 text-white rounded-md hover:opacity-90"
