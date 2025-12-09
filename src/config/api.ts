@@ -63,22 +63,22 @@ const getApiBaseUrl = () => {
     log('🌐 Using production API URL');
     return 'https://mandanten-portal-docker.onrender.com';
   }
-  
+
   // If explicitly set in environment
   if (process.env.REACT_APP_API_URL) {
     log('🌐 Using environment API URL:', process.env.REACT_APP_API_URL);
     return process.env.REACT_APP_API_URL;
   }
-  
+
   // Production detection
   if (process.env.NODE_ENV === 'production') {
     log('🌐 Using production mode API URL');
     return 'https://mandanten-portal-docker.onrender.com';
   }
-  
+
   // Development default
   log('🌐 Using development API URL');
-  return 'http://localhost:3001';
+  return 'http://localhost:10000';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -151,7 +151,7 @@ api.interceptors.request.use(
   (config) => {
     let token: string | null = null;
     let tokenType = 'None';
-    
+
     // Priority 1: Admin token for admin endpoints (takes precedence)
     if (config.url?.includes('/admin/')) {
       token = localStorage.getItem('admin_token');
@@ -160,7 +160,7 @@ api.interceptors.request.use(
         log('🔑 Using admin token for admin endpoint:', config.url);
       }
     }
-    
+
     // Priority 2: JWT token for authenticated requests
     if (!token) {
       token = localStorage.getItem('auth_token');
@@ -168,7 +168,7 @@ api.interceptors.request.use(
         tokenType = 'JWT';
       }
     }
-    
+
     // Priority 3: Portal session token as fallback
     if (!token) {
       token = localStorage.getItem('portal_session_token');
@@ -176,7 +176,7 @@ api.interceptors.request.use(
         tokenType = 'Session';
       }
     }
-    
+
     // Priority 4: Admin token as final fallback (if not admin endpoint)
     if (!token) {
       token = localStorage.getItem('admin_token');
@@ -184,11 +184,11 @@ api.interceptors.request.use(
         tokenType = 'Admin (fallback)';
       }
     }
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      log('🔑 API request with token:', { 
-        url: config.url, 
+      log('🔑 API request with token:', {
+        url: config.url,
         hasToken: !!token,
         tokenType,
         tokenPreview: `${token.substring(0, 10)}...`
@@ -196,7 +196,7 @@ api.interceptors.request.use(
     } else {
       log('⚠️ API request without token:', config.url);
     }
-    
+
     return config;
   },
   (error) => {

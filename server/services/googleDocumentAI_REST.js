@@ -66,19 +66,26 @@ class GoogleDocumentAI_REST {
   /**
    * Process document using Google Document AI REST API
    */
-  async processDocument(filePath, originalName) {
+  async processDocument(input, originalName) {
     try {
       console.log(`=== GOOGLE DOCUMENT AI REST PROCESSING START ===`);
       console.log(`Processing document: ${originalName}`);
-      console.log(`File path: ${filePath}`);
       
-      // Verify file exists
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
+      let fileBuffer;
+      
+      if (Buffer.isBuffer(input)) {
+        console.log(`Processing from memory buffer`);
+        fileBuffer = input;
+      } else {
+        console.log(`File path: ${input}`);
+        // Verify file exists
+        if (!fs.existsSync(input)) {
+          throw new Error(`File not found: ${input}`);
+        }
+        // Read the file as binary
+        fileBuffer = await fs.readFile(input);
       }
-      
-      // Read the file as binary
-      const fileBuffer = await fs.readFile(filePath);
+
       console.log('File size:', fileBuffer.length, 'bytes');
       
       // Determine MIME type

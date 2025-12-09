@@ -1127,6 +1127,12 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
       });
     }
 
+    // Handle GCS or remote URLs
+    if (document.url && document.url.startsWith('http')) {
+      console.log(`Redirecting to remote URL for document ${documentId}: ${document.url}`);
+      return res.redirect(document.url);
+    }
+
     // Construct file path based on your upload structure
     // Adjust this path based on your actual file storage structure
     const uploadsDir = path.join(__dirname, '../uploads');

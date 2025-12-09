@@ -21,6 +21,13 @@ import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 import ManualCreditorManager from './ManualCreditorManager';
 import SevenDayReviewTrigger from './SevenDayReviewTrigger';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '../../components/ui/dialog';
 
 interface UserDetailProps {
   userId: string;
@@ -137,12 +144,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [savingFinancial, setSavingFinancial] = useState(false);
 
   // Check if client has settlement plans sent (to determine if we should show the table)
-  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor => 
+  const hasSettlementPlansSent = user?.final_creditor_list?.some(creditor =>
     creditor.settlement_plan_sent_at
   );
 
   // Check if client has nullplan sent (to determine if we should show the nullplan table)
-  const hasNullplanSent = user?.final_creditor_list?.some(creditor => 
+  const hasNullplanSent = user?.final_creditor_list?.some(creditor =>
     creditor.nullplan_sent_at
   );
 
@@ -158,12 +165,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     if (hasSettlementPlansSent) {
       // Initial fetch
       fetchSettlementResponses();
-      
+
       // Set up 1-minute interval for auto-refresh
       const interval = setInterval(() => {
         fetchSettlementResponses();
       }, 60000); // 1 minute = 60,000ms
-      
+
       return () => clearInterval(interval);
     } else {
       // If no settlement plans detected yet, periodically check if they've been sent
@@ -171,7 +178,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       const checkInterval = setInterval(async () => {
         await fetchUserDetails(); // Refresh user data to check for new settlement_plan_sent_at fields
       }, 30000); // Check every 30 seconds
-      
+
       return () => clearInterval(checkInterval);
     }
   }, [hasSettlementPlansSent, userId]);
@@ -181,12 +188,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     if (isNullplanClient && hasNullplanSent) {
       // Initial fetch
       fetchNullplanResponses();
-      
+
       // Set up 1-minute interval for auto-refresh
       const interval = setInterval(() => {
         fetchNullplanResponses();
       }, 60000); // 1 minute = 60,000ms
-      
+
       return () => clearInterval(interval);
     } else if (isNullplanClient) {
       // If nullplan client but no nullplan sent yet, periodically check if they've been sent
@@ -194,7 +201,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       const checkInterval = setInterval(async () => {
         await fetchUserDetails(); // Refresh user data to check for new nullplan_sent_at fields
       }, 30000); // Check every 30 seconds
-      
+
       return () => clearInterval(checkInterval);
     }
   }, [isNullplanClient, hasNullplanSent, userId]);
@@ -204,9 +211,13 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [showReprocessModal, setShowReprocessModal] = useState(false);
   const [reprocessConfirmText, setReprocessConfirmText] = useState('');
 
+  const [downloadingDocs, setDownloadingDocs] = useState<Record<string, boolean>>({});
+  const [deletingDocs, setDeletingDocs] = useState<Record<string, boolean>>({});
+
   const downloadDocument = async (documentId: string, documentName: string) => {
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
+      setDownloadingDocs(prev => ({ ...prev, [documentId]: true }));
 
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}/download`, {
         headers: {
@@ -233,6 +244,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } catch (error) {
       console.error('❌ Error downloading document:', error);
       alert(`Fehler beim Herunterladen des Dokuments: ${error}`);
+    } finally {
+      setDownloadingDocs(prev => ({ ...prev, [documentId]: false }));
     }
   };
 
@@ -288,6 +301,49 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
+  const deleteDocument = async (documentId: string, documentName: string) => {
+    if (!user) return;
+
+    // Confirm deletion
+    const confirmDelete = window.confirm(
+      `Möchten Sie das Dokument "${documentName}" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      console.log(`🗑️ Deleting document ${documentId} (${documentName})`);
+      setDeletingDocs(prev => ({ ...prev, [documentId]: true }));
+
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Delete failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Document deleted successfully:`, result);
+      alert(`✅ Dokument "${documentName}" wurde erfolgreich gelöscht.`);
+
+      // Close the modal if it's open
+      setSelectedDocument(null);
+
+      // Refresh user data to update the documents list
+      await fetchUserDetails();
+    } catch (error) {
+      console.error('❌ Error deleting document:', error);
+      alert(`Fehler beim Löschen des Dokuments: ${error}`);
+    } finally {
+      setDeletingDocs(prev => ({ ...prev, [documentId]: false }));
+    }
+  };
+
   const reprocessAllDocuments = async () => {
     if (!user) return;
 
@@ -333,7 +389,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
         if (allProcessed) {
           clearInterval(pollInterval);
-          alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
+          // alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
         }
       }, 10000); // Poll every 10 seconds
 
@@ -357,9 +413,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     if (!confirm(`⚡ 7-Day Delay Skip\n\nDies überspringt die 7-Tage-Wartezeit für ${user.firstName} ${user.lastName} (${user.aktenzeichen}) und startet sofort die Gläubiger-Überprüfung.\n\n⚠️ Nur für Testing verwenden!\n\nFortfahren?`)) {
       return;
     }
-    
+
     setSkippingDelay(true);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/skip-seven-day-delay`, {
         method: 'POST',
@@ -368,20 +424,20 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to skip delay');
       }
-      
+
       const result = await response.json();
       console.log('✅ 7-day delay skipped:', result);
-      
+
       // Refresh user data to show updated status
       await fetchUserDetails();
-      
+
       alert(`✅ 7-Tage-Wartezeit übersprungen!\n\nGläubiger-Überprüfung wurde sofort gestartet für ${user.firstName} ${user.lastName}.`);
-      
+
     } catch (error: any) {
       console.error('❌ Error skipping delay:', error);
       alert(`Fehler beim Überspringen der Wartezeit: ${error.message}`);
@@ -512,12 +568,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const handleFinancialFormChange = async (field: string, value: string) => {
     const newForm = { ...financialForm, [field]: value };
     setFinancialForm(newForm);
-    
+
     // Real-time pfändbar calculation
     if (newForm.net_income && !isNaN(parseFloat(newForm.net_income))) {
       const netIncome = parseFloat(newForm.net_income);
       const dependents = parseInt(newForm.dependents) || 0;
-      
+
       const pfaendbar = await calculatePfaendbarAmount(netIncome, newForm.marital_status, dependents);
       setPfaendbarAmount(pfaendbar);
     } else {
@@ -528,7 +584,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const saveFinancialData = async () => {
     try {
       setSavingFinancial(true);
-      
+
       const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/financial-data`, {
         method: 'POST',
         headers: {
@@ -542,17 +598,17 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           input_by: 'admin'
         })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to save financial data');
       }
-      
+
       const result = await response.json();
       console.log('Financial data saved:', result);
-      
+
       // Refresh user data
       await fetchUserDetails();
-      
+
       // Clear form
       setFinancialForm({
         net_income: '',
@@ -560,7 +616,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         marital_status: 'ledig'
       });
       setPfaendbarAmount(null);
-      
+
     } catch (error) {
       console.error('Error saving financial data:', error);
       setError(error instanceof Error ? error.message : 'Failed to save financial data');
@@ -573,20 +629,20 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Fetch user data
       const userResponse = await fetch(`${API_BASE_URL}/api/clients/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
       });
-      
+
       if (!userResponse.ok) {
         throw new Error('Failed to fetch user details');
       }
-      
+
       const userData = await userResponse.json();
-      
+
       // Fetch documents separately
       try {
         const documentsResponse = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents`, {
@@ -594,7 +650,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
           }
         });
-        
+
         if (documentsResponse.ok) {
           const documentsData = await documentsResponse.json();
           userData.documents = documentsData || [];
@@ -605,11 +661,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         console.warn('Could not fetch documents:', docError);
         userData.documents = [];
       }
-      
+
       console.log('UserDetailView: Loaded user data:', userData);
       console.log('UserDetailView: Documents loaded:', userData.documents);
       setUser(userData);
-      
+
     } catch (error) {
       console.error('Error fetching user details:', error);
       setError('Failed to load user details');
@@ -625,7 +681,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
     try {
       setLoading(true);
-      
+
       const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/simulate-30-day-period`, {
         method: 'POST',
         headers: {
@@ -639,7 +695,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         const emailStatus = result.email_sent
           ? `\n\n📧 E-Mail versendet an: ${user?.email}\n✅ Client wurde benachrichtigt`
@@ -651,17 +707,17 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
         // Refresh user data to show updated status
         await fetchUserDetails();
-        
+
         // Force show settlement table immediately after 30-day simulation
         console.log('🎯 30-day simulation completed - forcing settlement table display');
-        
+
         // Wait a moment for settlement emails to be sent, then fetch settlement data
         setTimeout(async () => {
           await fetchSettlementResponses();
           // Force table to show by setting a flag
           setShowSettlementPlan(true);
         }, 3000); // Wait 3 seconds for settlement emails to be processed
-        
+
       } else {
         alert(`❌ Simulation fehlgeschlagen: ${result.message || 'Unknown error'}`);
       }
@@ -679,7 +735,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       console.log('🔄 Fetching settlement responses for userId:', userId);
       console.log('🔑 Admin token available:', !!adminToken);
       console.log('🔑 Token preview:', adminToken ? adminToken.substring(0, 20) + '...' : 'No token');
-      
+
       // Fetch settlement summary (silently, no loading state for auto-refresh)
       const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/settlement-responses`, {
         headers: {
@@ -711,7 +767,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       console.log('🔄 Fetching nullplan responses for userId:', userId);
       console.log('🔑 Admin token available:', !!adminToken);
       console.log('🔑 Token preview:', adminToken ? adminToken.substring(0, 20) + '...' : 'No token');
-      
+
       // Fetch nullplan summary (silently, no loading state for auto-refresh)
       const summaryResponse = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/nullplan-responses`, {
         headers: {
@@ -752,7 +808,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         settlement_response_status: c.settlement_response_status
       }))
     });
-    
+
     // Log the settlement API response
     if (settlementSummary) {
       console.log('📊 Settlement Summary Data:', settlementSummary);
@@ -782,7 +838,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         showCreditorInfo: false
       };
     }
-    
+
     if (doc.processing_status === 'failed') {
       return {
         badge: { color: 'bg-red-100 text-red-800', text: 'Verarbeitung fehlgeschlagen' },
@@ -797,7 +853,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
           showCreditorInfo: true
         };
       }
-      
+
       if (doc.is_creditor_document) {
         return {
           badge: { color: 'bg-red-100 text-red-800', text: 'Gläubigerdokument' },
@@ -828,54 +884,66 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     return <DocumentTextIcon className="w-5 h-5 text-gray-400" />;
   };
 
-  if (loading) {
+  if (loading && !user) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8">
-          <div className="flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{borderBottomColor: '#9f1a1d'}}></div>
+      <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className=" bg-white" showCloseButton={false}>
+          <div className="flex items-center justify-center space-x-3 p-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderBottomColor: '#9f1a1d' }}></div>
             <span className="text-lg">Loading user details...</span>
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   if (error || !user) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-red-600">Error</h2>
+      <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className=" bg-white" showCloseButton={false}>
+          <DialogHeader className="flex flex-row justify-between items-center">
+            <DialogTitle className="text-xl font-bold text-red-600">Error</DialogTitle>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <XMarkIcon className="w-6 h-6" />
             </button>
-          </div>
-          <p className="text-gray-600 mb-4">{error || 'User not found'}</p>
+          </DialogHeader>
+          <DialogDescription className="text-gray-600 mb-4">{error || 'User not found'}</DialogDescription>
           <button
             onClick={onClose}
             className="w-full px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
           >
             Close
           </button>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-screen overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="!max-w-[1250px] h-[calc(100vh_-_50px)] overflow-hidden p-0 bg-white flex flex-col " showCloseButton={false}>
+        {loading && user && (
+          <div className="absolute top-0 left-0 right-0 bg-yellow-100 text-yellow-800 text-center text-xs py-1 z-50">
+            Refreshing data...
+          </div>
+        )}
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 absolute right-3 top-3"
+        >
+          <XMarkIcon className="w-6 h-6" />
+        </button>
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 flex flex-col justify-between items-center p-6 border-b border-gray-200 bg-white">
+          <h2 className="text-xl font-bold text-gray-900">
             📄 User Details: {user.firstName} {user.lastName}
           </h2>
           <div className="flex items-center space-x-3">
-            <InsolvenzantragDownloadButton 
+            <InsolvenzantragDownloadButton
               userId={userId}
               className=""
             />
-            
+
             {/* Skip 7-Day Delay Button (for testing) */}
             {/* {user?.first_payment_received && user.documents?.length > 0 && (
               <button
@@ -896,7 +964,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 )}
               </button>
             )} */}
-            
+
             <button
               onClick={() => setShowSettlementPlan(true)}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"
@@ -918,7 +986,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               onClick={fetchUserDetails}
               disabled={loading}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border hover:bg-red-50 transition-colors"
-              style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+              style={{ color: '#9f1a1d', borderColor: '#9f1a1d' }}
               title="Refresh user data"
             >
               <ArrowPathIcon className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
@@ -936,7 +1004,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             {process.env.NODE_ENV === 'development' && (
               <div className="flex flex-col text-xs text-gray-500 space-y-1">
                 <div>
-                  Plans sent: {hasSettlementPlansSent ? 'Yes' : 'No'} | 
+                  Plans sent: {hasSettlementPlansSent ? 'Yes' : 'No'} |
                   Summary: {settlementSummary ? 'Yes' : 'No'} |
                   Creditors: {user?.final_creditor_list?.length || 0}
                 </div>
@@ -954,7 +1022,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       tokenLength: token?.length,
                       tokenPreview: token ? token.substring(0, 50) + '...' : 'No token'
                     });
-                    
+
                     try {
                       // Test a simple admin endpoint
                       const response = await fetch(`${API_BASE_URL}/api/clients`, {
@@ -971,266 +1039,277 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 </button>
               </div>
             )}
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <XMarkIcon className="w-6 h-6" />
-            </button>
+
           </div>
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* User Profile */}
-          <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center mb-4">
-              <UserIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-              <h3 className="text-lg font-semibold">Profile</h3>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-gray-600">Name</label>
-                <p className="text-gray-900">{user.firstName} {user.lastName}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Email</label>
-                <p className="text-gray-900">{user.email}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Aktenzeichen</label>
-                <p className="text-gray-900 font-mono">{user.aktenzeichen}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Status</label>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(user.current_status)}`}>
-                  {user.current_status}
-                </span>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Created</label>
-                <p className="text-gray-900">{new Date(user.created_at).toLocaleDateString('de-DE')}</p>
-              </div>
-              {user.last_login && (
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Last Login</label>
-                  <p className="text-gray-900">{new Date(user.last_login).toLocaleDateString('de-DE')}</p>
-                </div>
-              )}
-              {user?.zendesk_ticket_id && (
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Zendesk Ticket</label>
-                  <p className="text-gray-900 font-mono">{user.zendesk_ticket_id}</p>
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* Documents */}
-          <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
-                <DocumentTextIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-                <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex flex-col md:flex-row gap-2 max-h-[500px]">
+            {/* User Profile */}
+            <div className="bg-gray-50 rounded-lg p-4 w-[25%] ">
+              <div className="flex items-center mb-4">
+                <UserIcon className="w-8 h-8 mr-3" style={{ color: '#9f1a1d' }} />
+                <h3 className="text-lg font-semibold">Profile</h3>
               </div>
-              {user.documents && user.documents.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={downloadAllDocuments}
-                    disabled={downloadingAllDocuments}
-                    className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                      downloadingAllDocuments
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Name</label>
+                  <p className="text-gray-900">{user.firstName} {user.lastName}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Email</label>
+                  <p className="text-gray-900">{user.email}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Aktenzeichen</label>
+                  <p className="text-gray-900 font-mono">{user.aktenzeichen}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Status</label>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(user.current_status)}`}>
+                    {user.current_status}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Created</label>
+                  <p className="text-gray-900">{new Date(user.created_at).toLocaleDateString('de-DE')}</p>
+                </div>
+                {user.last_login && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Last Login</label>
+                    <p className="text-gray-900">{new Date(user.last_login).toLocaleDateString('de-DE')}</p>
+                  </div>
+                )}
+                {user?.zendesk_ticket_id && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Zendesk Ticket</label>
+                    <p className="text-gray-900 font-mono">{user.zendesk_ticket_id}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Documents */}
+            <div className="bg-gray-50 rounded-lg p-4  w-[50%] ">
+              <div className="flex items-center justify-between mb-4 gap-3 max-h-[80px]">
+                <div className="flex items-center shrink-0">
+                  <DocumentTextIcon className="w-8 h-8 mr-3" style={{ color: '#9f1a1d' }} />
+                  <h3 className="text-lg font-semibold">Documents ({user.documents?.length || 0})</h3>
+                </div>
+                {user.documents && user.documents.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={downloadAllDocuments}
+                      disabled={downloadingAllDocuments}
+                      className={`flex w-fit gap-2 items-center px-2 py-3 text-sm font-medium rounded-md transition-colors ${downloadingAllDocuments
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'text-white hover:opacity-90'
-                    }`}
-                    style={downloadingAllDocuments ? {} : {backgroundColor: '#9f1a1d'}}
-                    title="Download all documents as ZIP archive"
-                  >
-                    {downloadingAllDocuments ? (
-                      <>
-                        <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                        Wird vorbereitet...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                        Alle Dokumente herunterladen
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowReprocessModal(true)}
-                    disabled={reprocessingDocuments}
-                    className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors border-2 ${
-                      reprocessingDocuments
+                        }`}
+                      style={downloadingAllDocuments ? {} : { backgroundColor: '#9f1a1d' }}
+                      title="Download all documents as ZIP archive"
+                    >
+                      {downloadingAllDocuments ? (
+                        <>
+                          <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                          Wird vorbereitet...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownTrayIcon className="w-4 h-4 " />
+                          Alle Dokumente herunterladen
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setShowReprocessModal(true)}
+                      disabled={reprocessingDocuments}
+                      className={`inline-flex items-center px-2 py-3 text-sm font-medium rounded-md transition-colors border-2 ${reprocessingDocuments
                         ? 'bg-gray-300 text-gray-500 border-gray-300 cursor-not-allowed'
                         : 'bg-orange-50 text-orange-700 border-orange-400 hover:bg-orange-100'
-                    }`}
-                    title="Re-process all documents through AI pipeline (DESTRUCTIVE)"
-                  >
-                    {reprocessingDocuments ? (
-                      <>
-                        <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                        Wird neu verarbeitet...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowUturnLeftIcon className="w-4 h-4 mr-2" />
-                        Alle neu verarbeiten
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {user?.documents && user?.documents?.length > 0 ? (
-                user?.documents?.map((doc) => {
-                  const statusInfo = getDocumentStatusInfo(doc);
-                  return (
-                    <div key={doc.id} className="border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-3">
-                          {getDocumentStatusIcon(doc)}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.badge.color}`}>
-                                {statusInfo.badge.text}
-                              </span>
-                            </div>
-                            
-                            {/* AI Confidence - always show if available */}
-                            {doc.confidence && (
-                              <p className="text-xs text-gray-500 mb-2">
-                                <strong>AI-Sicherheit:</strong> {Math.round(doc.confidence * 100)}%
-                              </p>
-                            )}
+                        }`}
+                      title="Re-process all documents through AI pipeline (DESTRUCTIVE)"
+                    >
+                      {reprocessingDocuments ? (
+                        <>
+                          <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                          Wird neu verarbeitet...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUturnLeftIcon className="w-4 h-4 mr-2" />
+                          Alle neu verarbeiten
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3  overflow-y-auto max-h-[400px]">
+                {user?.documents && user?.documents?.length > 0 ? (
+                  user?.documents?.map((doc, idx) => {
+                    const statusInfo = getDocumentStatusInfo(doc);
+                    return (
+                      <div key={doc.id} className={`border border-gray-200 rounded-lg p-3 `}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start space-x-3">
 
-                            {/* Creditor Information - only show for creditor documents or manual review */}
-                            {statusInfo?.showCreditorInfo && doc.extracted_data?.creditor_data && (
-                              <div className="mt-2 p-2 bg-red-50 rounded text-xs border border-red-200">
-                                <div className="space-y-1">
-                                  {doc.extracted_data.creditor_data.sender_name && (
-                                    <p><strong>Gläubiger:</strong> {doc.extracted_data.creditor_data.sender_name}</p>
-                                  )}
-                                  {doc.extracted_data.creditor_data.claim_amount && (
-                                    <p><strong>Forderung:</strong> <span className="font-semibold text-red-700">€{doc.extracted_data.creditor_data.claim_amount}</span></p>
-                                  )}
-                                  {doc.extracted_data.creditor_data.reference_number && (
-                                    <p><strong>Aktenzeichen:</strong> <span className="font-mono">{doc.extracted_data.creditor_data.reference_number}</span></p>
-                                  )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-col items-start gap-1  mb-1">
+                                <p className="text-sm font-medium text-gray-900 truncate flex gap-2" title={doc.name}>
+                                  {getDocumentStatusIcon(doc)}
+                                  {(() => {
+                                    const name = doc.name;
+                                    const lastDotIndex = name?.lastIndexOf('.');
+                                    if (lastDotIndex === -1 || name?.length <= 25) return name;
+                                    const extension = name?.slice(lastDotIndex);
+                                    const baseName = name?.slice(0, lastDotIndex);
+                                    const maxBaseLength = 25 - extension?.length - 3; // 3 for "..."
+                                    if (baseName?.length <= maxBaseLength) return name;
+                                    return baseName?.slice(0, maxBaseLength) + '...' + extension;
+                                  })()}
+                                </p>
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.badge.color}`}>
+                                  {statusInfo.badge.text}
+                                </span>
+                              </div>
+
+                              {/* AI Confidence - always show if available */}
+                              {doc.confidence && (
+                                <p className="text-xs text-gray-500 mb-2">
+                                  <strong>AI-Sicherheit:</strong> {Math.round(doc.confidence * 100)}%
+                                </p>
+                              )}
+
+                              {/* Creditor Information - only show for creditor documents or manual review */}
+                              {statusInfo?.showCreditorInfo && doc.extracted_data?.creditor_data && (
+                                <div className="mt-2 p-2 bg-red-50 rounded text-xs border border-red-200">
+                                  <div className="space-y-1">
+                                    {doc.extracted_data.creditor_data.sender_name && (
+                                      <p><strong>Gläubiger:</strong> {doc.extracted_data.creditor_data.sender_name}</p>
+                                    )}
+                                    {doc.extracted_data.creditor_data.claim_amount && (
+                                      <p><strong>Forderung:</strong> <span className="font-semibold text-red-700">€{doc.extracted_data.creditor_data.claim_amount}</span></p>
+                                    )}
+                                    {doc.extracted_data.creditor_data.reference_number && (
+                                      <p><strong>Aktenzeichen:</strong> <span className="font-mono">{doc.extracted_data.creditor_data.reference_number}</span></p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
 
-                            {/* Summary for non-creditor documents */}
-                            {!statusInfo.showCreditorInfo && doc.processing_status === 'completed' && (
-                              <div className="mt-2 text-xs text-gray-600">
-                                <p className="italic">Dieses Dokument enthält keine Gläubigerforderung</p>
-                              </div>
-                            )}
+                              {/* Summary for non-creditor documents */}
+                              {!statusInfo.showCreditorInfo && doc.processing_status === 'completed' && (
+                                <div className="mt-2 text-xs text-gray-600">
+                                  <p className="italic">Dieses Dokument enthält keine Gläubigerforderung</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 space-x-2">
+                            <button
+                              onClick={() => downloadDocument(doc.id, doc.name)}
+                              disabled={downloadingDocs[doc.id]}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {downloadingDocs[doc.id] ? (
+                                <ArrowPathIcon className="w-3 h-3 mr-1 animate-spin" />
+                              ) : (
+                                <ArrowDownTrayIcon className="w-3 h-3 mr-1" />
+                              )}
+                              {downloadingDocs[doc.id] ? 'Loading...' : 'Download'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                console.log('Details button clicked for document:', doc);
+                                setSelectedDocument(doc);
+                              }}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-red-50 transition-colors"
+                              style={{ color: '#9f1a1d', borderColor: '#9f1a1d' }}
+                            >
+                              <EyeIcon className="w-3 h-3 mr-1" />
+                              Details
+                            </button>
                           </div>
                         </div>
-                        <div className="flex-shrink-0 space-x-2">
-                          <button
-                            onClick={() => downloadDocument(doc.id, doc.name)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300"
-                          >
-                            <ArrowDownTrayIcon className="w-3 h-3 mr-1" />
-                            Download
-                          </button>
-                          <button
-                            onClick={() => {
-                              console.log('Details button clicked for document:', doc);
-                              setSelectedDocument(doc);
-                            }}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-red-50 transition-colors"
-                            style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
-                          >
-                            <EyeIcon className="w-3 h-3 mr-1" />
-                            Details
-                          </button>
-                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-gray-500 text-sm">No documents uploaded</p>
+                )}
+              </div>
+            </div>
+
+            {/* Creditors */}
+            <div className="bg-gray-50 rounded-lg p-4  w-[25%]">
+              <div className="flex items-center mb-4">
+                <BuildingOfficeIcon className="w-8 h-8 mr-3" style={{ color: '#9f1a1d' }} />
+                <h3 className="text-lg font-semibold">Creditors ({user.final_creditor_list?.length || 0})</h3>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {user.final_creditor_list && user.final_creditor_list.length > 0 ? (
+                  user.final_creditor_list.map((creditor) => (
+                    <div key={creditor.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-900">{creditor.sender_name}</p>
+                        {creditor.sender_email && (
+                          <p className="text-xs text-gray-600">{creditor.sender_email}</p>
+                        )}
+                        {creditor.claim_amount && (
+                          <p className="text-xs text-gray-600">Amount: €{creditor.claim_amount}</p>
+                        )}
+                        {creditor.reference_number && (
+                          <p className="text-xs text-gray-500">Ref: {creditor.reference_number}</p>
+                        )}
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${creditor.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          creditor.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                          {creditor.status}
+                        </span>
                       </div>
                     </div>
-                  );
-                })
-              ) : (
-                <p className="text-gray-500 text-sm">No documents uploaded</p>
-              )}
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No creditors identified</p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Creditors */}
-          <div className="bg-gray-50 rounded-lg p-6">
+          {/* Analytics Summary */}
+          <div className="mt-6 bg-gray-50 rounded-lg p-6">
             <div className="flex items-center mb-4">
-              <BuildingOfficeIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-              <h3 className="text-lg font-semibold">Creditors ({user.final_creditor_list?.length || 0})</h3>
+              <ChartBarIcon className="w-8 h-8 mr-3" style={{ color: '#9f1a1d' }} />
+              <h3 className="text-lg font-semibold">Analytics Summary</h3>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {user.final_creditor_list && user.final_creditor_list.length > 0 ? (
-                user.final_creditor_list.map((creditor) => (
-                  <div key={creditor.id} className="border border-gray-200 rounded-lg p-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-900">{creditor.sender_name}</p>
-                      {creditor.sender_email && (
-                        <p className="text-xs text-gray-600">{creditor.sender_email}</p>
-                      )}
-                      {creditor.claim_amount && (
-                        <p className="text-xs text-gray-600">Amount: €{creditor.claim_amount}</p>
-                      )}
-                      {creditor.reference_number && (
-                        <p className="text-xs text-gray-500">Ref: {creditor.reference_number}</p>
-                      )}
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        creditor.status === 'confirmed' ? 'bg-green-100 text-green-800' : 
-                        creditor.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {creditor.status}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-sm">No creditors identified</p>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold" style={{ color: '#9f1a1d' }}>{user.documents?.length || 0}</p>
+                <p className="text-sm text-gray-600">Total Documents</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">
+                  {user.documents?.filter(d => d.processing_status === 'completed').length || 0}
+                </p>
+                <p className="text-sm text-gray-600">Processed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-yellow-600">
+                  {user.documents?.filter(d => d.processing_status === 'processing').length || 0}
+                </p>
+                <p className="text-sm text-gray-600">Processing</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold" style={{ color: '#9f1a1d' }}>{user.final_creditor_list?.length || 0}</p>
+                <p className="text-sm text-gray-600">Creditors</p>
+              </div>
             </div>
           </div>
-        </div>
-        
-        {/* Analytics Summary */}
-        <div className="mt-6 bg-gray-50 rounded-lg p-6">
-          <div className="flex items-center mb-4">
-            <ChartBarIcon className="w-8 h-8 mr-3" style={{color: '#9f1a1d'}} />
-            <h3 className="text-lg font-semibold">Analytics Summary</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold" style={{color: '#9f1a1d'}}>{user.documents?.length || 0}</p>
-              <p className="text-sm text-gray-600">Total Documents</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">
-                {user.documents?.filter(d => d.processing_status === 'completed').length || 0}
-              </p>
-              <p className="text-sm text-gray-600">Processed</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-yellow-600">
-                {user.documents?.filter(d => d.processing_status === 'processing').length || 0}
-              </p>
-              <p className="text-sm text-gray-600">Processing</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold" style={{color: '#9f1a1d'}}>{user.final_creditor_list?.length || 0}</p>
-              <p className="text-sm text-gray-600">Creditors</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Settlement Response Tracking Section */}
-        {/* {showSettlementPlan && ( */}
+          {/* Settlement Response Tracking Section */}
+          {/* {showSettlementPlan && ( */}
           <div className="mt-6 bg-purple-50 rounded-lg p-6 border border-purple-200">
             <div className="flex items-center mb-4">
               <ChartBarIcon className="w-6 h-6 mr-2 text-purple-600" />
@@ -1239,7 +1318,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 Auto-refreshing every minute
               </div>
             </div>
-            
+
             {/* Summary Statistics */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <div className="bg-white rounded-lg p-3 text-center border border-purple-200">
@@ -1304,7 +1383,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     {user?.final_creditor_list?.filter(creditor => creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at).map((creditor: Creditor, index: number) => {
                       // Use settlement status from database, fallback to 'pending'
                       const status = creditor.settlement_response_status || 'pending';
-                      
+
                       const getStatusColor = (status: string) => {
                         switch (status) {
                           case 'accepted': return 'bg-green-100 text-green-800';
@@ -1344,11 +1423,11 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             </span>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                            {creditor.settlement_response_received_at 
+                            {creditor.settlement_response_received_at
                               ? new Date(creditor.settlement_response_received_at).toLocaleDateString('de-DE')
-                              : creditor.settlement_plan_sent_at 
-                              ? new Date(creditor.settlement_plan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
-                              : '-'
+                              : creditor.settlement_plan_sent_at
+                                ? new Date(creditor.settlement_plan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
+                                : '-'
                             }
                           </td>
                         </tr>
@@ -1365,143 +1444,143 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               </div>
             </div>
           </div>
-        {/* )} */}
+          {/* )} */}
 
-        {/* Nullplan Response Tracking Section */}
-        {isNullplanClient && hasNullplanSent && (
-          <div className="mt-6 bg-green-50 rounded-lg p-6 border border-green-200">
-            <div className="flex items-center mb-4">
-              <ChartBarIcon className="w-6 h-6 mr-2 text-green-600" />
-              <h3 className="text-lg font-semibold text-green-800">Nullplan Response Tracking</h3>
-              <div className="ml-auto text-sm text-green-600">
-                Auto-refreshing every minute
+          {/* Nullplan Response Tracking Section */}
+          {isNullplanClient && hasNullplanSent && (
+            <div className="mt-6 bg-green-50 rounded-lg p-6 border border-green-200">
+              <div className="flex items-center mb-4">
+                <ChartBarIcon className="w-6 h-6 mr-2 text-green-600" />
+                <h3 className="text-lg font-semibold text-green-800">Nullplan Response Tracking</h3>
+                <div className="ml-auto text-sm text-green-600">
+                  Auto-refreshing every minute
+                </div>
               </div>
-            </div>
-            
-            {/* Summary Statistics */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="bg-white rounded-lg p-3 text-center border border-green-200">
-                <p className="text-lg font-bold text-green-600">{nullplanSummary?.total_creditors || 0}</p>
-                <p className="text-xs text-green-800">Total</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 text-center border border-blue-200">
-                <p className="text-lg font-bold text-blue-600">{nullplanSummary?.accepted || 0}</p>
-                <p className="text-xs text-blue-800">Accepted</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 text-center border border-red-200">
-                <p className="text-lg font-bold text-red-600">{nullplanSummary?.declined || 0}</p>
-                <p className="text-xs text-red-800">Declined</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
-                <p className="text-lg font-bold text-gray-600">{nullplanSummary?.no_responses || 0}</p>
-                <p className="text-xs text-gray-800">No Response</p>
-              </div>
-            </div>
 
-            {/* Legal Information */}
-            <div className="bg-white rounded-lg p-3 mb-4 border border-green-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-green-900">Nullplan Status</span>
-                <div className="text-right">
-                  <span className="text-sm font-medium text-green-600">§ 305 Abs. 1 Nr. 1 InsO</span>
-                  <span className="text-xs text-green-800 ml-2 block">
-                    Pfändbares Einkommen: 0,00 EUR
-                  </span>
+              {/* Summary Statistics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="bg-white rounded-lg p-3 text-center border border-green-200">
+                  <p className="text-lg font-bold text-green-600">{nullplanSummary?.total_creditors || 0}</p>
+                  <p className="text-xs text-green-800">Total</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-blue-200">
+                  <p className="text-lg font-bold text-blue-600">{nullplanSummary?.accepted || 0}</p>
+                  <p className="text-xs text-blue-800">Accepted</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-red-200">
+                  <p className="text-lg font-bold text-red-600">{nullplanSummary?.declined || 0}</p>
+                  <p className="text-xs text-red-800">Declined</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+                  <p className="text-lg font-bold text-gray-600">{nullplanSummary?.no_responses || 0}</p>
+                  <p className="text-xs text-gray-800">No Response</p>
+                </div>
+              </div>
+
+              {/* Legal Information */}
+              <div className="bg-white rounded-lg p-3 mb-4 border border-green-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-green-900">Nullplan Status</span>
+                  <div className="text-right">
+                    <span className="text-sm font-medium text-green-600">§ 305 Abs. 1 Nr. 1 InsO</span>
+                    <span className="text-xs text-green-800 ml-2 block">
+                      Pfändbares Einkommen: 0,00 EUR
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Creditor Response Table */}
+              <div className="bg-white rounded-lg border border-green-200 overflow-hidden">
+                <div className="px-4 py-3 bg-green-100 border-b border-green-200">
+                  <h4 className="text-sm font-medium text-green-900">Creditor Responses</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Creditor
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Amount
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Response
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                          Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {user?.final_creditor_list?.filter(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at).map((creditor: Creditor, index: number) => {
+                        // Use nullplan status from database, fallback to 'pending'
+                        const status = creditor.nullplan_response_status || 'pending';
+
+                        const getStatusColor = (status: string) => {
+                          switch (status) {
+                            case 'accepted': return 'bg-blue-100 text-blue-800';
+                            case 'declined': return 'bg-red-100 text-red-800';
+                            case 'no_response': return 'bg-gray-100 text-gray-800';
+                            case 'pending': return 'bg-yellow-100 text-yellow-800';
+                            default: return 'bg-gray-100 text-gray-800';
+                          }
+                        };
+
+                        const getStatusIcon = (status: string) => {
+                          switch (status) {
+                            case 'accepted': return '✅';
+                            case 'declined': return '❌';
+                            case 'no_response': return '⏰';
+                            case 'pending': return '⏳';
+                            default: return '❓';
+                          }
+                        };
+
+                        return (
+                          <tr key={creditor.id || index} className="hover:bg-gray-50">
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{creditor.sender_name}</div>
+                              <div className="text-xs text-gray-500">{creditor.sender_email}</div>
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {creditor.claim_amount ? `€${creditor.claim_amount.toFixed(2)}` : 'N/A'}
+                              </div>
+                              <div className="text-xs text-red-600 font-medium">Payment: €0.00</div>
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                                {getStatusIcon(status)} {status === 'no_response' ? 'No Answer' : status.charAt(0).toUpperCase() + status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                              {creditor.nullplan_response_received_at
+                                ? new Date(creditor.nullplan_response_received_at).toLocaleDateString('de-DE')
+                                : creditor.nullplan_sent_at
+                                  ? new Date(creditor.nullplan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
+                                  : '-'
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {(!user?.final_creditor_list?.some(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at)) && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No nullplan documents have been sent yet.</p>
+                      <p className="text-xs mt-1">Nullplan will be automatically sent when financial data shows 0 garnishable income.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Creditor Response Table */}
-            <div className="bg-white rounded-lg border border-green-200 overflow-hidden">
-              <div className="px-4 py-3 bg-green-100 border-b border-green-200">
-                <h4 className="text-sm font-medium text-green-900">Creditor Responses</h4>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Creditor
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Amount
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Response
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {user?.final_creditor_list?.filter(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at).map((creditor: Creditor, index: number) => {
-                      // Use nullplan status from database, fallback to 'pending'
-                      const status = creditor.nullplan_response_status || 'pending';
-                      
-                      const getStatusColor = (status: string) => {
-                        switch (status) {
-                          case 'accepted': return 'bg-blue-100 text-blue-800';
-                          case 'declined': return 'bg-red-100 text-red-800';
-                          case 'no_response': return 'bg-gray-100 text-gray-800';
-                          case 'pending': return 'bg-yellow-100 text-yellow-800';
-                          default: return 'bg-gray-100 text-gray-800';
-                        }
-                      };
-
-                      const getStatusIcon = (status: string) => {
-                        switch (status) {
-                          case 'accepted': return '✅';
-                          case 'declined': return '❌';
-                          case 'no_response': return '⏰';
-                          case 'pending': return '⏳';
-                          default: return '❓';
-                        }
-                      };
-
-                      return (
-                        <tr key={creditor.id || index} className="hover:bg-gray-50">
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{creditor.sender_name}</div>
-                            <div className="text-xs text-gray-500">{creditor.sender_email}</div>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">
-                              {creditor.claim_amount ? `€${creditor.claim_amount.toFixed(2)}` : 'N/A'}
-                            </div>
-                            <div className="text-xs text-red-600 font-medium">Payment: €0.00</div>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {getStatusIcon(status)} {status === 'no_response' ? 'No Answer' : status.charAt(0).toUpperCase() + status.slice(1)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                            {creditor.nullplan_response_received_at 
-                              ? new Date(creditor.nullplan_response_received_at).toLocaleDateString('de-DE')
-                              : creditor.nullplan_sent_at 
-                              ? new Date(creditor.nullplan_sent_at).toLocaleDateString('de-DE') + ' (sent)'
-                              : '-'
-                            }
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {(!user?.final_creditor_list?.some(creditor => creditor.nullplan_side_conversation_id || creditor.nullplan_sent_at)) && (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No nullplan documents have been sent yet.</p>
-                    <p className="text-xs mt-1">Nullplan will be automatically sent when financial data shows 0 garnishable income.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Financial Data Section */}
-        {/* <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
+          {/* Financial Data Section */}
+          {/* <div className="mt-6 bg-yellow-50 rounded-lg p-6 border border-yellow-200">
           <div className="flex items-center mb-4">
             <CurrencyEuroIcon className="w-6 h-6 mr-2 text-yellow-600" />
             <h3 className="text-lg font-semibold text-yellow-800">Financial Data</h3>
@@ -1607,535 +1686,580 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             </div>
           )}
         </div> */}
-        
-        {/* Manual Creditor Management Section */}
-        <div className="mt-6">
-          <ManualCreditorManager 
-            clientId={userId}
-            onCreditorAdded={fetchUserDetails}
-            onCreditorUpdated={fetchUserDetails}
-            onCreditorDeleted={fetchUserDetails}
-          />
-        </div>
 
-        {/* Seven Day Review Trigger Section */}
-        <div className="mt-6">
-          <SevenDayReviewTrigger
-            clientId={userId}
-            clientName={`${user.firstName} ${user.lastName}`}
-            sevenDayReviewScheduled={user.seven_day_review_scheduled || false}
-            sevenDayReviewTriggered={user.seven_day_review_triggered || false}
-            scheduledAt={user.seven_day_review_scheduled_at}
-            onTriggerSuccess={fetchUserDetails}
-          />
-        </div>
-        
-        {/* Delete User Section - Danger Zone */}
-        <div className="mt-8 border-t-2 border-red-200 pt-6">
-          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6">
-            <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Danger Zone</h3>
-            <p className="text-sm text-red-700 mb-4">
-              Permanently delete this user and all associated data. This action cannot be undone.
-            </p>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="px-6 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 transition-colors inline-flex items-center"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Delete User Permanently
-            </button>
+          {/* Manual Creditor Management Section */}
+          <div className="mt-6">
+            <ManualCreditorManager
+              clientId={userId}
+              onCreditorAdded={fetchUserDetails}
+              onCreditorUpdated={fetchUserDetails}
+              onCreditorDeleted={fetchUserDetails}
+            />
           </div>
-        </div>
 
-        <div className="mt-6 flex justify-end">
+          {/* Seven Day Review Trigger Section */}
+          <div className="mt-6">
+            <SevenDayReviewTrigger
+              clientId={userId}
+              clientName={`${user.firstName} ${user.lastName}`}
+              sevenDayReviewScheduled={user.seven_day_review_scheduled || false}
+              sevenDayReviewTriggered={user.seven_day_review_triggered || false}
+              scheduledAt={user.seven_day_review_scheduled_at}
+              onTriggerSuccess={fetchUserDetails}
+            />
+          </div>
+
+          {/* Delete User Section - Danger Zone */}
+          <div className="mt-8 border-t-2 border-red-200 pt-6">
+            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Danger Zone</h3>
+              <p className="text-sm text-red-700 mb-4">
+                Permanently delete this user and all associated data. This action cannot be undone.
+              </p>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="px-6 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 transition-colors inline-flex items-center"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete User Permanently
+              </button>
+            </div>
+          </div>
+
+        </div>
+        {/* End Scrollable Content */}
+
+        {/* Fixed Footer */}
+        <div className="flex-shrink-0 flex justify-end p-6 border-t border-gray-200 bg-white">
           <button
             onClick={onClose}
             className="px-6 py-2 text-gray-700 rounded-md hover:bg-gray-400"
-            style={{backgroundColor: '#f3f4f6'}}
+            style={{ backgroundColor: '#f3f4f6' }}
           >
             Close
           </button>
         </div>
-      </div>
 
-      {/* Document Detail Modal */}
-      {selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <InformationCircleIcon className="w-8 h-8" style={{color: '#9f1a1d'}} />
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">Dokument Details</h2>
-                  <p className="text-sm text-gray-600">{selectedDocument.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedDocument(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Document Status & Basic Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900">📄 Dokument Information</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="font-medium text-gray-600">Status:</span>
-                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                        selectedDocument.processing_status === 'completed' ? 'bg-green-100 text-green-800' :
-                        selectedDocument.processing_status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {selectedDocument.processing_status === 'completed' ? 'Verarbeitet' :
-                         selectedDocument.processing_status === 'processing' ? 'Wird verarbeitet...' : 'Fehler'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Hochgeladen:</span>
-                      <span className="ml-2 text-gray-900">{new Date(selectedDocument.uploadedAt).toLocaleString('de-DE')}</span>
-                    </div>
-                    {selectedDocument.processed_at && (
-                      <div>
-                        <span className="font-medium text-gray-600">Verarbeitet:</span>
-                        <span className="ml-2 text-gray-900">{new Date(selectedDocument.processed_at).toLocaleString('de-DE')}</span>
-                      </div>
-                    )}
-                    {selectedDocument.size && (
-                      <div>
-                        <span className="font-medium text-gray-600">Dateigröße:</span>
-                        <span className="ml-2 text-gray-900">{(selectedDocument.size / (1024 * 1024)).toFixed(2)} MB</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900">🤖 KI-Analyse</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="font-medium text-gray-600">Gläubigerdokument:</span>
-                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                        selectedDocument.is_creditor_document ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {selectedDocument.is_creditor_document ? 'JA' : 'NEIN'}
-                      </span>
-                    </div>
-                    {selectedDocument.confidence && (
-                      <div>
-                        <span className="font-medium text-gray-600">Sicherheit:</span>
-                        <span className="ml-2 text-gray-900 font-mono">{Math.round(selectedDocument.confidence * 100)}%</span>
-                      </div>
-                    )}
-                    {selectedDocument.document_status && (
-                      <div>
-                        <span className="font-medium text-gray-600">Dokumentstatus:</span>
-                        <span className="ml-2 text-gray-900">{selectedDocument.document_status}</span>
-                      </div>
-                    )}
-                    {selectedDocument.manual_review_required && (
-                      <div>
-                        <span className="font-medium text-gray-600">Manuelle Prüfung:</span>
-                        <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Erforderlich</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Creditor Data - Show for all documents with creditor_data */}
-              {selectedDocument.extracted_data?.creditor_data && (
-                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                  <h3 className="text-lg font-semibold mb-3 text-red-900">🏛️ Gläubiger-Informationen</h3>
-                  
-                  {/* Key Information Summary */}
-                  <div className="bg-white rounded-lg p-3 mb-4 border border-red-300">
-                    <h4 className="font-semibold text-red-800 mb-2">📋 Wichtige Daten im Überblick</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-600">Aktenzeichen:</span>
-                        <p className="text-gray-900 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number || 'Nicht verfügbar'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600">Forderungssumme:</span>
-                        <p className="text-red-700 font-bold">{selectedDocument.extracted_data.creditor_data.claim_amount ? `€${selectedDocument.extracted_data.creditor_data.claim_amount}` : 'Nicht verfügbar'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600">Forderung gegen:</span>
-                        <p className="text-gray-900">{user?.firstName} {user?.lastName} ({user?.aktenzeichen})</p>
-                      </div>
+        {/* Document Detail Modal */}
+        <Dialog open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
+          <DialogContent className=" w-[700px]  max-h-[90vh] p-0 bg-white flex flex-col" showCloseButton={false}>
+            {selectedDocument && (
+              <>
+                {/* Fixed Header */}
+                <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center space-x-3 pr-8">
+                    <InformationCircleIcon className="w-8 h-8 flex-shrink-0" style={{ color: '#9f1a1d' }} />
+                    <div className="min-w-0">
+                      <DialogTitle className="text-xl font-semibold text-gray-900">Dokument Details</DialogTitle>
+                      <DialogDescription className="text-sm text-gray-600 truncate">{selectedDocument.name}</DialogDescription>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setSelectedDocument(null)}
+                    className="text-gray-400 hover:text-gray-600 absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    title="Close"
+                  >
+                    <XMarkIcon className="w-6 h-6" />
+                  </button>
+                </DialogHeader>
 
-                  {/* Detailed Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div>
-                        <span className="font-medium text-red-700">Absender/Gläubiger:</span>
-                        <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_name || 'Nicht verfügbar'}</p>
-                      </div>
-                      {selectedDocument.extracted_data.creditor_data.sender_email && (
+                {/* Scrollable Content */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  {/* Document Status & Basic Info */}
+                  <div className="flex flex-col  gap-3">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 text-gray-900">📄 Dokument Information</h3>
+                      <div className="space-y-2">
                         <div>
-                          <span className="font-medium text-red-700">E-Mail:</span>
-                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_email}</p>
-                        </div>
-                      )}
-                      {selectedDocument.extracted_data.creditor_data.sender_address && (
-                        <div>
-                          <span className="font-medium text-red-700">Adresse:</span>
-                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_address}</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-3">
-                      {selectedDocument.extracted_data.creditor_data.reference_number && (
-                        <div>
-                          <span className="font-medium text-red-700">Aktenzeichen/Referenz:</span>
-                          <p className="text-red-900 mt-1 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number}</p>
-                        </div>
-                      )}
-                      {selectedDocument.extracted_data.creditor_data.claim_amount && (
-                        <div>
-                          <span className="font-medium text-red-700">Forderungssumme:</span>
-                          <p className="text-red-900 mt-1 text-xl font-bold">€{selectedDocument.extracted_data.creditor_data.claim_amount}</p>
-                        </div>
-                      )}
-                      {selectedDocument.extracted_data.creditor_data.is_representative && (
-                        <div>
-                          <span className="font-medium text-red-700">Vertreter:</span>
-                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                            {selectedDocument.extracted_data.creditor_data.is_representative ? 'JA' : 'NEIN'}
+                          <span className="font-medium text-gray-600">Status:</span>
+                          <span className={`ml-2 px-2 py-1 text-xs rounded-full ${selectedDocument.processing_status === 'completed' ? 'bg-green-100 text-green-800' :
+                            selectedDocument.processing_status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                            {selectedDocument.processing_status === 'completed' ? 'Verarbeitet' :
+                              selectedDocument.processing_status === 'processing' ? 'Wird verarbeitet...' : 'Fehler'}
                           </span>
                         </div>
-                      )}
-                      {selectedDocument.extracted_data.creditor_data.actual_creditor && (
                         <div>
-                          <span className="font-medium text-red-700">Tatsächlicher Gläubiger:</span>
-                          <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.actual_creditor}</p>
+                          <span className="font-medium text-gray-600">Hochgeladen:</span>
+                          <span className="ml-2 text-gray-900">{new Date(selectedDocument.uploadedAt).toLocaleString('de-DE')}</span>
                         </div>
-                      )}
+                        {selectedDocument.processed_at && (
+                          <div>
+                            <span className="font-medium text-gray-600">Verarbeitet:</span>
+                            <span className="ml-2 text-gray-900">{new Date(selectedDocument.processed_at).toLocaleString('de-DE')}</span>
+                          </div>
+                        )}
+                        {selectedDocument.size && (
+                          <div>
+                            <span className="font-medium text-gray-600">Dateigröße:</span>
+                            <span className="ml-2 text-gray-900">{(selectedDocument.size / (1024 * 1024)).toFixed(2)} MB</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 text-gray-900">🤖 KI-Analyse</h3>
+                      <div className="space-y-2">
+                        <div>
+                          <span className="font-medium text-gray-600">Gläubigerdokument:</span>
+                          <span className={`ml-2 px-2 py-1 text-xs rounded-full ${selectedDocument.is_creditor_document ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                            }`}>
+                            {selectedDocument.is_creditor_document ? 'JA' : 'NEIN'}
+                          </span>
+                        </div>
+                        {selectedDocument.confidence && (
+                          <div>
+                            <span className="font-medium text-gray-600">Sicherheit:</span>
+                            <span className="ml-2 text-gray-900 font-mono">{Math.round(selectedDocument.confidence * 100)}%</span>
+                          </div>
+                        )}
+                        {selectedDocument.document_status && (
+                          <div>
+                            <span className="font-medium text-gray-600">Dokumentstatus:</span>
+                            <span className="ml-2 text-gray-900">{selectedDocument.document_status}</span>
+                          </div>
+                        )}
+                        {selectedDocument.manual_review_required && (
+                          <div>
+                            <span className="font-medium text-gray-600">Manuelle Prüfung:</span>
+                            <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Erforderlich</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* AI Reasoning */}
-              {selectedDocument.extracted_data?.reasoning && (
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <h3 className="text-lg font-semibold mb-3 text-blue-900">🧠 KI-Begründung</h3>
-                  <p className="text-blue-800 text-sm leading-relaxed">{selectedDocument.extracted_data.reasoning}</p>
-                </div>
-              )}
+                  {/* Creditor Data - Show for all documents with creditor_data */}
+                  {selectedDocument.extracted_data?.creditor_data && (
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <h3 className="text-lg font-semibold mb-3 text-red-900">🏛️ Gläubiger-Informationen</h3>
 
-              {/* Summary */}
-              {selectedDocument.summary && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900">📋 Zusammenfassung</h3>
-                  <p className="text-gray-700 text-sm leading-relaxed">{selectedDocument.summary}</p>
-                </div>
-              )}
+                      {/* Key Information Summary */}
+                      <div className="bg-white rounded-lg p-3 mb-4 border border-red-300">
+                        <h4 className="font-semibold text-red-800 mb-2">📋 Wichtige Daten im Überblick</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-600">Aktenzeichen:</span>
+                            <p className="text-gray-900 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number || 'Nicht verfügbar'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-600">Forderungssumme:</span>
+                            <p className="text-red-700 font-bold">{selectedDocument.extracted_data.creditor_data.claim_amount ? `€${selectedDocument.extracted_data.creditor_data.claim_amount}` : 'Nicht verfügbar'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-600">Forderung gegen:</span>
+                            <p className="text-gray-900">{user?.firstName} {user?.lastName} ({user?.aktenzeichen})</p>
+                          </div>
+                        </div>
+                      </div>
 
-              {/* Technical Details */}
-              {selectedDocument.extracted_data && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900">⚙️ Technische Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    {selectedDocument.extracted_data.processing_method && (
-                      <div>
-                        <span className="font-medium text-gray-600">Verarbeitungsmethode:</span>
-                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.processing_method}</p>
+                      {/* Detailed Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div>
+                            <span className="font-medium text-red-700">Absender/Gläubiger:</span>
+                            <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_name || 'Nicht verfügbar'}</p>
+                          </div>
+                          {selectedDocument.extracted_data.creditor_data.sender_email && (
+                            <div>
+                              <span className="font-medium text-red-700">E-Mail:</span>
+                              <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_email}</p>
+                            </div>
+                          )}
+                          {selectedDocument.extracted_data.creditor_data.sender_address && (
+                            <div>
+                              <span className="font-medium text-red-700">Adresse:</span>
+                              <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.sender_address}</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-3">
+                          {selectedDocument.extracted_data.creditor_data.reference_number && (
+                            <div>
+                              <span className="font-medium text-red-700">Aktenzeichen/Referenz:</span>
+                              <p className="text-red-900 mt-1 font-mono">{selectedDocument.extracted_data.creditor_data.reference_number}</p>
+                            </div>
+                          )}
+                          {selectedDocument.extracted_data.creditor_data.claim_amount && (
+                            <div>
+                              <span className="font-medium text-red-700">Forderungssumme:</span>
+                              <p className="text-red-900 mt-1 text-xl font-bold">€{selectedDocument.extracted_data.creditor_data.claim_amount}</p>
+                            </div>
+                          )}
+                          {selectedDocument.extracted_data.creditor_data.is_representative && (
+                            <div>
+                              <span className="font-medium text-red-700">Vertreter:</span>
+                              <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                {selectedDocument.extracted_data.creditor_data.is_representative ? 'JA' : 'NEIN'}
+                              </span>
+                            </div>
+                          )}
+                          {selectedDocument.extracted_data.creditor_data.actual_creditor && (
+                            <div>
+                              <span className="font-medium text-red-700">Tatsächlicher Gläubiger:</span>
+                              <p className="text-red-900 mt-1">{selectedDocument.extracted_data.creditor_data.actual_creditor}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    {selectedDocument.extracted_data.workflow_status && (
-                      <div>
-                        <span className="font-medium text-gray-600">Workflow-Status:</span>
-                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.workflow_status}</p>
+                    </div>
+                  )}
+
+                  {/* AI Reasoning */}
+                  {selectedDocument.extracted_data?.reasoning && (
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <h3 className="text-lg font-semibold mb-3 text-blue-900">🧠 KI-Begründung</h3>
+                      <p className="text-blue-800 text-sm leading-relaxed">{selectedDocument.extracted_data.reasoning}</p>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  {selectedDocument.summary && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 text-gray-900">📋 Zusammenfassung</h3>
+                      <p className="text-gray-700 text-sm leading-relaxed">{selectedDocument.summary}</p>
+                    </div>
+                  )}
+
+                  {/* Technical Details */}
+                  {selectedDocument.extracted_data && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold mb-3 text-gray-900">⚙️ Technische Details</h3>
+                      <div className="flex flex-col gap-4 text-sm">
+                        {selectedDocument.extracted_data.processing_method && (
+                          <div>
+                            <span className="font-medium text-gray-600">Verarbeitungsmethode:</span>
+                            <p className="text-gray-900 mt-1 break-all">{selectedDocument.extracted_data.processing_method}</p>
+                          </div>
+                        )}
+                        {selectedDocument.extracted_data.workflow_status && (
+                          <div>
+                            <span className="font-medium text-gray-600">Workflow-Status:</span>
+                            <p className="text-gray-900 mt-1 break-words">{selectedDocument.extracted_data.workflow_status}</p>
+                          </div>
+                        )}
+                        {selectedDocument.extracted_data.token_usage && (
+                          <div>
+                            <span className="font-medium text-gray-600">Token-Verbrauch:</span>
+                            <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.token_usage.total_tokens || 'N/A'} Tokens</p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {selectedDocument.extracted_data.token_usage && (
-                      <div>
-                        <span className="font-medium text-gray-600">Token-Verbrauch:</span>
-                        <p className="text-gray-900 mt-1">{selectedDocument.extracted_data.token_usage.total_tokens || 'N/A'} Tokens</p>
-                      </div>
-                    )}
+                    </div>
+                  )}
+
+                  <div className="flex justify-between pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => deleteDocument(selectedDocument.id, selectedDocument.name)}
+                      disabled={deletingDocs[selectedDocument.id]}
+                      className={`px-6 py-2 text-white rounded-md transition-colors ${
+                        deletingDocs[selectedDocument.id]
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-red-600 hover:bg-red-700'
+                      }`}
+                      title="Dokument unwiderruflich löschen"
+                    >
+                      {deletingDocs[selectedDocument.id] ? 'Wird gelöscht...' : 'Dokument löschen'}
+                    </button>
+                    <button
+                      onClick={() => setSelectedDocument(null)}
+                      className="px-6 py-2 text-white rounded-md hover:opacity-90"
+                      style={{ backgroundColor: '#9f1a1d' }}
+                    >
+                      Schließen
+                    </button>
                   </div>
                 </div>
-              )}
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
-              <div className="flex justify-end pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setSelectedDocument(null)}
-                  className="px-6 py-2 text-white rounded-md hover:opacity-90"
-                  style={{backgroundColor: '#9f1a1d'}}
-                >
-                  Schließen
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Settlement Plan Modal */}
-      {showSettlementPlan && (
-        <SchuldenbereinigungsplanView
-          userId={userId}
-          onClose={() => setShowSettlementPlan(false)}
-          onBack={() => setShowSettlementPlan(false)}
-        />
-      )}
+        {/* Settlement Plan Modal */}
+        {showSettlementPlan && (
+          <SchuldenbereinigungsplanView
+            userId={userId}
+            onClose={() => setShowSettlementPlan(false)}
+            onBack={() => setShowSettlementPlan(false)}
+          />
+        )}
 
-      {/* Re-Process All Documents Confirmation Modal */}
-      {showReprocessModal && user && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-orange-600 text-white p-6 rounded-t-lg">
-              <div className="flex items-center space-x-3">
-                <ExclamationTriangleIcon className="w-10 h-10" />
-                <div>
-                  <h2 className="text-2xl font-bold">Re-Process All Documents - Destructive Action</h2>
-                  <p className="text-orange-100 text-sm mt-1">This will delete all current AI processing results</p>
+        {/* Re-Process All Documents Confirmation Modal */}
+        <Dialog open={showReprocessModal && !!user} onOpenChange={(open) => {
+          if (!open) {
+            setShowReprocessModal(false);
+            setReprocessConfirmText('');
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] p-0 bg-white flex flex-col" showCloseButton={false}>
+            {user && (
+              <>
+                {/* Fixed Header */}
+                <div className="bg-orange-600 text-white p-6 rounded-t-lg flex-shrink-0 relative">
+                  <div className="flex items-center space-x-3 pr-8">
+                    <ExclamationTriangleIcon className="w-10 h-10 flex-shrink-0" />
+                    <div>
+                      <DialogTitle className="text-2xl font-bold text-white">Re-Process All Documents</DialogTitle>
+                      <DialogDescription className="text-orange-100 text-sm mt-1">Destructive Action: This will delete all current AI processing results</DialogDescription>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowReprocessModal(false);
+                      setReprocessConfirmText('');
+                    }}
+                    className="absolute top-4 right-4 text-white/80 hover:text-white bg-orange-700/30 hover:bg-orange-700/50 rounded-full p-1 transition-colors"
+                    title="Close modal"
+                  >
+                    <XMarkIcon className="w-6 h-6" />
+                  </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="p-6 space-y-6">
-              {/* Warning Message */}
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <p className="text-lg font-bold text-yellow-900 mb-2">
-                  Are you sure you want to re-process all documents?
-                </p>
-                <div className="text-yellow-800">
-                  <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
-                  <p className="font-semibold mb-1">Documents: {user.documents?.length || 0}</p>
-                  <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
+                {/* Scrollable Content */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  {/* Warning Message */}
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                    <p className="text-lg font-bold text-yellow-900 mb-2">
+                      Are you sure you want to re-process all documents?
+                    </p>
+                    <div className="text-yellow-800">
+                      <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
+                      <p className="font-semibold mb-1">Documents: {user.documents?.length || 0}</p>
+                      <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
+                    </div>
+                  </div>
+
+                  {/* What will happen */}
+                  <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                    <h3 className="font-bold text-orange-900 text-lg mb-3">This will DELETE and RE-CREATE:</h3>
+                    <ul className="space-y-2 text-orange-800">
+                      <li className="flex items-start">
+                        <span className="mr-2">♻️</span>
+                        <span><strong>All AI extraction results</strong> (creditor data, confidence scores, summaries)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">♻️</span>
+                        <span><strong>Document processing status</strong> (will be reset to 'pending')</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">♻️</span>
+                        <span><strong>Creditor list</strong> (AI-extracted creditors will be removed and re-created)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">♻️</span>
+                        <span><strong>Document classifications</strong> (creditor vs. non-creditor)</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* What will be preserved */}
+                  <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                    <h3 className="font-bold text-green-900 text-lg mb-3">✅ PRESERVED (will NOT be changed):</h3>
+                    <ul className="space-y-2 text-green-800">
+                      <li className="flex items-start">
+                        <span className="mr-2">✓</span>
+                        <span><strong>Original uploaded files</strong> (same file IDs, filenames, upload dates)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">✓</span>
+                        <span><strong>User account data</strong> (profile, email, credentials)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">✓</span>
+                        <span><strong>Manually-added creditors</strong> (only AI-extracted ones are removed)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">✓</span>
+                        <span><strong>Workflow status</strong> and history</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Confirmation Input */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      To confirm, type "REPROCESS" in the box below:
+                    </label>
+                    <input
+                      type="text"
+                      value={reprocessConfirmText}
+                      onChange={(e) => setReprocessConfirmText(e.target.value)}
+                      placeholder="REPROCESS"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono"
+                      disabled={reprocessingDocuments}
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-3 pt-4">
+                    <button
+                      onClick={() => {
+                        setShowReprocessModal(false);
+                        setReprocessConfirmText('');
+                      }}
+                      className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                      disabled={reprocessingDocuments}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={reprocessAllDocuments}
+                      disabled={reprocessingDocuments || reprocessConfirmText !== 'REPROCESS'}
+                      className="flex-1 px-6 py-3 bg-orange-600 text-white font-bold rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                    >
+                      {reprocessingDocuments ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUturnLeftIcon className="w-5 h-5 mr-2" />
+                          Re-Process All Documents
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 text-center">
+                    This action will be logged in the audit trail. Original files and metadata will be preserved.
+                  </p>
                 </div>
-              </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
-              {/* What will happen */}
-              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
-                <h3 className="font-bold text-orange-900 text-lg mb-3">This will DELETE and RE-CREATE:</h3>
-                <ul className="space-y-2 text-orange-800">
-                  <li className="flex items-start">
-                    <span className="mr-2">♻️</span>
-                    <span><strong>All AI extraction results</strong> (creditor data, confidence scores, summaries)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">♻️</span>
-                    <span><strong>Document processing status</strong> (will be reset to 'pending')</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">♻️</span>
-                    <span><strong>Creditor list</strong> (AI-extracted creditors will be removed and re-created)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">♻️</span>
-                    <span><strong>Document classifications</strong> (creditor vs. non-creditor)</span>
-                  </li>
-                </ul>
-              </div>
+        {/* Delete User Confirmation Modal */}
+        <Dialog open={showDeleteModal && !!user} onOpenChange={(open) => {
+          if (!open) {
+            setShowDeleteModal(false);
+            setDeleteConfirmText('');
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 bg-white" showCloseButton={false}>
+            {user && (
+              <>
+                <DialogHeader className="bg-red-600 text-white p-6 rounded-t-lg">
+                  <div className="flex items-center space-x-3">
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <DialogTitle className="text-2xl font-bold text-white">Delete User Account - Permanent Action</DialogTitle>
+                      <DialogDescription className="text-red-100 text-sm mt-1">This action cannot be undone</DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
 
-              {/* What will be preserved */}
-              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
-                <h3 className="font-bold text-green-900 text-lg mb-3">✅ PRESERVED (will NOT be changed):</h3>
-                <ul className="space-y-2 text-green-800">
-                  <li className="flex items-start">
-                    <span className="mr-2">✓</span>
-                    <span><strong>Original uploaded files</strong> (same file IDs, filenames, upload dates)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">✓</span>
-                    <span><strong>User account data</strong> (profile, email, credentials)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">✓</span>
-                    <span><strong>Manually-added creditors</strong> (only AI-extracted ones are removed)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">✓</span>
-                    <span><strong>Workflow status</strong> and history</span>
-                  </li>
-                </ul>
-              </div>
+                <div className="p-6 space-y-6">
+                  {/* Warning Message */}
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                    <p className="text-lg font-bold text-yellow-900 mb-2">
+                      Are you sure you want to permanently delete this user?
+                    </p>
+                    <div className="text-yellow-800">
+                      <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
+                      <p className="font-semibold mb-1">Email: {user.email}</p>
+                      <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
+                    </div>
+                  </div>
 
-              {/* Confirmation Input */}
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">
-                  To confirm, type "REPROCESS" in the box below:
-                </label>
-                <input
-                  type="text"
-                  value={reprocessConfirmText}
-                  onChange={(e) => setReprocessConfirmText(e.target.value)}
-                  placeholder="REPROCESS"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono"
-                  disabled={reprocessingDocuments}
-                />
-              </div>
+                  {/* What will be deleted */}
+                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                    <h3 className="font-bold text-red-900 text-lg mb-3">⚠️ WARNING: This will permanently delete:</h3>
+                    <ul className="space-y-2 text-red-800">
+                      <li className="flex items-start">
+                        <span className="mr-2">🗑️</span>
+                        <span><strong>User account</strong> and login credentials</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">📄</span>
+                        <span><strong>{user.documents?.length || 0} documents</strong> and all uploaded files</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">🏢</span>
+                        <span><strong>{user.final_creditor_list?.length || 0} creditors</strong> and all creditor data</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">💰</span>
+                        <span><strong>Financial data</strong> {user.has_financial_data ? '(exists)' : '(none)'}</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">📋</span>
+                        <span><strong>Workflow status</strong> and all processing history</span>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mr-2">💬</span>
+                        <span><strong>Communication records</strong> and notes</span>
+                      </li>
+                    </ul>
+                  </div>
 
-              {/* Action Buttons */}
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowReprocessModal(false);
-                    setReprocessConfirmText('');
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
-                  disabled={reprocessingDocuments}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={reprocessAllDocuments}
-                  disabled={reprocessingDocuments || reprocessConfirmText !== 'REPROCESS'}
-                  className="flex-1 px-6 py-3 bg-orange-600 text-white font-bold rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
-                >
-                  {reprocessingDocuments ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUturnLeftIcon className="w-5 h-5 mr-2" />
-                      Re-Process All Documents
-                    </>
-                  )}
-                </button>
-              </div>
+                  {/* Confirmation Input */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      To confirm deletion, type the user's email address exactly:
+                      <span className="text-red-600 ml-2">{user.email}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder={user.email}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
+                      disabled={deleting}
+                    />
+                  </div>
 
-              <p className="text-xs text-gray-500 text-center">
-                This action will be logged in the audit trail. Original files and metadata will be preserved.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+                  {/* Action Buttons */}
+                  <div className="flex space-x-3 pt-4">
+                    <button
+                      onClick={() => {
+                        setShowDeleteModal(false);
+                        setDeleteConfirmText('');
+                      }}
+                      className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                      disabled={deleting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteUser}
+                      disabled={deleting || deleteConfirmText !== user.email}
+                      className="flex-1 px-6 py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                    >
+                      {deleting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete Permanently
+                        </>
+                      )}
+                    </button>
+                  </div>
 
-      {/* Delete User Confirmation Modal */}
-      {showDeleteModal && user && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-red-600 text-white p-6 rounded-t-lg">
-              <div className="flex items-center space-x-3">
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <h2 className="text-2xl font-bold">Delete User Account - Permanent Action</h2>
-                  <p className="text-red-100 text-sm mt-1">This action cannot be undone</p>
+                  <p className="text-xs text-gray-500 text-center">
+                    This deletion will be logged in the audit trail for compliance purposes.
+                  </p>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
-            <div className="p-6 space-y-6">
-              {/* Warning Message */}
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <p className="text-lg font-bold text-yellow-900 mb-2">
-                  Are you sure you want to permanently delete this user?
-                </p>
-                <div className="text-yellow-800">
-                  <p className="font-semibold mb-1">User: {user.firstName} {user.lastName}</p>
-                  <p className="font-semibold mb-1">Email: {user.email}</p>
-                  <p className="font-semibold">Aktenzeichen: {user.aktenzeichen}</p>
-                </div>
-              </div>
-
-              {/* What will be deleted */}
-              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-                <h3 className="font-bold text-red-900 text-lg mb-3">⚠️ WARNING: This will permanently delete:</h3>
-                <ul className="space-y-2 text-red-800">
-                  <li className="flex items-start">
-                    <span className="mr-2">🗑️</span>
-                    <span><strong>User account</strong> and login credentials</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">📄</span>
-                    <span><strong>{user.documents?.length || 0} documents</strong> and all uploaded files</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">🏢</span>
-                    <span><strong>{user.final_creditor_list?.length || 0} creditors</strong> and all creditor data</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">💰</span>
-                    <span><strong>Financial data</strong> {user.has_financial_data ? '(exists)' : '(none)'}</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">📋</span>
-                    <span><strong>Workflow status</strong> and all processing history</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">💬</span>
-                    <span><strong>Communication records</strong> and notes</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Confirmation Input */}
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2">
-                  To confirm deletion, type the user's email address exactly:
-                  <span className="text-red-600 ml-2">{user.email}</span>
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  placeholder={user.email}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
-                  disabled={deleting}
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setDeleteConfirmText('');
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteUser}
-                  disabled={deleting || deleteConfirmText !== user.email}
-                  className="flex-1 px-6 py-3 bg-red-600 text-white font-bold rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center"
-                >
-                  {deleting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Delete Permanently
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-500 text-center">
-                This deletion will be logged in the audit trail for compliance purposes.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
