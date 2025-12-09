@@ -1,0 +1,13 @@
+{
+    "type": "service_account",
+    "project_id": "automationscuric",
+    "private_key_id": "1a0ffd955d298df05b8d67622727ee3cf6db41c4",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCpsPCr/hcupp95\nDS/0kWYxI94enmHxya2522sEvxiOFq5U8l8GXj8AQzTOzrkZ7S4E5GH14krHsXaY\nOQoPbXSdMUXZQz63qYtA9CiJT9NdDqoQtENJEcc6oJaEUKMAwYix+LB2UAUy5UqM\n7Xu8BQX/utOQevzT6RdYBNnwnVZRyztmrNUXXbhRzke7m8PNDIf3gU5YkWI/TyJT\n+n9qB5+JnByEkP5UMKIlxuem8FeADsNyBz87bYlVg7oM52DcWiXQrDdemZrBWL1I\nAdHFwORd8+ksLvNC8REhVcYF/8YdwJM9/2Ar3+BC+P52+7ed9ub4HF+7Tc9g9JBn\nEWStm28PAgMBAAECggEATmEDGX5YuNyPpns33lBWknYNv7jKZsMP8lvt95hIwECr\nr2LwD2Hy2a0xNCD6EIakDfBrawZmIgzPSYp3Ih8dkQnUSIEt8+lk/9CG9L2hVEdU\nuDh7J8IFcwf/3gfc8plyCTpkT5GwhQyxvZxn3bW4SqHB3Odh5oOwm6BKBkC2QTrL\n5CaUWlPPR3h2+1OwLEv1krHTsKeFeTKHDRvyz0QNrKlr0wlhScYh/JajnCqovbQN\nyns/RCMzcLFUmRjhcz0TPPmWwuDoSLN1lJsK+FYoH2Vk17jt+JkIAh8FPBg2ry0a\nmc9evlr4f4wRRlNCD+eVe/Af7MK+Pc3Ik2wNFZQbaQKBgQDjZTOQMHRz1W7DWfet\n4M/0MAaxjVR5NJvqmfvXwV0eXMAzRRQI8h51/cufuCq2i2yFYlhDh5Z3ZEzuwyWJ\n08HXWXXL60UrTaMP36FfIeXvzjreAq6YMyhBrch6HS+YKBzCCKockegZooQO1yF+\n1Ucj1EGvY7RtZKfrxC7QkJTiuwKBgQC/CX7QCU3f5YmNf+++4lUafiMSSmC1HDBj\nAPcjK66de6bJ+pRJ2YWNcnk0AFfd7VQlmWm0wy99rz5PUpuIq6popd74ADmoyO6z\nO+enCTpAr6S2CsMo36xBLdMBCgc8bzxOYVWy+00bjjGG+7/d4QDV7U1F53RZjKI9\ntIMyadrxvQKBgBSfwSV6v5Uh7oHZTxV+Jl5HXNQNtXOoydtlS+otp3xxfR0pTr/g\n9dJNyoIZ+gXEb3tJiCfXzFXXywJ8wJLXmeUmQADWvddHm1p9Ne2i7W/qjHxGUf+L\n5ELQuDYbH431VWZj0sn0kdCBZOjTqj4Oqf0d6zc1G9AwKOrBSF2yP06xAoGABRhn\nvXzCCvrAVHnZFypKQs6ieNZrBemekMVx0gpUOfcWV8TLN70JhuBKw0xPC6hM2kPh\nQeUC20NVUiBN7bNGdEwYSl0XLJ1PYJB0eUwRta/5oLFgyzJMEeD7A8gUsVP2M9D8\nzC1PvTBpucP1NiHON+aAbSDjRZAus56g8TNJl7ECgYEA4d1XDzJHwrkF1Dj/b+ij\noAMhpW5IUKXxf6SL3dDYt7Neofq++t0y9vETLbNHzUVJA4HEm8wgKHGuyt3DmyVp\n3bn239nnhgzQXeYvkuQ5HU7XLH2xaJuxnCKZQcTTXwl2C05Rv1rku6PLTu+acWxP\nDzvdVVc/uaZCmwxHwsb4+2Q=\n-----END PRIVATE KEY-----\n",
+    "client_email": "gcs-uploader@automationscuric.iam.gserviceaccount.com",
+    "client_id": "104611393629313866722",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/gcs-uploader%40automationscuric.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+  }
