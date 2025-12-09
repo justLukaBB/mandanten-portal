@@ -1,10 +1,26 @@
-const { Storage } = require('@google-cloud/storage');
-const path = require('path');
+ const { Storage } = require('@google-cloud/storage');
+// const path = require('path');
 
-const keyFilePath = path.join(process.cwd(), 'config/gcs-keys.json');
+// const keyFilePath = path.join(process.cwd(), 'config/gcs-keys.json');
 
+// const storage = new Storage({
+//   keyFilename: keyFilePath,
+// });
+
+let credentials = {};
+
+if (process.env.GCS_KEY_BASE64) {
+  const decoded = Buffer.from(process.env.GCS_KEY_BASE64, 'base64').toString();
+  credentials = JSON.parse(decoded);
+}
+
+console.log('credentials', credentials);
 const storage = new Storage({
-  keyFilename: keyFilePath,
+  projectId: credentials.project_id,
+  credentials: {
+    client_email: credentials.client_email,
+    private_key: credentials.private_key,
+  },
 });
 
 const bucketName = 'automation_scuric'; 
