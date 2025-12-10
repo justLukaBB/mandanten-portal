@@ -1,25 +1,10 @@
- const { Storage } = require('@google-cloud/storage');
-// const path = require('path');
+const { Storage } = require('@google-cloud/storage');
 
-// const keyFilePath = path.join(process.cwd(), 'config/gcs-keys.json');
-
-// const storage = new Storage({
-//   keyFilename: keyFilePath,
-// });
-
-let credentials = {};
-
-if (process.env.GCS_KEY_BASE64) {
-  const decoded = Buffer.from(process.env.GCS_KEY_BASE64, 'base64').toString();
-  credentials = JSON.parse(decoded);
-}
-
-console.log('credentials', credentials);
 const storage = new Storage({
-  projectId: credentials.project_id,
+  projectId: process.env.GCS_PROJECT_ID,
   credentials: {
-    client_email: credentials.client_email,
-    private_key: credentials.private_key,
+    client_email: process.env.GCS_CLIENT_EMAIL,
+    private_key: process.env.GCS_PRIVATE_KEY ? process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
   },
 });
 
