@@ -356,8 +356,9 @@ router.post('/ai-processing',
         // Create Zendesk ticket(s) - async, don't wait
         setImmediate(async () => {
           try {
-            // Import Zendesk service (adjust path as needed)
-            const zendeskService = require('../services/zendesk');
+            // Import Zendesk service
+            const ZendeskService = require('../services/zendeskService');
+            const zendeskService = new ZendeskService();
             
             // Get fresh client data for ticket creation
             const clientForTicket = await getClient(client_id);
