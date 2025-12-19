@@ -1,5 +1,7 @@
 const { Storage } = require('@google-cloud/storage');
 
+
+
 const storage = new Storage({
   projectId: process.env.GCS_PROJECT_ID,
   credentials: {
@@ -10,6 +12,7 @@ const storage = new Storage({
 
 const bucketName = 'automation_scuric'; 
 const bucket = storage.bucket(bucketName);
+
 
 const uploadToGCS = (file) => {
   return new Promise((resolve, reject) => {
@@ -28,7 +31,7 @@ const uploadToGCS = (file) => {
       
       // Determine if we should return a public URL or just the name. 
       // For now, following the user's snippet:
-      resolve(`https://storage.googleapis.com/${bucketName}/${blob.name}`);
+      resolve({url:`https://storage.googleapis.com/${bucketName}/${blob.name}`, name: blob.name});
     });
 
     blobStream.end(file.buffer);
@@ -51,4 +54,14 @@ const getGCSFileBuffer = (filename) => {
   });
 };
 
-module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, bucket };
+
+const getSignedUrl = async (filename) => {
+  const options = {
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+  };
+  const [url] =  await storage.bucket(bucketName).file(filename).getSignedUrl(options);
+  return url;
+};
+module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, bucket, getSignedUrl };
