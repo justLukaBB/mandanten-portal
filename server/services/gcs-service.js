@@ -59,7 +59,7 @@ const getSignedUrl = async (filename) => {
   const options = {
     version: 'v4',
     action: 'read',
-    expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    expires: Date.now() + 120 * 60 * 1000, // 2 hours
   };
   const [url] =  await storage.bucket(bucketName).file(filename).getSignedUrl(options);
   return url;

@@ -8,7 +8,7 @@
 
 // Configuration
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
-const FASTAPI_TIMEOUT = parseInt(process.env.FASTAPI_TIMEOUT) || 30000; // 30 seconds
+const FASTAPI_TIMEOUT = parseInt(process.env.FASTAPI_TIMEOUT) || 1200000; // 30 seconds
 const FASTAPI_API_KEY = process.env.FASTAPI_API_KEY || ''; // API key for authentication
 const { getSignedUrl } = require("../services/gcs-service");
 
@@ -69,17 +69,22 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
   });
   
   try {
+
     const requestBody = {
       client_id: clientId,
-      files: await Promise.all(files.map(async(f) => {
-        const signedUrl = await getSignedUrl(f.filename)
-         return {filename: f.filename,
-          gcs_path:signedUrl,
+      files: await Promise.all(files.map(async (f) => {
+        const gcsPath = f.gcs_path || await getSignedUrl(f.filename); // prefer provided
+        console.log("gcsPath======",gcsPath)
+        console.log("mime type======",f.mime_type)
+        return {
+          filename: f.filename,            // blob name
+          gcs_path: gcsPath,               // signed URL
           mime_type: f.mime_type || 'image/png',
           size: f.size || 0,
-          document_id: f.document_id || f.id}
+          document_id: f.document_id || f.id,
+        };
       })),
-      webhook_url: webhookUrl
+      webhook_url: webhookUrl,
     };
     
     // Add API key if provided

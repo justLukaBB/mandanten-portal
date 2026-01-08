@@ -45,7 +45,7 @@ const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
-const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
+const { uploadToGCS, getGCSFileStream, getGCSFileBuffer,getSignedUrl } = require('./services/gcs-service');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
@@ -1271,196 +1271,334 @@ app.get('/api/clients/:clientId', async (req, res) => {
 //   }
 // });
 
-app.post('/api/clients/:clientId/documents',
-  // rateLimits.upload,  // Uncomment when using your rate limiter
-  upload.array('documents', 10),
-  // validateFileUpload,  // Uncomment when using your validation
-  async (req, res) => {
-    try {
-      const clientId = req.params.clientId;
+// app.post('/api/clients/:clientId/documents',
+//   // rateLimits.upload,  // Uncomment when using your rate limiter
+//   upload.array('documents', 10),
+//   // validateFileUpload,  // Uncomment when using your validation
+//   async (req, res) => {
+//     try {
+//       const clientId = req.params.clientId;
       
-      // Get client from database
-      const client = await getClient(clientId);
+//       // Get client from database
+//       const client = await getClient(clientId);
       
-      if (!client) {
-        return res.status(404).json({ error: 'Client not found' });
+//       if (!client) {
+//         return res.status(404).json({ error: 'Client not found' });
+//       }
+      
+//       console.log(`\n📤 ================================`);
+//       console.log(`📤 DOCUMENT UPLOAD STARTED`);
+//       console.log(`📤 ================================`);
+//       console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+//       console.log(`📄 Files uploaded: ${req.files.length}`);
+//       console.log(`⏰ Upload time: ${new Date().toISOString()}`);
+      
+//       // Log uploaded files
+//       console.log(`\n📋 UPLOADED FILES:`);
+//       req.files.forEach((file, index) => {
+//         console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+//       });
+      
+//       const uploadedDocuments = [];
+//       const filesToProcess = [];
+      
+//       // Process each uploaded file
+//       for (const file of req.files) {
+//         const documentId = uuidv4();
+        
+//         let gcsUrl,gcsFileName;
+//         try {
+//           const {url,name} = await uploadToGCS(file);
+//           gcsUrl = url;
+//           gcsFileName = name;
+//           console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
+//         } catch (uploadError) {
+//           console.error(`❌ Failed to upload ${file.originalname} to GCS:`, uploadError);
+//           continue;
+//         }
+        
+//         // Create document record
+//         const documentRecord = {
+//           id: documentId,
+//           name: file.originalname,
+//           filename: gcsFileName,
+//           type: file.mimetype,
+//           size: file.size,
+//           uploadedAt: new Date().toISOString(),
+//           url: gcsUrl,
+//           processing_status: 'processing', // Will be updated by webhook
+//           document_status: 'pending',
+//           extracted_data: null
+//         };
+        
+//         uploadedDocuments.push(documentRecord);
+        
+//         // Prepare file info for FastAPI
+//         filesToProcess.push({
+//           document_id: documentId,
+//           filename: gcsFileName,
+//           gcs_path: gcsUrl,
+//           mime_type: file.mimetype,
+//           size: file.size
+//         });
+//       }
+      
+//       // Add documents to client record
+//       await safeClientUpdate(clientId, (client) => {
+//         client.documents = client.documents || [];
+//         client.documents.push(...uploadedDocuments);
+        
+//         // Update status based on document upload
+//         if (client.current_status === 'portal_access_sent') {
+//           client.current_status = 'documents_uploaded';
+//           console.log(`📊 Status updated to 'documents_uploaded' for client ${clientId}`);
+          
+//           // Add status history entry
+//           client.status_history = client.status_history || [];
+//           client.status_history.push({
+//             id: uuidv4(),
+//             status: 'documents_uploaded',
+//             changed_by: 'client',
+//             metadata: {
+//               documents_uploaded: uploadedDocuments.length,
+//               document_names: uploadedDocuments.map(doc => doc.name),
+//               upload_timestamp: new Date().toISOString()
+//             },
+//             created_at: new Date()
+//           });
+//         }
+        
+//         // Check if client was waiting for documents after payment
+//         if (client.first_payment_received && client.payment_ticket_type === 'document_request') {
+//           console.log(`✅ Documents uploaded for client ${clientId} who was waiting after payment!`);
+          
+//           client.payment_ticket_type = 'processing_wait';
+//           client.documents_uploaded_after_payment_at = new Date();
+          
+//           client.status_history.push({
+//             id: uuidv4(),
+//             status: 'documents_uploaded_after_payment',
+//             changed_by: 'system',
+//             metadata: {
+//               documents_count: uploadedDocuments.length,
+//               days_after_payment: Math.floor(
+//                 (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
+//               ),
+//               reminder_count: client.document_reminder_count || 0
+//             }
+//           });
+//         }
+        
+//         return client;
+//       });
+      
+//       // Call FastAPI for AI processing (async - don't wait)
+//       if (filesToProcess.length > 0) {
+//         const webhookUrl = `${WEBHOOK_BASE_URL}/api/webhooks/ai-processing`;
+        
+//         // Fire and forget - FastAPI will process and send webhook
+//         fastApiClient.createProcessingJob({
+//           clientId: clientId,
+//           files: filesToProcess,
+//           webhookUrl: webhookUrl
+//         }).then(result => {
+//           if (result.success) {
+//             console.log(`🚀 FastAPI job created: ${result.jobId}`);
+            
+//             // Optionally store job ID in documents
+//             safeClientUpdate(clientId, (client) => {
+//               filesToProcess.forEach(file => {
+//                 const doc = client.documents.find(d => d.id === file.document_id);
+//                 if (doc) {
+//                   doc.processing_job_id = result.jobId;
+//                 }
+//               });
+//               return client;
+//             }).catch(err => console.error('Failed to update job ID:', err));
+            
+//           } else {
+//             console.error(`❌ FastAPI job creation failed:`, result.error);
+            
+//             // Mark documents as failed
+//             safeClientUpdate(clientId, (client) => {
+//               filesToProcess.forEach(file => {
+//                 const doc = client.documents.find(d => d.id === file.document_id);
+//                 if (doc) {
+//                   doc.processing_status = 'failed';
+//                   doc.document_status = 'needs_review';
+//                   doc.processing_error = result.error;
+//                 }
+//               });
+//               return client;
+//             }).catch(err => console.error('Failed to update error status:', err));
+//           }
+//         }).catch(err => {
+//           console.error('FastAPI call failed:', err);
+//         });
+//       }
+      
+//       console.log(`\n✅ ================================`);
+//       console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
+//       console.log(`✅ ================================`);
+//       console.log(`👤 Client: ${clientId}`);
+//       console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
+//       console.log(`🔄 AI processing triggered via FastAPI`);
+//       console.log(`⏰ Completed at: ${new Date().toISOString()}`);
+//       console.log(`\n`);
+      
+//       res.json({
+//         success: true,
+//         message: `${uploadedDocuments.length} Dokument(e) erfolgreich hochgeladen. AI-Verarbeitung läuft im Hintergrund.`,
+//         documents: uploadedDocuments
+//       });
+      
+//     } catch (error) {
+//       console.error('Upload error:', error);
+//       res.status(500).json({
+//         error: 'Fehler beim Hochladen der Dateien',
+//         details: error.message
+//       });
+//     }
+//   }
+// );
+
+app.post('/api/clients/:clientId/documents', upload.array('documents', 50), async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+    const client = await getClient(clientId);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    console.log(`\n📤 DOCUMENT UPLOAD STARTED for ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+    console.log(`📄 Files uploaded: ${req.files.length}`);
+
+    const uploadedDocuments = [];
+    const filesToProcess = [];
+
+    for (const file of req.files) {
+      const documentId = uuidv4();
+
+      let gcsFileName, signedUrl;
+      try {
+        const { url: publicUrl, name } = await uploadToGCS(file); // name is the blob name
+        gcsFileName = name;
+        signedUrl = await getSignedUrl(gcsFileName); // sign the blob name you just uploaded
+        console.log(`✅ Uploaded to GCS: ${publicUrl}`);
+      } catch (err) {
+        console.error(`❌ Failed to upload ${file.originalname} to GCS:`, err);
+        continue;
       }
-      
-      console.log(`\n📤 ================================`);
-      console.log(`📤 DOCUMENT UPLOAD STARTED`);
-      console.log(`📤 ================================`);
-      console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-      console.log(`📄 Files uploaded: ${req.files.length}`);
-      console.log(`⏰ Upload time: ${new Date().toISOString()}`);
-      
-      // Log uploaded files
-      console.log(`\n📋 UPLOADED FILES:`);
-      req.files.forEach((file, index) => {
-        console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+
+      uploadedDocuments.push({
+        id: documentId,
+        name: file.originalname,
+        filename: gcsFileName,      // blob name
+        type: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        url: signedUrl,             // signed URL stored for reference
+        processing_status: 'processing',
+        document_status: 'pending',
+        extracted_data: null,
       });
-      
-      const uploadedDocuments = [];
-      const filesToProcess = [];
-      
-      // Process each uploaded file
-      for (const file of req.files) {
-        const documentId = uuidv4();
-        
-        let gcsUrl,gcsFileName;
-        try {
-          const {url,name} = await uploadToGCS(file);
-          gcsUrl = url;
-          gcsFileName = name;
-          console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
-        } catch (uploadError) {
-          console.error(`❌ Failed to upload ${file.originalname} to GCS:`, uploadError);
-          continue;
-        }
-        
-        // Create document record
-        const documentRecord = {
-          id: documentId,
-          name: file.originalname,
-          filename: gcsFileName,
-          type: file.mimetype,
-          size: file.size,
-          uploadedAt: new Date().toISOString(),
-          url: gcsUrl,
-          processing_status: 'processing', // Will be updated by webhook
-          document_status: 'pending',
-          extracted_data: null
-        };
-        
-        uploadedDocuments.push(documentRecord);
-        
-        // Prepare file info for FastAPI
-        filesToProcess.push({
-          document_id: documentId,
-          filename: gcsFileName,
-          gcs_path: gcsUrl,
-          mime_type: file.mimetype,
-          size: file.size
+
+      filesToProcess.push({
+        document_id: documentId,
+        filename: gcsFileName,      // blob name
+        gcs_path: signedUrl,        // signed URL to fetch
+        mime_type: file.mimetype,
+        size: file.size,
+      });
+    }
+
+    // Update client record
+    await safeClientUpdate(clientId, (c) => {
+      c.documents = c.documents || [];
+      c.documents.push(...uploadedDocuments);
+
+      if (c.current_status === 'portal_access_sent') {
+        c.current_status = 'documents_uploaded';
+        c.status_history = c.status_history || [];
+        c.status_history.push({
+          id: uuidv4(),
+          status: 'documents_uploaded',
+          changed_by: 'client',
+          metadata: {
+            documents_uploaded: uploadedDocuments.length,
+            document_names: uploadedDocuments.map((d) => d.name),
+            upload_timestamp: new Date().toISOString(),
+          },
+          created_at: new Date(),
         });
       }
-      
-      // Add documents to client record
-      await safeClientUpdate(clientId, (client) => {
-        client.documents = client.documents || [];
-        client.documents.push(...uploadedDocuments);
-        
-        // Update status based on document upload
-        if (client.current_status === 'portal_access_sent') {
-          client.current_status = 'documents_uploaded';
-          console.log(`📊 Status updated to 'documents_uploaded' for client ${clientId}`);
-          
-          // Add status history entry
-          client.status_history = client.status_history || [];
-          client.status_history.push({
-            id: uuidv4(),
-            status: 'documents_uploaded',
-            changed_by: 'client',
-            metadata: {
-              documents_uploaded: uploadedDocuments.length,
-              document_names: uploadedDocuments.map(doc => doc.name),
-              upload_timestamp: new Date().toISOString()
-            },
-            created_at: new Date()
-          });
-        }
-        
-        // Check if client was waiting for documents after payment
-        if (client.first_payment_received && client.payment_ticket_type === 'document_request') {
-          console.log(`✅ Documents uploaded for client ${clientId} who was waiting after payment!`);
-          
-          client.payment_ticket_type = 'processing_wait';
-          client.documents_uploaded_after_payment_at = new Date();
-          
-          client.status_history.push({
-            id: uuidv4(),
-            status: 'documents_uploaded_after_payment',
-            changed_by: 'system',
-            metadata: {
-              documents_count: uploadedDocuments.length,
-              days_after_payment: Math.floor(
-                (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
-              ),
-              reminder_count: client.document_reminder_count || 0
-            }
-          });
-        }
-        
-        return client;
-      });
-      
-      // Call FastAPI for AI processing (async - don't wait)
-      if (filesToProcess.length > 0) {
-        const webhookUrl = `${WEBHOOK_BASE_URL}/api/webhooks/ai-processing`;
-        
-        // Fire and forget - FastAPI will process and send webhook
-        fastApiClient.createProcessingJob({
-          clientId: clientId,
-          files: filesToProcess,
-          webhookUrl: webhookUrl
-        }).then(result => {
+
+      if (c.first_payment_received && c.payment_ticket_type === 'document_request') {
+        c.payment_ticket_type = 'processing_wait';
+        c.documents_uploaded_after_payment_at = new Date();
+        c.status_history = c.status_history || [];
+        c.status_history.push({
+          id: uuidv4(),
+          status: 'documents_uploaded_after_payment',
+          changed_by: 'system',
+          metadata: {
+            documents_count: uploadedDocuments.length,
+            days_after_payment: Math.floor(
+              (Date.now() - new Date(c.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
+            ),
+            reminder_count: c.document_reminder_count || 0,
+          },
+        });
+      }
+      return c;
+    });
+
+    // Fire-and-forget FastAPI job
+    if (filesToProcess.length > 0) {
+      const webhookUrl = `${WEBHOOK_BASE_URL}/api/webhooks/ai-processing`;
+      fastApiClient
+        .createProcessingJob({
+          clientId,
+          files: filesToProcess, // already has signed URLs
+          webhookUrl,
+        })
+        .then((result) => {
           if (result.success) {
             console.log(`🚀 FastAPI job created: ${result.jobId}`);
-            
-            // Optionally store job ID in documents
-            safeClientUpdate(clientId, (client) => {
-              filesToProcess.forEach(file => {
-                const doc = client.documents.find(d => d.id === file.document_id);
-                if (doc) {
-                  doc.processing_job_id = result.jobId;
-                }
+            safeClientUpdate(clientId, (c) => {
+              filesToProcess.forEach((f) => {
+                const doc = c.documents.find((d) => d.id === f.document_id);
+                if (doc) doc.processing_job_id = result.jobId;
               });
-              return client;
-            }).catch(err => console.error('Failed to update job ID:', err));
-            
+              return c;
+            }).catch((err) => console.error('Failed to update job ID:', err));
           } else {
             console.error(`❌ FastAPI job creation failed:`, result.error);
-            
-            // Mark documents as failed
-            safeClientUpdate(clientId, (client) => {
-              filesToProcess.forEach(file => {
-                const doc = client.documents.find(d => d.id === file.document_id);
+            safeClientUpdate(clientId, (c) => {
+              filesToProcess.forEach((f) => {
+                const doc = c.documents.find((d) => d.id === f.document_id);
                 if (doc) {
                   doc.processing_status = 'failed';
                   doc.document_status = 'needs_review';
                   doc.processing_error = result.error;
                 }
               });
-              return client;
-            }).catch(err => console.error('Failed to update error status:', err));
+              return c;
+            }).catch((err) => console.error('Failed to update error status:', err));
           }
-        }).catch(err => {
-          console.error('FastAPI call failed:', err);
-        });
-      }
-      
-      console.log(`\n✅ ================================`);
-      console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
-      console.log(`✅ ================================`);
-      console.log(`👤 Client: ${clientId}`);
-      console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
-      console.log(`🔄 AI processing triggered via FastAPI`);
-      console.log(`⏰ Completed at: ${new Date().toISOString()}`);
-      console.log(`\n`);
-      
-      res.json({
-        success: true,
-        message: `${uploadedDocuments.length} Dokument(e) erfolgreich hochgeladen. AI-Verarbeitung läuft im Hintergrund.`,
-        documents: uploadedDocuments
-      });
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      res.status(500).json({
-        error: 'Fehler beim Hochladen der Dateien',
-        details: error.message
-      });
+        })
+        .catch((err) => console.error('FastAPI call failed:', err));
     }
+
+    console.log(`✅ DOCUMENT UPLOAD COMPLETE for ${clientId}`);
+    res.json({
+      success: true,
+      message: `${uploadedDocuments.length} Dokument(e) erfolgreich hochgeladen. AI-Verarbeitung läuft im Hintergrund.`,
+      documents: uploadedDocuments,
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Fehler beim Hochladen der Dateien', details: error.message });
   }
-);
+});
 
 // Bulk download - Download all documents for a client as ZIP
 // NOTE: This route MUST come BEFORE the :documentId/download route due to Express routing order
