@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowPathIcon,
+  EllipsisVerticalIcon,
+  XMarkIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  PlusIcon
+} from '@heroicons/react/24/outline';
+import api from '../config/api';
 import CreditorUploadComponent from '../components/CreditorUploadComponent';
-import ClientDataComponent from '../components/ClientDataComponent';
-import ClientProgressTracker from '../components/ClientProgressTracker';
-import ClientDocumentsViewer from '../components/ClientDocumentsViewer';
-import ClientInvoicesViewer from '../components/ClientInvoicesViewer';
 import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
-import { ArrowPathIcon, EllipsisVerticalIcon, XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import api from '../config/api';
+import ClientProgressTracker from '../components/ClientProgressTracker';
+import ClientDataComponent from '../components/ClientDataComponent';
+import ClientInvoicesViewer from '../components/ClientInvoicesViewer';
+import ClientDocumentsViewer from '../components/ClientDocumentsViewer';
 import ClientAddressForm from '../components/ClientAddressForm';
+import AddCreditorForm from '../components/AddCreditorForm';
 
 /**
  * Personal/Client Portal Function Component
@@ -50,7 +58,7 @@ export const PersonalPortal = ({
   const [showingFinancialForm, setShowingFinancialForm] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
-  
+
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -473,7 +481,7 @@ export const PersonalPortal = ({
               {customTitle}
             </h1>
           </div>
-          
+
           {/* Three-dot dropdown menu */}
           <div className="relative dropdown-container">
             <button
@@ -482,7 +490,7 @@ export const PersonalPortal = ({
             >
               <EllipsisVerticalIcon className="h-6 w-6 text-gray-600" />
             </button>
-            
+
             {showDropdown && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
                 <div className="py-1">
@@ -592,6 +600,15 @@ export const PersonalPortal = ({
                 </div>
               </div>
             )}
+
+            <AddCreditorForm
+              clientId={clientId!}
+              onClose={() => { }} // No longer needed for closing
+              customColors={customColors}
+              onSuccess={() => {
+                // Refresh logic if needed
+              }}
+            />
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -632,8 +649,8 @@ export const PersonalPortal = ({
         )}
 
         {/* Creditor confirmation component - shows when ready for client confirmation */}
-        <CreditorConfirmation 
-          clientId={clientId!} 
+        <CreditorConfirmation
+          clientId={clientId!}
           onConfirmationComplete={fetchClientData}
         />
 
@@ -910,7 +927,7 @@ export const PersonalPortal = ({
                   <button
                     type="submit"
                     className="flex-1 px-4 py-2 text-white rounded-md transition-colors"
-                    style={{ 
+                    style={{
                       backgroundColor: customColors.primary,
                       opacity: passwordLoading ? 0.6 : 1
                     }}

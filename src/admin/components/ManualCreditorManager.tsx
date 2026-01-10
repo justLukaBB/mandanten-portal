@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  PlusIcon, 
-  PencilIcon, 
+import {
+  PlusIcon,
+  PencilIcon,
   TrashIcon,
-  CheckCircleIcon, 
+  CheckCircleIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
   UserGroupIcon
@@ -54,11 +54,11 @@ interface Props {
   onCreditorDeleted?: () => void;
 }
 
-const ManualCreditorManager: React.FC<Props> = ({ 
-  clientId, 
-  onCreditorAdded, 
-  onCreditorUpdated, 
-  onCreditorDeleted 
+const ManualCreditorManager: React.FC<Props> = ({
+  clientId,
+  onCreditorAdded,
+  onCreditorUpdated,
+  onCreditorDeleted
 }) => {
   const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [client, setClient] = useState<Client | null>(null);
@@ -144,7 +144,7 @@ const ManualCreditorManager: React.FC<Props> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.sender_name.trim()) {
       setError('Gläubigername ist erforderlich');
       return;
@@ -254,123 +254,125 @@ const ManualCreditorManager: React.FC<Props> = ({
 
         {/* Add/Edit Form */}
         {showAddForm && (
-          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="text-md font-medium text-gray-900 mb-4">
-              {editingId ? 'Gläubiger bearbeiten' : 'Neuen Gläubiger hinzufügen'}
-            </h4>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <h3 className="text-xl font-bold text-gray-900 mb-8">
+              {editingId ? 'Edit Creditor' : 'Add New Creditor'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Gläubigername *
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Creditor Name *
                   </label>
                   <input
                     type="text"
                     value={formData.sender_name}
-                    onChange={(e) => setFormData({...formData, sender_name: e.target.value})}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    E-Mail
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email
                   </label>
                   <input
                     type="email"
                     value={formData.sender_email}
-                    onChange={(e) => setFormData({...formData, sender_email: e.target.value})}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    onChange={(e) => setFormData({ ...formData, sender_email: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Referenznummer
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Reference Number
                   </label>
                   <input
                     type="text"
                     value={formData.reference_number}
-                    onChange={(e) => setFormData({...formData, reference_number: e.target.value})}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Forderungsbetrag (€)
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount Claimed (€)
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.claim_amount}
-                    onChange={(e) => setFormData({...formData, claim_amount: e.target.value})}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    onChange={(e) => setFormData({ ...formData, claim_amount: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                   />
                 </div>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Adresse
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Address
                 </label>
                 <textarea
                   value={formData.sender_address}
-                  onChange={(e) => setFormData({...formData, sender_address: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, sender_address: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                  className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm resize-none"
                 />
               </div>
 
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center">
+              <div className="flex flex-col space-y-4 py-2">
+                <div className="flex items-center">
                   <input
                     type="checkbox"
+                    id="isRepresentative"
                     checked={formData.is_representative}
-                    onChange={(e) => setFormData({...formData, is_representative: e.target.checked})}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                    onChange={(e) => setFormData({ ...formData, is_representative: e.target.checked })}
+                    className="h-5 w-5 text-blue-600 focus:ring-blue-500/20 border-gray-300 rounded cursor-pointer transition-all"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Ist Vertreter</span>
-                </label>
-                
+                  <label htmlFor="isRepresentative" className="ml-3 block text-sm font-medium text-gray-700 cursor-pointer">
+                    Is Representative
+                  </label>
+                </div>
                 {formData.is_representative && (
-                  <div className="flex-1">
+                  <div className="flex-1 animate-in fade-in slide-in-from-top-2 duration-300">
                     <input
                       type="text"
-                      placeholder="Tatsächlicher Gläubiger"
+                      placeholder="Actual creditor name"
                       value={formData.actual_creditor}
-                      onChange={(e) => setFormData({...formData, actual_creditor: e.target.value})}
-                      className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      onChange={(e) => setFormData({ ...formData, actual_creditor: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                     />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Notizen
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notes
                 </label>
                 <textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                  placeholder="Zusätzliche Informationen..."
+                  className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm resize-none"
+                  placeholder="Additional information..."
                 />
               </div>
 
-              <div className="flex justify-end space-x-3">
+              <div className="flex justify-end space-x-3 pt-6">
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
                 >
-                  Abbrechen
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-800 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                  className="px-8 py-2.5 border border-transparent rounded-lg text-sm font-bold text-white bg-red-800 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 shadow-sm shadow-blue-900/10 active:scale-[0.98]"
                 >
-                  {saving ? 'Speichern...' : (editingId ? 'Aktualisieren' : 'Hinzufügen')}
+                  {saving ? 'Saving...' : (editingId ? 'Update Creditor' : 'Add Creditor')}
                 </button>
               </div>
             </form>
@@ -384,7 +386,7 @@ const ManualCreditorManager: React.FC<Props> = ({
               Gläubiger ({creditors.length})
             </h4>
             <div className="text-sm text-gray-500">
-              Manuelle: {creditors.filter(c => c.created_via === 'admin_manual_entry').length} | 
+              Manuelle: {creditors.filter(c => c.created_via === 'admin_manual_entry').length} |
               KI-extrahiert: {creditors.filter(c => c.created_via !== 'admin_manual_entry').length}
             </div>
           </div>
@@ -454,11 +456,10 @@ const ManualCreditorManager: React.FC<Props> = ({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-xs">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            creditor.created_via === 'admin_manual_entry' 
-                              ? 'bg-blue-100 text-blue-800' 
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${creditor.created_via === 'admin_manual_entry'
+                              ? 'bg-blue-100 text-blue-800'
                               : 'bg-green-100 text-green-800'
-                          }`}>
+                            }`}>
                             {creditor.created_via === 'admin_manual_entry' ? 'Manuell' : 'KI-extrahiert'}
                           </span>
                           <div className="mt-1 text-gray-500">

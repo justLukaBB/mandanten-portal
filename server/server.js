@@ -27,6 +27,7 @@ const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
+const creditorRoutes = require('./routes/creditorRoutes');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -75,6 +76,7 @@ app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
 app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
+app.use('/api', creditorRoutes);
 
 // Serve generated documents statically
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -84,201 +86,201 @@ app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
 // Test endpoint to list available documents (for debugging)
 app.get('/api/documents-list', (req, res) => {
-    try {
-        const documentsDir = path.join(__dirname, 'documents');
-        const files = fs.readdirSync(documentsDir).filter(file => file.endsWith('.docx'));
-        const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
-        
-        const documentUrls = files.map(filename => ({
-            filename,
-            url: `${baseUrl}/documents/${filename}`,
-            size: fs.statSync(path.join(documentsDir, filename)).size
-        }));
-        
-        res.json({
-            success: true,
-            count: files.length,
-            documents: documentUrls,
-            documentsDir: documentsDir,
-            baseUrl: baseUrl
-        });
-    } catch (error) {
-        res.json({
-            success: false,
-            error: error.message,
-            documentsDir: path.join(__dirname, 'documents')
-        });
-    }
+  try {
+    const documentsDir = path.join(__dirname, 'documents');
+    const files = fs.readdirSync(documentsDir).filter(file => file.endsWith('.docx'));
+    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+
+    const documentUrls = files.map(filename => ({
+      filename,
+      url: `${baseUrl}/documents/${filename}`,
+      size: fs.statSync(path.join(documentsDir, filename)).size
+    }));
+
+    res.json({
+      success: true,
+      count: files.length,
+      documents: documentUrls,
+      documentsDir: documentsDir,
+      baseUrl: baseUrl
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      documentsDir: path.join(__dirname, 'documents')
+    });
+  }
 });
 
 // Test endpoint to check if static file serving is working
 app.get('/api/test-document', (req, res) => {
-    try {
-        const testFile = path.join(__dirname, 'documents', 'TEST_Schuldenbereinigungsplan.docx');
-        if (fs.existsSync(testFile)) {
-            const stats = fs.statSync(testFile);
-            res.json({
-                success: true,
-                message: 'TEST document exists',
-                file: testFile,
-                size: stats.size,
-                testUrl: `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/documents/TEST_Schuldenbereinigungsplan.docx`
-            });
-        } else {
-            res.json({
-                success: false,
-                message: 'TEST document not found',
-                file: testFile
-            });
-        }
-    } catch (error) {
-        res.json({
-            success: false,
-            error: error.message
-        });
+  try {
+    const testFile = path.join(__dirname, 'documents', 'TEST_Schuldenbereinigungsplan.docx');
+    if (fs.existsSync(testFile)) {
+      const stats = fs.statSync(testFile);
+      res.json({
+        success: true,
+        message: 'TEST document exists',
+        file: testFile,
+        size: stats.size,
+        testUrl: `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/documents/TEST_Schuldenbereinigungsplan.docx`
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'TEST document not found',
+        file: testFile
+      });
     }
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Settlement response monitoring endpoints
 app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
-    try {
-        const { clientId } = req.params;
-        
-        // Convert clientId to aktenzeichen
-        const aktenzeichen = await getClientAktenzeichen(clientId);
-        if (!aktenzeichen) {
-            return res.status(404).json({
-                success: false,
-                error: 'Client not found'
-            });
-        }
-        
-        const summary = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
-        res.json({
-            success: true,
-            summary: summary
-        });
-        
-    } catch (error) {
-        console.error('❌ Error getting settlement responses:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
     }
+
+    const summary = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
+    res.json({
+      success: true,
+      summary: summary
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting settlement responses:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticateAdmin, async (req, res) => {
-    try {
-        const { clientId } = req.params;
-        const { timeoutDays = 30 } = req.body;
-        
-        // Convert clientId to aktenzeichen
-        const aktenzeichen = await getClientAktenzeichen(clientId);
-        if (!aktenzeichen) {
-            return res.status(404).json({
-                success: false,
-                error: 'Client not found'
-            });
-        }
-        
-        const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
-        res.json({
-            success: true,
-            result: result
-        });
-        
-    } catch (error) {
-        console.error('❌ Error processing settlement timeouts:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+  try {
+    const { clientId } = req.params;
+    const { timeoutDays = 30 } = req.body;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
     }
+
+    const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
+    res.json({
+      success: true,
+      result: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing settlement timeouts:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
-    try {
-        const { clientId } = req.params;
-        
-        // Convert clientId to aktenzeichen
-        const aktenzeichen = await getClientAktenzeichen(clientId);
-        if (!aktenzeichen) {
-            return res.status(404).json({
-                success: false,
-                error: 'Client not found'
-            });
-        }
-        
-        const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
-        res.json({
-            success: true,
-            status: status
-        });
-        
-    } catch (error) {
-        console.error('❌ Error getting monitoring status:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
     }
+
+    const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
+    res.json({
+      success: true,
+      status: status
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting monitoring status:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Nullplan response monitoring endpoints
 app.get('/api/admin/clients/:clientId/nullplan-responses', authenticateAdmin, async (req, res) => {
-    try {
-        const { clientId } = req.params;
-        
-        // Convert clientId to aktenzeichen
-        const aktenzeichen = await getClientAktenzeichen(clientId);
-        if (!aktenzeichen) {
-            return res.status(404).json({
-                success: false,
-                error: 'Client not found'
-            });
-        }
-        
-        // Get client data to analyze nullplan responses
-        const client = await Client.findOne({ aktenzeichen: aktenzeichen });
-        if (!client) {
-            return res.status(404).json({
-                success: false,
-                error: 'Client not found'
-            });
-        }
-        
-        // Generate nullplan summary from creditor data
-        const nullplanCreditors = client.final_creditor_list?.filter(c => 
-            c.nullplan_side_conversation_id || c.nullplan_sent_at
-        ) || [];
-        
-        const summary = {
-            total_creditors: nullplanCreditors.length,
-            accepted: nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length,
-            declined: nullplanCreditors.filter(c => c.nullplan_response_status === 'declined').length,
-            no_responses: nullplanCreditors.filter(c => c.nullplan_response_status === 'no_response').length,
-            pending: nullplanCreditors.filter(c => !c.nullplan_response_status || c.nullplan_response_status === 'pending').length,
-            total_debt: nullplanCreditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0),
-            acceptance_rate: nullplanCreditors.length > 0 ? 
-                Math.round((nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length / nullplanCreditors.length) * 100) : 0,
-            plan_type: 'Nullplan',
-            garnishable_amount: 0,
-            legal_reference: '§ 305 Abs. 1 Nr. 1 InsO'
-        };
-        
-        res.json({
-            success: true,
-            summary: summary
-        });
-        
-    } catch (error) {
-        console.error('❌ Error getting nullplan responses:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
     }
+
+    // Get client data to analyze nullplan responses
+    const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    // Generate nullplan summary from creditor data
+    const nullplanCreditors = client.final_creditor_list?.filter(c =>
+      c.nullplan_side_conversation_id || c.nullplan_sent_at
+    ) || [];
+
+    const summary = {
+      total_creditors: nullplanCreditors.length,
+      accepted: nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length,
+      declined: nullplanCreditors.filter(c => c.nullplan_response_status === 'declined').length,
+      no_responses: nullplanCreditors.filter(c => c.nullplan_response_status === 'no_response').length,
+      pending: nullplanCreditors.filter(c => !c.nullplan_response_status || c.nullplan_response_status === 'pending').length,
+      total_debt: nullplanCreditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0),
+      acceptance_rate: nullplanCreditors.length > 0 ?
+        Math.round((nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length / nullplanCreditors.length) * 100) : 0,
+      plan_type: 'Nullplan',
+      garnishable_amount: 0,
+      legal_reference: '§ 305 Abs. 1 Nr. 1 InsO'
+    };
+
+    res.json({
+      success: true,
+      summary: summary
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting nullplan responses:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Promise-based mutex for database operations to prevent race conditions
@@ -289,9 +291,9 @@ async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
   try {
     const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
     const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
-    
+
     console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
-    
+
     const response = await axios.post(webhookUrl, {
       client_id: clientId,
       document_id: documentId,
@@ -304,10 +306,10 @@ async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
         'User-Agent': 'MandarenPortal-Server/1.0'
       }
     });
-    
+
     console.log(`✅ Processing-complete webhook triggered successfully for client ${clientId}`);
     return response.data;
-    
+
   } catch (error) {
     console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
     // Don't throw - webhook failure shouldn't break document processing
@@ -381,9 +383,9 @@ startxref
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${documentName}"`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    
+
     res.send(Buffer.from(mockPDFContent));
-    
+
   } catch (error) {
     console.error('❌ Error serving mock PDF download:', error);
     res.status(500).json({
@@ -399,26 +401,26 @@ async function safeClientUpdate(clientId, updateFunction) {
   if (!processingMutex.has(clientId)) {
     processingMutex.set(clientId, Promise.resolve());
   }
-  
+
   // Chain this operation after the previous one
   const currentLock = processingMutex.get(clientId);
-  
+
   const newLock = currentLock.then(async () => {
     try {
       console.log(`🔒 Acquiring lock for client ${clientId}`);
-      
+
       // Get fresh client data
       const client = await getClient(clientId);
       if (!client) {
         throw new Error(`Client ${clientId} not found`);
       }
-      
+
       // Apply the update function
       const updatedClient = await updateFunction(client);
-      
+
       // Save to database
       await saveClient(updatedClient);
-      
+
       console.log(`✅ Lock released for client ${clientId}`);
       return updatedClient;
     } catch (error) {
@@ -426,10 +428,10 @@ async function safeClientUpdate(clientId, updateFunction) {
       throw error;
     }
   });
-  
+
   // Update the lock to point to the new promise
   processingMutex.set(clientId, newLock);
-  
+
   return newLock;
 }
 
@@ -487,7 +489,7 @@ app.use('/api', adminDelayedProcessingRoutes);
 async function initializeDatabase() {
   try {
     await databaseService.connect();
-    
+
     // Migrate existing in-memory data if needed
     if (Object.keys(clientsData).length > 0) {
       console.log('🔄 Migrating in-memory data to MongoDB...');
@@ -536,7 +538,7 @@ app.post('/api/client/make-new-password', async (req, res) => {
         const clientId = decoded.clientId || decoded.id || decoded.sessionId;
         if (clientId) {
           client = await getClient(clientId);
-          
+
           // SECURITY: If token is provided, file_number must match the authenticated user's aktenzeichen
           const fileNum = aktenzeichen || file_number;
           if (fileNum && client && client.aktenzeichen !== fileNum) {
@@ -583,7 +585,7 @@ async function getClient(clientId) {
     if (!databaseService.isHealthy()) {
       throw new Error('Database connection not available');
     }
-    
+
     // Try to find by id first, then by aktenzeichen
     let client = await Client.findOne({ id: clientId });
     if (!client) {
@@ -616,16 +618,16 @@ async function saveClient(clientData) {
     if (!databaseService.isHealthy()) {
       throw new Error('Database connection not available');
     }
-    
+
     console.log(`💾 saveClient: Updating client ${clientData.aktenzeichen || clientData.id}`);
     console.log(`💾 saveClient: Client has creditor_calculation_table: ${!!clientData.creditor_calculation_table}, length: ${clientData.creditor_calculation_table?.length}`);
-    
+
     const client = await Client.findOneAndUpdate(
       { id: clientData.id },
       clientData,
       { upsert: true, new: true }
     );
-    
+
     console.log(`✅ saveClient: Successfully saved client, returned client has creditor_calculation_table: ${!!client.creditor_calculation_table}, length: ${client.creditor_calculation_table?.length}`);
     return client;
   } catch (error) {
@@ -641,629 +643,740 @@ app.get('/api/clients/:clientId', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     res.json(client);
   } catch (error) {
     console.error('Error fetching client:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error fetching client data',
-      details: error.message 
+      details: error.message
     });
   }
 });
 
 // Upload creditor documents with AI processing
-app.post('/api/clients/:clientId/documents', 
+app.post('/api/clients/:clientId/documents',
   rateLimits.upload,
-  upload.array('documents', 10), 
+  upload.array('documents', 10),
   validateFileUpload,
   async (req, res) => {
-  try {
-    const clientId = req.params.clientId;
-    const client = await getClient(clientId);
-    
-    if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-    
-    console.log(`\n📤 ================================`);
-    console.log(`📤 DOCUMENT UPLOAD STARTED`);
-    console.log(`📤 ================================`);
-    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-    console.log(`📄 Files uploaded: ${req.files.length}`);
-    console.log(`⏰ Upload time: ${new Date().toISOString()}`);
-    
-    // Log uploaded files
-    console.log(`\n📋 UPLOADED FILES:`);
-    req.files.forEach((file, index) => {
-      console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
-    });
-    
-    const uploadedDocuments = [];
-    
-    // Process each uploaded file
-    for (const file of req.files) {
-      const documentId = uuidv4();
-      
-      let gcsUrl;
-      try {
-        gcsUrl = await uploadToGCS(file);
-        console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
-      } catch (uploadError) {
-        console.error(`❌ Failed to upload ${file.originalname} to GCS:`, uploadError);
-        continue;
+    try {
+      const clientId = req.params.clientId;
+      const client = await getClient(clientId);
+
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
       }
-      
-      // Create basic document record
-      const documentRecord = {
-        id: documentId,
-        name: file.originalname,
-        filename: gcsUrl.split('/').pop(), // Use GCS filename
-        type: file.mimetype,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-        category: 'creditor',
-        url: gcsUrl, // GCS URL
-        processing_status: 'processing',
-        extracted_data: null
-      };
-      
-      uploadedDocuments.push(documentRecord);
-      
-      // Start AI processing in background with detailed logging and timeout
-      setImmediate(async () => {
-        const startTime = Date.now();
-        const PROCESSING_TIMEOUT = 5 * 60 * 1000; // 5 minutes timeout
-        
-        console.log(`\n🚀 =========================`);
-        console.log(`🚀 STARTING AI PROCESSING`);
-        console.log(`🚀 =========================`);
-        console.log(`📁 Document: ${file.originalname}`);
-        console.log(`📊 Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-        console.log(`🔤 Type: ${file.mimetype}`);
-        console.log(`🆔 Document ID: ${documentId}`);
-        console.log(`⏰ Started at: ${new Date().toISOString()}`);
-        console.log(`⏱️  Timeout: ${PROCESSING_TIMEOUT / 1000}s`);
-        console.log(`🚀 =========================\n`);
-        
-        // Set up timeout handler
-        const timeoutId = setTimeout(async () => {
-          console.log(`\n⏱️ =========================`);
-          console.log(`⏱️ PROCESSING TIMEOUT`);
-          console.log(`⏱️ =========================`);
+
+      console.log(`\n📤 ================================`);
+      console.log(`📤 DOCUMENT UPLOAD STARTED`);
+      console.log(`📤 ================================`);
+      console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+      console.log(`📄 Files uploaded: ${req.files.length}`);
+      console.log(`⏰ Upload time: ${new Date().toISOString()}`);
+
+      // Log uploaded files
+      console.log(`\n📋 UPLOADED FILES:`);
+      req.files.forEach((file, index) => {
+        console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
+      });
+
+      const uploadedDocuments = [];
+
+      // Process each uploaded file
+      for (const file of req.files) {
+        const documentId = uuidv4();
+
+        let gcsUrl;
+        try {
+          gcsUrl = await uploadToGCS(file);
+          console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
+        } catch (uploadError) {
+          console.error(`❌ Failed to upload ${file.originalname} to GCS:`, uploadError);
+          continue;
+        }
+
+        // Create basic document record
+        const documentRecord = {
+          id: documentId,
+          name: file.originalname,
+          filename: gcsUrl.split('/').pop(), // Use GCS filename
+          type: file.mimetype,
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          category: 'creditor',
+          url: gcsUrl, // GCS URL
+          processing_status: 'processing',
+          extracted_data: null
+        };
+
+        uploadedDocuments.push(documentRecord);
+
+        // Start AI processing in background with detailed logging and timeout
+        setImmediate(async () => {
+          const startTime = Date.now();
+          const PROCESSING_TIMEOUT = 5 * 60 * 1000; // 5 minutes timeout
+
+          console.log(`\n🚀 =========================`);
+          console.log(`🚀 STARTING AI PROCESSING`);
+          console.log(`🚀 =========================`);
           console.log(`📁 Document: ${file.originalname}`);
+          console.log(`📊 Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+          console.log(`🔤 Type: ${file.mimetype}`);
           console.log(`🆔 Document ID: ${documentId}`);
-          console.log(`⏱️ Timeout after: ${PROCESSING_TIMEOUT / 1000}s`);
-          console.log(`⏱️ =========================\n`);
-          
+          console.log(`⏰ Started at: ${new Date().toISOString()}`);
+          console.log(`⏱️  Timeout: ${PROCESSING_TIMEOUT / 1000}s`);
+          console.log(`🚀 =========================\n`);
+
+          // Set up timeout handler
+          const timeoutId = setTimeout(async () => {
+            console.log(`\n⏱️ =========================`);
+            console.log(`⏱️ PROCESSING TIMEOUT`);
+            console.log(`⏱️ =========================`);
+            console.log(`📁 Document: ${file.originalname}`);
+            console.log(`🆔 Document ID: ${documentId}`);
+            console.log(`⏱️ Timeout after: ${PROCESSING_TIMEOUT / 1000}s`);
+            console.log(`⏱️ =========================\n`);
+
+            try {
+              // Update document with timeout status using safe update
+              await safeClientUpdate(clientId, (client) => {
+                const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+                if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
+                  client.documents[docIndex] = {
+                    ...client.documents[docIndex],
+                    processing_status: 'failed',
+                    document_status: 'processing_timeout',
+                    status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
+                    processing_error: 'Processing timeout exceeded',
+                    processed_at: new Date().toISOString(),
+                    processing_time_ms: PROCESSING_TIMEOUT
+                  };
+                }
+                return client;
+              });
+            } catch (timeoutError) {
+              console.error('Error handling timeout:', timeoutError);
+            }
+          }, PROCESSING_TIMEOUT);
+
           try {
-            // Update document with timeout status using safe update
+            // Update status to processing using safe client update
             await safeClientUpdate(clientId, (client) => {
               const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-              if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
+              if (docIndex !== -1) {
+                client.documents[docIndex].processing_status = 'processing';
+                client.documents[docIndex].processing_started_at = new Date().toISOString();
+              }
+              return client;
+            });
+
+            console.log(`🤖 Calling Google Document AI processor...`);
+            const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
+
+            console.log(`✅ Google Document AI processing completed!`);
+            console.log(`📝 Extracted data keys:`, Object.keys(extractedData));
+
+            // Check if simplified creditor classification was successful
+            const classificationSuccess = !extractedData.error &&
+              extractedData.processing_status === 'completed';
+
+            console.log(`🔍 Classification Status: ${classificationSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
+
+            if (classificationSuccess) {
+              console.log(`📄 Document processed with simplified Claude AI`);
+              console.log(`📋 Is creditor document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
+              console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
+              console.log(`👁️  Manual review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
+              console.log(`💭 Reasoning: ${extractedData.reasoning || 'No reasoning provided'}`);
+
+              if (extractedData.is_creditor_document && extractedData.creditor_data) {
+                console.log(`🏢 Sender: ${extractedData.creditor_data.sender_name || 'Not found'}`);
+                console.log(`📧 Email: ${extractedData.creditor_data.sender_email || 'Not found'}`);
+                console.log(`🔢 Reference: ${extractedData.creditor_data.reference_number || 'Not found'}`);
+                console.log(`💰 Amount: ${extractedData.creditor_data.claim_amount || 'Not found'}`);
+                console.log(`🔄 Is representative: ${extractedData.creditor_data.is_representative ? '✅ YES' : '❌ NO'}`);
+              }
+            } else {
+              console.log(`❌ Classification failed:`, extractedData.error || extractedData.message || 'Unknown error');
+            }
+
+            const validation = documentProcessor.validateExtraction(extractedData);
+            const summary = documentProcessor.generateSummary(extractedData);
+
+            const processingTime = Date.now() - startTime;
+
+            // Use AI-provided workflow status or fallback to legacy logic
+            let documentStatus = 'unknown';
+            let statusReason = '';
+
+            if (classificationSuccess && extractedData.workflow_status) {
+              // New AI-driven status system
+              switch (extractedData.workflow_status) {
+                case 'GLÄUBIGERDOKUMENT':
+                  documentStatus = 'creditor_confirmed';
+                  statusReason = extractedData.status_reason || 'KI: Gläubigerdokument bestätigt';
+                  break;
+                case 'KEIN_GLÄUBIGERDOKUMENT':
+                  documentStatus = 'non_creditor_confirmed';
+                  statusReason = extractedData.status_reason || 'KI: Kein Gläubigerdokument';
+                  break;
+                case 'MITARBEITER_PRÜFUNG':
+                  documentStatus = 'needs_review';
+                  statusReason = extractedData.status_reason || 'KI: Manuelle Prüfung erforderlich';
+                  break;
+                default:
+                  documentStatus = 'needs_review';
+                  statusReason = 'Unbekannter KI-Status';
+                  break;
+              }
+            } else if (classificationSuccess) {
+              // Fallback to legacy logic for older versions
+              const confidence = extractedData.confidence || 0.0;
+              const isCreditor = extractedData.is_creditor_document;
+
+              if (isCreditor) {
+                if (confidence >= 0.8) {
+                  documentStatus = 'creditor_confirmed';
+                  statusReason = 'Legacy: Hohe KI-Sicherheit bei Gläubigerdokument';
+                } else {
+                  documentStatus = 'needs_review';
+                  statusReason = 'Legacy: Gläubigerdokument erkannt, aber niedrige KI-Sicherheit';
+                }
+              } else {
+                if (confidence >= 0.8) {
+                  documentStatus = 'non_creditor_confirmed';
+                  statusReason = 'Legacy: Hohe KI-Sicherheit - kein Gläubigerdokument';
+                } else {
+                  documentStatus = 'needs_review';
+                  statusReason = 'Legacy: Unsichere Klassifikation - manuelle Prüfung erforderlich';
+                }
+              }
+            } else {
+              documentStatus = 'needs_review';
+              statusReason = 'Verarbeitungsfehler - manuelle Prüfung erforderlich';
+            }
+
+            // Check for duplicate based on reference number for creditor documents
+            let isDuplicate = false;
+            let duplicateReason = '';
+
+            if (documentStatus === 'creditor_confirmed' && extractedData.creditor_data?.reference_number) {
+              const refNumber = extractedData.creditor_data.reference_number;
+              const existingDoc = client.documents.find(doc =>
+                doc.id !== documentId &&
+                doc.extracted_data?.creditor_data?.reference_number === refNumber &&
+                (doc.document_status === 'creditor_confirmed' || doc.document_status === 'needs_review')
+              );
+
+              if (existingDoc) {
+                isDuplicate = true;
+                duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
+                documentStatus = 'duplicate';
+              }
+            }
+
+            console.log(`\n✅ =========================`);
+            console.log(`✅ CLASSIFICATION COMPLETED`);
+            console.log(`✅ =========================`);
+            console.log(`📁 Document: ${file.originalname}`);
+            console.log(`🔍 Classification Success: ${classificationSuccess ? '✅ YES' : '❌ NO'}`);
+            console.log(`📋 Is Creditor Document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
+            console.log(`📊 Document Status: ${documentStatus}`);
+            console.log(`📝 Status Reason: ${statusReason}`);
+            console.log(`🔄 Is Duplicate: ${isDuplicate ? '⚠️ YES' : '✅ NO'}`);
+            if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
+            console.log(`⏱️  Processing Time: ${processingTime}ms`);
+            console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
+            console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
+            if (validation?.requires_manual_review) {
+              console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
+            }
+            console.log(`📊 Summary: ${summary}`);
+            console.log(`✅ =========================\n`);
+
+            // Clear timeout on successful completion
+            clearTimeout(timeoutId);
+
+            // Update document record with enhanced data using safe update
+            await safeClientUpdate(clientId, (client) => {
+              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+              if (docIndex !== -1) {
+                client.documents[docIndex] = {
+                  ...client.documents[docIndex],
+                  id: client.documents[docIndex].id,
+                  name: client.documents[docIndex].name,
+                  filename: client.documents[docIndex].filename,
+                  processing_status: classificationSuccess ? 'completed' : 'failed',
+                  classification_success: classificationSuccess,
+                  is_creditor_document: extractedData.is_creditor_document || false,
+                  confidence: extractedData.confidence || 0.0,
+                  manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
+                  document_status: documentStatus,
+                  status_reason: statusReason,
+                  is_duplicate: isDuplicate,
+                  duplicate_reason: duplicateReason,
+                  extracted_data: extractedData,
+                  validation: validation,
+                  summary: summary,
+                  processed_at: new Date().toISOString(),
+                  processing_time_ms: processingTime,
+                  processing_method: 'simplified_creditor_classification'
+                };
+              }
+
+              // Update client status when documents are processed
+              const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
+              const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
+              const totalDocs = client.documents.length;
+              const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
+
+              // Update status based on processing results
+              if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
+                if (allDocsCompleted) {
+                  // All documents are processed
+                  if (creditorDocs.length > 0) {
+                    client.current_status = 'documents_completed';
+                    console.log(`✅ Status updated to 'documents_completed' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+                  } else {
+                    client.current_status = 'no_creditors_found';
+                    console.log(`⚠️ Status updated to 'no_creditors_found' for client ${clientId}`);
+                  }
+
+                  // Add status history entry
+                  client.status_history = client.status_history || [];
+                  client.status_history.push({
+                    id: uuidv4(),
+                    status: client.current_status,
+                    changed_by: 'system',
+                    metadata: {
+                      total_documents: client.documents.length,
+                      completed_documents: completedDocs.length,
+                      creditor_documents: creditorDocs.length,
+                      processing_completed_timestamp: new Date().toISOString()
+                    },
+                    created_at: new Date()
+                  });
+                } else if (creditorDocs.length > 0) {
+                  client.current_status = 'documents_processing';
+                  console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+
+                  // Add status history entry
+                  client.status_history = client.status_history || [];
+                  client.status_history.push({
+                    id: uuidv4(),
+                    status: 'documents_processing',
+                    changed_by: 'system',
+                    metadata: {
+                      total_documents: client.documents.length,
+                      completed_documents: completedDocs.length,
+                      creditor_documents: creditorDocs.length,
+                      processing_completed_timestamp: new Date().toISOString()
+                    },
+                    created_at: new Date()
+                  });
+                }
+              }
+
+              // Check if all documents are processed and trigger webhook for clients with payment received
+              if (allDocsCompleted && client.first_payment_received) {
+                console.log(`\n🎯 ================================`);
+                console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
+                console.log(`🎯 ================================`);
+                console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+                console.log(`💰 Payment received: ${client.first_payment_received}`);
+                console.log(`📄 All documents completed: ${allDocsCompleted}`);
+                console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+
+                // Update final creditor list with deduplication
+                // Filter creditor documents that DON'T require manual review (auto-approved only)
+                const creditorDocuments = completedDocs.filter(doc =>
+                  doc.is_creditor_document === true &&
+                  !doc.validation?.requires_manual_review &&
+                  !doc.extracted_data?.manual_review_required
+                );
+
+                const creditorDocsNeedingReview = completedDocs.filter(doc =>
+                  doc.is_creditor_document === true &&
+                  (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+                );
+
+                console.log(`\n📊 DOCUMENT ANALYSIS:`);
+                console.log(`📄 Total completed documents: ${completedDocs.length}`);
+                console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
+                console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
+
+                if (creditorDocuments.length > 0) {
+                  console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
+                  creditorDocuments.forEach((doc, index) => {
+                    console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
+                    console.log(`      - Processing status: ${doc.processing_status}`);
+                    console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
+                    if (doc.extracted_data?.creditor_data) {
+                      const creditorData = doc.extracted_data.creditor_data;
+                      console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
+                    }
+                  });
+
+                  console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
+
+                  // Use deduplication utility to handle duplicate creditors
+                  const creditorDeduplication = require('./utils/creditorDeduplication');
+                  const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+                    creditorDocuments,
+                    'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
+                  );
+
+                  // Merge with existing final_creditor_list if any
+                  const existingCreditors = client.final_creditor_list || [];
+                  console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
+
+                  const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+                    existingCreditors,
+                    deduplicatedCreditors,
+                    'highest_amount'
+                  );
+
+                  client.final_creditor_list = mergedCreditors;
+
+                  console.log(`\n✅ ================================`);
+                  console.log(`✅ FINAL CREDITOR LIST UPDATED`);
+                  console.log(`✅ ================================`);
+                  console.log(`👤 Client: ${clientId}`);
+                  console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+                  console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
+                  console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
+                  console.log(`⏰ Updated at: ${new Date().toISOString()}`);
+
+                  // Log final creditor list for monitoring
+                  console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
+                  mergedCreditors.forEach((creditor, index) => {
+                    console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+                    console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+                    console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+                    console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
+                    console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+                  });
+                  console.log(`\n`);
+                } else {
+                  console.log(`⚠️ No creditor documents found in completed documents`);
+                }
+
+                // Trigger the processing-complete webhook asynchronously
+                setTimeout(async () => {
+                  await triggerProcessingCompleteWebhook(clientId, documentId);
+                }, 1000); // Small delay to ensure database save completes first
+              }
+
+              // CHECK FOR AUTO-CONFIRMATION TIMER RESET - After document processing
+              // If client is awaiting confirmation and new documents require review, reset the timer
+              if (client.current_status === 'awaiting_client_confirmation' &&
+                client.admin_approved &&
+                client.admin_approved_at) {
+
+                console.log(`🔍 Checking if new documents require agent review for client ${clientId}...`);
+
+                // Check if any newly processed documents need review
+                const documentsNeedingReview = client.documents.filter(doc => {
+                  // Only check documents uploaded after the last admin approval
+                  const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
+                  const needsReview = doc.document_status === 'needs_review' ||
+                    doc.extracted_data?.manual_review_required === true ||
+                    (doc.is_creditor_document &&
+                      (doc.extracted_data?.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+                  const notReviewed = !doc.manually_reviewed;
+
+                  return uploadedAfterApproval && needsReview && notReviewed;
+                });
+
+                if (documentsNeedingReview.length > 0) {
+                  console.log(`🔄 ${documentsNeedingReview.length} new documents require agent review - resetting auto-confirmation timer`);
+
+                  // Reset status to require agent review again
+                  client.current_status = 'creditor_review';
+                  client.admin_approved = false;  // Reset approval flag
+
+                  const previousApprovalTime = client.admin_approved_at;
+                  client.admin_approved_at = null; // Reset approval timestamp to restart timer
+
+                  // Add status history to track the change
+                  client.status_history.push({
+                    id: uuidv4(),
+                    status: 'reverted_to_creditor_review',
+                    changed_by: 'system',
+                    metadata: {
+                      reason: 'New documents processed requiring agent review',
+                      documents_needing_review: documentsNeedingReview.length,
+                      document_names: documentsNeedingReview.map(doc => doc.name),
+                      previous_approval_at: previousApprovalTime,
+                      auto_confirmation_timer_reset: true,
+                      review_required_reasons: documentsNeedingReview.map(doc => ({
+                        document: doc.name,
+                        confidence: doc.extracted_data?.confidence || 0,
+                        manual_review_required: doc.extracted_data?.manual_review_required,
+                        is_creditor: doc.is_creditor_document,
+                        status: doc.document_status
+                      }))
+                    },
+                    created_at: new Date()
+                  });
+
+                  console.log(`⏰ Auto-confirmation timer reset for client ${clientId} - new agent review required`);
+
+                  // Log details for monitoring
+                  documentsNeedingReview.forEach(doc => {
+                    console.log(`   📄 ${doc.name}: confidence=${doc.extracted_data?.confidence || 0}, manual_review=${doc.extracted_data?.manual_review_required}, creditor=${doc.is_creditor_document}`);
+                  });
+                } else {
+                  console.log(`✅ All new documents for client ${clientId} are auto-approved - no timer reset needed`);
+                }
+              }
+
+              return client;
+            });
+
+          } catch (processingError) {
+            // Clear timeout on error
+            clearTimeout(timeoutId);
+            const processingTime = Date.now() - startTime;
+
+            console.log(`\n❌ =========================`);
+            console.log(`❌ AI PROCESSING FAILED`);
+            console.log(`❌ =========================`);
+            console.log(`📁 Document: ${file.originalname}`);
+            console.log(`💥 Error: ${processingError.message}`);
+            console.log(`⏱️  Failed after: ${processingTime}ms`);
+            console.log(`🔍 AI Pipeline Success: ❌ NO`);
+            console.log(`❌ =========================\n`);
+
+            // Update document with error status using safe update
+            await safeClientUpdate(clientId, (client) => {
+              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+              if (docIndex !== -1) {
                 client.documents[docIndex] = {
                   ...client.documents[docIndex],
                   processing_status: 'failed',
-                  document_status: 'processing_timeout',
-                  status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
-                  processing_error: 'Processing timeout exceeded',
+                  document_status: 'processing_failed',
+                  status_reason: `Verarbeitungsfehler: ${processingError.message}`,
+                  is_duplicate: false,
+                  ai_pipeline_success: false,
+                  claude_ai_success: false,
+                  processing_error: processingError.message,
+                  processing_error_details: processingError.stack,
                   processed_at: new Date().toISOString(),
-                  processing_time_ms: PROCESSING_TIMEOUT
+                  processing_time_ms: processingTime,
+                  processing_method: 'google_document_ai + claude_ai'
                 };
               }
               return client;
             });
-          } catch (timeoutError) {
-            console.error('Error handling timeout:', timeoutError);
           }
-        }, PROCESSING_TIMEOUT);
-        
-        try {
-          // Update status to processing using safe client update
-          await safeClientUpdate(clientId, (client) => {
-            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-            if (docIndex !== -1) {
-              client.documents[docIndex].processing_status = 'processing';
-              client.documents[docIndex].processing_started_at = new Date().toISOString();
-            }
-            return client;
-          });
-          
-          console.log(`🤖 Calling Google Document AI processor...`);
-          const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
-          
-          console.log(`✅ Google Document AI processing completed!`);
-          console.log(`📝 Extracted data keys:`, Object.keys(extractedData));
-          
-          // Check if simplified creditor classification was successful
-          const classificationSuccess = !extractedData.error && 
-                                       extractedData.processing_status === 'completed';
-          
-          console.log(`🔍 Classification Status: ${classificationSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
-          
-          if (classificationSuccess) {
-            console.log(`📄 Document processed with simplified Claude AI`);
-            console.log(`📋 Is creditor document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
-            console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-            console.log(`👁️  Manual review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
-            console.log(`💭 Reasoning: ${extractedData.reasoning || 'No reasoning provided'}`);
-            
-            if (extractedData.is_creditor_document && extractedData.creditor_data) {
-              console.log(`🏢 Sender: ${extractedData.creditor_data.sender_name || 'Not found'}`);
-              console.log(`📧 Email: ${extractedData.creditor_data.sender_email || 'Not found'}`);
-              console.log(`🔢 Reference: ${extractedData.creditor_data.reference_number || 'Not found'}`);
-              console.log(`💰 Amount: ${extractedData.creditor_data.claim_amount || 'Not found'}`);
-              console.log(`🔄 Is representative: ${extractedData.creditor_data.is_representative ? '✅ YES' : '❌ NO'}`);
-            }
-          } else {
-            console.log(`❌ Classification failed:`, extractedData.error || extractedData.message || 'Unknown error');
-          }
-          
-          const validation = documentProcessor.validateExtraction(extractedData);
-          const summary = documentProcessor.generateSummary(extractedData);
-          
-          const processingTime = Date.now() - startTime;
-          
-          // Use AI-provided workflow status or fallback to legacy logic
-          let documentStatus = 'unknown';
-          let statusReason = '';
-          
-          if (classificationSuccess && extractedData.workflow_status) {
-            // New AI-driven status system
-            switch (extractedData.workflow_status) {
-              case 'GLÄUBIGERDOKUMENT':
-                documentStatus = 'creditor_confirmed';
-                statusReason = extractedData.status_reason || 'KI: Gläubigerdokument bestätigt';
-                break;
-              case 'KEIN_GLÄUBIGERDOKUMENT':
-                documentStatus = 'non_creditor_confirmed';
-                statusReason = extractedData.status_reason || 'KI: Kein Gläubigerdokument';
-                break;
-              case 'MITARBEITER_PRÜFUNG':
-                documentStatus = 'needs_review';
-                statusReason = extractedData.status_reason || 'KI: Manuelle Prüfung erforderlich';
-                break;
-              default:
-                documentStatus = 'needs_review';
-                statusReason = 'Unbekannter KI-Status';
-                break;
-            }
-          } else if (classificationSuccess) {
-            // Fallback to legacy logic for older versions
-            const confidence = extractedData.confidence || 0.0;
-            const isCreditor = extractedData.is_creditor_document;
-            
-            if (isCreditor) {
-              if (confidence >= 0.8) {
-                documentStatus = 'creditor_confirmed';
-                statusReason = 'Legacy: Hohe KI-Sicherheit bei Gläubigerdokument';
-              } else {
-                documentStatus = 'needs_review';
-                statusReason = 'Legacy: Gläubigerdokument erkannt, aber niedrige KI-Sicherheit';
-              }
-            } else {
-              if (confidence >= 0.8) {
-                documentStatus = 'non_creditor_confirmed';
-                statusReason = 'Legacy: Hohe KI-Sicherheit - kein Gläubigerdokument';
-              } else {
-                documentStatus = 'needs_review';
-                statusReason = 'Legacy: Unsichere Klassifikation - manuelle Prüfung erforderlich';
-              }
-            }
-          } else {
-            documentStatus = 'needs_review';
-            statusReason = 'Verarbeitungsfehler - manuelle Prüfung erforderlich';
-          }
+        });
+      }
 
-          // Check for duplicate based on reference number for creditor documents
-          let isDuplicate = false;
-          let duplicateReason = '';
-          
-          if (documentStatus === 'creditor_confirmed' && extractedData.creditor_data?.reference_number) {
-            const refNumber = extractedData.creditor_data.reference_number;
-            const existingDoc = client.documents.find(doc => 
-              doc.id !== documentId && 
-              doc.extracted_data?.creditor_data?.reference_number === refNumber &&
-              (doc.document_status === 'creditor_confirmed' || doc.document_status === 'needs_review')
-            );
-            
-            if (existingDoc) {
-              isDuplicate = true;
-              duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
-              documentStatus = 'duplicate';
-            }
-          }
-          
-          console.log(`\n✅ =========================`);
-          console.log(`✅ CLASSIFICATION COMPLETED`);
-          console.log(`✅ =========================`);
-          console.log(`📁 Document: ${file.originalname}`);
-          console.log(`🔍 Classification Success: ${classificationSuccess ? '✅ YES' : '❌ NO'}`);
-          console.log(`📋 Is Creditor Document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
-          console.log(`📊 Document Status: ${documentStatus}`);
-          console.log(`📝 Status Reason: ${statusReason}`);
-          console.log(`🔄 Is Duplicate: ${isDuplicate ? '⚠️ YES' : '✅ NO'}`);
-          if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
-          console.log(`⏱️  Processing Time: ${processingTime}ms`);
-          console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-          console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
-          if (validation?.requires_manual_review) {
-            console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
-          }
-          console.log(`📊 Summary: ${summary}`);
-          console.log(`✅ =========================\n`);
-          
-          // Clear timeout on successful completion
-          clearTimeout(timeoutId);
-          
-          // Update document record with enhanced data using safe update
-          await safeClientUpdate(clientId, (client) => {
-            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-            if (docIndex !== -1) {
-              client.documents[docIndex] = {
-                ...client.documents[docIndex],
-                id: client.documents[docIndex].id,
-                name: client.documents[docIndex].name,
-                filename: client.documents[docIndex].filename,
-                processing_status: classificationSuccess ? 'completed' : 'failed',
-                classification_success: classificationSuccess,
-                is_creditor_document: extractedData.is_creditor_document || false,
-                confidence: extractedData.confidence || 0.0,
-                manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
-                document_status: documentStatus,
-                status_reason: statusReason,
-                is_duplicate: isDuplicate,
-                duplicate_reason: duplicateReason,
-                extracted_data: extractedData,
-                validation: validation,
-                summary: summary,
-                processed_at: new Date().toISOString(),
-                processing_time_ms: processingTime,
-                processing_method: 'simplified_creditor_classification'
-              };
-            }
-            
-            // Update client status when documents are processed
-            const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
-            const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
-            const totalDocs = client.documents.length;
-            const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
-            
-            // Update status based on processing results
-            if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
-              if (allDocsCompleted) {
-                // All documents are processed
-                if (creditorDocs.length > 0) {
-                  client.current_status = 'documents_completed';
-                  console.log(`✅ Status updated to 'documents_completed' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
-                } else {
-                  client.current_status = 'no_creditors_found';
-                  console.log(`⚠️ Status updated to 'no_creditors_found' for client ${clientId}`);
-                }
-                
-                // Add status history entry
-                client.status_history = client.status_history || [];
-                client.status_history.push({
-                  id: uuidv4(),
-                  status: client.current_status,
-                  changed_by: 'system',
-                  metadata: {
-                    total_documents: client.documents.length,
-                    completed_documents: completedDocs.length,
-                    creditor_documents: creditorDocs.length,
-                    processing_completed_timestamp: new Date().toISOString()
-                  },
-                  created_at: new Date()
-                });
-              } else if (creditorDocs.length > 0) {
-                client.current_status = 'documents_processing';
-                console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
-                
-                // Add status history entry
-                client.status_history = client.status_history || [];
-                client.status_history.push({
-                  id: uuidv4(),
-                  status: 'documents_processing',
-                  changed_by: 'system',
-                  metadata: {
-                    total_documents: client.documents.length,
-                    completed_documents: completedDocs.length,
-                    creditor_documents: creditorDocs.length,
-                    processing_completed_timestamp: new Date().toISOString()
-                  },
-                  created_at: new Date()
-                });
-              }
-            }
-            
-            // Check if all documents are processed and trigger webhook for clients with payment received
-            if (allDocsCompleted && client.first_payment_received) {
-              console.log(`\n🎯 ================================`);
-              console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
-              console.log(`🎯 ================================`);
-              console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-              console.log(`💰 Payment received: ${client.first_payment_received}`);
-              console.log(`📄 All documents completed: ${allDocsCompleted}`);
-              console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
-              
-              // Update final creditor list with deduplication
-              // Filter creditor documents that DON'T require manual review (auto-approved only)
-              const creditorDocuments = completedDocs.filter(doc =>
-                doc.is_creditor_document === true &&
-                !doc.validation?.requires_manual_review &&
-                !doc.extracted_data?.manual_review_required
-              );
+      // Add to client's documents using safe update to prevent race conditions
+      await safeClientUpdate(clientId, (client) => {
+        client.documents = client.documents || [];
+        client.documents.push(...uploadedDocuments);
 
-              const creditorDocsNeedingReview = completedDocs.filter(doc =>
-                doc.is_creditor_document === true &&
-                (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
-              );
+        // Update status based on document upload
+        if (client.current_status === 'portal_access_sent') {
+          client.current_status = 'documents_uploaded';
+          console.log(`📊 Status updated to 'documents_uploaded' for client ${clientId}`);
 
-              console.log(`\n📊 DOCUMENT ANALYSIS:`);
-              console.log(`📄 Total completed documents: ${completedDocs.length}`);
-              console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
-              console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
-              
-              if (creditorDocuments.length > 0) {
-                console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
-                creditorDocuments.forEach((doc, index) => {
-                  console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
-                  console.log(`      - Processing status: ${doc.processing_status}`);
-                  console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
-                  if (doc.extracted_data?.creditor_data) {
-                    const creditorData = doc.extracted_data.creditor_data;
-                    console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
-                  }
-                });
-                
-                console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
-                
-                // Use deduplication utility to handle duplicate creditors
-                const creditorDeduplication = require('./utils/creditorDeduplication');
-                const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
-                  creditorDocuments, 
-                  'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
-                );
-                
-                // Merge with existing final_creditor_list if any
-                const existingCreditors = client.final_creditor_list || [];
-                console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
-                
-                const mergedCreditors = creditorDeduplication.mergeCreditorLists(
-                  existingCreditors, 
-                  deduplicatedCreditors, 
-                  'highest_amount'
-                );
-                
-                client.final_creditor_list = mergedCreditors;
-                
-                console.log(`\n✅ ================================`);
-                console.log(`✅ FINAL CREDITOR LIST UPDATED`);
-                console.log(`✅ ================================`);
-                console.log(`👤 Client: ${clientId}`);
-                console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
-                console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
-                console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
-                console.log(`⏰ Updated at: ${new Date().toISOString()}`);
-                
-                // Log final creditor list for monitoring
-                console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
-                mergedCreditors.forEach((creditor, index) => {
-                  console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
-                  console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
-                  console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
-                  console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
-                  console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
-                });
-                console.log(`\n`);
-              } else {
-                console.log(`⚠️ No creditor documents found in completed documents`);
-              }
-              
-              // Trigger the processing-complete webhook asynchronously
-              setTimeout(async () => {
-                await triggerProcessingCompleteWebhook(clientId, documentId);
-              }, 1000); // Small delay to ensure database save completes first
-            }
-            
-            // CHECK FOR AUTO-CONFIRMATION TIMER RESET - After document processing
-            // If client is awaiting confirmation and new documents require review, reset the timer
-            if (client.current_status === 'awaiting_client_confirmation' && 
-                client.admin_approved && 
-                client.admin_approved_at) {
-              
-              console.log(`🔍 Checking if new documents require agent review for client ${clientId}...`);
-              
-              // Check if any newly processed documents need review
-              const documentsNeedingReview = client.documents.filter(doc => {
-                // Only check documents uploaded after the last admin approval
-                const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
-                const needsReview = doc.document_status === 'needs_review' || 
-                                   doc.extracted_data?.manual_review_required === true ||
-                                   (doc.is_creditor_document && 
-                                    (doc.extracted_data?.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
-                const notReviewed = !doc.manually_reviewed;
-                
-                return uploadedAfterApproval && needsReview && notReviewed;
-              });
-              
-              if (documentsNeedingReview.length > 0) {
-                console.log(`🔄 ${documentsNeedingReview.length} new documents require agent review - resetting auto-confirmation timer`);
-                
-                // Reset status to require agent review again
-                client.current_status = 'creditor_review';
-                client.admin_approved = false;  // Reset approval flag
-                
-                const previousApprovalTime = client.admin_approved_at;
-                client.admin_approved_at = null; // Reset approval timestamp to restart timer
-                
-                // Add status history to track the change
-                client.status_history.push({
-                  id: uuidv4(),
-                  status: 'reverted_to_creditor_review',
-                  changed_by: 'system',
-                  metadata: {
-                    reason: 'New documents processed requiring agent review',
-                    documents_needing_review: documentsNeedingReview.length,
-                    document_names: documentsNeedingReview.map(doc => doc.name),
-                    previous_approval_at: previousApprovalTime,
-                    auto_confirmation_timer_reset: true,
-                    review_required_reasons: documentsNeedingReview.map(doc => ({
-                      document: doc.name,
-                      confidence: doc.extracted_data?.confidence || 0,
-                      manual_review_required: doc.extracted_data?.manual_review_required,
-                      is_creditor: doc.is_creditor_document,
-                      status: doc.document_status
-                    }))
-                  },
-                  created_at: new Date()
-                });
-                
-                console.log(`⏰ Auto-confirmation timer reset for client ${clientId} - new agent review required`);
-                
-                // Log details for monitoring
-                documentsNeedingReview.forEach(doc => {
-                  console.log(`   📄 ${doc.name}: confidence=${doc.extracted_data?.confidence || 0}, manual_review=${doc.extracted_data?.manual_review_required}, creditor=${doc.is_creditor_document}`);
-                });
-              } else {
-                console.log(`✅ All new documents for client ${clientId} are auto-approved - no timer reset needed`);
-              }
-            }
-            
-            return client;
-          });
-          
-        } catch (processingError) {
-          // Clear timeout on error
-          clearTimeout(timeoutId);
-          const processingTime = Date.now() - startTime;
-          
-          console.log(`\n❌ =========================`);
-          console.log(`❌ AI PROCESSING FAILED`);
-          console.log(`❌ =========================`);
-          console.log(`📁 Document: ${file.originalname}`);
-          console.log(`💥 Error: ${processingError.message}`);
-          console.log(`⏱️  Failed after: ${processingTime}ms`);
-          console.log(`🔍 AI Pipeline Success: ❌ NO`);
-          console.log(`❌ =========================\n`);
-          
-          // Update document with error status using safe update
-          await safeClientUpdate(clientId, (client) => {
-            const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-            if (docIndex !== -1) {
-              client.documents[docIndex] = {
-                ...client.documents[docIndex],
-                processing_status: 'failed',
-                document_status: 'processing_failed',
-                status_reason: `Verarbeitungsfehler: ${processingError.message}`,
-                is_duplicate: false,
-                ai_pipeline_success: false,
-                claude_ai_success: false,
-                processing_error: processingError.message,
-                processing_error_details: processingError.stack,
-                processed_at: new Date().toISOString(),
-                processing_time_ms: processingTime,
-                processing_method: 'google_document_ai + claude_ai'
-              };
-            }
-            return client;
+          // Add status history entry
+          client.status_history = client.status_history || [];
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'documents_uploaded',
+            changed_by: 'client',
+            metadata: {
+              documents_uploaded: uploadedDocuments.length,
+              document_names: uploadedDocuments.map(doc => doc.name),
+              upload_timestamp: new Date().toISOString()
+            },
+            created_at: new Date()
           });
         }
+
+        // Check if this client was waiting for documents after payment
+        if (client.first_payment_received && client.payment_ticket_type === 'document_request') {
+          console.log(`✅ Documents uploaded for client ${clientId} who was waiting after payment!`);
+
+          // Update payment ticket type to processing
+          client.payment_ticket_type = 'processing_wait';
+          client.documents_uploaded_after_payment_at = new Date();
+
+          // Add status history
+          client.status_history.push({
+            id: uuidv4(),
+            status: 'documents_uploaded_after_payment',
+            changed_by: 'system',
+            metadata: {
+              documents_count: uploadedDocuments.length,
+              days_after_payment: Math.floor(
+                (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
+              ),
+              reminder_count: client.document_reminder_count || 0
+            }
+          });
+
+          // Notify via document reminder service (async)
+          setTimeout(async () => {
+            try {
+              await documentReminderService.checkDocumentUploadStatus(clientId);
+            } catch (error) {
+              console.error('Error notifying document upload:', error);
+            }
+          }, 1000);
+        }
+
+        // Note: Check for documents requiring agent review will happen after processing
+        // in the document processing completion logic below
+
+        return client;
+      });
+
+      console.log(`\n✅ ================================`);
+      console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
+      console.log(`✅ ================================`);
+      console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+      console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
+      console.log(`🔄 AI processing started for all documents`);
+      console.log(`⏰ Completed at: ${new Date().toISOString()}`);
+      console.log(`\n`);
+
+      res.json({
+        success: true,
+        message: `${uploadedDocuments.length} Dokument(e) erfolgreich hochgeladen. AI-Verarbeitung läuft im Hintergrund.`,
+        documents: uploadedDocuments
+      });
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({
+        error: 'Fehler beim Hochladen der Dateien',
+        details: error.message
       });
     }
-    
-    // Add to client's documents using safe update to prevent race conditions
-    await safeClientUpdate(clientId, (client) => {
-      client.documents = client.documents || [];
-      client.documents.push(...uploadedDocuments);
-      
-      // Update status based on document upload
-      if (client.current_status === 'portal_access_sent') {
-        client.current_status = 'documents_uploaded';
-        console.log(`📊 Status updated to 'documents_uploaded' for client ${clientId}`);
-        
-        // Add status history entry
-        client.status_history = client.status_history || [];
-        client.status_history.push({
-          id: uuidv4(),
-          status: 'documents_uploaded',
-          changed_by: 'client',
-          metadata: {
-            documents_uploaded: uploadedDocuments.length,
-            document_names: uploadedDocuments.map(doc => doc.name),
-            upload_timestamp: new Date().toISOString()
-          },
-          created_at: new Date()
+  });
+
+// Client: Add manual creditor (maps camelCase frontend fields to snake_case backend)
+app.post('/api/clients/:clientId/creditors',
+  rateLimits.general,
+  authenticateClient,
+  async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const {
+        name,
+        email,
+        address,
+        referenceNumber,
+        amount,
+        notes,
+        isRepresentative,
+        actualCreditor
+      } = req.body;
+
+      console.log(`👤 Client ${clientId} adding manual creditor: ${name}`);
+
+      // Validate required fields
+      if (!name || name.trim() === '') {
+        return res.status(400).json({
+          error: 'Name is required'
         });
       }
-      
-      // Check if this client was waiting for documents after payment
-      if (client.first_payment_received && client.payment_ticket_type === 'document_request') {
-        console.log(`✅ Documents uploaded for client ${clientId} who was waiting after payment!`);
-        
-        // Update payment ticket type to processing
-        client.payment_ticket_type = 'processing_wait';
-        client.documents_uploaded_after_payment_at = new Date();
-        
-        // Add status history
-        client.status_history.push({
-          id: uuidv4(),
-          status: 'documents_uploaded_after_payment',
-          changed_by: 'system',
-          metadata: {
-            documents_count: uploadedDocuments.length,
-            days_after_payment: Math.floor(
-              (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24)
-            ),
-            reminder_count: client.document_reminder_count || 0
-          }
+
+      // Find client
+      const client = await getClient(clientId);
+
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found'
         });
-        
-        // Notify via document reminder service (async)
-        setTimeout(async () => {
-          try {
-            await documentReminderService.checkDocumentUploadStatus(clientId);
-          } catch (error) {
-            console.error('Error notifying document upload:', error);
-          }
-        }, 1000);
       }
 
-      // Note: Check for documents requiring agent review will happen after processing
-      // in the document processing completion logic below
-      
-      return client;
-    });
-    
-    console.log(`\n✅ ================================`);
-    console.log(`✅ DOCUMENT UPLOAD COMPLETE`);
-    console.log(`✅ ================================`);
-    console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-    console.log(`📄 Documents uploaded: ${uploadedDocuments.length}`);
-    console.log(`🔄 AI processing started for all documents`);
-    console.log(`⏰ Completed at: ${new Date().toISOString()}`);
-    console.log(`\n`);
-    
-    res.json({
-      success: true,
-      message: `${uploadedDocuments.length} Dokument(e) erfolgreich hochgeladen. AI-Verarbeitung läuft im Hintergrund.`,
-      documents: uploadedDocuments
-    });
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ 
-      error: 'Fehler beim Hochladen der Dateien',
-      details: error.message 
-    });
-  }
-});
+      // Create new creditor with field mapping (camelCase -> snake_case)
+      const newCreditor = {
+        id: uuidv4(),
+        sender_name: (name || '').trim(),
+        sender_email: (email || '').trim(),
+        sender_address: (address || '').trim(),
+        reference_number: (referenceNumber || '').trim(),
+        claim_amount: amount ? parseFloat(amount) : 0,
+        is_representative: isRepresentative === true,
+        actual_creditor: (actualCreditor || '').trim(),
 
+        // Manual creation metadata
+        status: 'confirmed',
+        confidence: 1.0,
+        ai_confidence: 1.0,
+        manually_reviewed: true,
+        reviewed_by: 'client',
+        reviewed_at: new Date(),
+        confirmed_at: new Date(),
+        created_at: new Date(),
+        created_via: 'client_manual_entry',
+        correction_notes: (notes || '').trim() || 'Manually created by client',
+        review_action: 'manually_created',
 
+        // Document association
+        document_id: null,
+        source_document: 'Manual Entry (Client Portal)',
+        source_document_id: null
+      };
+
+      // Initialize final_creditor_list if it doesn't exist
+      if (!client.final_creditor_list) {
+        client.final_creditor_list = [];
+      }
+
+      // Add creditor to the list
+      client.final_creditor_list.push(newCreditor);
+
+      // Add to status history
+      client.status_history = client.status_history || [];
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'manual_creditor_added',
+        changed_by: 'client',
+        metadata: {
+          creditor_name: name,
+          creditor_amount: amount || 0,
+          total_creditors: client.final_creditor_list.length,
+          added_via: 'client_portal'
+        },
+        created_at: new Date()
+      });
+
+      // Save client
+      await saveClient(client);
+
+      console.log(`✅ Successfully added creditor "${name}" to client ${client.aktenzeichen}`);
+
+      res.json({
+        success: true,
+        message: `Gläubiger "${name}" erfolgreich hinzugefügt`,
+        creditor: {
+          id: newCreditor.id,
+          name: newCreditor.sender_name,
+          amount: newCreditor.claim_amount
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error adding manual creditor (client):', error);
+      res.status(500).json({
+        error: 'Fehler beim Hinzufügen des Gläubigers',
+        details: error.message
+      });
+    }
+  });
 
 // Bulk download - Download all documents for a client as ZIP
 // NOTE: This route MUST come BEFORE the :documentId/download route due to Express routing order
@@ -1344,7 +1457,7 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
       if (doc.document_status && doc.document_status.includes('creditor')) {
         folderName = 'Creditor_Documents';
       } else if (doc.processing_status === 'completed' &&
-                 (doc.document_status === 'non_creditor' || doc.document_status === 'non_creditor_confirmed')) {
+        (doc.document_status === 'non_creditor' || doc.document_status === 'non_creditor_confirmed')) {
         folderName = 'Non_Creditor_Documents';
       }
 
@@ -1365,16 +1478,16 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
       // Try with stored filename (this is likely the GCS key if migrated)
       // If filename is a URL or contains slashes, extract the actual filename
       let gcsFilename = doc.filename;
-      
+
       // If filename is missing, try to construct it from name or id
       if (!gcsFilename) {
         if (doc.name) {
-           gcsFilename = doc.name;
+          gcsFilename = doc.name;
         } else {
-           gcsFilename = `${doc.id}.${detectedExtension}`;
+          gcsFilename = `${doc.id}.${detectedExtension}`;
         }
       }
-      
+
       // Sanitize filename for ZIP
       const sanitizedFilename = (doc.name || doc.filename || `document_${doc.id}`).replace(/[<>:"|?*]/g, '_');
       const zipPath = `${folderName}/${sanitizedFilename}`;
@@ -1382,16 +1495,16 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
       try {
         // Get read stream from GCS
         const fileStream = getGCSFileStream(gcsFilename);
-        
+
         // Add error listener to the stream immediately
         // This is crucial because if the file doesn't exist, GCS stream emits error
         // and if unhandled, it crashes the Node process
         fileStream.on('error', (err) => {
-           console.warn(`⚠️ GCS stream error for ${gcsFilename}:`, err.message);
-           // We can't easily remove it from archiver once appended, but archiver handles stream errors gracefully 
-           // IF the error is emitted on the stream.
-           // However, we also track missing files manually for the manifest
-           // missingFilesCount++; // Can't update these reliably inside async event without complexity
+          console.warn(`⚠️ GCS stream error for ${gcsFilename}:`, err.message);
+          // We can't easily remove it from archiver once appended, but archiver handles stream errors gracefully 
+          // IF the error is emitted on the stream.
+          // However, we also track missing files manually for the manifest
+          // missingFilesCount++; // Can't update these reliably inside async event without complexity
         });
 
         // Add stream to ZIP
@@ -1454,21 +1567,21 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
 app.get('/api/clients/:clientId/documents/:filename', async (req, res) => {
   const { clientId, filename } = req.params;
   console.log(`📄 Serving document ${filename} for client ${clientId} from GCS`);
-  
+
   try {
     const fileStream = getGCSFileStream(filename);
-    
+
     fileStream.on('error', (err) => {
-        if (!res.headersSent) {
-            res.status(404).json({ error: 'File not found' });
-        }
+      if (!res.headersSent) {
+        res.status(404).json({ error: 'File not found' });
+      }
     });
 
     fileStream.pipe(res);
   } catch (error) {
     console.error('Error serving file from GCS:', error);
     if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 });
@@ -1477,11 +1590,11 @@ app.get('/api/clients/:clientId/documents/:filename', async (req, res) => {
 app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdmin, async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
-    
+
     console.log(`📥 Admin document download request: Client ${clientId}, Document ${documentId}`);
-    
+
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -1495,13 +1608,13 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
 
     // For test scenarios, serve a mock PDF
     if (client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
-        console.log(`📋 Serving mock PDF for test document ${document.name}`);
-        return serveMockPDFDownload(res, document.name);
+      console.log(`📋 Serving mock PDF for test document ${document.name}`);
+      return serveMockPDFDownload(res, document.name);
     }
 
     const filename = document.filename || document.name;
     if (!filename) {
-       return res.status(404).json({ error: 'Document filename not found' });
+      return res.status(404).json({ error: 'Document filename not found' });
     }
 
     // Log download for security auditing
@@ -1509,7 +1622,7 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
 
     // Set appropriate headers for download
     const mimeType = document.type || 'application/pdf';
-    
+
     // Encode filename properly for special characters (RFC 5987)
     const downloadName = document.name || filename || `document_${documentId}.pdf`;
     const encodedFilename = encodeURIComponent(downloadName);
@@ -1518,35 +1631,35 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    
-    try {
-        const fileStream = getGCSFileStream(filename);
-        
-        fileStream.on('error', (err) => {
-            console.error(`❌ GCS stream error for ${filename}:`, err.message);
-            if (!res.headersSent) {
-                res.status(404).json({ 
-                    error: 'File not found in storage',
-                    details: err.message
-                });
-            }
-        });
 
-        fileStream.pipe(res);
-    } catch (streamError) {
-        console.error('Error creating GCS stream:', streamError);
+    try {
+      const fileStream = getGCSFileStream(filename);
+
+      fileStream.on('error', (err) => {
+        console.error(`❌ GCS stream error for ${filename}:`, err.message);
         if (!res.headersSent) {
-            res.status(500).json({ error: 'Failed to retrieve file' });
+          res.status(404).json({
+            error: 'File not found in storage',
+            details: err.message
+          });
         }
+      });
+
+      fileStream.pipe(res);
+    } catch (streamError) {
+      console.error('Error creating GCS stream:', streamError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to retrieve file' });
+      }
     }
 
   } catch (error) {
     console.error('❌ Error downloading document:', error);
     if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Failed to download document',
-          details: error.message
-        });
+      res.status(500).json({
+        error: 'Failed to download document',
+        details: error.message
+      });
     }
   }
 });
@@ -1556,17 +1669,17 @@ app.get('/api/clients/:clientId/documents', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     res.json(client.documents || []);
   } catch (error) {
     console.error('Error fetching client documents:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error fetching documents',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1584,31 +1697,31 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', (req, res) => {
   const clientId = req.params.clientId;
   const { adminName } = req.body;
   const client = clientsData[clientId];
-  
+
   if (!client) {
     return res.status(404).json({ error: 'Client not found' });
   }
-  
+
   if (!client.first_payment_received) {
     return res.status(400).json({ error: 'Erste Rate muss erst als erhalten markiert werden' });
   }
-  
+
   // Get all confirmed creditor documents (not duplicates, not failed, not marked as non-creditor)
   const creditorDocs = client.documents.filter(doc =>
     doc.document_status === 'creditor_confirmed' &&
     !doc.is_duplicate &&
     doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
   );
-  
+
   // Create deduplicated creditor list
   const creditorMap = new Map();
-  
+
   creditorDocs.forEach(doc => {
     const creditorData = doc.extracted_data?.creditor_data;
     if (!creditorData) return;
-    
+
     const referenceKey = creditorData.reference_number || `${creditorData.sender_name}_${creditorData.claim_amount}`;
-    
+
     if (!creditorMap.has(referenceKey)) {
       creditorMap.set(referenceKey, {
         id: `creditor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1630,16 +1743,16 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', (req, res) => {
       console.log(`Duplikat übersprungen: ${referenceKey} aus Dokument ${doc.name}`);
     }
   });
-  
+
   const finalCreditorList = Array.from(creditorMap.values());
-  
+
   // Update client status
   client.final_creditor_list = finalCreditorList;
   client.admin_approved = true;
   client.admin_approved_at = new Date().toISOString();
   client.admin_approved_by = adminName || 'System';
   client.workflow_status = 'client_confirmation';
-  
+
   res.json({
     success: true,
     message: `${finalCreditorList.length} Gläubiger für Kundenbestätigung vorbereitet`,
@@ -1654,11 +1767,11 @@ app.get('/api/admin/clients/:clientId/workflow-status', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const creditorDocuments = (client.documents || []).filter(doc =>
       doc.document_status === 'creditor_confirmed' &&
       doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
@@ -1667,7 +1780,7 @@ app.get('/api/admin/clients/:clientId/workflow-status', async (req, res) => {
     const needsReview = (client.documents || []).filter(doc =>
       doc.document_status === 'needs_review'
     );
-    
+
     res.json({
       client_name: `${client.firstName} ${client.lastName}`,
       workflow_status: client.workflow_status,
@@ -1686,9 +1799,9 @@ app.get('/api/admin/clients/:clientId/workflow-status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching workflow status:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error fetching workflow status',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1698,14 +1811,14 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Check current_status (new field) or workflow_status (legacy field)
     const status = client.current_status || client.workflow_status;
-    
+
     console.log(`🔍 Creditor confirmation check for ${client.aktenzeichen}:`, {
       current_status: client.current_status,
       workflow_status: client.workflow_status,
@@ -1716,7 +1829,7 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
       creditors_count: (client.final_creditor_list || []).length,
       status: status
     });
-    
+
     // For new clients, return empty state
     if (status === 'portal_access_sent' || status === 'created') {
       return res.json({
@@ -1727,11 +1840,11 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
         message: 'Bitte laden Sie zuerst Ihre Gläubigerdokumente hoch.'
       });
     }
-    
+
     // Check if agent has approved (required before client can see creditors)
     // Auto-approve for cases where 7-day review has been triggered and payment received
     const isAutoApproved = client.first_payment_received && client.seven_day_review_triggered && status === 'creditor_review';
-    
+
     if (!client.admin_approved && !isAutoApproved) {
       return res.json({
         workflow_status: status,
@@ -1741,11 +1854,11 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
         message: 'Ihre Gläubigerliste wird noch von unserem Team überprüft.'
       });
     }
-    
+
     // If agent approved and status is awaiting_client_confirmation, show creditors
     // Also include creditor_review status when 7-day review has been triggered and payment received
     if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
-        (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
+      (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
 
       // Filter out creditors that belong to documents marked as "not a creditor"
       const validCreditors = (client.final_creditor_list || []).filter(creditor => {
@@ -1767,7 +1880,7 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
         confirmation_deadline: null
       });
     }
-    
+
     // Default case - creditors being processed
     return res.json({
       workflow_status: status,
@@ -1778,9 +1891,9 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching creditor confirmation:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error fetching creditor confirmation data',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1790,11 +1903,11 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Check if admin has already approved
     if (!client.admin_approved) {
       return res.status(400).json({
@@ -1802,7 +1915,7 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
         message: 'Die Gläubigerliste muss zuerst von unserem Team überprüft werden.'
       });
     }
-    
+
     // Check if client is in the right status
     if (client.current_status !== 'awaiting_client_confirmation') {
       return res.status(400).json({
@@ -1811,11 +1924,11 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
         current_status: client.current_status
       });
     }
-    
+
     // Process client creditor confirmation directly
     try {
       console.log(`✅ Processing client creditor confirmation for ${client.aktenzeichen}...`);
-      
+
       // Update client confirmation status
       client.client_confirmed_creditors = true;
       client.client_confirmed_at = new Date();
@@ -1837,35 +1950,35 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
       });
 
       await client.save();
-      
+
       console.log(`✅ Client ${client.aktenzeichen} creditor confirmation processed successfully`);
-      
+
       // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
       let creditorContactResult = null;
       const creditors = client.final_creditor_list || [];
-      
+
       if (creditors.length > 0) {
         try {
           console.log(`🚀 Auto-triggering creditor contact for ${client.aktenzeichen}...`);
-          
+
           const CreditorContactService = require('./services/creditorContactService');
           const creditorService = new CreditorContactService();
           creditorContactResult = await creditorService.processClientCreditorConfirmation(client.aktenzeichen);
-          
+
           console.log(`✅ Creditor contact initiated: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
-          
+
           // AUTO-START SIDE CONVERSATION MONITORING
           try {
             console.log(`🔄 Auto-starting Side Conversation monitoring for client ${client.aktenzeichen}...`);
-            
+
             // Pass the same creditor service instance to monitor so it can access the contact data
             globalSideConversationMonitor.creditorContactService = creditorService;
-            
+
             // Small delay to ensure all side conversations are fully created
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             const monitorResult = globalSideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
-            
+
             if (monitorResult.success) {
               console.log(`✅ Started monitoring ${monitorResult.side_conversations_count} Side Conversations for ${client.aktenzeichen}`);
             } else {
@@ -1874,17 +1987,17 @@ app.post('/api/clients/:clientId/confirm-creditors', async (req, res) => {
           } catch (error) {
             console.error(`❌ Error auto-starting monitoring for ${client.aktenzeichen}:`, error.message);
           }
-          
+
           // Add internal comment to main ticket documenting creditor contact
           if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {
             try {
               const ZendeskService = require('./services/zendeskService');
               const zendeskService = new ZendeskService();
-              
-              const creditorsList = creditors.map((c, index) => 
+
+              const creditorsList = creditors.map((c, index) =>
                 `${index + 1}. **${c.creditor_name}** - €${(c.claim_amount || 0).toFixed(2)}`
               ).join('\n');
-              
+
               await zendeskService.addInternalComment(client.zendesk_ticket_id, {
                 content: `🚀 **GLÄUBIGER-KONTAKT INITIIERT**
 
@@ -1905,20 +2018,20 @@ ${creditorsList}
 **Status:** Warten auf Gläubiger-Antworten`,
                 status: 'pending'
               });
-              
+
               console.log(`✅ Added creditor contact documentation to ticket ${client.zendesk_ticket_id}`);
-              
+
             } catch (commentError) {
               console.error(`❌ Failed to add creditor contact comment:`, commentError.message);
             }
           }
-          
+
         } catch (creditorError) {
           console.error(`❌ Failed to initiate creditor contact:`, creditorError.message);
           // Don't fail the confirmation, just log the error
         }
       }
-      
+
       res.json({
         success: true,
         message: 'Gläubigerliste erfolgreich bestätigt',
@@ -1927,11 +2040,11 @@ ${creditorsList}
           emails_sent: creditorContactResult.emails_sent,
           main_ticket_id: creditorContactResult.main_ticket_id
         } : null,
-        next_step: creditorContactResult ? 
-          `Creditor contact initiated - ${creditorContactResult.emails_sent} emails sent` : 
+        next_step: creditorContactResult ?
+          `Creditor contact initiated - ${creditorContactResult.emails_sent} emails sent` :
           'Manual creditor contact required'
       });
-      
+
     } catch (confirmationError) {
       console.error('Failed to process client confirmation:', confirmationError.message);
       res.status(500).json({
@@ -1939,12 +2052,12 @@ ${creditorsList}
         details: confirmationError.message
       });
     }
-    
+
   } catch (error) {
     console.error('Error confirming creditors:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error confirming creditors',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1954,18 +2067,18 @@ app.post('/api/admin/clients/:clientId/mark-payment-received', async (req, res) 
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Update client in MongoDB
     await Client.findByIdAndUpdate(client._id, {
       first_payment_received: true,
       payment_received_at: new Date(),
       workflow_status: 'admin_review'
     });
-    
+
     res.json({
       success: true,
       message: 'Payment marked as received',
@@ -1973,9 +2086,9 @@ app.post('/api/admin/clients/:clientId/mark-payment-received', async (req, res) 
     });
   } catch (error) {
     console.error('Error marking payment received:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error marking payment received',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1985,13 +2098,13 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`🔄 Admin resetting payment status for client ${client.aktenzeichen}`);
-    
+
     // Reset payment and status fields
     client.first_payment_received = false;
     client.payment_processed_at = null;
@@ -2007,16 +2120,16 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
     client.creditor_contact_started_at = null;
     client.document_request_email_sent_at = null;
     client.all_documents_processed_at = null;
-    
+
     // Clear final creditor list
     client.final_creditor_list = [];
-    
+
     // Add status history entry
     const { v4: uuidv4 } = require('uuid');
     if (!client.status_history) {
       client.status_history = [];
     }
-    
+
     client.status_history.push({
       id: uuidv4(),
       status: 'waiting_for_payment',
@@ -2028,24 +2141,24 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
       },
       created_at: new Date()
     });
-    
+
     // Save the client
     await client.save({ validateModifiedOnly: true });
-    
+
     console.log(`✅ Payment status reset successfully for ${client.aktenzeichen}`);
-    
+
     res.json({
       success: true,
       message: `Payment status reset for ${client.aktenzeichen}`,
       new_status: client.current_status,
       workflow_status: client.workflow_status
     });
-    
+
   } catch (error) {
     console.error('Error resetting payment status:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error resetting payment status',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -2054,17 +2167,17 @@ app.post('/api/admin/clients/:clientId/reset-payment', async (req, res) => {
 app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     // Find client by ID or Aktenzeichen
     let client = await Client.findOne({ id: clientId });
     if (!client) {
       client = await Client.findOne({ aktenzeichen: clientId });
     }
-    
+
     if (!client) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Client not found',
-        client_id: clientId 
+        client_id: clientId
       });
     }
 
@@ -2096,12 +2209,12 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
     // Trigger the review immediately
     const DelayedProcessingService = require('./services/delayedProcessingService');
     const delayedService = new DelayedProcessingService();
-    
+
     // Mark as triggered
     client.seven_day_review_triggered = true;
     client.seven_day_review_triggered_at = new Date();
     client.current_status = 'creditor_review';
-    
+
     // Prepare status history entry
     const statusHistoryEntry = {
       id: require('uuid').v4(),
@@ -2111,7 +2224,7 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
         admin_action: 'Manual trigger via admin panel',
         originally_scheduled_at: client.seven_day_review_scheduled_at,
         triggered_at: new Date(),
-        days_skipped: client.seven_day_review_scheduled_at 
+        days_skipped: client.seven_day_review_scheduled_at
           ? Math.ceil((new Date(client.seven_day_review_scheduled_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
           : 0
       }
@@ -2131,11 +2244,11 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
         }
       }
     );
-    
+
     // Trigger the creditor review process
     console.log(`🔄 Triggering creditor review process for client.id: "${client.id}" (${client.aktenzeichen})`);
     const result = await delayedService.triggerCreditorReviewProcess(client.id);
-    
+
     res.json({
       success: true,
       message: '7-day review manually triggered',
@@ -2167,25 +2280,25 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
     const clientId = req.params.clientId;
     const { adminName } = req.body;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     if (!client.first_payment_received) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Payment not received yet',
         current_status: client.workflow_status
       });
     }
-    
+
     // Generate creditor list from confirmed creditor documents
     const creditorDocuments = (client.documents || []).filter(doc =>
       doc.document_status === 'creditor_confirmed' &&
       doc.extracted_data?.creditor_data &&
       doc.is_creditor_document !== false // Exclude documents marked as "not a creditor"
     );
-    
+
     const finalCreditorList = creditorDocuments.map(doc => ({
       id: doc.id,
       sender_name: doc.extracted_data.creditor_data.sender_name,
@@ -2200,7 +2313,7 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
       status: 'pending_confirmation',
       created_at: new Date().toISOString()
     }));
-    
+
     // Update client in MongoDB
     await Client.findByIdAndUpdate(client._id, {
       final_creditor_list: finalCreditorList,
@@ -2209,7 +2322,7 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
       admin_approved_by: adminName || 'Admin',
       workflow_status: 'client_confirmation'
     });
-    
+
     res.json({
       success: true,
       message: 'Creditor list generated and approved',
@@ -2218,287 +2331,287 @@ app.post('/api/admin/clients/:clientId/generate-creditor-list', async (req, res)
     });
   } catch (error) {
     console.error('Error generating creditor list:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error generating creditor list',
-      details: error.message 
+      details: error.message
     });
   }
 });
 
 // Admin: Get all clients for dashboard
-app.get('/api/admin/clients', 
+app.get('/api/admin/clients',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    let clients = [];
-    
-    // Try MongoDB first
     try {
-      if (databaseService.isHealthy()) {
-        clients = await Client.find({}, {
-          firstName: 1,
-          lastName: 1,
-          email: 1,
-          aktenzeichen: 1,
-          workflow_status: 1,
-          current_status: 1,
-          documents: 1,
-          final_creditor_list: 1,
-          created_at: 1,
-          updated_at: 1,
-          last_login: 1,
-          zendesk_ticket_id: 1,
-          first_payment_received: 1,
-          admin_approved: 1,
-          client_confirmed_creditors: 1
-        }).sort({ created_at: -1 });
-        console.log(`📊 Found ${clients.length} clients in MongoDB`);
-        
-        // Debug: Log all clients with their basic info
-        clients.forEach(client => {
-          console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email} - ID: ${client._id}`);
-        });
+      let clients = [];
+
+      // Try MongoDB first
+      try {
+        if (databaseService.isHealthy()) {
+          clients = await Client.find({}, {
+            firstName: 1,
+            lastName: 1,
+            email: 1,
+            aktenzeichen: 1,
+            workflow_status: 1,
+            current_status: 1,
+            documents: 1,
+            final_creditor_list: 1,
+            created_at: 1,
+            updated_at: 1,
+            last_login: 1,
+            zendesk_ticket_id: 1,
+            first_payment_received: 1,
+            admin_approved: 1,
+            client_confirmed_creditors: 1
+          }).sort({ created_at: -1 });
+          console.log(`📊 Found ${clients.length} clients in MongoDB`);
+
+          // Debug: Log all clients with their basic info
+          clients.forEach(client => {
+            console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email} - ID: ${client._id}`);
+          });
+        }
+      } catch (mongoError) {
+        console.error('MongoDB query failed:', mongoError);
       }
-    } catch (mongoError) {
-      console.error('MongoDB query failed:', mongoError);
+
+      // Fallback to in-memory data if MongoDB is empty or failed
+      if (clients.length === 0) {
+        console.log('📊 Falling back to in-memory clients data');
+        clients = Object.values(clientsData).map(client => ({
+          _id: client.id,
+          firstName: client.firstName,
+          lastName: client.lastName,
+          email: client.email,
+          aktenzeichen: client.aktenzeichen,
+          workflow_status: client.workflow_status,
+          current_status: client.current_status,
+          documents: client.documents || [],
+          final_creditor_list: client.final_creditor_list || [],
+          created_at: client.created_at,
+          updated_at: client.updated_at,
+          last_login: client.last_login,
+          zendesk_ticket_id: client.zendesk_ticket_id,
+          first_payment_received: client.first_payment_received,
+          admin_approved: client.admin_approved,
+          client_confirmed_creditors: client.client_confirmed_creditors
+        }));
+        console.log(`📊 Found ${clients.length} clients in memory`);
+      }
+
+      res.json({ clients });
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      res.status(500).json({
+        error: 'Error fetching clients',
+        details: error.message
+      });
     }
-    
-    // Fallback to in-memory data if MongoDB is empty or failed
-    if (clients.length === 0) {
-      console.log('📊 Falling back to in-memory clients data');
-      clients = Object.values(clientsData).map(client => ({
-        _id: client.id,
-        firstName: client.firstName,
-        lastName: client.lastName,
-        email: client.email,
-        aktenzeichen: client.aktenzeichen,
-        workflow_status: client.workflow_status,
-        current_status: client.current_status,
-        documents: client.documents || [],
-        final_creditor_list: client.final_creditor_list || [],
-        created_at: client.created_at,
-        updated_at: client.updated_at,
-        last_login: client.last_login,
-        zendesk_ticket_id: client.zendesk_ticket_id,
-        first_payment_received: client.first_payment_received,
-        admin_approved: client.admin_approved,
-        client_confirmed_creditors: client.client_confirmed_creditors
-      }));
-      console.log(`📊 Found ${clients.length} clients in memory`);
-    }
-    
-    res.json({ clients });
-  } catch (error) {
-    console.error('Error fetching clients:', error);
-    res.status(500).json({ 
-      error: 'Error fetching clients',
-      details: error.message 
-    });
-  }
-});
+  });
 
 // Admin: Create new client
-app.post('/api/admin/clients', 
+app.post('/api/admin/clients',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const clientData = req.body;
-    console.log('📝 Received client creation request:', {
-      firstName: clientData.firstName,
-      lastName: clientData.lastName,
-      email: clientData.email,
-      aktenzeichen: clientData.aktenzeichen,
-      current_status: clientData.current_status,
-      workflow_status: clientData.workflow_status
-    });
-    
-    // Validate required fields
-    if (!clientData.firstName || !clientData.lastName || !clientData.email || !clientData.aktenzeichen) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['firstName', 'lastName', 'email', 'aktenzeichen']
+    try {
+      const clientData = req.body;
+      console.log('📝 Received client creation request:', {
+        firstName: clientData.firstName,
+        lastName: clientData.lastName,
+        email: clientData.email,
+        aktenzeichen: clientData.aktenzeichen,
+        current_status: clientData.current_status,
+        workflow_status: clientData.workflow_status
       });
+
+      // Validate required fields
+      if (!clientData.firstName || !clientData.lastName || !clientData.email || !clientData.aktenzeichen) {
+        return res.status(400).json({
+          error: 'Missing required fields',
+          required: ['firstName', 'lastName', 'email', 'aktenzeichen']
+        });
+      }
+
+      // Check if client with same aktenzeichen already exists
+      const existingClient = await Client.findOne({
+        $or: [
+          { aktenzeichen: clientData.aktenzeichen },
+          { email: clientData.email }
+        ]
+      });
+
+      if (existingClient) {
+        return res.status(409).json({
+          error: 'Client already exists',
+          details: existingClient.email === clientData.email ?
+            'Email already in use' : 'Aktenzeichen already exists'
+        });
+      }
+
+      // Create new client in MongoDB
+      const newClient = new Client({
+        ...clientData,
+        id: clientData.aktenzeichen, // Use aktenzeichen as ID
+        _id: undefined, // Let MongoDB generate _id
+        created_at: new Date(),
+        updated_at: new Date(),
+        documents: [],
+        final_creditor_list: [],
+        // Grant immediate portal access for manually created users
+        portal_link_sent: true,
+        portal_link_sent_at: new Date(),
+        status_history: [{
+          id: uuidv4(),
+          status: clientData.current_status || 'created',
+          changed_by: 'system',
+          created_at: new Date()
+        }]
+      });
+
+      await newClient.save();
+
+      console.log(`✅ Created new client: ${newClient.firstName} ${newClient.lastName} (${newClient.aktenzeichen})`);
+
+      res.status(201).json({
+        id: newClient.id,
+        _id: newClient._id,
+        firstName: newClient.firstName,
+        lastName: newClient.lastName,
+        email: newClient.email,
+        aktenzeichen: newClient.aktenzeichen,
+        current_status: newClient.current_status,
+        workflow_status: newClient.workflow_status,
+        created_at: newClient.created_at
+      });
+
+    } catch (error) {
+      console.error('❌ Error creating client:', error);
+
+      // Enhanced error logging
+      if (error.name === 'ValidationError') {
+        console.error('MongoDB Validation Error:', error.errors);
+        res.status(400).json({
+          error: 'Validation error',
+          details: error.message,
+          validation_errors: error.errors
+        });
+      } else if (error.code === 11000) {
+        console.error('MongoDB Duplicate Key Error:', error);
+        res.status(409).json({
+          error: 'Duplicate entry',
+          details: 'Client with this email or aktenzeichen already exists'
+        });
+      } else {
+        console.error('General Error:', error);
+        res.status(500).json({
+          error: 'Error creating client',
+          details: error.message,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+      }
     }
-    
-    // Check if client with same aktenzeichen already exists
-    const existingClient = await Client.findOne({ 
-      $or: [
-        { aktenzeichen: clientData.aktenzeichen },
-        { email: clientData.email }
-      ]
-    });
-    
-    if (existingClient) {
-      return res.status(409).json({ 
-        error: 'Client already exists',
-        details: existingClient.email === clientData.email ? 
-          'Email already in use' : 'Aktenzeichen already exists'
-      });
-    }
-    
-    // Create new client in MongoDB
-    const newClient = new Client({
-      ...clientData,
-      id: clientData.aktenzeichen, // Use aktenzeichen as ID
-      _id: undefined, // Let MongoDB generate _id
-      created_at: new Date(),
-      updated_at: new Date(),
-      documents: [],
-      final_creditor_list: [],
-      // Grant immediate portal access for manually created users
-      portal_link_sent: true,
-      portal_link_sent_at: new Date(),
-      status_history: [{
-        id: uuidv4(),
-        status: clientData.current_status || 'created',
-        changed_by: 'system',
-        created_at: new Date()
-      }]
-    });
-    
-    await newClient.save();
-    
-    console.log(`✅ Created new client: ${newClient.firstName} ${newClient.lastName} (${newClient.aktenzeichen})`);
-    
-    res.status(201).json({
-      id: newClient.id,
-      _id: newClient._id,
-      firstName: newClient.firstName,
-      lastName: newClient.lastName,
-      email: newClient.email,
-      aktenzeichen: newClient.aktenzeichen,
-      current_status: newClient.current_status,
-      workflow_status: newClient.workflow_status,
-      created_at: newClient.created_at
-    });
-    
-  } catch (error) {
-    console.error('❌ Error creating client:', error);
-    
-    // Enhanced error logging
-    if (error.name === 'ValidationError') {
-      console.error('MongoDB Validation Error:', error.errors);
-      res.status(400).json({ 
-        error: 'Validation error',
-        details: error.message,
-        validation_errors: error.errors
-      });
-    } else if (error.code === 11000) {
-      console.error('MongoDB Duplicate Key Error:', error);
-      res.status(409).json({ 
-        error: 'Duplicate entry',
-        details: 'Client with this email or aktenzeichen already exists'
-      });
-    } else {
-      console.error('General Error:', error);
-      res.status(500).json({ 
-        error: 'Error creating client',
-        details: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
-    }
-  }
-});
+  });
 
 // Admin: Clear all data from MongoDB (DANGER!)
-app.delete('/api/admin/clear-database', 
+app.delete('/api/admin/clear-database',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    console.log('🗑️ ADMIN REQUEST: Clearing all data from MongoDB...');
-    
-    if (!databaseService.isHealthy()) {
-      return res.status(503).json({ 
-        error: 'Database not available' 
-      });
-    }
-    
-    // Get counts before deletion for confirmation
-    const clientCount = await Client.countDocuments();
-    
-    console.log(`📊 Found ${clientCount} clients in database`);
-    
-    // Delete all clients (this will cascade delete all related data)
-    const deleteResult = await Client.deleteMany({});
-    
-    console.log(`✅ Deleted ${deleteResult.deletedCount} clients from MongoDB`);
-    
-    // Also clean up any uploaded files directory
-    // const uploadsDir = path.join(__dirname, 'uploads');
-    if (fs.existsSync(uploadsDir)) {
-      console.log('🗂️ Cleaning up uploads directory...');
-      const clientDirs = fs.readdirSync(uploadsDir).filter(dir => {
-        const dirPath = path.join(uploadsDir, dir);
-        return fs.statSync(dirPath).isDirectory();
-      });
-      
-      let filesDeleted = 0;
-      for (const clientDir of clientDirs) {
-        const clientDirPath = path.join(uploadsDir, clientDir);
-        try {
-          fs.removeSync(clientDirPath);
-          filesDeleted++;
-          console.log(`🗑️ Deleted directory: ${clientDir}`);
-        } catch (error) {
-          console.warn(`⚠️ Could not delete directory ${clientDir}:`, error.message);
-        }
+    try {
+      console.log('🗑️ ADMIN REQUEST: Clearing all data from MongoDB...');
+
+      if (!databaseService.isHealthy()) {
+        return res.status(503).json({
+          error: 'Database not available'
+        });
       }
-      console.log(`📂 Cleaned up ${filesDeleted} client directories`);
+
+      // Get counts before deletion for confirmation
+      const clientCount = await Client.countDocuments();
+
+      console.log(`📊 Found ${clientCount} clients in database`);
+
+      // Delete all clients (this will cascade delete all related data)
+      const deleteResult = await Client.deleteMany({});
+
+      console.log(`✅ Deleted ${deleteResult.deletedCount} clients from MongoDB`);
+
+      // Also clean up any uploaded files directory
+      // const uploadsDir = path.join(__dirname, 'uploads');
+      if (fs.existsSync(uploadsDir)) {
+        console.log('🗂️ Cleaning up uploads directory...');
+        const clientDirs = fs.readdirSync(uploadsDir).filter(dir => {
+          const dirPath = path.join(uploadsDir, dir);
+          return fs.statSync(dirPath).isDirectory();
+        });
+
+        let filesDeleted = 0;
+        for (const clientDir of clientDirs) {
+          const clientDirPath = path.join(uploadsDir, clientDir);
+          try {
+            fs.removeSync(clientDirPath);
+            filesDeleted++;
+            console.log(`🗑️ Deleted directory: ${clientDir}`);
+          } catch (error) {
+            console.warn(`⚠️ Could not delete directory ${clientDir}:`, error.message);
+          }
+        }
+        console.log(`📂 Cleaned up ${filesDeleted} client directories`);
+      }
+
+      res.json({
+        success: true,
+        message: 'Database cleared successfully',
+        stats: {
+          clients_deleted: deleteResult.deletedCount,
+          upload_dirs_cleaned: fs.existsSync(uploadsDir) ?
+            fs.readdirSync(uploadsDir).filter(dir =>
+              fs.statSync(path.join(uploadsDir, dir)).isDirectory()
+            ).length : 0
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('❌ Error clearing database:', error);
+      res.status(500).json({
+        error: 'Error clearing database',
+        details: error.message
+      });
     }
-    
-    res.json({
-      success: true,
-      message: 'Database cleared successfully',
-      stats: {
-        clients_deleted: deleteResult.deletedCount,
-        upload_dirs_cleaned: fs.existsSync(uploadsDir) ? 
-          fs.readdirSync(uploadsDir).filter(dir => 
-            fs.statSync(path.join(uploadsDir, dir)).isDirectory()
-          ).length : 0
-      },
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('❌ Error clearing database:', error);
-    res.status(500).json({ 
-      error: 'Error clearing database',
-      details: error.message 
-    });
-  }
-});
+  });
 
 // Trigger reprocessing of a document
 app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, res) => {
   try {
     const { clientId, documentId } = req.params;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
-    
+
     if (docIndex === -1) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    
+
     const document = client.documents[docIndex];
     const filePath = path.join(__dirname, 'uploads', clientId, document.filename);
-    
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Document file not found' });
     }
-    
+
     // Update status to processing
     client.documents[docIndex].processing_status = 'processing';
     client.documents[docIndex].processing_error = null;
     await saveClient(client);
-    
+
     // Start reprocessing in background
     setImmediate(async () => {
       try {
@@ -2506,7 +2619,7 @@ app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, r
         const extractedData = await documentProcessor.processDocument(filePath, document.name);
         const validation = documentProcessor.validateExtraction(extractedData);
         const summary = documentProcessor.generateSummary(extractedData);
-        
+
         client.documents[docIndex] = {
           ...client.documents[docIndex],
           processing_status: 'completed',
@@ -2515,7 +2628,7 @@ app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, r
           summary: summary,
           processed_at: new Date().toISOString()
         };
-        
+
         await saveClient(client);
         console.log(`Reprocessing completed for: ${document.name}`);
       } catch (error) {
@@ -2529,17 +2642,17 @@ app.post('/api/clients/:clientId/documents/:documentId/reprocess', async (req, r
         await saveClient(client);
       }
     });
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Document reprocessing started',
       document_id: documentId
     });
   } catch (error) {
     console.error('Error starting reprocessing:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error starting reprocessing',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -2643,7 +2756,7 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
       client.final_creditor_list = client.final_creditor_list.filter(creditor => {
         // Keep creditors that were manually added or from other sources
         return creditor.created_via === 'manual_entry' ||
-               !documentIds.includes(creditor.document_id);
+          !documentIds.includes(creditor.document_id);
       });
 
       console.log(`Removed ${removedCreditorsCount - client.final_creditor_list.length} creditors from final list`);
@@ -2690,12 +2803,12 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
 
       for (let i = 0; i < client.documents.length; i++) {
         const doc = client.documents[i];
-        
+
         // Skip documents without filename
         // Use stored filename (GCS object name)
         // If filename is missing (legacy), try name
         const gcsFilename = doc.filename || doc.name;
-        
+
         if (!gcsFilename) {
           console.warn(`⚠️ Skipping document ${doc.id} - no filename`);
           failureCount++;
@@ -2707,11 +2820,11 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
         try {
           fileBuffer = await getGCSFileBuffer(gcsFilename);
           if (!fileBuffer) {
-             throw new Error('File buffer is empty');
+            throw new Error('File buffer is empty');
           }
         } catch (gcsFetchError) {
           console.error(`❌ Failed to fetch file from GCS for reprocessing: ${doc.name} (${gcsFilename})`, gcsFetchError.message);
-          
+
           const updatedClient = await getClient(clientId);
           const docIndex = updatedClient.documents.findIndex(d => d.id === doc.id);
           if (docIndex !== -1) {
@@ -2753,7 +2866,7 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
               // Explicitly ensure key metadata fields are preserved
               id: existingDoc.id,
               filename: existingDoc.filename,
-              name: existingDoc.name, 
+              name: existingDoc.name,
               type: existingDoc.type,
               size: existingDoc.size,
               uploadedAt: existingDoc.uploadedAt,
@@ -2855,7 +2968,7 @@ app.post('/api/clients/:clientId/documents/reprocess-all', async (req, res) => {
 app.delete('/api/clients/:clientId/documents/delete-all', async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     console.log(`🗑️ Deleting ALL documents for client ${clientId}`);
 
     const client = await getClient(clientId);
@@ -2868,7 +2981,7 @@ app.delete('/api/clients/:clientId/documents/delete-all', async (req, res) => {
 
     // Clear documents array
     client.documents = [];
-    
+
     await saveClient(client);
 
     console.log(`✅ Deleted ${docCount} documents for client ${clientId}`);
@@ -2881,9 +2994,9 @@ app.delete('/api/clients/:clientId/documents/delete-all', async (req, res) => {
 
   } catch (error) {
     console.error('Error deleting documents:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error deleting documents',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -2894,23 +3007,23 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
     const { clientId, documentId } = req.params;
     const { document_status, admin_note, reviewed_by } = req.body;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const docIndex = client.documents?.findIndex(doc => doc.id === documentId);
-    
+
     if (docIndex === -1) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    
+
     // Validate the new status
     const validStatuses = ['creditor_confirmed', 'non_creditor_confirmed', 'needs_review', 'duplicate'];
     if (!validStatuses.includes(document_status)) {
       return res.status(400).json({ error: 'Invalid document status' });
     }
-    
+
     // Update document with admin review
     client.documents[docIndex] = {
       ...client.documents[docIndex],
@@ -2921,13 +3034,13 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
       admin_reviewed_by: reviewed_by || 'Admin',
       manual_review_required: false // Clear manual review flag after admin review
     };
-    
+
     await saveClient(client);
-    
+
     console.log(`📋 Admin Review: Document "${client.documents[docIndex].name}" marked as "${document_status}" by ${reviewed_by || 'Admin'}`);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: `Dokument erfolgreich als "${document_status}" markiert`,
       document: {
         id: documentId,
@@ -2940,9 +3053,9 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
     });
   } catch (error) {
     console.error('Error reviewing document:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error reviewing document',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -2951,28 +3064,28 @@ app.patch('/api/admin/clients/:clientId/documents/:documentId/review', async (re
 app.delete('/api/clients/:clientId/documents/:documentId', (req, res) => {
   const { clientId, documentId } = req.params;
   const client = clientsData[clientId];
-  
+
   if (!client) {
     return res.status(404).json({ error: 'Client not found' });
   }
-  
+
   const documentIndex = client.documents.findIndex(doc => doc.id === documentId);
-  
+
   if (documentIndex === -1) {
     return res.status(404).json({ error: 'Document not found' });
   }
-  
+
   const document = client.documents[documentIndex];
   const filePath = path.join(uploadsDir, clientId, document.filename);
-  
+
   // Remove file from filesystem
   if (fs.existsSync(filePath)) {
     fs.removeSync(filePath);
   }
-  
+
   // Remove from client documents
   client.documents.splice(documentIndex, 1);
-  
+
   res.json({ success: true, message: 'Dokument gelöscht' });
 });
 
@@ -2985,45 +3098,45 @@ app.post('/api/clients/:clientId/start-creditor-contact', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Only allow if client has confirmed creditors
     if (client.workflow_status !== 'completed') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Creditor contact can only be started after client confirmation is completed',
         current_status: client.workflow_status
       });
     }
-    
+
     console.log(`🚀 Starting Zendesk creditor contact process for client ${clientId}`);
-    
+
     const clientData = {
       name: `${client.firstName} ${client.lastName}`,
       email: client.email
     };
-    
+
     const result = await creditorContactService.processClientCreditorConfirmation(clientId, clientData);
-    
+
     if (result.success) {
       // Update client workflow status
       client.creditor_contact_started = true;
       client.creditor_contact_started_at = new Date().toISOString();
       client.workflow_status = 'creditor_contact_active';
-      
+
       console.log(`✅ Creditor contact process completed for ${clientId}`);
       console.log(`📊 Results: ${result.tickets_created} tickets, ${result.emails_sent} emails`);
     }
-    
+
     res.json(result);
-    
+
   } catch (error) {
     console.error('Error starting creditor contact process:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error starting creditor contact process',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3033,71 +3146,71 @@ app.post('/api/clients/:clientId/resend-creditor-emails', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     if (!client.creditor_contact_started) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Creditor contact process has not been started yet',
         current_status: client.workflow_status
       });
     }
-    
+
     console.log(`🔄 Re-sending creditor emails for client ${clientId}`);
-    
+
     // Get existing creditor contact data from the service
     const status = await creditorContactService.getClientCreditorStatus(clientId);
-    
+
     if (!status.creditor_contacts || status.creditor_contacts.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'No creditor contacts found to resend'
       });
     }
-    
+
     // Re-send emails for all existing contacts
     let emailsSent = 0;
     const results = [];
-    
+
     for (let i = 0; i < status.creditor_contacts.length; i++) {
       const contact = status.creditor_contacts[i];
-      
+
       try {
         console.log(`📧 Re-sending email ${i + 1}/${status.creditor_contacts.length} for ${contact.creditor_name}`);
-        
+
         // Send email via Zendesk (reuse existing ticket)
         if (contact.zendesk_ticket_id) {
           const clientData = {
             name: `${client.firstName} ${client.lastName}`,
             email: client.email
           };
-          
+
           await creditorContactService.zendesk.sendCreditorEmailViaTicket(
             contact.zendesk_ticket_id,
             contact,
             clientData
           );
-          
+
           // Update contact status
           contact.contact_status = 'email_sent';
           contact.email_sent_at = new Date().toISOString();
           contact.updated_at = new Date().toISOString();
-          
+
           emailsSent++;
           results.push({
             creditor_name: contact.creditor_name,
             ticket_id: contact.zendesk_ticket_id,
             success: true
           });
-          
+
           // Wait between emails to avoid rate limits
           if (i < status.creditor_contacts.length - 1) {
             console.log(`⏰ Waiting 3 seconds before next email...`);
             await new Promise(resolve => setTimeout(resolve, 3000));
           }
         }
-        
+
       } catch (error) {
         console.error(`❌ Failed to resend email for ${contact.creditor_name}:`, error.message);
         results.push({
@@ -3107,9 +3220,9 @@ app.post('/api/clients/:clientId/resend-creditor-emails', async (req, res) => {
         });
       }
     }
-    
+
     console.log(`✅ Re-sent ${emailsSent} creditor emails for client ${clientId}`);
-    
+
     res.json({
       success: true,
       emails_sent: emailsSent,
@@ -3118,12 +3231,12 @@ app.post('/api/clients/:clientId/resend-creditor-emails', async (req, res) => {
       message: `${emailsSent} E-Mails erneut versendet`,
       processing_timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error re-sending creditor emails:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error re-sending creditor emails',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3133,13 +3246,13 @@ app.get('/api/clients/:clientId/creditor-contact-status', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const status = await creditorContactService.getClientCreditorStatus(clientId);
-    
+
     res.json({
       ...status,
       client_info: {
@@ -3150,12 +3263,12 @@ app.get('/api/clients/:clientId/creditor-contact-status', async (req, res) => {
         creditor_contact_started_at: client.creditor_contact_started_at
       }
     });
-    
+
   } catch (error) {
     console.error('Error getting creditor contact status:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error getting creditor contact status',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3165,13 +3278,13 @@ app.get('/api/clients/:clientId/final-debt-summary', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const summary = await creditorContactService.getFinalDebtSummary(clientId);
-    
+
     res.json({
       ...summary,
       client_info: {
@@ -3179,12 +3292,12 @@ app.get('/api/clients/:clientId/final-debt-summary', async (req, res) => {
         email: client.email
       }
     });
-    
+
   } catch (error) {
     console.error('Error getting final debt summary:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error getting final debt summary',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3196,53 +3309,53 @@ app.get('/api/clients/:clientId/final-debt-summary', async (req, res) => {
 app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
   try {
     const webhookData = req.body;
-    
+
     console.log('🔗 Received Portal-Link webhook:', JSON.stringify(webhookData, null, 2));
-    
+
     // Extract ticket and user information
     const ticket = webhookData.ticket;
     const requester = ticket?.requester;
-    
+
     if (!ticket || !requester) {
       throw new Error('Missing ticket or requester information');
     }
-    
+
     // Validate required fields
     if (!requester.email) {
       throw new Error('Requester email is required');
     }
-    
+
     // Extract Aktenzeichen and Email from the webhook
-    const aktenzeichen = requester?.aktenzeichen || 
-                        ticket.external_id || 
-                        ticket.id || 
-                        `MAND_${Date.now()}`;
-    
+    const aktenzeichen = requester?.aktenzeichen ||
+      ticket.external_id ||
+      ticket.id ||
+      `MAND_${Date.now()}`;
+
     const email = requester.email.toLowerCase().trim();
     const name = requester.name || 'Unknown';
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       throw new Error(`Invalid email format: ${email}`);
     }
-    
+
     console.log(`📋 Creating portal user: ${name} (${email}) - Aktenzeichen: ${aktenzeichen}`);
-    
+
     // Generate unique client ID - use Aktenzeichen directly if alphanumeric, otherwise create safe version
     const clientId = aktenzeichen;
-    
+
     // Check if client already exists
     const existingClient = await getClient(clientId);
     if (existingClient) {
       console.log(`⚠️ Client ${clientId} already exists, updating info`);
     }
-    
+
     // Parse name into first and last name
     const nameParts = name.trim().split(' ');
     const firstName = nameParts[0] || 'Unknown';
     const lastName = nameParts.slice(1).join(' ') || '';
-    
+
     // Create or update client in database
     const clientData = {
       id: clientId,
@@ -3265,12 +3378,12 @@ app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
       portal_token: existingClient?.portal_token || uuidv4(),
       portal_link: existingClient?.portal_link || `https://portal.kanzlei.de/login`
     };
-    
+
     const client = await saveClient(clientData);
-    
+
     console.log(`✅ Client ${clientId} created/updated with portal access`);
     console.log(`🔗 Portal link: ${client.portal_link}`);
-    
+
     // Update Zendesk ticket with portal information
     try {
       await creditorContactService.zendesk.addTicketComment(
@@ -3288,146 +3401,146 @@ app.post('/api/zendesk-webhook/portal-link', async (req, res) => {
       console.error('⚠️ Failed to update Zendesk ticket (this is normal for test webhooks):', zendeskError.message);
       // Don't throw error - webhook should still succeed even if Zendesk update fails
     }
-    
-    res.json({ 
-      status: 'success', 
+
+    res.json({
+      status: 'success',
       message: 'Portal user created',
       client_id: clientId,
       portal_link: client.portal_link,
       aktenzeichen: aktenzeichen
     });
-    
+
   } catch (error) {
     console.error('Error processing Portal-Link webhook:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: error.message 
+    res.status(500).json({
+      status: 'error',
+      message: error.message
     });
   }
 });
 
 // Portal login endpoint
-app.post('/api/portal/login', 
-  rateLimits.auth, 
+app.post('/api/portal/login',
+  rateLimits.auth,
   async (req, res, next) => next(),
   async (req, res) => {
-  try {
-    const { email, aktenzeichen, file_number, fileNumber, password } = req.body;
-
-    // Normalize raw inputs first; don't infer meanings yet
-    const rawAktenzeichen = (aktenzeichen || file_number || fileNumber || '').toString().trim();
-    const rawPassword = password;
-
-    console.log(`🔐 Portal login attempt:`, { email, aktenzeichen: rawAktenzeichen, password: rawPassword ? '[PROVIDED]' : '[MISSING]' });
-
-    if (!email) {
-      return res.status(400).json({ 
-        error: 'E-Mail ist erforderlich' 
-      });
-    }
-
-    // Find client by email first
-    let foundClient = null;
-    
     try {
-      if (databaseService.isHealthy()) {
-        console.log(`🔍 Searching in MongoDB for client with email: ${email}`);
-        foundClient = await Client.findOne({ email: email });
-        
-        if (foundClient) {
-          console.log(`✅ Client found by email: ${foundClient.aktenzeichen} | ${foundClient.email}`);
-        } else {
-          console.log(`❌ No client found in MongoDB with email: ${email}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error searching client in MongoDB:', error);
-    }
-    
-    if (!foundClient) {
-      console.log(`❌ Login failed: No client found with email ${email}`);
-      return res.status(401).json({ 
-        error: 'Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail.' 
-      });
-    }
-    
-    // Determine login mode based on isPasswordSet
-    const isPasswordSet = !!foundClient.isPasswordSet;
-    console.log(`🔐 Client password status: isPasswordSet=${isPasswordSet}`);
+      const { email, aktenzeichen, file_number, fileNumber, password } = req.body;
 
-    if (isPasswordSet) {
-      // If password not sent explicitly, allow frontend that sends it via aktenzeichen field
-      const providedPassword = rawPassword || (rawAktenzeichen?.length > 0 ? rawAktenzeichen : null);
+      // Normalize raw inputs first; don't infer meanings yet
+      const rawAktenzeichen = (aktenzeichen || file_number || fileNumber || '').toString().trim();
+      const rawPassword = password;
 
-      // Password is set: require password
-      if (!providedPassword) {
-        return res.status(400).json({ 
-          error: 'Passwort ist erforderlich' 
+      console.log(`🔐 Portal login attempt:`, { email, aktenzeichen: rawAktenzeichen, password: rawPassword ? '[PROVIDED]' : '[MISSING]' });
+
+      if (!email) {
+        return res.status(400).json({
+          error: 'E-Mail ist erforderlich'
         });
       }
 
-      // Verify password using stored hash
-      if (typeof foundClient.comparePassword === 'function') {
-        const ok = await foundClient.comparePassword(providedPassword);
-        if (!ok) {
-          console.log(`❌ Password verification failed for ${email}`);
-          return res.status(401).json({ error: 'Ungültiges Passwort' });
+      // Find client by email first
+      let foundClient = null;
+
+      try {
+        if (databaseService.isHealthy()) {
+          console.log(`🔍 Searching in MongoDB for client with email: ${email}`);
+          foundClient = await Client.findOne({ email: email });
+
+          if (foundClient) {
+            console.log(`✅ Client found by email: ${foundClient.aktenzeichen} | ${foundClient.email}`);
+          } else {
+            console.log(`❌ No client found in MongoDB with email: ${email}`);
+          }
         }
-        console.log(`✅ Password verification successful for ${email}`);
+      } catch (error) {
+        console.error('Error searching client in MongoDB:', error);
+      }
+
+      if (!foundClient) {
+        console.log(`❌ Login failed: No client found with email ${email}`);
+        return res.status(401).json({
+          error: 'Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail.'
+        });
+      }
+
+      // Determine login mode based on isPasswordSet
+      const isPasswordSet = !!foundClient.isPasswordSet;
+      console.log(`🔐 Client password status: isPasswordSet=${isPasswordSet}`);
+
+      if (isPasswordSet) {
+        // If password not sent explicitly, allow frontend that sends it via aktenzeichen field
+        const providedPassword = rawPassword || (rawAktenzeichen?.length > 0 ? rawAktenzeichen : null);
+
+        // Password is set: require password
+        if (!providedPassword) {
+          return res.status(400).json({
+            error: 'Passwort ist erforderlich'
+          });
+        }
+
+        // Verify password using stored hash
+        if (typeof foundClient.comparePassword === 'function') {
+          const ok = await foundClient.comparePassword(providedPassword);
+          if (!ok) {
+            console.log(`❌ Password verification failed for ${email}`);
+            return res.status(401).json({ error: 'Ungültiges Passwort' });
+          }
+          console.log(`✅ Password verification successful for ${email}`);
+        } else {
+          return res.status(500).json({ error: 'Passwortprüfung nicht verfügbar' });
+        }
       } else {
-        return res.status(500).json({ error: 'Passwortprüfung nicht verfügbar' });
+        // Password not set yet: aktenzeichen is REQUIRED and must match DB
+        if (!rawAktenzeichen) {
+          return res.status(400).json({ error: 'Aktenzeichen ist erforderlich' });
+        }
+        if (foundClient.aktenzeichen !== rawAktenzeichen) {
+          console.log(`❌ Aktenzeichen mismatch: provided=${rawAktenzeichen}, stored=${foundClient.aktenzeichen}`);
+          return res.status(401).json({ error: 'Ungültiges Aktenzeichen' });
+        }
+        console.log(`✅ Aktenzeichen verified for ${email}`);
       }
-    } else {
-      // Password not set yet: aktenzeichen is REQUIRED and must match DB
-      if (!rawAktenzeichen) {
-        return res.status(400).json({ error: 'Aktenzeichen ist erforderlich' });
-      }
-      if (foundClient.aktenzeichen !== rawAktenzeichen) {
-        console.log(`❌ Aktenzeichen mismatch: provided=${rawAktenzeichen}, stored=${foundClient.aktenzeichen}`);
-        return res.status(401).json({ error: 'Ungültiges Aktenzeichen' });
-      }
-      console.log(`✅ Aktenzeichen verified for ${email}`);
+
+      // Generate JWT token instead of simple session token
+      const jwtToken = generateClientToken(foundClient.id, foundClient.email);
+      const sessionToken = uuidv4(); // Keep for backward compatibility
+
+      // Update client with session token
+      foundClient.session_token = sessionToken;
+      foundClient.last_login = new Date().toISOString();
+
+      // Save updated client
+      await saveClient(foundClient);
+
+      console.log(`✅ Login successful for ${email} (Client ID: ${foundClient.id})`);
+
+      res.json({
+        success: true,
+        message: 'Anmeldung erfolgreich',
+        client: {
+          id: foundClient.id,
+          firstName: foundClient.firstName,
+          lastName: foundClient.lastName,
+          email: foundClient.email,
+          aktenzeichen: foundClient.aktenzeichen,
+          phase: foundClient.phase,
+          workflow_status: foundClient.workflow_status,
+          documents_count: foundClient.documents?.length || 0,
+          isPasswordSet: !!foundClient.isPasswordSet
+        },
+        session_token: sessionToken, // Backward compatibility
+        token: jwtToken // New JWT token
+      });
+
+    } catch (error) {
+      console.error('Error during portal login:', error);
+      res.status(500).json({
+        error: 'Anmeldefehler',
+        details: error.message
+      });
     }
-    
-    // Generate JWT token instead of simple session token
-    const jwtToken = generateClientToken(foundClient.id, foundClient.email);
-    const sessionToken = uuidv4(); // Keep for backward compatibility
-    
-    // Update client with session token
-    foundClient.session_token = sessionToken;
-    foundClient.last_login = new Date().toISOString();
-    
-    // Save updated client
-    await saveClient(foundClient);
-    
-    console.log(`✅ Login successful for ${email} (Client ID: ${foundClient.id})`);
-    
-    res.json({
-      success: true,
-      message: 'Anmeldung erfolgreich',
-      client: {
-        id: foundClient.id,
-        firstName: foundClient.firstName,
-        lastName: foundClient.lastName,
-        email: foundClient.email,
-        aktenzeichen: foundClient.aktenzeichen,
-        phase: foundClient.phase,
-        workflow_status: foundClient.workflow_status,
-        documents_count: foundClient.documents?.length || 0,
-        isPasswordSet: !!foundClient.isPasswordSet
-      },
-      session_token: sessionToken, // Backward compatibility
-      token: jwtToken // New JWT token
-    });
-    
-  } catch (error) {
-    console.error('Error during portal login:', error);
-    res.status(500).json({ 
-      error: 'Anmeldefehler',
-      details: error.message 
-    });
-  }
-});
+  });
 
 // Admin login endpoint
 app.post('/api/admin/login',
@@ -3437,56 +3550,56 @@ app.post('/api/admin/login',
     validationRules.password
   ]),
   async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // TODO: Replace with proper admin user management
-    // For now, use environment variables for admin credentials
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@mandanten-portal.de';
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // CHANGE THIS!
-    
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      return res.status(401).json({ 
-        error: 'Ungültige Admin-Anmeldedaten' 
+    try {
+      const { email, password } = req.body;
+
+      // TODO: Replace with proper admin user management
+      // For now, use environment variables for admin credentials
+      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@mandanten-portal.de';
+      const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // CHANGE THIS!
+
+      if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+        return res.status(401).json({
+          error: 'Ungültige Admin-Anmeldedaten'
+        });
+      }
+
+      // Generate admin JWT token
+      const token = generateAdminToken(email);
+
+      res.json({
+        success: true,
+        message: 'Admin-Anmeldung erfolgreich',
+        token,
+        user: {
+          email,
+          role: 'admin'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error during admin login:', error);
+      res.status(500).json({
+        error: 'Anmeldefehler',
+        details: error.message
       });
     }
-    
-    // Generate admin JWT token
-    const token = generateAdminToken(email);
-    
-    res.json({
-      success: true,
-      message: 'Admin-Anmeldung erfolgreich',
-      token,
-      user: {
-        email,
-        role: 'admin'
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error during admin login:', error);
-    res.status(500).json({ 
-      error: 'Anmeldefehler',
-      details: error.message 
-    });
-  }
-});
+  });
 
 // Portal session validation endpoint
 app.get('/api/portal/validate-session', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No session token provided' });
     }
-    
+
     const sessionToken = authHeader.substring(7);
-    
+
     // Find client by session token
     let foundClient = null;
-    
+
     try {
       if (databaseService.isHealthy()) {
         foundClient = await Client.findOne({ session_token: sessionToken });
@@ -3494,7 +3607,7 @@ app.get('/api/portal/validate-session', async (req, res) => {
     } catch (error) {
       console.error('Error searching client by session token in MongoDB:', error);
     }
-    
+
     // Fallback to in-memory search
     if (!foundClient) {
       for (const [clientId, client] of Object.entries(clientsData)) {
@@ -3504,11 +3617,11 @@ app.get('/api/portal/validate-session', async (req, res) => {
         }
       }
     }
-    
+
     if (!foundClient) {
       return res.status(401).json({ error: 'Invalid session token' });
     }
-    
+
     res.json({
       valid: true,
       client: {
@@ -3521,12 +3634,12 @@ app.get('/api/portal/validate-session', async (req, res) => {
         workflow_status: foundClient.workflow_status
       }
     });
-    
+
   } catch (error) {
     console.error('Error validating session:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Session validation error',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3535,20 +3648,20 @@ app.get('/api/portal/validate-session', async (req, res) => {
 app.post('/api/admin/process-timeout-creditors', async (req, res) => {
   try {
     const { timeout_days = 14 } = req.body;
-    
+
     console.log(`⏰ Processing timeout creditors (${timeout_days} days)`);
-    
+
     const result = await creditorContactService.processTimeoutCreditors(timeout_days);
-    
+
     console.log(`✅ Processed ${result.processed_count} timeout creditors`);
-    
+
     res.json(result);
-    
+
   } catch (error) {
     console.error('Error processing timeout creditors:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error processing timeout creditors',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3558,18 +3671,18 @@ app.get('/api/admin/test-zendesk', async (req, res) => {
   try {
     const zendesk = creditorContactService.zendesk;
     const connectionOk = await zendesk.testConnection();
-    
-    res.json({ 
+
+    res.json({
       success: connectionOk,
       message: connectionOk ? 'Zendesk connection successful' : 'Zendesk connection failed'
     });
-    
+
   } catch (error) {
     console.error('Error testing Zendesk connection:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Error testing Zendesk connection',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3579,11 +3692,11 @@ app.post('/api/admin/clients/:clientId/add-demo-documents', (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Add comprehensive demo documents for testing
     const demoDocuments = [
       {
@@ -3749,20 +3862,20 @@ app.post('/api/admin/clients/:clientId/add-demo-documents', (req, res) => {
         }
       }
     ];
-    
+
     // Add demo documents to client
     client.documents = [...client.documents, ...demoDocuments];
-    
+
     // Update client workflow status to ready for admin review
     client.workflow_status = 'admin_review';
     client.admin_approved = false;
     client.client_confirmed_creditors = false;
-    
+
     console.log(`✅ Added ${demoDocuments.length} demo documents for client ${clientId}`);
-    
+
     const totalDebt = demoDocuments.reduce((sum, doc) => sum + (doc.extracted_data.creditor_data.claim_amount || 0), 0);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       message: `${demoDocuments.length} Demo-Gläubiger-Dokumente hinzugefügt`,
       documents_added: demoDocuments.length,
@@ -3777,12 +3890,12 @@ app.post('/api/admin/clients/:clientId/add-demo-documents', (req, res) => {
         reference_numbers: demoDocuments.map(d => d.extracted_data.creditor_data.reference_number)
       }
     });
-    
+
   } catch (error) {
     console.error('Error adding demo documents:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error adding demo documents',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3795,27 +3908,27 @@ app.post('/api/admin/clients/:clientId/add-demo-documents', (req, res) => {
 app.post('/api/admin/test-debt-extraction', async (req, res) => {
   try {
     const { email_body, creditor_context } = req.body;
-    
+
     if (!email_body) {
       return res.status(400).json({ error: 'email_body is required' });
     }
-    
+
     console.log(`🧪 Testing debt extraction on provided email...`);
-    
+
     const result = await debtAmountExtractor.extractDebtAmount(email_body, creditor_context);
-    
+
     res.json({
       success: true,
       email_body: email_body.slice(0, 200) + (email_body.length > 200 ? '...' : ''),
       extraction_result: result,
       message: `Extracted amount: ${result.extracted_amount} EUR (confidence: ${result.confidence})`
     });
-    
+
   } catch (error) {
     console.error('Error testing debt extraction:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error testing debt extraction',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3824,12 +3937,12 @@ app.post('/api/admin/test-debt-extraction', async (req, res) => {
 app.get('/api/admin/test-debt-extraction-suite', async (req, res) => {
   try {
     console.log(`🧪 Running debt extraction test suite...`);
-    
+
     const results = await debtAmountExtractor.testExtraction();
-    
+
     const successCount = results.filter(r => r.success).length;
     const totalTests = results.length;
-    
+
     res.json({
       success: true,
       test_results: results,
@@ -3840,12 +3953,12 @@ app.get('/api/admin/test-debt-extraction-suite', async (req, res) => {
       },
       message: `Test Suite Complete: ${successCount}/${totalTests} tests passed`
     });
-    
+
   } catch (error) {
     console.error('Error running debt extraction test suite:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error running debt extraction test suite',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3859,19 +3972,19 @@ app.post('/api/clients/:clientId/simulate-creditor-responses', async (req, res) 
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`🎭 Simulating creditor responses for client ${clientId}`);
-    
+
     const result = await creditorContactService.simulateCreditorResponses(clientId);
-    
+
     if (result.success) {
       console.log(`✅ Simulated ${result.simulated_responses} creditor responses`);
     }
-    
+
     res.json({
       success: result.success,
       client_reference: clientId,
@@ -3881,12 +3994,12 @@ app.post('/api/clients/:clientId/simulate-creditor-responses', async (req, res) 
       results: result.results,
       message: `${result.simulated_responses} Gläubiger-Antworten simuliert`
     });
-    
+
   } catch (error) {
     console.error('Error simulating creditor responses:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error simulating creditor responses',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3895,35 +4008,35 @@ app.post('/api/clients/:clientId/simulate-creditor-responses', async (req, res) 
 app.post('/api/admin/process-creditor-response', async (req, res) => {
   try {
     const { email_body, reference_number, creditor_email, is_simulation = true } = req.body;
-    
+
     if (!email_body) {
       return res.status(400).json({ error: 'email_body is required' });
     }
-    
+
     console.log(`📧 Processing creditor response${is_simulation ? ' (TEST)' : ''}...`);
     console.log(`📋 Reference: ${reference_number || 'auto-detect'}`);
-    
+
     const emailData = {
       body: email_body,
       subject: `Re: Gläubiger-Anfrage${reference_number ? ` - Az: ${reference_number}` : ''}`,
       sender_email: creditor_email || 'test@example.com'
     };
-    
+
     const result = await creditorContactService.processCreditorResponse(emailData, is_simulation);
-    
+
     res.json({
       success: result.success,
       result: result,
-      message: result.success 
+      message: result.success
         ? `Antwort verarbeitet: ${result.final_amount} EUR (${result.amount_source})`
         : `Fehler: ${result.error}`
     });
-    
+
   } catch (error) {
     console.error('Error processing creditor response:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error processing creditor response',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3933,25 +4046,25 @@ app.get('/api/clients/:clientId/response-stats', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     const stats = creditorContactService.getResponseStats(clientId);
-    
+
     res.json({
       client_reference: clientId,
       client_name: `${client.firstName} ${client.lastName}`,
       response_stats: stats,
       last_updated: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error getting response stats:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error getting response stats',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -3960,33 +4073,33 @@ app.get('/api/clients/:clientId/response-stats', async (req, res) => {
 app.post('/api/admin/test-webhook-response', async (req, res) => {
   try {
     const { ticket_id, comment_body } = req.body;
-    
+
     if (!ticket_id || !comment_body) {
       return res.status(400).json({ error: 'ticket_id and comment_body are required' });
     }
-    
+
     console.log(`🧪 Testing webhook response processing for ticket ${ticket_id}`);
-    
+
     const result = await creditorContactService.processIncomingCreditorResponse(ticket_id, {
       body: comment_body,
       public: true,
       via: { channel: 'email' }
     });
-    
+
     res.json({
       success: result.success,
       ticket_id: ticket_id,
       result: result,
-      message: result.success 
+      message: result.success
         ? `Webhook-Test erfolgreich: ${result.creditor_name} - ${result.final_amount} EUR`
         : `Webhook-Test fehlgeschlagen: ${result.error}`
     });
-    
+
   } catch (error) {
     console.error('Error testing webhook response:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error testing webhook response',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4000,46 +4113,46 @@ app.post('/api/clients/:clientId/calculate-garnishable-income', authenticateAdmi
   try {
     const clientId = req.params.clientId;
     const { netIncome, maritalStatus, numberOfChildren } = req.body;
-    
+
     console.log(`💰 Calculating garnishable income for client: ${clientId}`);
     console.log(`   Net income: ${netIncome} EUR`);
     console.log(`   Marital status: ${maritalStatus}`);
     console.log(`   Children: ${numberOfChildren}`);
-    
+
     // Validate required parameters
     if (!netIncome || !maritalStatus) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: netIncome, maritalStatus' 
+      return res.status(400).json({
+        error: 'Missing required parameters: netIncome, maritalStatus'
       });
     }
-    
+
     if (netIncome <= 0) {
-      return res.status(400).json({ 
-        error: 'Net income must be greater than 0' 
+      return res.status(400).json({
+        error: 'Net income must be greater than 0'
       });
     }
-    
+
     const validStatuses = ['ledig', 'verheiratet', 'geschieden', 'verwitwet'];
     if (!validStatuses.includes(maritalStatus)) {
-      return res.status(400).json({ 
-        error: `Invalid marital status. Valid values: ${validStatuses.join(', ')}` 
+      return res.status(400).json({
+        error: `Invalid marital status. Valid values: ${validStatuses.join(', ')}`
       });
     }
-    
+
     // Calculate garnishable income using 2025-2026 table
     const result = garnishmentCalculator.calculate(
       parseFloat(netIncome),
       maritalStatus,
       parseInt(numberOfChildren) || 0
     );
-    
+
     if (!result.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Garnishment calculation failed',
-        details: result.error 
+        details: result.error
       });
     }
-    
+
     res.json({
       success: true,
       clientId: clientId,
@@ -4048,12 +4161,12 @@ app.post('/api/clients/:clientId/calculate-garnishable-income', authenticateAdmi
       calculationDetails: result.calculationDetails,
       calculation_timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error calculating garnishable income:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error calculating garnishable income',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4062,21 +4175,21 @@ app.post('/api/clients/:clientId/calculate-garnishable-income', authenticateAdmi
 app.get('/api/clients/:clientId/total-debt', (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     console.log(`📊 Calculating total debt for client: ${clientId}`);
-    
+
     const result = garnishmentCalculator.calculateTotalDebtFromCreditors(
-      clientId, 
+      clientId,
       creditorContactService
     );
-    
+
     if (!result.success) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Failed to calculate total debt',
-        details: result.error 
+        details: result.error
       });
     }
-    
+
     res.json({
       success: true,
       clientId: clientId,
@@ -4085,12 +4198,12 @@ app.get('/api/clients/:clientId/total-debt', (req, res) => {
       creditorSummary: result.creditorSummary,
       calculation_timestamp: result.calculation_timestamp
     });
-    
+
   } catch (error) {
     console.error('Error calculating total debt:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error calculating total debt',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4100,13 +4213,13 @@ app.post('/api/clients/:clientId/calculate-creditor-quotas', (req, res) => {
   try {
     const clientId = req.params.clientId;
     const { garnishableIncome } = req.body;
-    
+
     console.log(`💰 Calculating creditor quotas for client: ${clientId}`);
     console.log(`   Garnishable income: ${garnishableIncome} EUR`);
-    
+
     if (!garnishableIncome && garnishableIncome !== 0) {
-      return res.status(400).json({ 
-        error: 'Garnishable income parameter is required' 
+      return res.status(400).json({
+        error: 'Garnishable income parameter is required'
       });
     }
 
@@ -4128,20 +4241,20 @@ app.post('/api/clients/:clientId/calculate-creditor-quotas', (req, res) => {
         calculation_timestamp: new Date().toISOString()
       });
     }
-    
+
     const result = garnishmentCalculator.calculateCreditorQuotas(
       clientId,
       parseFloat(garnishableIncome),
       creditorContactService
     );
-    
+
     if (!result.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Quota calculation failed',
-        details: result.error 
+        details: result.error
       });
     }
-    
+
     res.json({
       success: true,
       clientId: clientId,
@@ -4152,12 +4265,12 @@ app.post('/api/clients/:clientId/calculate-creditor-quotas', (req, res) => {
       quotasSumCheck: result.quotasSumCheck,
       calculation_timestamp: result.calculation_timestamp
     });
-    
+
   } catch (error) {
     console.error('Error calculating creditor quotas:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error calculating creditor quotas',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4167,42 +4280,42 @@ app.post('/api/clients/:clientId/restructuring-analysis', (req, res) => {
   try {
     const clientId = req.params.clientId;
     const { netIncome, maritalStatus, numberOfChildren } = req.body;
-    
+
     console.log(`📋 Generating complete restructuring analysis for client: ${clientId}`);
-    
+
     // Validate required parameters
     if (!netIncome || !maritalStatus) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: netIncome, maritalStatus' 
+      return res.status(400).json({
+        error: 'Missing required parameters: netIncome, maritalStatus'
       });
     }
-    
+
     const financialData = {
       netIncome: parseFloat(netIncome),
       maritalStatus: maritalStatus,
       numberOfChildren: parseInt(numberOfChildren) || 0
     };
-    
+
     const result = garnishmentCalculator.generateRestructuringAnalysis(
       clientId,
       financialData,
       creditorContactService
     );
-    
+
     if (!result.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Restructuring analysis failed',
-        details: result.error 
+        details: result.error
       });
     }
-    
+
     res.json(result);
-    
+
   } catch (error) {
     console.error('Error generating restructuring analysis:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error generating restructuring analysis',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4211,9 +4324,9 @@ app.post('/api/clients/:clientId/restructuring-analysis', (req, res) => {
 app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     console.log(`📋 Creating demo creditor contacts for client: ${clientId}`);
-    
+
     // Create demo creditor contacts directly in creditorContactService
     const demoContacts = [
       {
@@ -4225,7 +4338,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '57852774001',
         original_claim_amount: 2500.00,
         document_ids: ['demo-doc-1'],
-        
+
         // Response processing results (simulated)
         contact_status: 'responded',
         response_received_at: new Date().toISOString(),
@@ -4234,7 +4347,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 2750.50,
         amount_source: 'creditor_response',
         extraction_confidence: 0.95,
-        
+
         // Timestamps
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -4248,7 +4361,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '88997766001',
         original_claim_amount: 345.67,
         document_ids: ['demo-doc-2'],
-        
+
         contact_status: 'responded',
         response_received_at: new Date().toISOString(),
         current_debt_amount: 410.20,
@@ -4256,7 +4369,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 410.20,
         amount_source: 'creditor_response',
         extraction_confidence: 0.88,
-        
+
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       },
@@ -4269,7 +4382,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '99888777666',
         original_claim_amount: 1200.00,
         document_ids: ['demo-doc-3'],
-        
+
         contact_status: 'timeout',
         response_received_at: null,
         current_debt_amount: null,
@@ -4277,7 +4390,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 1200.00, // Using original amount due to timeout
         amount_source: 'original_document',
         extraction_confidence: 0.0,
-        
+
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       },
@@ -4290,7 +4403,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '11223344556',
         original_claim_amount: 3450.80,
         document_ids: ['demo-doc-4'],
-        
+
         contact_status: 'responded',
         response_received_at: new Date().toISOString(),
         current_debt_amount: 3650.95,
@@ -4298,7 +4411,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 3650.95,
         amount_source: 'creditor_response',
         extraction_confidence: 0.93,
-        
+
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       },
@@ -4311,7 +4424,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '77888999000',
         original_claim_amount: 189.95,
         document_ids: ['demo-doc-5'],
-        
+
         contact_status: 'responded',
         response_received_at: new Date().toISOString(),
         current_debt_amount: 220.45,
@@ -4319,7 +4432,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 220.45,
         amount_source: 'creditor_response',
         extraction_confidence: 0.91,
-        
+
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       },
@@ -4332,7 +4445,7 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         reference_number: '33445566778',
         original_claim_amount: 8750.45,
         document_ids: ['demo-doc-6'],
-        
+
         contact_status: 'response_unclear',
         response_received_at: new Date().toISOString(),
         current_debt_amount: 0, // Unclear response
@@ -4340,22 +4453,22 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         final_debt_amount: 8750.45, // Using original amount due to unclear response
         amount_source: 'original_document',
         extraction_confidence: 0.1,
-        
+
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
     ];
-    
+
     // Add contacts to creditorContactService
     for (const contact of demoContacts) {
       creditorContactService.creditorContacts.set(contact.id, contact);
     }
-    
+
     const totalDebt = demoContacts.reduce((sum, contact) => sum + contact.final_debt_amount, 0);
-    
+
     console.log(`✅ Created ${demoContacts.length} demo creditor contacts`);
     console.log(`💰 Total debt: ${totalDebt} EUR`);
-    
+
     res.json({
       success: true,
       client_id: clientId,
@@ -4369,12 +4482,12 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
         contact_status: c.contact_status
       }))
     });
-    
+
   } catch (error) {
     console.error('Error creating demo creditor contacts:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error creating demo creditor contacts',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4383,21 +4496,21 @@ app.post('/api/test/create-demo-creditor-contacts/:clientId', (req, res) => {
 app.get('/api/test/garnishment-calculator', (req, res) => {
   try {
     console.log('🧪 Testing garnishment calculator...');
-    
+
     const testPassed = garnishmentCalculator.testCalculator();
-    
+
     res.json({
       success: true,
       testPassed: testPassed,
       message: testPassed ? 'All tests passed!' : 'Some tests failed - check server logs',
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error testing garnishment calculator:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error testing garnishment calculator',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4407,22 +4520,22 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`📊 Generating financial overview for client: ${clientId}`);
-    
+
     // Get creditor contact status
     const creditorStatus = await creditorContactService.getClientCreditorStatus(clientId);
-    
+
     // Get total debt calculation
     const debtResult = garnishmentCalculator.calculateTotalDebtFromCreditors(
-      clientId, 
+      clientId,
       creditorContactService
     );
-    
+
     const overview = {
       client_info: {
         id: clientId,
@@ -4431,7 +4544,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
         phone: client.phone,
         workflow_status: client.workflow_status
       },
-      
+
       // Phase 1 status
       document_processing: {
         total_documents: client.documents.length,
@@ -4439,7 +4552,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
         admin_approved: client.admin_approved,
         client_confirmed: client.client_confirmed_creditors
       },
-      
+
       // Creditor communication status
       creditor_communication: {
         zendesk_sync_status: creditorStatus.sync_info ? 'completed' : 'not_started',
@@ -4448,7 +4561,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
         responses_received: creditorStatus.summary.responses_received,
         main_ticket_id: creditorStatus.main_ticket_id
       },
-      
+
       // Debt analysis
       debt_analysis: debtResult.success ? {
         total_debt: debtResult.totalDebt,
@@ -4459,7 +4572,7 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
         error: debtResult.error,
         ready_for_restructuring: false
       },
-      
+
       // Next steps
       next_steps: {
         phase_1_complete: client.client_confirmed_creditors && creditorStatus.summary.emails_sent > 0,
@@ -4468,14 +4581,14 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
         needs_garnishment_calculation: true
       }
     };
-    
+
     res.json(overview);
-    
+
   } catch (error) {
     console.error('Error generating financial overview:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error generating financial overview',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -4488,15 +4601,15 @@ app.get('/api/clients/:clientId/financial-overview', async (req, res) => {
 app.get('/api/test/phase2/stats', (req, res) => {
   try {
     console.log('📊 Getting test data statistics...');
-    
+
     const stats = testDataService.getTestDataStats();
-    
+
     res.json({
       success: true,
       stats: stats,
       message: 'Test data statistics retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting test data stats:', error.message);
     res.status(500).json({
@@ -4511,16 +4624,16 @@ app.get('/api/test/phase2/stats', (req, res) => {
 app.get('/api/test/phase2/financial-profiles', (req, res) => {
   try {
     console.log('👥 Getting all financial profiles...');
-    
+
     const profiles = testDataService.getAllFinancialProfiles();
-    
+
     res.json({
       success: true,
       profiles: profiles,
       count: profiles.length,
       message: 'Financial profiles retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting financial profiles:', error.message);
     res.status(500).json({
@@ -4536,22 +4649,22 @@ app.get('/api/test/phase2/financial-profiles/:profileId', (req, res) => {
   try {
     const profileId = req.params.profileId;
     console.log(`👤 Getting financial profile: ${profileId}`);
-    
+
     const profile = testDataService.getFinancialProfile(profileId);
-    
+
     if (!profile) {
       return res.status(404).json({
         success: false,
         error: `Financial profile '${profileId}' not found`
       });
     }
-    
+
     res.json({
       success: true,
       profile: profile,
       message: 'Financial profile retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting financial profile:', error.message);
     res.status(500).json({
@@ -4567,7 +4680,7 @@ app.post('/api/test/phase2/test-financial-profile/:profileId', (req, res) => {
   try {
     const profileId = req.params.profileId;
     console.log(`🧪 Testing financial profile: ${profileId}`);
-    
+
     const profile = testDataService.getFinancialProfile(profileId);
     if (!profile) {
       return res.status(404).json({
@@ -4575,20 +4688,20 @@ app.post('/api/test/phase2/test-financial-profile/:profileId', (req, res) => {
         error: `Financial profile '${profileId}' not found`
       });
     }
-    
+
     // Run calculation
     const result = garnishmentCalculator.calculate(
       profile.client_data.netIncome,
       profile.client_data.maritalStatus,
       profile.client_data.numberOfChildren
     );
-    
+
     // Validate results
     const validation = testDataService.validateResults(
       { garnishableIncome: result.garnishableAmount },
       profile.expected_results
     );
-    
+
     res.json({
       success: true,
       profile: profile,
@@ -4596,7 +4709,7 @@ app.post('/api/test/phase2/test-financial-profile/:profileId', (req, res) => {
       validation: validation,
       message: validation.valid ? 'Test passed successfully' : 'Test validation failed'
     });
-    
+
   } catch (error) {
     console.error('❌ Error testing financial profile:', error.message);
     res.status(500).json({
@@ -4611,18 +4724,18 @@ app.post('/api/test/phase2/test-financial-profile/:profileId', (req, res) => {
 app.get('/api/test/phase2/run-financial-tests', (req, res) => {
   try {
     console.log('🧪 Running all financial profile tests...');
-    
+
     const testResults = testDataService.runFinancialProfileTests(
-      (netIncome, maritalStatus, numberOfChildren) => 
+      (netIncome, maritalStatus, numberOfChildren) =>
         garnishmentCalculator.calculate(netIncome, maritalStatus, numberOfChildren)
     );
-    
+
     res.json({
       success: true,
       test_results: testResults,
       message: `Financial tests completed: ${testResults.passed}/${testResults.total} passed`
     });
-    
+
   } catch (error) {
     console.error('❌ Error running financial tests:', error.message);
     res.status(500).json({
@@ -4638,18 +4751,18 @@ app.post('/api/test/phase2/create-test-client/:testCaseId', (req, res) => {
   try {
     const testCaseId = req.params.testCaseId;
     console.log(`🏗️ Creating test client for case: ${testCaseId}`);
-    
+
     const testData = testDataService.createTestClient(testCaseId);
     const clientId = testData.clientData.id;
-    
+
     // Add to clients data
     clientsData[clientId] = testData.clientData;
-    
+
     // Add creditor contacts to service
     creditorContactService.creditorContacts = testData.creditorContacts;
-    
+
     console.log(`✅ Test client created: ${clientId}`);
-    
+
     res.json({
       success: true,
       client_id: clientId,
@@ -4658,7 +4771,7 @@ app.post('/api/test/phase2/create-test-client/:testCaseId', (req, res) => {
       test_case: testData.testCase,
       message: `Test client '${clientId}' created successfully`
     });
-    
+
   } catch (error) {
     console.error('❌ Error creating test client:', error.message);
     res.status(500).json({
@@ -4674,15 +4787,15 @@ app.post('/api/test/phase2/run-integration-test/:testCaseId', async (req, res) =
   try {
     const testCaseId = req.params.testCaseId;
     console.log(`🔬 Running integration test: ${testCaseId}`);
-    
+
     // Create test client
     const testData = testDataService.createTestClient(testCaseId);
     const clientId = testData.clientData.id;
-    
+
     // Temporarily add to system
     clientsData[clientId] = testData.clientData;
     creditorContactService.creditorContacts = testData.creditorContacts;
-    
+
     try {
       // Run garnishment calculation
       const garnishmentResult = garnishmentCalculator.calculateGarnishableIncome2025(
@@ -4690,21 +4803,21 @@ app.post('/api/test/phase2/run-integration-test/:testCaseId', async (req, res) =
         testData.clientData.financial_data.maritalStatus,
         testData.clientData.financial_data.numberOfChildren
       );
-      
+
       // Run creditor quota calculation
       const quotasResult = garnishmentCalculator.calculateCreditorQuotas(
         clientId,
         garnishmentResult.garnishableAmount,
         creditorContactService
       );
-      
+
       // Generate restructuring analysis
       const analysisResult = garnishmentCalculator.generateRestructuringAnalysis(
         clientId,
         testData.clientData.financial_data,
         creditorContactService
       );
-      
+
       // Validate results
       const validation = testDataService.validateResults(
         {
@@ -4715,7 +4828,7 @@ app.post('/api/test/phase2/run-integration-test/:testCaseId', async (req, res) =
         },
         testData.testCase.expected_calculations
       );
-      
+
       res.json({
         success: true,
         test_case_id: testCaseId,
@@ -4728,13 +4841,13 @@ app.post('/api/test/phase2/run-integration-test/:testCaseId', async (req, res) =
         validation: validation,
         message: validation.valid ? 'Integration test passed' : 'Integration test failed validation'
       });
-      
+
     } finally {
       // Clean up test data
       delete clientsData[clientId];
       creditorContactService.creditorContacts.clear();
     }
-    
+
   } catch (error) {
     console.error('❌ Error running integration test:', error.message);
     res.status(500).json({
@@ -4749,16 +4862,16 @@ app.post('/api/test/phase2/run-integration-test/:testCaseId', async (req, res) =
 app.get('/api/test/phase2/creditor-scenarios', (req, res) => {
   try {
     console.log('🏛️ Getting creditor scenarios...');
-    
+
     const scenarios = testDataService.creditorResponses?.test_scenarios || [];
-    
+
     res.json({
       success: true,
       scenarios: scenarios,
       count: scenarios.length,
       message: 'Creditor scenarios retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting creditor scenarios:', error.message);
     res.status(500).json({
@@ -4773,16 +4886,16 @@ app.get('/api/test/phase2/creditor-scenarios', (req, res) => {
 app.get('/api/test/phase2/workflow-tests', (req, res) => {
   try {
     console.log('🔗 Getting workflow test cases...');
-    
+
     const testCases = testDataService.integrationTestCases?.complete_workflow_tests || [];
-    
+
     res.json({
       success: true,
       test_cases: testCases,
       count: testCases.length,
       message: 'Workflow test cases retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting workflow tests:', error.message);
     res.status(500).json({
@@ -4797,7 +4910,7 @@ app.get('/api/test/phase2/workflow-tests', (req, res) => {
 app.get('/api/test/phase2/garnishment-edge-cases', (req, res) => {
   try {
     console.log('⚡ Testing garnishment calculator edge cases...');
-    
+
     const edgeCases = [
       // Below threshold
       { income: 1559, marital: 'ledig', children: 0, expected: 0 },
@@ -4810,16 +4923,16 @@ app.get('/api/test/phase2/garnishment-edge-cases', (req, res) => {
       // Large family protection
       { income: 3000, marital: 'verheiratet', children: 5, expected: 0 }
     ];
-    
+
     const results = edgeCases.map(testCase => {
       const result = garnishmentCalculator.calculate(
         testCase.income,
         testCase.marital,
         testCase.children
       );
-      
+
       const passed = Math.abs(result.garnishableAmount - testCase.expected) < 0.01;
-      
+
       return {
         input: testCase,
         actual_result: result.garnishableAmount,
@@ -4828,9 +4941,9 @@ app.get('/api/test/phase2/garnishment-edge-cases', (req, res) => {
         difference: Math.abs(result.garnishableAmount - testCase.expected)
       };
     });
-    
+
     const passedCount = results.filter(r => r.passed).length;
-    
+
     res.json({
       success: true,
       edge_case_results: results,
@@ -4841,7 +4954,7 @@ app.get('/api/test/phase2/garnishment-edge-cases', (req, res) => {
       },
       message: `Edge case tests completed: ${passedCount}/${results.length} passed`
     });
-    
+
   } catch (error) {
     console.error('❌ Error testing edge cases:', error.message);
     res.status(500).json({
@@ -4857,7 +4970,7 @@ app.post('/api/clients/:clientId/process-documents-to-creditors', (req, res) => 
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -4929,7 +5042,7 @@ app.post('/api/clients/:clientId/fix-creditor-contacts', (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = clientsData[clientId];
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -4940,7 +5053,7 @@ app.post('/api/clients/:clientId/fix-creditor-contacts', (req, res) => {
     if (client.final_creditor_list && client.final_creditor_list.length > 0) {
       client.final_creditor_list.forEach((creditor, index) => {
         const contactId = `${clientId}-contact-${index + 1}`;
-        
+
         // Create creditor contact entry
         creditorContactService.creditorContacts.set(contactId, {
           id: contactId,
@@ -4994,27 +5107,27 @@ app.post('/api/test/phase2/init-demo-client', (req, res) => {
   try {
     const clientId = '12345';
     console.log('🚀 Initializing demo data for client 12345...');
-    
+
     // Create test client with high debt scenario
     const testData = testDataService.createTestClient('standard_debt_restructuring');
-    
+
     // Update existing client 12345 with financial data
     if (clientsData[clientId]) {
       clientsData[clientId].financial_data = testData.clientData.financial_data;
       clientsData[clientId].phase = 2;
       clientsData[clientId].workflow_status = 'creditor_contact_completed';
     }
-    
+
     // Add creditor contacts to service for client 12345
     const demoCreditorContacts = testDataService.generateMockCreditorContacts(clientId, 'high_debt_multiple_creditors');
-    
+
     // Add contacts to the service
     demoCreditorContacts.forEach((contact, contactId) => {
       creditorContactService.creditorContacts.set(contactId, contact);
     });
-    
+
     console.log(`✅ Demo client initialized with ${demoCreditorContacts.size} creditor contacts`);
-    
+
     res.json({
       success: true,
       client_id: clientId,
@@ -5022,7 +5135,7 @@ app.post('/api/test/phase2/init-demo-client', (req, res) => {
       financial_data: clientsData[clientId]?.financial_data,
       message: 'Demo client 12345 initialized successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error initializing demo client:', error.message);
     res.status(500).json({
@@ -5037,22 +5150,22 @@ app.post('/api/test/phase2/init-demo-client', (req, res) => {
 app.post('/api/test/phase2/reset', (req, res) => {
   try {
     console.log('🔄 Resetting test data...');
-    
+
     // Clear creditor contacts
     creditorContactService.creditorContacts.clear();
-    
+
     // Reset client 12345 to default state
     if (clientsData['12345']) {
       delete clientsData['12345'].financial_data;
       clientsData['12345'].phase = 1;
       clientsData['12345'].workflow_status = 'documents_processing';
     }
-    
+
     res.json({
       success: true,
       message: 'Test data reset successfully'
     });
-    
+
   } catch (error) {
     console.error('❌ Error resetting test data:', error.message);
     res.status(500).json({
@@ -5064,15 +5177,15 @@ app.post('/api/test/phase2/reset', (req, res) => {
 });
 
 // Manual trigger for document reminder check (admin only)
-app.post('/api/admin/trigger-document-reminders', 
+app.post('/api/admin/trigger-document-reminders',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
     try {
       console.log('📧 Admin triggered manual document reminder check');
-      
+
       const result = await documentReminderService.checkAndSendReminders();
-      
+
       res.json({
         success: true,
         message: 'Document reminder check completed',
@@ -5080,7 +5193,7 @@ app.post('/api/admin/trigger-document-reminders',
         remindersSent: result.remindersSent,
         errors: result.errors
       });
-      
+
     } catch (error) {
       console.error('Error in manual document reminder trigger:', error);
       res.status(500).json({
@@ -5092,18 +5205,18 @@ app.post('/api/admin/trigger-document-reminders',
 );
 
 // Check document upload status for specific client
-app.post('/api/admin/check-document-status/:clientId', 
+app.post('/api/admin/check-document-status/:clientId',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
     try {
       const { clientId } = req.params;
       console.log(`📄 Admin checking document status for client ${clientId}`);
-      
+
       const result = await documentReminderService.checkDocumentUploadStatus(clientId);
-      
+
       res.json(result);
-      
+
     } catch (error) {
       console.error('Error checking document status:', error);
       res.status(500).json({
@@ -5119,29 +5232,29 @@ app.use((error, req, res, next) => {
   console.error('❌ Express Error Handler:', error);
   console.error('Error Type:', error.constructor.name);
   console.error('Error Stack:', error.stack);
-  
+
   // Handle JSON parsing errors
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
     console.error('JSON Parse Error - Request Body:', req.body);
     console.error('JSON Parse Error - Raw Body:', error.body);
-    return res.status(400).json({ 
-      error: 'Invalid JSON', 
+    return res.status(400).json({
+      error: 'Invalid JSON',
       details: error.message,
       type: 'JSON_PARSE_ERROR'
     });
   }
-  
+
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        error: 'Datei zu groß. Maximale Größe: 10MB' 
+      return res.status(400).json({
+        error: 'Datei zu groß. Maximale Größe: 10MB'
       });
     }
   }
-  
-  res.status(500).json({ 
-    error: 'Server error', 
-    details: error.message 
+
+  res.status(500).json({
+    error: 'Server error',
+    details: error.message
   });
 });
 
@@ -5155,7 +5268,7 @@ const loginReminderService = new LoginReminderService();
 function startScheduledTasks() {
   // Run document reminder check every hour
   const REMINDER_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
-  
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled document reminder check...');
@@ -5165,10 +5278,10 @@ function startScheduledTasks() {
       console.error('❌ Error in scheduled document reminder check:', error);
     }
   }, REMINDER_CHECK_INTERVAL);
-  
+
   // Run delayed processing webhook check every 30 minutes
   const DELAYED_WEBHOOK_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
-  
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled delayed webhook check...');
@@ -5180,10 +5293,10 @@ function startScheduledTasks() {
       console.error('❌ Error in scheduled delayed webhook check:', error);
     }
   }, DELAYED_WEBHOOK_CHECK_INTERVAL);
-  
+
   // Run login reminder check every 6 hours (for 7-day cycle checks)
   const LOGIN_REMINDER_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-  
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled login reminder check...');
@@ -5193,10 +5306,10 @@ function startScheduledTasks() {
       console.error('❌ Error in scheduled login reminder check:', error);
     }
   }, LOGIN_REMINDER_CHECK_INTERVAL);
-  
+
   // Run 7-day review check every hour
   const SEVEN_DAY_REVIEW_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
-  
+
   setInterval(async () => {
     try {
       console.log('\n⏰ Running scheduled 3-minute review check (TEST MODE)...');
@@ -5208,7 +5321,7 @@ function startScheduledTasks() {
       console.error('❌ Error in scheduled 3-minute review check:', error);
     }
   }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
-  
+
   // Run auto-confirmation check every 7 hours (PRODUCTION MODE)
   const AUTO_CONFIRMATION_CHECK_INTERVAL = 7 * 60 * 60 * 1000; // 7 hours in milliseconds (25200000 ms)
 
@@ -5223,7 +5336,7 @@ function startScheduledTasks() {
       console.error('❌ Error in scheduled auto-confirmation check:', error);
     }
   }, AUTO_CONFIRMATION_CHECK_INTERVAL);
-  
+
   // Run initial checks after 1 minute
   setTimeout(async () => {
     try {
@@ -5234,7 +5347,7 @@ function startScheduledTasks() {
       console.error('❌ Error in initial document reminder check:', error);
     }
   }, 60000); // 1 minute
-  
+
   // Run initial delayed webhook check after 2 minutes
   setTimeout(async () => {
     try {
@@ -5247,7 +5360,7 @@ function startScheduledTasks() {
       console.error('❌ Error in initial delayed webhook check:', error);
     }
   }, 120000); // 2 minutes
-  
+
   // Run initial login reminder check after 3 minutes
   setTimeout(async () => {
     try {
@@ -5258,7 +5371,7 @@ function startScheduledTasks() {
       console.error('❌ Error in initial login reminder check:', error);
     }
   }, 180000); // 3 minutes
-  
+
   // Run initial auto-confirmation check after 5 minutes (PRODUCTION MODE)
   setTimeout(async () => {
     try {
@@ -5271,7 +5384,7 @@ function startScheduledTasks() {
       console.error('❌ Error in initial auto-confirmation check:', error);
     }
   }, 300000); // 5 minutes (PRODUCTION MODE)
-  
+
   console.log('📅 Scheduled tasks started:');
   console.log('  • Document reminders: every hour');
   console.log('  • Delayed processing webhooks: every 30 minutes');
@@ -5289,20 +5402,20 @@ app.post('/api/admin/clients/:clientId/financial-data', authenticateAdmin, async
   try {
     const clientId = req.params.clientId;
     const { net_income, dependents, marital_status, input_by } = req.body;
-    
+
     console.log(`💰 Saving financial data for client: ${clientId}`);
-    
+
     // Validate required parameters
     if (!net_income || !marital_status) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: net_income, marital_status' 
+      return res.status(400).json({
+        error: 'Missing required parameters: net_income, marital_status'
       });
     }
-    
+
     // Calculate pfändbar amount using existing calculator
     const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
     const garnishmentResult = germanGarnishmentCalculator.calculate(net_income, marital_status, dependents || 0);
-    
+
     // Find and update client using the safe helper
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       client.financial_data = {
@@ -5315,13 +5428,13 @@ app.post('/api/admin/clients/:clientId/financial-data', authenticateAdmin, async
       };
       return client;
     });
-    
+
     if (!updatedClient) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`✅ Financial data saved for ${updatedClient.aktenzeichen}: ${garnishmentResult.garnishableAmount} EUR pfändbar`);
-    
+
     res.json({
       success: true,
       client_id: updatedClient.id,
@@ -5329,7 +5442,7 @@ app.post('/api/admin/clients/:clientId/financial-data', authenticateAdmin, async
       financial_data: updatedClient.financial_data,
       garnishment_result: garnishmentResult
     });
-    
+
   } catch (error) {
     console.error('❌ Error saving financial data:', error.message);
     res.status(500).json({
@@ -5344,43 +5457,43 @@ app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => 
   try {
     const clientId = req.params.clientId;
     const { generated_by } = req.body;
-    
+
     console.log(`📊 Generating settlement plan for client: ${clientId}`);
-    
+
     // Find client with financial data
-    const client = await Client.findOne({ 
+    const client = await Client.findOne({
       $or: [
         { id: clientId },
         { aktenzeichen: clientId }
       ]
     });
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     if (!client.financial_data || !client.financial_data.pfaendbar_amount) {
-      return res.status(400).json({ 
-        error: 'Financial data not found. Please enter client financial information first.' 
+      return res.status(400).json({
+        error: 'Financial data not found. Please enter client financial information first.'
       });
     }
-    
+
     // Get creditor contacts for this client
     const CreditorContactService = require('./services/creditorContactService');
     const creditorService = new CreditorContactService();
-    
+
     // Get all creditor contacts for this client
     const creditorContacts = Array.from(creditorService.creditorContacts.values())
       .filter(contact => contact.client_reference === client.aktenzeichen);
-    
+
     if (creditorContacts.length === 0) {
       // Fallback: use final_creditor_list if no contact records exist
       if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
-        return res.status(400).json({ 
-          error: 'No creditors found for this client. Please ensure creditor contact has been initiated.' 
+        return res.status(400).json({
+          error: 'No creditors found for this client. Please ensure creditor contact has been initiated.'
         });
       }
-      
+
       // Use final_creditor_list data
       creditorContacts = client.final_creditor_list.map(creditor => ({
         creditor_name: creditor.sender_name || creditor.creditor_name,
@@ -5388,17 +5501,17 @@ app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => 
         reference_number: creditor.reference_number,
         original_claim_amount: creditor.claim_amount,
         final_debt_amount: creditor.creditor_response_amount || creditor.claim_amount || 100.00,
-        amount_source: creditor.creditor_response_amount ? 'creditor_response' : 
-                      creditor.claim_amount ? 'original_document' : 'default_fallback',
+        amount_source: creditor.creditor_response_amount ? 'creditor_response' :
+          creditor.claim_amount ? 'original_document' : 'default_fallback',
         contact_status: creditor.status === 'responded' ? 'responded' : 'no_response'
       }));
     }
-    
+
     // Build final creditors list with amount prioritization
     const finalCreditors = creditorContacts.map(contact => {
       let amount = 100.00; // Default fallback
       let amount_source = 'default_fallback';
-      
+
       // Priority: Response > Original > Default
       if (contact.final_debt_amount > 0) {
         amount = contact.final_debt_amount;
@@ -5407,7 +5520,7 @@ app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => 
         amount = contact.original_claim_amount;
         amount_source = 'original_document';
       }
-      
+
       return {
         id: contact.id || require('uuid').v4(),
         name: contact.creditor_name,
@@ -5417,14 +5530,14 @@ app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => 
         contact_status: contact.contact_status || 'no_response'
       };
     });
-    
+
     // Calculate proportional distribution using existing calculator
     const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
     const quotas = germanGarnishmentCalculator.calculateCreditorQuotas(finalCreditors, client.financial_data.pfaendbar_amount);
-    
+
     // Calculate totals
     const totalDebt = finalCreditors.reduce((sum, creditor) => sum + creditor.amount, 0);
-    
+
     // Create settlement plan
     const settlementPlan = {
       created_at: new Date(),
@@ -5444,18 +5557,18 @@ app.post('/api/clients/:clientId/generate-settlement-plan', async (req, res) => 
       generated_by: generated_by || 'system',
       plan_notes: `Generated automatically after 30-day creditor response period. Total of ${finalCreditors.length} creditors processed.`
     };
-    
+
     // Create Zendesk ticket for the settlement plan
     let zendesk_ticket_id = null;
     try {
       const ZendeskService = require('./services/zendeskService');
       const zendeskService = new ZendeskService();
-      
+
       // Create formatted plan summary for Zendesk
-      const creditorSummary = settlementPlan.creditors.map((creditor, index) => 
+      const creditorSummary = settlementPlan.creditors.map((creditor, index) =>
         `${index + 1}. **${creditor.name}** - €${creditor.amount.toFixed(2)} (${creditor.percentage.toFixed(1)}%) → Monatlich: €${creditor.monthly_quota.toFixed(2)}\n   📧 ${creditor.email}\n   🏷️ ${creditor.amount_source} | Status: ${creditor.contact_status}`
       ).join('\n\n');
-      
+
       const ticketContent = `📊 **SCHULDENBEREINIGUNGSPLAN ERSTELLT**
 
 👤 **Mandant:** ${client.firstName} ${client.lastName} (${client.aktenzeichen})
@@ -5496,28 +5609,28 @@ ${creditorSummary}
         priority: 'normal',
         type: 'task'
       });
-      
+
       if (ticketResult.success) {
         zendesk_ticket_id = ticketResult.ticket.id;
         console.log(`✅ Created Zendesk ticket ${zendesk_ticket_id} for settlement plan`);
       } else {
         console.error('❌ Failed to create Zendesk ticket:', ticketResult.error);
       }
-      
+
     } catch (zendeskError) {
       console.error('❌ Error creating Zendesk ticket:', zendeskError.message);
       // Don't fail the whole process if Zendesk fails
     }
-    
+
     // Update settlement plan with Zendesk ticket ID
     settlementPlan.zendesk_ticket_id = zendesk_ticket_id;
-    
+
     // Save plan to client record
     client.debt_settlement_plan = settlementPlan;
     await client.save();
-    
+
     console.log(`✅ Settlement plan generated for ${client.aktenzeichen}: ${totalDebt} EUR total debt, ${client.financial_data.pfaendbar_amount} EUR monthly distribution`);
-    
+
     res.json({
       success: true,
       client_id: client.id,
@@ -5533,7 +5646,7 @@ ${creditorSummary}
       zendesk_ticket_created: !!zendesk_ticket_id,
       zendesk_ticket_id: zendesk_ticket_id
     });
-    
+
   } catch (error) {
     console.error('❌ Error generating settlement plan:', error.message);
     res.status(500).json({
@@ -5547,18 +5660,18 @@ ${creditorSummary}
 app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`📋 Settlement plan request for ${client.aktenzeichen}:`);
     console.log(`   - has_creditor_calculation: ${!!client.creditor_calculation_table}`);
     console.log(`   - calculation_table_length: ${client.creditor_calculation_table?.length || 0}`);
     console.log(`   - total_debt: ${client.creditor_calculation_total_debt || 'N/A'}`);
-    
+
     res.json({
       success: true,
       client_id: client.id,
@@ -5574,7 +5687,7 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
       creditor_calculation_created_at: client.creditor_calculation_created_at,
       settlement_plan: client.calculated_settlement_plan || client.debt_settlement_plan
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting settlement plan:', error.message);
     res.status(500).json({
@@ -5588,15 +5701,15 @@ app.get('/api/clients/:clientId/settlement-plan', async (req, res) => {
 app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`🕐 30-Day Simulation: Creating creditor calculation table for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
-    
+
     // Check if client has final_creditor_list
     if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
       return res.status(400).json({
@@ -5604,17 +5717,17 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         message: 'Client must have a final creditor list first. Please ensure documents are processed and creditors are approved.'
       });
     }
-    
+
     // Create creditor calculation table with 3-tier amount logic
     const currentTime = new Date().toISOString();
     const creditorCalculationTable = [];
     let totalDebt = 0;
-    
+
     client.final_creditor_list.forEach((creditor, index) => {
       let finalAmount = 0;
       let amountSource = 'default_fallback';
       let contactStatus = 'no_response';
-      
+
       // 3-Tier Logic:
       // 1. Check if we got a creditor response (priority 1)
       if (creditor.current_debt_amount && creditor.contact_status === 'responded') {
@@ -5640,9 +5753,9 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         amountSource = 'default_fallback';
         contactStatus = 'no_response';
       }
-      
+
       totalDebt += finalAmount;
-      
+
       creditorCalculationTable.push({
         id: creditor.id || `calc_${Date.now()}_${index}`,
         name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
@@ -5659,18 +5772,18 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         created_at: currentTime
       });
     });
-    
+
     // Store the creditor calculation table in the client record using safeClientUpdate
     console.log(`💾 Attempting to save creditor calculation table with ${creditorCalculationTable.length} creditors`);
-    
+
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       console.log(`📝 Before update - client has calculation table: ${!!client.creditor_calculation_table}`);
-      
+
       client.creditor_calculation_table = creditorCalculationTable;
       client.creditor_calculation_created_at = currentTime;
       client.creditor_calculation_total_debt = totalDebt;
       client.current_status = 'creditor_calculation_ready';
-      
+
       // Add a note about the calculation
       if (!client.admin_notes) {
         client.admin_notes = [];
@@ -5680,13 +5793,13 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
         note: `🕐 30-Day Simulation: Created creditor calculation table with ${creditorCalculationTable.length} creditors, total debt: €${totalDebt.toFixed(2)}`,
         admin: 'system_simulation'
       });
-      
+
       console.log(`📝 After update - client has calculation table: ${!!client.creditor_calculation_table}, length: ${client.creditor_calculation_table?.length}`);
       return client;
     });
-    
+
     console.log(`💾 After safeClientUpdate - updatedClient has calculation table: ${!!updatedClient.creditor_calculation_table}, length: ${updatedClient.creditor_calculation_table?.length}`);
-    
+
     // Generate automatic Schuldenbereinigungsplan calculation if financial data exists
     let settlementPlan = null;
     if (updatedClient.financial_data && updatedClient.financial_data.monthly_net_income) {
@@ -5698,13 +5811,13 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           dependents: updatedClient.financial_data.dependents
         });
         console.log(`   Creditors to include:`, creditorCalculationTable.length);
-        
+
         const financialData = {
           netIncome: updatedClient.financial_data.monthly_net_income,
           maritalStatus: updatedClient.financial_data.marital_status || 'ledig',
           numberOfChildren: updatedClient.financial_data.number_of_children || 0
         };
-        
+
         // Create mock creditor contact service that matches the expected interface
         const creditorContacts = new Map();
         creditorCalculationTable.forEach((creditor, index) => {
@@ -5718,24 +5831,24 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
             contact_status: creditor.contact_status
           });
         });
-        
+
         const creditorContactService = {
           creditorContacts: creditorContacts
         };
-        
+
         console.log(`🧮 Calling generateRestructuringAnalysis with:`, {
           clientId,
           financialData,
           creditorServiceType: typeof creditorContactService,
           creditorContactsCount: creditorContactService.creditorContacts?.size || 0
         });
-        
+
         settlementPlan = garnishmentCalculator.generateRestructuringAnalysis(
           clientId,
           financialData,
           creditorContactService
         );
-        
+
         console.log(`📊 Settlement plan result:`, {
           success: settlementPlan?.success,
           error: settlementPlan?.error,
@@ -5743,10 +5856,10 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           creditorCount: settlementPlan?.debtAnalysis?.creditorCount,
           totalDebt: settlementPlan?.debtAnalysis?.totalDebt
         });
-        
+
         if (settlementPlan && settlementPlan.success) {
           console.log(`✅ Settlement plan generated successfully: Garnishable income €${settlementPlan.garnishment?.garnishableAmount || 0}/month`);
-          
+
           // Save settlement plan to database (new field)
           await safeClientUpdate(clientId, async (client) => {
             client.calculated_settlement_plan = settlementPlan;
@@ -5756,7 +5869,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
           console.log(`⚠️ Settlement plan generation failed:`, settlementPlan);
           settlementPlan = { success: false, error: settlementPlan?.error || 'Unknown calculation error' };
         }
-        
+
       } catch (error) {
         console.error(`❌ Error generating settlement plan:`, error);
         settlementPlan = { success: false, error: error.message || 'Unknown error occurred' };
@@ -5764,9 +5877,9 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
     } else {
       console.log(`ℹ️ Skipping settlement plan generation - no financial data available`);
     }
-    
+
     console.log(`✅ 30-Day Simulation: Created calculation table for ${updatedClient.aktenzeichen} with ${creditorCalculationTable.length} creditors, total: €${totalDebt.toFixed(2)}`);
-    
+
     // INTEGRATION: Activate financial data form after 30-day simulation
     // This simulates the end of the creditor response period and makes the financial form available
     const finalUpdatedClient = await safeClientUpdate(clientId, async (client) => {
@@ -5776,7 +5889,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
       client.current_status = 'creditor_contact_active'; // Status that allows financial form
       return client;
     });
-    
+
     console.log(`🎯 Financial data form activated for ${finalUpdatedClient.aktenzeichen} - form should be available in client portal`);
 
     // Send financial data reminder email to client
@@ -5835,7 +5948,7 @@ app.post('/api/admin/clients/:clientId/simulate-30-day-period', authenticateAdmi
       settlement_plan: settlementPlan,
       created_at: currentTime
     });
-    
+
   } catch (error) {
     console.error('❌ Error in 30-day simulation:', error.message);
     res.status(500).json({
@@ -5850,15 +5963,15 @@ app.post('/api/admin/clients/:clientId/creditor-response', authenticateAdmin, as
   try {
     const clientId = req.params.clientId;
     const { creditor_id, response_amount, response_text } = req.body;
-    
+
     if (!creditor_id || !response_amount) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: creditor_id and response_amount' 
+      return res.status(400).json({
+        error: 'Missing required fields: creditor_id and response_amount'
       });
     }
-    
+
     console.log(`📧 Processing creditor response for client ${clientId}, creditor ${creditor_id}, amount: €${response_amount}`);
-    
+
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       // Update the creditor in final_creditor_list
       if (client.final_creditor_list) {
@@ -5869,13 +5982,13 @@ app.post('/api/admin/clients/:clientId/creditor-response', authenticateAdmin, as
           client.final_creditor_list[creditorIndex].amount_source = 'creditor_response';
           client.final_creditor_list[creditorIndex].contact_status = 'responded';
           client.final_creditor_list[creditorIndex].response_received_at = new Date().toISOString();
-          
+
           console.log(`✅ Updated creditor ${creditor_id} with response amount €${response_amount}`);
         } else {
           throw new Error(`Creditor ${creditor_id} not found in final_creditor_list`);
         }
       }
-      
+
       // If there's an existing creditor calculation table, update it too
       if (client.creditor_calculation_table && client.creditor_calculation_table.length > 0) {
         const calcIndex = client.creditor_calculation_table.findIndex(c => c.id === creditor_id);
@@ -5883,18 +5996,18 @@ app.post('/api/admin/clients/:clientId/creditor-response', authenticateAdmin, as
           client.creditor_calculation_table[calcIndex].final_amount = parseFloat(response_amount);
           client.creditor_calculation_table[calcIndex].amount_source = 'creditor_response';
           client.creditor_calculation_table[calcIndex].contact_status = 'responded';
-          
+
           // Recalculate total debt
           client.creditor_calculation_total_debt = client.creditor_calculation_table
             .reduce((sum, cred) => sum + cred.final_amount, 0);
-          
+
           console.log(`✅ Updated creditor calculation table, new total: €${client.creditor_calculation_total_debt}`);
         }
       }
-      
+
       return client;
     });
-    
+
     res.json({
       success: true,
       message: `Creditor response updated successfully`,
@@ -5902,7 +6015,7 @@ app.post('/api/admin/clients/:clientId/creditor-response', authenticateAdmin, as
       response_amount: parseFloat(response_amount),
       new_total_debt: updatedClient.creditor_calculation_total_debt
     });
-    
+
   } catch (error) {
     console.error('❌ Error updating creditor response:', error.message);
     res.status(500).json({
@@ -5917,13 +6030,13 @@ async function startServer() {
   try {
     // Initialize database first
     await initializeDatabase();
-    
+
     // Start the server
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`💾 Database: ${databaseService.isHealthy() ? 'MongoDB Connected' : 'In-Memory Fallback'}`);
-      
+
       // Start scheduled tasks
       startScheduledTasks();
     });
@@ -5934,90 +6047,90 @@ async function startServer() {
 }
 
 // Admin: Enhanced Dashboard Status (inline for consistent auth)
-app.get('/api/admin/dashboard-status', 
+app.get('/api/admin/dashboard-status',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    console.log('📊 Dashboard Status: Getting enhanced client statuses');
+    try {
+      console.log('📊 Dashboard Status: Getting enhanced client statuses');
 
-    const clients = await Client.find({}).sort({ updated_at: -1 });
-    console.log(`📊 Found ${clients.length} clients in MongoDB`);
-    
-    // Debug: Log all clients with their basic info
-    clients.forEach(client => {
-      console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email}`);
-    });
-    
-    const clientStatuses = clients.map(client => {
-      const status = getClientDisplayStatus(client);
-      
-      return {
-        id: client.id,
-        aktenzeichen: client.aktenzeichen,
-        name: `${client.firstName} ${client.lastName}`,
-        email: client.email,
-        created_at: client.created_at,
-        updated_at: client.updated_at,
-        
-        // Enhanced status info
-        payment: status.payment,
-        documents: status.documents,
-        processing: status.processing,
-        review: status.review,
-        overall_status: status.overall_status,
-        
-        // Raw data for detailed views
-        first_payment_received: client.first_payment_received,
-        payment_ticket_type: client.payment_ticket_type,
-        current_status: client.current_status,
-        documents_count: client.documents?.length || 0,
-        creditors_count: client.final_creditor_list?.length || 0,
-        
-        // Timestamps
-        payment_processed_at: client.payment_processed_at,
-        document_request_sent_at: client.document_request_sent_at,
-        all_documents_processed_at: client.all_documents_processed_at,
-        
-        // Actions needed
-        needs_attention: status.needs_attention,
-        next_action: status.next_action
+      const clients = await Client.find({}).sort({ updated_at: -1 });
+      console.log(`📊 Found ${clients.length} clients in MongoDB`);
+
+      // Debug: Log all clients with their basic info
+      clients.forEach(client => {
+        console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email}`);
+      });
+
+      const clientStatuses = clients.map(client => {
+        const status = getClientDisplayStatus(client);
+
+        return {
+          id: client.id,
+          aktenzeichen: client.aktenzeichen,
+          name: `${client.firstName} ${client.lastName}`,
+          email: client.email,
+          created_at: client.created_at,
+          updated_at: client.updated_at,
+
+          // Enhanced status info
+          payment: status.payment,
+          documents: status.documents,
+          processing: status.processing,
+          review: status.review,
+          overall_status: status.overall_status,
+
+          // Raw data for detailed views
+          first_payment_received: client.first_payment_received,
+          payment_ticket_type: client.payment_ticket_type,
+          current_status: client.current_status,
+          documents_count: client.documents?.length || 0,
+          creditors_count: client.final_creditor_list?.length || 0,
+
+          // Timestamps
+          payment_processed_at: client.payment_processed_at,
+          document_request_sent_at: client.document_request_sent_at,
+          all_documents_processed_at: client.all_documents_processed_at,
+
+          // Actions needed
+          needs_attention: status.needs_attention,
+          next_action: status.next_action
+        };
+      });
+
+      // Statistics
+      const stats = {
+        total_clients: clients.length,
+        payment_confirmed: clients.filter(c => c.first_payment_received).length,
+        awaiting_documents: clients.filter(c => c.payment_ticket_type === 'document_request').length,
+        processing: clients.filter(c => c.payment_ticket_type === 'processing_wait').length,
+        manual_review_needed: clients.filter(c => c.payment_ticket_type === 'manual_review').length,
+        auto_approved: clients.filter(c => c.payment_ticket_type === 'auto_approved').length,
+        no_creditors: clients.filter(c => c.payment_ticket_type === 'no_creditors_found').length,
+        needs_attention: clientStatuses.filter(c => c.needs_attention).length
       };
-    });
 
-    // Statistics
-    const stats = {
-      total_clients: clients.length,
-      payment_confirmed: clients.filter(c => c.first_payment_received).length,
-      awaiting_documents: clients.filter(c => c.payment_ticket_type === 'document_request').length,
-      processing: clients.filter(c => c.payment_ticket_type === 'processing_wait').length,
-      manual_review_needed: clients.filter(c => c.payment_ticket_type === 'manual_review').length,
-      auto_approved: clients.filter(c => c.payment_ticket_type === 'auto_approved').length,
-      no_creditors: clients.filter(c => c.payment_ticket_type === 'no_creditors_found').length,
-      needs_attention: clientStatuses.filter(c => c.needs_attention).length
-    };
+      res.json({
+        success: true,
+        clients: clientStatuses,
+        statistics: stats,
+        timestamp: new Date().toISOString()
+      });
 
-    res.json({
-      success: true,
-      clients: clientStatuses,
-      statistics: stats,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Error getting dashboard status:', error);
-    res.status(500).json({
-      error: 'Failed to get dashboard status',
-      details: error.message
-    });
-  }
-});
+    } catch (error) {
+      console.error('❌ Error getting dashboard status:', error);
+      res.status(500).json({
+        error: 'Failed to get dashboard status',
+        details: error.message
+      });
+    }
+  });
 
 // Helper function for client display status
 function getClientDisplayStatus(client) {
   const documents = client.documents || [];
   const creditors = client.final_creditor_list || [];
-  
+
   const status = {
     payment: client.first_payment_received ? '✅ Bezahlt' : '❌ Ausstehend',
     documents: `${documents.length} Dokumente`,
@@ -6027,14 +6140,14 @@ function getClientDisplayStatus(client) {
     needs_attention: false,
     next_action: 'Warten auf erste Rate'
   };
-  
+
   // Calculate processing status
   if (documents.length === 0) {
     status.processing = '❌ Keine Dokumente';
   } else {
     const completed = documents.filter(d => d.processing_status === 'completed');
     const processing = documents.filter(d => d.processing_status === 'processing');
-    
+
     if (completed.length === documents.length) {
       status.processing = '✅ Abgeschlossen';
     } else if (processing.length > 0) {
@@ -6043,13 +6156,13 @@ function getClientDisplayStatus(client) {
       status.processing = `📋 ${completed.length}/${documents.length}`;
     }
   }
-  
+
   // Calculate review status based on payment state
   if (!client.first_payment_received) {
     status.overall_status = 'awaiting_payment';
     status.review = '💰 Warte auf erste Rate';
     status.next_action = 'Warten auf erste Rate';
-  // Check for completed workflows first (current_status)
+    // Check for completed workflows first (current_status)
   } else if (client.current_status === 'manual_review_complete') {
     status.overall_status = 'review_complete';
     status.review = '✅ Prüfung abgeschlossen';
@@ -6076,41 +6189,41 @@ function getClientDisplayStatus(client) {
     status.next_action = 'Fall abgeschlossen';
     status.needs_attention = false;
   } else if (client.payment_ticket_type) {
-    switch(client.payment_ticket_type) {
+    switch (client.payment_ticket_type) {
       case 'document_request':
         status.overall_status = 'awaiting_documents';
         status.review = '📄 Warte auf Dokumente';
         status.next_action = 'Mandant kontaktieren - Dokumente anfordern';
         status.needs_attention = true;
         break;
-        
+
       case 'processing_wait':
         status.overall_status = 'processing';
         status.review = '⏳ AI verarbeitet';
         status.next_action = 'Warten auf AI-Verarbeitung';
         break;
-        
+
       case 'manual_review':
         status.overall_status = 'manual_review';
         status.review = '🔍 Manuelle Prüfung';
         status.next_action = 'Manuelle Gläubiger-Prüfung durchführen';
         status.needs_attention = true;
         break;
-        
+
       case 'auto_approved':
         status.overall_status = 'ready_for_confirmation';
         status.review = '✅ Bereit zur Bestätigung';
         status.next_action = 'Gläubigerliste an Mandant senden';
         status.needs_attention = true;
         break;
-        
+
       case 'no_creditors_found':
         status.overall_status = 'problem';
         status.review = '⚠️ Keine Gläubiger';
         status.next_action = 'Dokumente manuell prüfen';
         status.needs_attention = true;
         break;
-        
+
       default:
         status.overall_status = 'unknown';
         status.review = '❓ Unbekannt';
@@ -6124,7 +6237,7 @@ function getClientDisplayStatus(client) {
     status.next_action = 'System prüfen - Ticket-Typ fehlt';
     status.needs_attention = true;
   }
-  
+
   return status;
 }
 
@@ -6133,7 +6246,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -6146,9 +6259,9 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     const fileName = req.file.filename;
     const originalName = req.file.originalname;
     const filePath = req.file.path;
-    
+
     console.log(`📄 Processing uploaded document: ${originalName} for client ${clientId}`);
-    
+
     // Initialize document record
     const documentRecord = {
       id: documentId,
@@ -6175,8 +6288,8 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     // (additional_documents_review can occur when multiple documents are uploaded in succession)
     const previousStatus = client.current_status; // Store for Zendesk ticket logic
     const isInConfirmationPhase = (client.current_status === 'awaiting_client_confirmation' ||
-                                    client.current_status === 'additional_documents_review') &&
-                                    client.admin_approved === true;
+      client.current_status === 'additional_documents_review') &&
+      client.admin_approved === true;
 
     // Update client status to documents_uploaded if needed (but NOT if in confirmation phase)
     if (!isInConfirmationPhase && (client.current_status === 'created' || client.current_status === 'portal_access_sent')) {
@@ -6223,12 +6336,12 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
         // Add 3-second delay before processing each document
         console.log(`⏳ Waiting 3 seconds before processing: ${originalName}`);
         await new Promise(resolve => setTimeout(resolve, 3000));
-        
+
         console.log(`🤖 Starting AI processing for: ${originalName}`);
-        
+
         // Process with AI
         const processingResult = await documentProcessor.processDocument(filePath, originalName);
-        
+
         // Update document with processing results
         const docIndex = client.documents.findIndex(doc => doc.id === documentId);
         if (docIndex !== -1) {
@@ -6242,16 +6355,16 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             processed_at: new Date().toISOString(),
             processing_time_ms: processingResult.processing_time_ms || 0
           };
-          
+
           await saveClient(client);
           console.log(`✅ Document processing completed: ${originalName} - Creditor: ${processingResult.classification.is_creditor_document}`);
-          
+
           // Check if all documents are now completed and trigger status updates
           const updatedClient = await getClient(clientId);
           const completedDocs = updatedClient.documents.filter(doc => doc.processing_status === 'completed');
           const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
           const allDocsCompleted = completedDocs.length === updatedClient.documents.length && updatedClient.documents.length > 0;
-          
+
           // Update status based on processing results (regardless of payment status)
           if (allDocsCompleted) {
             if (creditorDocs.length > 0) {
@@ -6261,7 +6374,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
               updatedClient.current_status = 'no_creditors_found';
               console.log(`⚠️ All documents completed but no creditors found for client ${clientId}`);
             }
-            
+
             // Add status history entry
             updatedClient.status_history = updatedClient.status_history || [];
             updatedClient.status_history.push({
@@ -6281,8 +6394,8 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
           // ===== ITERATIVE LOOP: Check if client is in confirmation phase BEFORE scheduling webhook =====
           const clientStatus = updatedClient.current_status;
           const inConfirmationPhase = (clientStatus === 'awaiting_client_confirmation' ||
-                                        clientStatus === 'additional_documents_review') &&
-                                       updatedClient.admin_approved === true;
+            clientStatus === 'additional_documents_review') &&
+            updatedClient.admin_approved === true;
 
           if (inConfirmationPhase) {
             console.log(`🔄 Client ${clientId} is in confirmation phase (${clientStatus}) - skipping processing-complete webhook (iterative loop active)`);
@@ -6291,7 +6404,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
           // If payment is also received AND NOT in confirmation phase, populate creditor list and schedule delayed webhook
           if (allDocsCompleted && updatedClient.first_payment_received && !inConfirmationPhase) {
             console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
-            
+
             // Update final creditor list
             // Filter creditor documents that DON'T require manual review (auto-approved only)
             const creditorDocuments = completedDocs.filter(doc =>
@@ -6308,7 +6421,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             console.log(`📊 Found ${creditorDocuments.length} auto-approved creditor documents for extraction`);
             console.log(`⚠️ Found ${creditorDocsNeedingReview.length} creditor documents requiring manual review`);
             const extractedCreditors = [];
-            
+
             creditorDocuments.forEach(doc => {
               if (doc.extracted_data?.creditor_data) {
                 const creditorData = doc.extracted_data.creditor_data;
@@ -6331,7 +6444,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
                 });
               }
             });
-            
+
             // Update client with extracted creditors
             if (extractedCreditors.length > 0) {
               updatedClient.final_creditor_list = extractedCreditors;
@@ -6341,13 +6454,13 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
               updatedClient.current_status = 'no_creditors_found';
               console.log(`⚠️ No creditors extracted despite creditor documents being found`);
             }
-            
+
             await saveClient(updatedClient);
-            
+
             // Schedule delayed processing-complete webhook (24 hours)
             const delayedProcessingService = require('./services/delayedProcessingService');
             const delayService = new delayedProcessingService();
-            
+
             try {
               await delayService.scheduleProcessingCompleteWebhook(clientId, documentId, 24);
               console.log(`⏰ Scheduled processing-complete webhook for 24 hours from now`);
@@ -6358,10 +6471,10 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             }
           }
         }
-        
+
       } catch (processingError) {
         console.error(`❌ Error processing document ${originalName}:`, processingError);
-        
+
         // Update document with error
         const docIndex = client.documents.findIndex(doc => doc.id === documentId);
         if (docIndex !== -1) {
@@ -6371,7 +6484,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
             processing_error: processingError.message,
             processed_at: new Date().toISOString()
           };
-          
+
           await saveClient(client);
         }
       }
@@ -6467,9 +6580,9 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 
   } catch (error) {
     console.error('Error uploading document:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to upload document',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -6482,13 +6595,13 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
 async function triggerSecondRoundCreditorEmails(client, settlementPlan, settlementResult, overviewResult, ratenplanResult) {
   try {
     console.log(`📧 Starting second round creditor emails for ${client.aktenzeichen}`);
-    
+
     // Check if client has creditors to contact
     if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
       console.warn(`⚠️ No creditors found for ${client.aktenzeichen} - skipping email sending`);
       return;
     }
-    
+
     // Check if creditor contact service is available
     const CreditorContactService = require('./services/creditorContactService');
     const creditorService = new CreditorContactService();
@@ -6551,7 +6664,7 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
       } else {
         console.warn(`⚠️ sendSettlementPlanToCreditors method not yet implemented in CreditorContactService`);
         console.log(`📧 Would send settlement plan (${planType}) to ${(client.final_creditor_list || []).length} creditors`);
-        
+
         // Simulate success for now - documents are generated and ready
         emailResult = {
           success: true,
@@ -6588,23 +6701,23 @@ async function triggerSecondRoundCreditorEmails(client, settlementPlan, settleme
 async function processFinancialDataAndGenerateDocuments(client, garnishmentResult, planType) {
   try {
     console.log(`📄 Starting automatic document generation for ${client.aktenzeichen} (${planType})`);
-    
+
     // Check if document generation service is available
     const DocumentGenerator = require('./services/documentGenerator');
     const documentGenerator = new DocumentGenerator();
-    
+
     if (!documentGenerator.isAvailable()) {
       console.warn(`⚠️ Document generation unavailable - skipping for ${client.aktenzeichen}`);
       return;
     }
-    
+
     // Create settlement plan data structure
     const totalDebt = client.final_creditor_list?.reduce((sum, creditor) => sum + (creditor.claim_amount || 0), 0) || 0;
     const monthlyPayment = garnishmentResult.garnishableAmount;
     const durationMonths = 36;
     const totalPaymentAmount = monthlyPayment * durationMonths;
     const averageQuotaPercentage = totalDebt > 0 ? (totalPaymentAmount / totalDebt) * 100 : 0;
-    
+
     const settlementPlan = {
       plan_type: planType,
       monthly_payment: monthlyPayment,
@@ -6626,31 +6739,31 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
       })),
       generated_at: new Date().toISOString()
     };
-    
+
     // Update client with settlement plan
     client.calculated_settlement_plan = settlementPlan;
-    
+
     // Generate document based on plan type
     console.log(`📄 [DOCUMENT GENERATION] Plan Type: ${planType} for ${client.aktenzeichen}`);
     console.log(`📄 [DOCUMENT GENERATION] Monthly Payment: ${garnishmentResult.garnishableAmount} EUR`);
     console.log(`📄 [DOCUMENT GENERATION] Is Nullplan: ${planType === 'nullplan' ? 'YES → generateNullplanDocuments()' : 'NO → generateSchuldenbereinigungsplan()'}`);
-    
+
     // Prepare client data for document generation
     const clientData = {
       name: `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Client',
       email: client.email || '',
       reference: client.aktenzeichen
     };
-    
+
     let settlementResult;
     if (planType === 'nullplan') {
       console.log(`📄 [DOCUMENT GENERATION] Calling generateNullplanDocuments()...`);
       // Generate Nullplan document for clients with no garnishable income
       settlementResult = await documentGenerator.generateNullplanDocuments(client.aktenzeichen);
-      
+
       if (settlementResult.success) {
         console.log(`✅ Generated Nullplan documents:`);
-        
+
         // Log individual Nullplan letters
         if (settlementResult.nullplan_letters && settlementResult.nullplan_letters.documents) {
           console.log(`   - Nullplan Letters: ${settlementResult.nullplan_letters.documents.length} individual letters`);
@@ -6658,12 +6771,12 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
             console.log(`     ${index + 1}. ${doc.filename} (${doc.creditor_name})`);
           });
         }
-        
+
         // Log Forderungsübersicht
         if (settlementResult.forderungsuebersicht && settlementResult.forderungsuebersicht.document_info) {
           console.log(`   - Forderungsübersicht: ${settlementResult.forderungsuebersicht.document_info.filename}`);
         }
-        
+
         // Log Schuldenbereinigungsplan (quota table)
         if (settlementResult.schuldenbereinigungsplan && settlementResult.schuldenbereinigungsplan.filename) {
           console.log(`   - Schuldenbereinigungsplan: ${settlementResult.schuldenbereinigungsplan.filename}`);
@@ -6674,19 +6787,19 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
         client.nullplan_letters = settlementResult.nullplan_letters;
         client.forderungsuebersicht_document = settlementResult.forderungsuebersicht;
         client.schuldenbereinigungsplan_document = settlementResult.schuldenbereinigungsplan;
-        
+
         // Automatically send Nullplan to creditors
         console.log(`📧 Automatically sending Nullplan to creditors...`);
         try {
           const CreditorContactService = require('./services/creditorContactService');
           const creditorContactService = new CreditorContactService();
-          
+
           const nullplanData = {
             total_debt: totalDebt,
             creditors: client.final_creditor_list?.filter(c => c.status === 'confirmed') || [],
             plan_type: 'Nullplan'
           };
-          
+
           // Convert Nullplan document structure to expected format
           const nullplanDocuments = {
             nullplan_letters: settlementResult.nullplan_letters, // Include individual letters
@@ -6703,7 +6816,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
             nullplanData,
             nullplanDocuments
           );
-          
+
           if (emailResult.success) {
             console.log(`✅ Nullplan emails sent to ${emailResult.emails_sent}/${emailResult.total_creditors} creditors`);
             console.log(`🎫 Nullplan ticket ID: ${emailResult.settlement_ticket_id}`);
@@ -6749,28 +6862,28 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
         creditors: settlementPlan.creditors?.length || 0,
         creditor_payments: settlementPlan.creditor_payments?.length || 0
       })}`);
-      
+
       settlementResult = await documentGenerator.generateSchuldenbereinigungsplan(
         clientData,
         settlementPlan,
         settlementPlan // calculation result is part of settlement data
       );
-      
+
       console.log(`📄 [DOCUMENT GENERATION] generateSchuldenbereinigungsplan() result: ${settlementResult.success ? 'SUCCESS' : 'FAILED'}`);
-      
+
       if (settlementResult.success) {
         console.log(`✅ Generated settlement plan: ${settlementResult.document_info.filename}`);
       } else {
         console.error(`❌ Settlement plan generation failed: ${settlementResult.error}`);
       }
     }
-    
+
     // Generate Forderungsübersicht (Creditor Overview) - only for Schuldenbereinigungsplan cases
     // For Nullplan cases, Forderungsübersicht is already generated as part of generateNullplanDocuments
     let overviewResult;
     if (planType !== 'nullplan') {
       console.log(`📄 Generating Forderungsübersicht for ${client.aktenzeichen}...`);
-      
+
       // Prepare creditor data for document generation
       const creditorData = (client.final_creditor_list || []).map(creditor => ({
         creditor_name: creditor.sender_name || creditor.creditor_name || 'Unknown Creditor',
@@ -6784,16 +6897,16 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
         representative_info: creditor.representative_info || null,
         representative_reference: creditor.representative_reference || ''
       }));
-      
+
       try {
         const overviewDoc = await documentGenerator.generateForderungsuebersicht(
           clientData,
           creditorData
         );
-        
+
         // Save the document
         const saveResult = await documentGenerator.saveDocument(overviewDoc, client.aktenzeichen, `Forderungsübersicht_${client.aktenzeichen}_${new Date().toISOString().split('T')[0]}.docx`);
-        
+
         overviewResult = {
           success: true,
           document_info: {
@@ -6805,7 +6918,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
           },
           buffer: saveResult.buffer
         };
-        
+
         console.log(`✅ Generated creditor overview: ${overviewResult.document_info.filename}`);
       } catch (error) {
         console.error(`❌ Creditor overview generation failed: ${error.message}`);
@@ -6851,7 +6964,7 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
     } else {
       console.log(`✅ Nullplan emails already sent directly - skipping triggerSecondRoundCreditorEmails`);
     }
-    
+
   } catch (error) {
     console.error(`❌ processFinancialDataAndGenerateDocuments failed for ${client.aktenzeichen}:`, error);
     throw error;
@@ -6862,22 +6975,22 @@ async function processFinancialDataAndGenerateDocuments(client, garnishmentResul
 app.get('/api/clients/:clientId/financial-form-status', authenticateClient, async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     console.log(`🔍 Checking financial form status for client: ${clientId}`);
     console.log(`🔐 Authenticated client ID: ${req.clientId}`);
-    
+
     // Get the client to verify authentication
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Verify that the authenticated client matches the requested client
     // Check against both id and aktenzeichen fields
-    const isAuthorized = req.clientId === client.id || 
-                        req.clientId === client.aktenzeichen || 
-                        req.clientId === clientId;
-    
+    const isAuthorized = req.clientId === client.id ||
+      req.clientId === client.aktenzeichen ||
+      req.clientId === clientId;
+
     if (!isAuthorized) {
       console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
       return res.status(403).json({ error: 'Access denied - client ID mismatch' });
@@ -6885,32 +6998,32 @@ app.get('/api/clients/:clientId/financial-form-status', authenticateClient, asyn
 
     // Check if client has already submitted financial data
     const formAlreadySubmitted = client.financial_data?.client_form_filled || false;
-    
+
     // Check if 30-day creditor response period has passed
     let shouldShowForm = false;
     let periodStatus = 'not_started';
     let daysRemaining = null;
-    
+
     // Criteria for showing financial form - based on real creditor contact timeline:
     // 1. Client must have confirmed creditors (creditor contact was initiated)
     // 2. 30-day creditor response period must have passed
     // 3. Financial data hasn't been filled yet
-    
+
     if (!formAlreadySubmitted && client.creditor_contact_started && client.creditor_contact_started_at) {
-      
+
       // Calculate days since creditor contact started
       const contactStartDate = new Date(client.creditor_contact_started_at);
       const currentDate = new Date();
       const daysSinceContact = Math.floor((currentDate - contactStartDate) / (1000 * 60 * 60 * 24));
       const CREDITOR_RESPONSE_PERIOD_DAYS = 30; // Use 30 days as specified in flowchart
-      
+
       daysRemaining = Math.max(0, CREDITOR_RESPONSE_PERIOD_DAYS - daysSinceContact);
-      
+
       console.log(`⏰ Creditor response period check for ${client.aktenzeichen}:`);
       console.log(`   Contact started: ${contactStartDate.toLocaleDateString()}`);
       console.log(`   Days since contact: ${daysSinceContact}`);
       console.log(`   Days remaining in response period: ${daysRemaining}`);
-      
+
       if (daysSinceContact >= CREDITOR_RESPONSE_PERIOD_DAYS) {
         shouldShowForm = true;
         periodStatus = 'expired';
@@ -6919,7 +7032,7 @@ app.get('/api/clients/:clientId/financial-form-status', authenticateClient, asyn
         periodStatus = 'active';
         console.log(`⏳ Still waiting for creditor responses (${daysRemaining} days remaining)`);
       }
-      
+
     } else if (!client.creditor_contact_started) {
       periodStatus = 'not_started';
       console.log(`❌ Creditor contact not yet started for ${client.aktenzeichen}`);
@@ -6963,32 +7076,32 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
   try {
     const { clientId } = req.params;
     const { monthly_net_income, number_of_children, marital_status } = req.body;
-    
+
     console.log(`💰 Client submitting financial data: ${clientId}`);
     console.log(`🔐 Authenticated client ID: ${req.clientId}`);
     console.log(`📊 Data: €${monthly_net_income}, ${number_of_children} children, status: ${marital_status}`);
-    
+
     // Get the client to verify authentication
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Verify that the authenticated client matches the requested client
     // Check against both id and aktenzeichen fields
-    const isAuthorized = req.clientId === client.id || 
-                        req.clientId === client.aktenzeichen || 
-                        req.clientId === clientId;
-    
+    const isAuthorized = req.clientId === client.id ||
+      req.clientId === client.aktenzeichen ||
+      req.clientId === clientId;
+
     if (!isAuthorized) {
       console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
       return res.status(403).json({ error: 'Access denied - client ID mismatch' });
     }
-    
+
     // Validate required parameters
     if (!monthly_net_income || marital_status === undefined || number_of_children === undefined) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: monthly_net_income, number_of_children, marital_status' 
+      return res.status(400).json({
+        error: 'Missing required parameters: monthly_net_income, number_of_children, marital_status'
       });
     }
 
@@ -7005,22 +7118,22 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
     if (!validMaritalStatus.includes(marital_status)) {
       return res.status(400).json({ error: 'Invalid marital_status' });
     }
-    
+
     // Calculate garnishable amount using existing calculator
     const germanGarnishmentCalculator = new GermanGarnishmentCalculator();
     const garnishmentResult = germanGarnishmentCalculator.calculate(
-      parseFloat(monthly_net_income), 
-      marital_status, 
+      parseFloat(monthly_net_income),
+      marital_status,
       parseInt(number_of_children)
     );
-    
+
     // Determine recommended plan type based on garnishable amount
     // Use threshold of 1 EUR to handle rounding and treat very small amounts as 0
     const recommendedPlanType = garnishmentResult.garnishableAmount >= 1 ? 'quotenplan' : 'nullplan';
 
     console.log(`💰 Garnishment calculation result: €${garnishmentResult.garnishableAmount.toFixed(2)}`);
     console.log(`📊 Recommended plan type: ${recommendedPlanType} (threshold: €1.00)`);
-    
+
     // Find and update client using the safe helper
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       client.financial_data = {
@@ -7035,19 +7148,19 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
       };
       return client;
     });
-    
+
     if (!updatedClient) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`✅ Financial data saved for ${updatedClient.aktenzeichen}:`);
     console.log(`   Garnishable: €${garnishmentResult.garnishableAmount}/month`);
     console.log(`   Plan Type: ${recommendedPlanType} (automatically selected)`);
-    
+
     // Since we only have 2 plan types and selection is automatic, 
     // we can immediately proceed with document generation and creditor contact
     console.log(`🚀 Starting automatic workflow: ${recommendedPlanType} selected based on garnishment calculation`);
-    
+
     // Trigger automatic document generation
     try {
       await processFinancialDataAndGenerateDocuments(updatedClient, garnishmentResult, recommendedPlanType);
@@ -7055,7 +7168,7 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
       console.error(`❌ Error in automatic document generation for ${updatedClient.aktenzeichen}:`, docError);
       // Continue with response even if document generation fails
     }
-    
+
     res.json({
       success: true,
       client_id: updatedClient.id,
@@ -7064,7 +7177,7 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
       automatic_processing: {
         plan_type_selected: recommendedPlanType,
         document_generation_triggered: true,
-        next_steps: recommendedPlanType === 'quotenplan' 
+        next_steps: recommendedPlanType === 'quotenplan'
           ? 'Schuldenbereinigungsplan wird generiert - Monatliche Ratenzahlung basierend auf pfändbarem Einkommen'
           : 'Nullplan wird generiert - Keine regelmäßigen Zahlungen aufgrund fehlendem pfändbarem Einkommen'
       },
@@ -7077,7 +7190,7 @@ app.post('/api/clients/:clientId/financial-data', authenticateClient, async (req
         calculation_details: garnishmentResult
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Error saving client financial data:', error.message);
     res.status(500).json({
@@ -7092,31 +7205,31 @@ app.post('/api/clients/:clientId/address', authenticateClient, async (req, res) 
   try {
     const { clientId } = req.params;
     const { city, house_number, phone, street, zip_code } = req.body;
-    
+
     // Get the client to verify authentication
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Verify that the authenticated client matches the requested client
     // Check against both id and aktenzeichen fields
-    const isAuthorized = req.clientId === client.id || 
-                        req.clientId === client.aktenzeichen || 
-                        req.clientId === clientId;
-    
+    const isAuthorized = req.clientId === client.id ||
+      req.clientId === client.aktenzeichen ||
+      req.clientId === clientId;
+
     if (!isAuthorized) {
       console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
       return res.status(403).json({ error: 'Access denied - client ID mismatch' });
     }
-    
+
     // Validate required parameters
     if (!city || !house_number || !street || !zip_code) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: city, house number, street and zip code' 
+      return res.status(400).json({
+        error: 'Missing required parameters: city, house number, street and zip code'
       });
     }
-    
+
     // Find and update client using the safe helper
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       client.address = `${street} ${house_number}, ${zip_code} ${city}`.trim();
@@ -7128,19 +7241,19 @@ app.post('/api/clients/:clientId/address', authenticateClient, async (req, res) 
 
       return client;
     });
-    
+
     if (!updatedClient) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     console.log(`✅ Personal data saved for ${updatedClient.aktenzeichen}:`);
-    
+
     res.json({
       success: true,
       client_id: updatedClient.id,
       aktenzeichen: updatedClient.aktenzeichen,
     });
-    
+
   } catch (error) {
     console.error('❌ Error saving client personal data:', error.message);
     res.status(500).json({
@@ -7154,22 +7267,22 @@ app.post('/api/clients/:clientId/address', authenticateClient, async (req, res) 
 app.post('/api/clients/:clientId/reset-financial-data', authenticateClient, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     console.log(`🔄 Resetting financial data for client: ${clientId}`);
-    
+
     // Find and reset client data
     const Client = require('./models/Client');
-    const client = await Client.findOne({ 
+    const client = await Client.findOne({
       $or: [
         { _id: clientId },
         { aktenzeichen: clientId }
       ]
     });
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Reset all financial and settlement data
     client.financial_data = null;
     client.debt_settlement_plan = null;
@@ -7178,22 +7291,22 @@ app.post('/api/clients/:clientId/reset-financial-data', authenticateClient, asyn
     client.creditor_contact_started = false;
     client.creditor_contact_started_at = null;
     client.settlement_plan_sent_at = null;
-    
+
     await client.save();
-    
+
     console.log(`✅ Client data reset successfully for ${client.aktenzeichen}`);
-    
+
     res.json({
       success: true,
       message: 'Client data reset successfully',
       client_reference: client.aktenzeichen
     });
-    
+
   } catch (error) {
     console.error('❌ Error resetting client data:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -7202,46 +7315,46 @@ app.post('/api/clients/:clientId/reset-financial-data', authenticateClient, asyn
 app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     console.log(`🔄 Client requesting financial data reset: ${clientId}`);
     console.log(`🔐 Authenticated client ID: ${req.clientId}`);
-    
+
     // Get the client to verify authentication
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Verify that the authenticated client matches the requested client
-    const isAuthorized = req.clientId === client.id || 
-                        req.clientId === client.aktenzeichen || 
-                        req.clientId === clientId;
-    
+    const isAuthorized = req.clientId === client.id ||
+      req.clientId === client.aktenzeichen ||
+      req.clientId === clientId;
+
     if (!isAuthorized) {
       console.error(`❌ Client ID mismatch: authenticated=${req.clientId}, client.id=${client.id}, client.aktenzeichen=${client.aktenzeichen}, requested=${clientId}`);
       return res.status(403).json({ error: 'Access denied - client ID mismatch' });
     }
-    
+
     // Check if financial data exists
     if (!client.financial_data || !client.financial_data.client_form_filled) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'No financial data to reset',
         message: 'Financial form has not been submitted yet'
       });
     }
-    
+
     // Reset financial data using safeClientUpdate
     const updatedClient = await safeClientUpdate(clientId, async (client) => {
       // Reset financial data to null but keep historical record
       const previousData = { ...client.financial_data };
-      
+
       client.financial_data = {
         client_form_filled: false,
         form_reset_at: new Date(),
         previous_data: previousData,
         reset_count: (client.financial_data.reset_count || 0) + 1
       };
-      
+
       // Add note to admin_notes if it exists
       if (!client.admin_notes) {
         client.admin_notes = [];
@@ -7251,18 +7364,18 @@ app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (r
         note: `💰 Client reset financial data form (reset #${(client.financial_data.reset_count || 0) + 1})`,
         admin: 'client_self_reset'
       });
-      
+
       return client;
     });
-    
+
     if (!updatedClient) {
       return res.status(404).json({ error: 'Client not found during update' });
     }
-    
+
     console.log(`✅ Financial data reset for ${updatedClient.aktenzeichen}`);
     console.log(`   Previous garnishable amount: €${updatedClient.financial_data.previous_data?.garnishable_amount || 0}/month`);
     console.log(`   Reset count: ${updatedClient.financial_data.reset_count}`);
-    
+
     res.json({
       success: true,
       message: 'Financial data has been reset successfully',
@@ -7275,7 +7388,7 @@ app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (r
         can_resubmit: true
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Error resetting client financial data:', error.message);
     res.status(500).json({
@@ -7293,23 +7406,23 @@ app.delete('/api/clients/:clientId/financial-data', authenticateClient, async (r
 app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     // Get client's aktenzeichen for settlement services
     const aktenzeichen = await getClientAktenzeichen(clientId);
     if (!aktenzeichen) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Generate settlement response summary using aktenzeichen
     const result = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
-    
+
     res.json({
       success: true,
       client_id: clientId,
       aktenzeichen: aktenzeichen,
       settlement_responses: result
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting settlement responses:', error.message);
     res.status(500).json({
@@ -7324,23 +7437,23 @@ app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticat
   try {
     const clientId = req.params.clientId;
     const { timeoutDays = 30 } = req.body;
-    
+
     // Get client's aktenzeichen for settlement services
     const aktenzeichen = await getClientAktenzeichen(clientId);
     if (!aktenzeichen) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Process timeouts using aktenzeichen
     const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
-    
+
     res.json({
       success: true,
       client_id: clientId,
       aktenzeichen: aktenzeichen,
       timeout_processing: result
     });
-    
+
   } catch (error) {
     console.error('❌ Error processing settlement timeouts:', error.message);
     res.status(500).json({
@@ -7354,23 +7467,23 @@ app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticat
 app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     // Get client's aktenzeichen for settlement services
     const aktenzeichen = await getClientAktenzeichen(clientId);
     if (!aktenzeichen) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Get monitoring status using aktenzeichen
     const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
-    
+
     res.json({
       success: true,
       client_id: clientId,
       aktenzeichen: aktenzeichen,
       monitoring_status: status
     });
-    
+
   } catch (error) {
     console.error('❌ Error getting settlement monitoring status:', error.message);
     res.status(500).json({
@@ -7384,29 +7497,29 @@ app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticat
 app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdmin, async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    
+
     console.log(`🔧 Manual settlement tracking fix requested for client ${clientId}`);
-    
+
     // Get client's aktenzeichen
     const aktenzeichen = await getClientAktenzeichen(clientId);
     if (!aktenzeichen) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Get the client to check current state
     const client = await getClient(clientId);
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    
+
     // Check creditors without settlement_side_conversation_id
     const creditorsWithoutIds = client.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
     const creditorsWithIds = client.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
-    
+
     console.log(`📊 Settlement tracking status for ${aktenzeichen}:`);
     console.log(`   - Creditors with IDs: ${creditorsWithIds.length}`);
     console.log(`   - Creditors without IDs: ${creditorsWithoutIds.length}`);
-    
+
     if (creditorsWithoutIds.length === 0) {
       return res.json({
         success: true,
@@ -7418,11 +7531,11 @@ app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdm
         action_needed: false
       });
     }
-    
+
     // Try to find and apply any missing Side Conversation IDs from Zendesk
     const CreditorContactService = require('./services/creditorContactService');
     const creditorService = new CreditorContactService();
-    
+
     // Create mock email results for the robust update method
     const mockEmailResults = creditorsWithoutIds.map(creditor => ({
       success: true,
@@ -7433,19 +7546,19 @@ app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdm
       recipient_email: creditor.sender_email,
       manual_fix: true
     }));
-    
+
     console.log(`🔧 Attempting to fix ${mockEmailResults.length} creditor tracking IDs...`);
-    
+
     const fixResult = await creditorService.robustUpdateCreditorsWithRetry(aktenzeichen, mockEmailResults);
-    
+
     // Get updated client state
     const updatedClient = await getClient(clientId);
     const finalCreditorsWithIds = updatedClient.final_creditor_list?.filter(c => c.settlement_side_conversation_id) || [];
     const finalCreditorsWithoutIds = updatedClient.final_creditor_list?.filter(c => !c.settlement_side_conversation_id) || [];
-    
+
     res.json({
       success: fixResult.success,
-      message: fixResult.success ? 
+      message: fixResult.success ?
         `Fixed settlement tracking for ${fixResult.updated_count} creditors` :
         `Failed to fix settlement tracking: ${fixResult.error}`,
       client_id: clientId,
@@ -7461,7 +7574,7 @@ app.post('/api/admin/clients/:clientId/fix-settlement-tracking', authenticateAdm
       },
       creditors_fixed: finalCreditorsWithIds.length - creditorsWithIds.length
     });
-    
+
   } catch (error) {
     console.error('❌ Error fixing settlement tracking:', error.message);
     res.status(500).json({
@@ -7479,7 +7592,7 @@ app.post('/api/test/create-agent', async (_req, res) => {
 
     // Check if test agent already exists
     let testAgent = await Agent.findOne({ username: 'test2' });
-    
+
     if (testAgent) {
       console.log('✅ Test agent already exists');
       return res.json({
@@ -7494,7 +7607,7 @@ app.post('/api/test/create-agent', async (_req, res) => {
 
     // Create test agent
     const hashedPassword = await bcrypt.hash('testpassword123', 12);
-    
+
     testAgent = new Agent({
       id: uuidv4(),
       username: 'test2',
@@ -7507,7 +7620,7 @@ app.post('/api/test/create-agent', async (_req, res) => {
     });
 
     await testAgent.save();
-    
+
     console.log('✅ Test agent created successfully');
 
     res.json({
@@ -7529,549 +7642,549 @@ app.post('/api/test/create-agent', async (_req, res) => {
 });
 
 // Admin: Add manual creditor to any client (unrestricted)
-app.post('/api/admin/clients/:clientId/add-creditor', 
+app.post('/api/admin/clients/:clientId/add-creditor',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const { clientId } = req.params;
-    const {
-      sender_name,
-      sender_email,
-      sender_address,
-      reference_number,
-      claim_amount,
-      notes,
-      is_representative,
-      actual_creditor
-    } = req.body;
-
-    console.log(`👤 Admin adding manual creditor to client ${clientId}`);
-
-    // Validate required fields
-    if (!sender_name) {
-      return res.status(400).json({
-        error: 'sender_name is required'
-      });
-    }
-
-    // Find client (any client, no workflow restrictions)
-    let client;
     try {
-      // First try with string fields
-      client = await Client.findOne({ 
-        $or: [
-          { id: clientId },
-          { aktenzeichen: clientId }
-        ]
+      const { clientId } = req.params;
+      const {
+        sender_name,
+        sender_email,
+        sender_address,
+        reference_number,
+        claim_amount,
+        notes,
+        is_representative,
+        actual_creditor
+      } = req.body;
+
+      console.log(`👤 Admin adding manual creditor to client ${clientId}`);
+
+      // Validate required fields
+      if (!sender_name) {
+        return res.status(400).json({
+          error: 'sender_name is required'
+        });
+      }
+
+      // Find client (any client, no workflow restrictions)
+      let client;
+      try {
+        // First try with string fields
+        client = await Client.findOne({
+          $or: [
+            { id: clientId },
+            { aktenzeichen: clientId }
+          ]
+        });
+
+        // If not found and clientId looks like a MongoDB ObjectId, try _id
+        if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+          client = await Client.findOne({ _id: clientId });
+        }
+      } catch (findError) {
+        console.error('Error finding client:', findError);
+        client = null;
+      }
+
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: clientId
+        });
+      }
+
+      console.log(`📋 Adding creditor to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+      // Create new creditor
+      const newCreditor = {
+        id: uuidv4(),
+        sender_name: sender_name.trim(),
+        sender_email: sender_email?.trim() || '',
+        sender_address: sender_address?.trim() || '',
+        reference_number: reference_number?.trim() || '',
+        claim_amount: claim_amount ? parseFloat(claim_amount) : 0,
+        is_representative: is_representative === true,
+        actual_creditor: actual_creditor?.trim() || '',
+
+        // Manual creation metadata
+        status: 'confirmed',
+        confidence: 1.0, // Manual entry = 100% confidence
+        ai_confidence: 1.0,
+        manually_reviewed: true,
+        reviewed_by: req.adminId || req.agentId || 'admin',
+        reviewed_at: new Date(),
+        confirmed_at: new Date(),
+        created_at: new Date(),
+        created_via: 'admin_manual_entry',
+        correction_notes: notes?.trim() || 'Manually created by admin',
+        review_action: 'manually_created',
+
+        // Document association (optional)
+        document_id: null,
+        source_document: 'Manual Entry',
+        source_document_id: null
+      };
+
+      // Initialize final_creditor_list if it doesn't exist
+      if (!client.final_creditor_list) {
+        client.final_creditor_list = [];
+      }
+
+      // Add creditor to the list
+      client.final_creditor_list.push(newCreditor);
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'manual_creditor_added',
+        changed_by: 'admin',
+        metadata: {
+          creditor_name: sender_name,
+          creditor_amount: claim_amount || 0,
+          added_by: req.adminId || req.agentId || 'admin',
+          admin_action: 'manual_creditor_creation',
+          total_creditors: client.final_creditor_list.length
+        }
       });
-      
-      // If not found and clientId looks like a MongoDB ObjectId, try _id
-      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-        client = await Client.findOne({ _id: clientId });
-      }
-    } catch (findError) {
-      console.error('Error finding client:', findError);
-      client = null;
-    }
 
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: clientId
+      // Save client
+      await client.save();
+
+      console.log(`✅ Successfully added creditor "${sender_name}" to client ${client.aktenzeichen}`);
+
+      res.json({
+        success: true,
+        message: `Creditor "${sender_name}" added successfully`,
+        creditor: {
+          id: newCreditor.id,
+          sender_name: newCreditor.sender_name,
+          sender_email: newCreditor.sender_email,
+          claim_amount: newCreditor.claim_amount,
+          status: newCreditor.status
+        },
+        client: {
+          id: client.id,
+          name: `${client.firstName} ${client.lastName}`,
+          aktenzeichen: client.aktenzeichen,
+          total_creditors: client.final_creditor_list.length
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error adding manual creditor:', error);
+      res.status(500).json({
+        error: 'Failed to add creditor',
+        details: error.message
       });
     }
-
-    console.log(`📋 Adding creditor to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
-
-    // Create new creditor
-    const newCreditor = {
-      id: uuidv4(),
-      sender_name: sender_name.trim(),
-      sender_email: sender_email?.trim() || '',
-      sender_address: sender_address?.trim() || '',
-      reference_number: reference_number?.trim() || '',
-      claim_amount: claim_amount ? parseFloat(claim_amount) : 0,
-      is_representative: is_representative === true,
-      actual_creditor: actual_creditor?.trim() || '',
-      
-      // Manual creation metadata
-      status: 'confirmed',
-      confidence: 1.0, // Manual entry = 100% confidence
-      ai_confidence: 1.0,
-      manually_reviewed: true,
-      reviewed_by: req.adminId || req.agentId || 'admin',
-      reviewed_at: new Date(),
-      confirmed_at: new Date(),
-      created_at: new Date(),
-      created_via: 'admin_manual_entry',
-      correction_notes: notes?.trim() || 'Manually created by admin',
-      review_action: 'manually_created',
-      
-      // Document association (optional)
-      document_id: null,
-      source_document: 'Manual Entry',
-      source_document_id: null
-    };
-
-    // Initialize final_creditor_list if it doesn't exist
-    if (!client.final_creditor_list) {
-      client.final_creditor_list = [];
-    }
-
-    // Add creditor to the list
-    client.final_creditor_list.push(newCreditor);
-
-    // Add to status history
-    client.status_history.push({
-      id: uuidv4(),
-      status: 'manual_creditor_added',
-      changed_by: 'admin',
-      metadata: {
-        creditor_name: sender_name,
-        creditor_amount: claim_amount || 0,
-        added_by: req.adminId || req.agentId || 'admin',
-        admin_action: 'manual_creditor_creation',
-        total_creditors: client.final_creditor_list.length
-      }
-    });
-
-    // Save client
-    await client.save();
-
-    console.log(`✅ Successfully added creditor "${sender_name}" to client ${client.aktenzeichen}`);
-
-    res.json({
-      success: true,
-      message: `Creditor "${sender_name}" added successfully`,
-      creditor: {
-        id: newCreditor.id,
-        sender_name: newCreditor.sender_name,
-        sender_email: newCreditor.sender_email,
-        claim_amount: newCreditor.claim_amount,
-        status: newCreditor.status
-      },
-      client: {
-        id: client.id,
-        name: `${client.firstName} ${client.lastName}`,
-        aktenzeichen: client.aktenzeichen,
-        total_creditors: client.final_creditor_list.length
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Error adding manual creditor:', error);
-    res.status(500).json({
-      error: 'Failed to add creditor',
-      details: error.message
-    });
-  }
-});
+  });
 
 // Admin: Get all creditors for a specific client
-app.get('/api/admin/clients/:clientId/creditors', 
+app.get('/api/admin/clients/:clientId/creditors',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const { clientId } = req.params;
-
-    console.log(`📋 Admin requesting creditors for client ${clientId}`);
-
-    // Find client (any client, no workflow restrictions)
-    let client;
     try {
-      // First try with string fields
-      client = await Client.findOne({ 
-        $or: [
-          { id: clientId },
-          { aktenzeichen: clientId }
-        ]
-      });
-      
-      // If not found and clientId looks like a MongoDB ObjectId, try _id
-      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-        client = await Client.findOne({ _id: clientId });
+      const { clientId } = req.params;
+
+      console.log(`📋 Admin requesting creditors for client ${clientId}`);
+
+      // Find client (any client, no workflow restrictions)
+      let client;
+      try {
+        // First try with string fields
+        client = await Client.findOne({
+          $or: [
+            { id: clientId },
+            { aktenzeichen: clientId }
+          ]
+        });
+
+        // If not found and clientId looks like a MongoDB ObjectId, try _id
+        if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+          client = await Client.findOne({ _id: clientId });
+        }
+      } catch (findError) {
+        console.error('Error finding client:', findError);
+        client = null;
       }
-    } catch (findError) {
-      console.error('Error finding client:', findError);
-      client = null;
-    }
 
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: clientId
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: clientId
+        });
+      }
+
+      const creditors = client.final_creditor_list || [];
+
+      res.json({
+        success: true,
+        client: {
+          id: client.id,
+          name: `${client.firstName} ${client.lastName}`,
+          aktenzeichen: client.aktenzeichen,
+          current_status: client.current_status,
+          workflow_status: client.workflow_status
+        },
+        creditors: creditors.map(creditor => ({
+          id: creditor.id,
+          sender_name: creditor.sender_name,
+          sender_email: creditor.sender_email,
+          sender_address: creditor.sender_address,
+          reference_number: creditor.reference_number,
+          claim_amount: creditor.claim_amount,
+          status: creditor.status,
+          confidence: creditor.confidence || creditor.ai_confidence,
+          manually_reviewed: creditor.manually_reviewed,
+          created_via: creditor.created_via,
+          created_at: creditor.created_at,
+          reviewed_by: creditor.reviewed_by,
+          correction_notes: creditor.correction_notes
+        })),
+        total_creditors: creditors.length,
+        manual_creditors: creditors.filter(c => c.created_via === 'admin_manual_entry').length,
+        ai_creditors: creditors.filter(c => c.created_via !== 'admin_manual_entry').length
+      });
+
+    } catch (error) {
+      console.error('❌ Error getting client creditors:', error);
+      res.status(500).json({
+        error: 'Failed to get creditors',
+        details: error.message
       });
     }
-
-    const creditors = client.final_creditor_list || [];
-
-    res.json({
-      success: true,
-      client: {
-        id: client.id,
-        name: `${client.firstName} ${client.lastName}`,
-        aktenzeichen: client.aktenzeichen,
-        current_status: client.current_status,
-        workflow_status: client.workflow_status
-      },
-      creditors: creditors.map(creditor => ({
-        id: creditor.id,
-        sender_name: creditor.sender_name,
-        sender_email: creditor.sender_email,
-        sender_address: creditor.sender_address,
-        reference_number: creditor.reference_number,
-        claim_amount: creditor.claim_amount,
-        status: creditor.status,
-        confidence: creditor.confidence || creditor.ai_confidence,
-        manually_reviewed: creditor.manually_reviewed,
-        created_via: creditor.created_via,
-        created_at: creditor.created_at,
-        reviewed_by: creditor.reviewed_by,
-        correction_notes: creditor.correction_notes
-      })),
-      total_creditors: creditors.length,
-      manual_creditors: creditors.filter(c => c.created_via === 'admin_manual_entry').length,
-      ai_creditors: creditors.filter(c => c.created_via !== 'admin_manual_entry').length
-    });
-
-  } catch (error) {
-    console.error('❌ Error getting client creditors:', error);
-    res.status(500).json({
-      error: 'Failed to get creditors',
-      details: error.message
-    });
-  }
-});
+  });
 
 // Admin: Update/Edit existing creditor
-app.put('/api/admin/clients/:clientId/creditors/:creditorId', 
+app.put('/api/admin/clients/:clientId/creditors/:creditorId',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const { clientId, creditorId } = req.params;
-    const {
-      sender_name,
-      sender_email,
-      sender_address,
-      reference_number,
-      claim_amount,
-      notes,
-      is_representative,
-      actual_creditor
-    } = req.body;
-
-    console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
-
-    // Find client
-    let client;
     try {
-      // First try with string fields
-      client = await Client.findOne({ 
-        $or: [
-          { id: clientId },
-          { aktenzeichen: clientId }
-        ]
-      });
-      
-      // If not found and clientId looks like a MongoDB ObjectId, try _id
-      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-        client = await Client.findOne({ _id: clientId });
-      }
-    } catch (findError) {
-      console.error('Error finding client:', findError);
-      client = null;
-    }
+      const { clientId, creditorId } = req.params;
+      const {
+        sender_name,
+        sender_email,
+        sender_address,
+        reference_number,
+        claim_amount,
+        notes,
+        is_representative,
+        actual_creditor
+      } = req.body;
 
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: clientId
-      });
-    }
+      console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
 
-    // Find creditor
-    const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
-    if (creditorIndex === -1 || creditorIndex === undefined) {
-      return res.status(404).json({
-        error: 'Creditor not found',
-        creditor_id: creditorId
-      });
-    }
+      // Find client
+      let client;
+      try {
+        // First try with string fields
+        client = await Client.findOne({
+          $or: [
+            { id: clientId },
+            { aktenzeichen: clientId }
+          ]
+        });
 
-    const originalCreditor = { ...client.final_creditor_list[creditorIndex] };
-
-    // Update creditor fields
-    Object.assign(client.final_creditor_list[creditorIndex], {
-      sender_name: sender_name?.trim() || originalCreditor.sender_name,
-      sender_email: sender_email?.trim() || originalCreditor.sender_email || '',
-      sender_address: sender_address?.trim() || originalCreditor.sender_address || '',
-      reference_number: reference_number?.trim() || originalCreditor.reference_number || '',
-      claim_amount: claim_amount !== undefined ? parseFloat(claim_amount) : originalCreditor.claim_amount,
-      is_representative: is_representative !== undefined ? is_representative : originalCreditor.is_representative,
-      actual_creditor: actual_creditor?.trim() || originalCreditor.actual_creditor || '',
-      
-      // Update metadata
-      manually_reviewed: true,
-      reviewed_by: req.adminId || req.agentId || 'admin',
-      reviewed_at: new Date(),
-      correction_notes: notes?.trim() || originalCreditor.correction_notes || 'Updated by admin',
-      review_action: 'manually_updated'
-    });
-
-    // Add to status history
-    client.status_history.push({
-      id: uuidv4(),
-      status: 'creditor_updated',
-      changed_by: 'admin',
-      metadata: {
-        creditor_id: creditorId,
-        creditor_name: sender_name || originalCreditor.sender_name,
-        updated_by: req.adminId || req.agentId || 'admin',
-        admin_action: 'creditor_update',
-        changes: {
-          name_changed: sender_name && sender_name !== originalCreditor.sender_name,
-          amount_changed: claim_amount !== undefined && claim_amount !== originalCreditor.claim_amount,
-          email_changed: sender_email && sender_email !== originalCreditor.sender_email
+        // If not found and clientId looks like a MongoDB ObjectId, try _id
+        if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+          client = await Client.findOne({ _id: clientId });
         }
+      } catch (findError) {
+        console.error('Error finding client:', findError);
+        client = null;
       }
-    });
 
-    // Save client
-    await client.save();
-
-    console.log(`✅ Successfully updated creditor "${client.final_creditor_list[creditorIndex].sender_name}" for client ${client.aktenzeichen}`);
-
-    res.json({
-      success: true,
-      message: `Creditor "${client.final_creditor_list[creditorIndex].sender_name}" updated successfully`,
-      creditor: {
-        id: client.final_creditor_list[creditorIndex].id,
-        sender_name: client.final_creditor_list[creditorIndex].sender_name,
-        sender_email: client.final_creditor_list[creditorIndex].sender_email,
-        claim_amount: client.final_creditor_list[creditorIndex].claim_amount,
-        status: client.final_creditor_list[creditorIndex].status
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: clientId
+        });
       }
-    });
 
-  } catch (error) {
-    console.error('❌ Error updating creditor:', error);
-    res.status(500).json({
-      error: 'Failed to update creditor',
-      details: error.message
-    });
-  }
-});
+      // Find creditor
+      const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
+      if (creditorIndex === -1 || creditorIndex === undefined) {
+        return res.status(404).json({
+          error: 'Creditor not found',
+          creditor_id: creditorId
+        });
+      }
+
+      const originalCreditor = { ...client.final_creditor_list[creditorIndex] };
+
+      // Update creditor fields
+      Object.assign(client.final_creditor_list[creditorIndex], {
+        sender_name: sender_name?.trim() || originalCreditor.sender_name,
+        sender_email: sender_email?.trim() || originalCreditor.sender_email || '',
+        sender_address: sender_address?.trim() || originalCreditor.sender_address || '',
+        reference_number: reference_number?.trim() || originalCreditor.reference_number || '',
+        claim_amount: claim_amount !== undefined ? parseFloat(claim_amount) : originalCreditor.claim_amount,
+        is_representative: is_representative !== undefined ? is_representative : originalCreditor.is_representative,
+        actual_creditor: actual_creditor?.trim() || originalCreditor.actual_creditor || '',
+
+        // Update metadata
+        manually_reviewed: true,
+        reviewed_by: req.adminId || req.agentId || 'admin',
+        reviewed_at: new Date(),
+        correction_notes: notes?.trim() || originalCreditor.correction_notes || 'Updated by admin',
+        review_action: 'manually_updated'
+      });
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'creditor_updated',
+        changed_by: 'admin',
+        metadata: {
+          creditor_id: creditorId,
+          creditor_name: sender_name || originalCreditor.sender_name,
+          updated_by: req.adminId || req.agentId || 'admin',
+          admin_action: 'creditor_update',
+          changes: {
+            name_changed: sender_name && sender_name !== originalCreditor.sender_name,
+            amount_changed: claim_amount !== undefined && claim_amount !== originalCreditor.claim_amount,
+            email_changed: sender_email && sender_email !== originalCreditor.sender_email
+          }
+        }
+      });
+
+      // Save client
+      await client.save();
+
+      console.log(`✅ Successfully updated creditor "${client.final_creditor_list[creditorIndex].sender_name}" for client ${client.aktenzeichen}`);
+
+      res.json({
+        success: true,
+        message: `Creditor "${client.final_creditor_list[creditorIndex].sender_name}" updated successfully`,
+        creditor: {
+          id: client.final_creditor_list[creditorIndex].id,
+          sender_name: client.final_creditor_list[creditorIndex].sender_name,
+          sender_email: client.final_creditor_list[creditorIndex].sender_email,
+          claim_amount: client.final_creditor_list[creditorIndex].claim_amount,
+          status: client.final_creditor_list[creditorIndex].status
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error updating creditor:', error);
+      res.status(500).json({
+        error: 'Failed to update creditor',
+        details: error.message
+      });
+    }
+  });
 
 // Admin: Skip 7-day delay and trigger immediate review (for testing)
-app.post('/api/admin/clients/:clientId/skip-seven-day-delay', 
+app.post('/api/admin/clients/:clientId/skip-seven-day-delay',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const { clientId } = req.params;
-
-    console.log(`⚡ Admin skipping 7-day delay for client ${clientId}`);
-
-    // Find client
-    let client;
     try {
-      // First try with string fields
-      client = await Client.findOne({ 
-        $or: [
-          { id: clientId },
-          { aktenzeichen: clientId }
-        ]
-      });
-      
-      // If not found and clientId looks like a MongoDB ObjectId, try _id
-      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-        client = await Client.findOne({ _id: clientId });
+      const { clientId } = req.params;
+
+      console.log(`⚡ Admin skipping 7-day delay for client ${clientId}`);
+
+      // Find client
+      let client;
+      try {
+        // First try with string fields
+        client = await Client.findOne({
+          $or: [
+            { id: clientId },
+            { aktenzeichen: clientId }
+          ]
+        });
+
+        // If not found and clientId looks like a MongoDB ObjectId, try _id
+        if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+          client = await Client.findOne({ _id: clientId });
+        }
+      } catch (findError) {
+        console.error('Error finding client:', findError);
+        client = null;
       }
-    } catch (findError) {
-      console.error('Error finding client:', findError);
-      client = null;
-    }
 
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: clientId
-      });
-    }
-
-    // Check if client has both conditions met
-    const hasPayment = client.first_payment_received === true;
-    const hasDocuments = client.documents && client.documents.length > 0;
-
-    if (!hasPayment || !hasDocuments) {
-      return res.status(400).json({
-        error: 'Cannot skip delay - both payment and documents are required',
-        has_payment: hasPayment,
-        has_documents: hasDocuments,
-        documents_count: client.documents?.length || 0
-      });
-    }
-
-    // Cancel any existing 7-day schedule
-    if (client.seven_day_review_scheduled && !client.seven_day_review_triggered) {
-      client.seven_day_review_scheduled = false;
-      client.seven_day_review_triggered = true;
-      client.seven_day_review_triggered_at = new Date();
-    }
-
-    // Mark both conditions as met
-    if (!client.both_conditions_met_at) {
-      client.both_conditions_met_at = new Date();
-    }
-
-    // Add to status history
-    client.status_history.push({
-      id: uuidv4(),
-      status: 'seven_day_delay_skipped_by_admin',
-      changed_by: 'admin',
-      metadata: {
-        admin_action: 'skip_seven_day_delay',
-        skipped_by: req.adminId || req.agentId || 'admin',
-        original_scheduled_at: client.seven_day_review_scheduled_at,
-        immediate_trigger: true,
-        reason: 'Admin testing override'
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: clientId
+        });
       }
-    });
 
-    // Update status to creditor_review
-    client.current_status = 'creditor_review';
+      // Check if client has both conditions met
+      const hasPayment = client.first_payment_received === true;
+      const hasDocuments = client.documents && client.documents.length > 0;
 
-    await client.save();
+      if (!hasPayment || !hasDocuments) {
+        return res.status(400).json({
+          error: 'Cannot skip delay - both payment and documents are required',
+          has_payment: hasPayment,
+          has_documents: hasDocuments,
+          documents_count: client.documents?.length || 0
+        });
+      }
 
-    // Trigger immediate review process
-    const DelayedProcessingService = require('./services/delayedProcessingService');
-    const delayedService = new DelayedProcessingService();
-    
-    try {
-      await delayedService.triggerCreditorReviewProcess(client.id);
-      console.log(`✅ Immediate creditor review triggered for ${client.aktenzeichen}`);
-    } catch (reviewError) {
-      console.error('❌ Error triggering immediate review:', reviewError);
-      // Continue anyway - the status is updated
+      // Cancel any existing 7-day schedule
+      if (client.seven_day_review_scheduled && !client.seven_day_review_triggered) {
+        client.seven_day_review_scheduled = false;
+        client.seven_day_review_triggered = true;
+        client.seven_day_review_triggered_at = new Date();
+      }
+
+      // Mark both conditions as met
+      if (!client.both_conditions_met_at) {
+        client.both_conditions_met_at = new Date();
+      }
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'seven_day_delay_skipped_by_admin',
+        changed_by: 'admin',
+        metadata: {
+          admin_action: 'skip_seven_day_delay',
+          skipped_by: req.adminId || req.agentId || 'admin',
+          original_scheduled_at: client.seven_day_review_scheduled_at,
+          immediate_trigger: true,
+          reason: 'Admin testing override'
+        }
+      });
+
+      // Update status to creditor_review
+      client.current_status = 'creditor_review';
+
+      await client.save();
+
+      // Trigger immediate review process
+      const DelayedProcessingService = require('./services/delayedProcessingService');
+      const delayedService = new DelayedProcessingService();
+
+      try {
+        await delayedService.triggerCreditorReviewProcess(client.id);
+        console.log(`✅ Immediate creditor review triggered for ${client.aktenzeichen}`);
+      } catch (reviewError) {
+        console.error('❌ Error triggering immediate review:', reviewError);
+        // Continue anyway - the status is updated
+      }
+
+      res.json({
+        success: true,
+        message: `7-day delay skipped for ${client.firstName} ${client.lastName}`,
+        client: {
+          id: client.id,
+          name: `${client.firstName} ${client.lastName}`,
+          aktenzeichen: client.aktenzeichen,
+          current_status: client.current_status,
+          both_conditions_met_at: client.both_conditions_met_at,
+          seven_day_review_triggered: client.seven_day_review_triggered
+        },
+        immediate_review_triggered: true,
+        skipped_at: new Date()
+      });
+
+    } catch (error) {
+      console.error('❌ Error skipping 7-day delay:', error);
+      res.status(500).json({
+        error: 'Failed to skip 7-day delay',
+        details: error.message
+      });
     }
-
-    res.json({
-      success: true,
-      message: `7-day delay skipped for ${client.firstName} ${client.lastName}`,
-      client: {
-        id: client.id,
-        name: `${client.firstName} ${client.lastName}`,
-        aktenzeichen: client.aktenzeichen,
-        current_status: client.current_status,
-        both_conditions_met_at: client.both_conditions_met_at,
-        seven_day_review_triggered: client.seven_day_review_triggered
-      },
-      immediate_review_triggered: true,
-      skipped_at: new Date()
-    });
-
-  } catch (error) {
-    console.error('❌ Error skipping 7-day delay:', error);
-    res.status(500).json({
-      error: 'Failed to skip 7-day delay',
-      details: error.message
-    });
-  }
-});
+  });
 
 // Admin: Delete creditor
-app.delete('/api/admin/clients/:clientId/creditors/:creditorId', 
+app.delete('/api/admin/clients/:clientId/creditors/:creditorId',
   rateLimits.admin,
   authenticateAdmin,
   async (req, res) => {
-  try {
-    const { clientId, creditorId } = req.params;
-
-    console.log(`🗑️ Admin deleting creditor ${creditorId} for client ${clientId}`);
-
-    // Find client
-    let client;
     try {
-      // First try with string fields
-      client = await Client.findOne({ 
-        $or: [
-          { id: clientId },
-          { aktenzeichen: clientId }
-        ]
-      });
-      
-      // If not found and clientId looks like a MongoDB ObjectId, try _id
-      if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-        client = await Client.findOne({ _id: clientId });
+      const { clientId, creditorId } = req.params;
+
+      console.log(`🗑️ Admin deleting creditor ${creditorId} for client ${clientId}`);
+
+      // Find client
+      let client;
+      try {
+        // First try with string fields
+        client = await Client.findOne({
+          $or: [
+            { id: clientId },
+            { aktenzeichen: clientId }
+          ]
+        });
+
+        // If not found and clientId looks like a MongoDB ObjectId, try _id
+        if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+          client = await Client.findOne({ _id: clientId });
+        }
+      } catch (findError) {
+        console.error('Error finding client:', findError);
+        client = null;
       }
-    } catch (findError) {
-      console.error('Error finding client:', findError);
-      client = null;
-    }
 
-    if (!client) {
-      return res.status(404).json({
-        error: 'Client not found',
-        client_id: clientId
+      if (!client) {
+        return res.status(404).json({
+          error: 'Client not found',
+          client_id: clientId
+        });
+      }
+
+      // Find creditor
+      const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
+      if (creditorIndex === -1 || creditorIndex === undefined) {
+        return res.status(404).json({
+          error: 'Creditor not found',
+          creditor_id: creditorId
+        });
+      }
+
+      const deletedCreditor = client.final_creditor_list[creditorIndex];
+
+      // Remove creditor from list
+      client.final_creditor_list.splice(creditorIndex, 1);
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'creditor_deleted',
+        changed_by: 'admin',
+        metadata: {
+          creditor_id: creditorId,
+          creditor_name: deletedCreditor.sender_name,
+          creditor_amount: deletedCreditor.claim_amount,
+          deleted_by: req.adminId || req.agentId || 'admin',
+          admin_action: 'creditor_deletion',
+          remaining_creditors: client.final_creditor_list.length
+        }
       });
-    }
 
-    // Find creditor
-    const creditorIndex = client.final_creditor_list?.findIndex(c => c.id === creditorId);
-    if (creditorIndex === -1 || creditorIndex === undefined) {
-      return res.status(404).json({
-        error: 'Creditor not found',
-        creditor_id: creditorId
-      });
-    }
+      // Save client
+      await client.save();
 
-    const deletedCreditor = client.final_creditor_list[creditorIndex];
+      console.log(`✅ Successfully deleted creditor "${deletedCreditor.sender_name}" for client ${client.aktenzeichen}`);
 
-    // Remove creditor from list
-    client.final_creditor_list.splice(creditorIndex, 1);
-
-    // Add to status history
-    client.status_history.push({
-      id: uuidv4(),
-      status: 'creditor_deleted',
-      changed_by: 'admin',
-      metadata: {
-        creditor_id: creditorId,
-        creditor_name: deletedCreditor.sender_name,
-        creditor_amount: deletedCreditor.claim_amount,
-        deleted_by: req.adminId || req.agentId || 'admin',
-        admin_action: 'creditor_deletion',
+      res.json({
+        success: true,
+        message: `Creditor "${deletedCreditor.sender_name}" deleted successfully`,
+        deleted_creditor: {
+          id: deletedCreditor.id,
+          sender_name: deletedCreditor.sender_name,
+          claim_amount: deletedCreditor.claim_amount
+        },
         remaining_creditors: client.final_creditor_list.length
-      }
-    });
+      });
 
-    // Save client
-    await client.save();
-
-    console.log(`✅ Successfully deleted creditor "${deletedCreditor.sender_name}" for client ${client.aktenzeichen}`);
-
-    res.json({
-      success: true,
-      message: `Creditor "${deletedCreditor.sender_name}" deleted successfully`,
-      deleted_creditor: {
-        id: deletedCreditor.id,
-        sender_name: deletedCreditor.sender_name,
-        claim_amount: deletedCreditor.claim_amount
-      },
-      remaining_creditors: client.final_creditor_list.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error deleting creditor:', error);
-    res.status(500).json({
-      error: 'Failed to delete creditor',
-      details: error.message
-    });
-  }
-});
+    } catch (error) {
+      console.error('❌ Error deleting creditor:', error);
+      res.status(500).json({
+        error: 'Failed to delete creditor',
+        details: error.message
+      });
+    }
+  });
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
