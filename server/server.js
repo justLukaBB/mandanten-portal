@@ -71,12 +71,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
-// Body parsing middleware for JSON - applied globally
+// ⚠️ CRITICAL: Webhooks MUST be mounted BEFORE body parsing middleware!
+// Webhook signature verification needs raw bytes, not parsed JSON
+app.use('/api/webhooks', webhooksRoutes);
+
+// Body parsing middleware for JSON - applied globally (mounted AFTER webhooks)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Webhooks need raw body parsing, so they override this with their own middleware
-app.use('/api/webhooks', webhooksRoutes);
 
 // Mount routes
 app.use('/api/health', healthRoutes);
