@@ -32,6 +32,7 @@ const { createProcessingJob } = fastApiClient;
 const { getJobStatus } = fastApiClient;
 const { getJobResults } = fastApiClient;
 const { checkHealth } = fastApiClient;
+const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -92,7 +93,7 @@ app.use('/api/second-round', secondRoundApiRoutes);
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
-
+app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
 
 // Serve generated documents statically for Make.com webhook downloads
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
