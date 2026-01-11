@@ -69,7 +69,7 @@ app.use('/api/webhooks', webhooksRoutes);
 // Middleware
 // app.use(express.json({ limit: '10mb' })); // REMOVED - duplicate middleware
 // app.use(express.urlencoded({ extended: true })); // REMOVED - duplicate middleware
-app.use(express.text({ type: 'application/json' })); // Handle JSON sent as text
+// app.use(express.text({ type: 'application/json' })); // REMOVED - This was intercepting JSON and breaking validation
 
 // Mount routes
 app.use('/api/health', healthRoutes);
