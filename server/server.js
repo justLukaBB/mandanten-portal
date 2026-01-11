@@ -60,16 +60,23 @@ const app = express();
 const PORT = config.PORT;
 const WEBHOOK_BASE_URL = process.env.BACKEND_URL || 'http://localhost:10000';
 
-// CORS is configured later with proper settings (line ~459)
-// app.use(cors()); // REMOVED - duplicate CORS middleware
+// Security middleware - MUST be first
 app.use(securityHeaders);
 
+// CORS middleware - MUST be applied BEFORE any routes for cross-origin requests
+app.use(cors({
+  origin: true, // Allow all origins temporarily
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
+}));
+
+// Body parsing middleware for JSON - applied globally
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Webhooks need raw body parsing, so they override this with their own middleware
 app.use('/api/webhooks', webhooksRoutes);
-// Body parsing middleware is configured later with size limits (line ~467)
-// Middleware
-// app.use(express.json({ limit: '10mb' })); // REMOVED - duplicate middleware
-// app.use(express.urlencoded({ extended: true })); // REMOVED - duplicate middleware
-// app.use(express.text({ type: 'application/json' })); // REMOVED - This was intercepting JSON and breaking validation
 
 // Mount routes
 app.use('/api/health', healthRoutes);
@@ -453,22 +460,10 @@ const debtAmountExtractor = new DebtAmountExtractor();
 const garnishmentCalculator = new GermanGarnishmentCalculator();
 const testDataService = new TestDataService();
 
-// Security middleware
-app.use(securityHeaders);
+// Rate limiting middleware
 app.use(rateLimits.general);
 
-// CORS middleware - temporarily allow all origins for debugging
-app.use(cors({
-  origin: true, // Allow all origins temporarily
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
-}));
-
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
+// CORS and body parsing are now configured earlier (lines 66-76) to apply to ALL routes
 // Health check routes (no auth required)
 app.use('/', healthRoutes);
 
