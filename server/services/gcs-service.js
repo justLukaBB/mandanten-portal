@@ -1,14 +1,18 @@
 const { Storage } = require('@google-cloud/storage');
-const path = require('path');
 
-const keyFilePath = path.join(process.cwd(), 'config/gcs-keys.json');
+
 
 const storage = new Storage({
-  keyFilename: keyFilePath,
+  projectId: process.env.GCS_PROJECT_ID,
+  credentials: {
+    client_email: process.env.GCS_CLIENT_EMAIL,
+    private_key: process.env.GCS_PRIVATE_KEY ? process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
+  },
 });
 
 const bucketName = 'automation_scuric'; 
 const bucket = storage.bucket(bucketName);
+
 
 const uploadToGCS = (file) => {
   return new Promise((resolve, reject) => {
@@ -27,7 +31,7 @@ const uploadToGCS = (file) => {
       
       // Determine if we should return a public URL or just the name. 
       // For now, following the user's snippet:
-      resolve(`https://storage.googleapis.com/${bucketName}/${blob.name}`);
+      resolve({url:`https://storage.googleapis.com/${bucketName}/${blob.name}`, name: blob.name});
     });
 
     blobStream.end(file.buffer);
@@ -50,4 +54,14 @@ const getGCSFileBuffer = (filename) => {
   });
 };
 
-module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, bucket };
+
+const getSignedUrl = async (filename) => {
+  const options = {
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + 120 * 60 * 1000, // 2 hours
+  };
+  const [url] =  await storage.bucket(bucketName).file(filename).getSignedUrl(options);
+  return url;
+};
+module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, bucket, getSignedUrl };

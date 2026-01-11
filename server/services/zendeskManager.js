@@ -1837,14 +1837,18 @@ Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schul
         try {
             const emailBody = this.generateFirstRoundEmailBody(creditorData, clientData, documentUrl);
             const emailSubject = `Außergerichtlicher Einigungsversuch - ${creditorData.creditor_name} - Az: ${clientData.reference}`;
-            
+
             // Use test email for development
             const testEmail = 'justlukax@gmail.com';
-            
+
             console.log(`📧 Creating Side Conversation for ${creditorData.creditor_name} with document...`);
-            
+
             const sideConversationData = {
                 message: {
+                    from: {
+                        email: "glaubiger@scuric.zendesk.com",
+                        name: "Gläubiger-Team"
+                    },
                     to: [
                         {
                             email: testEmail,
