@@ -60,13 +60,15 @@ const app = express();
 const PORT = config.PORT;
 const WEBHOOK_BASE_URL = process.env.BACKEND_URL || 'http://localhost:10000';
 
-app.use(cors());
+// CORS is configured later with proper settings (line ~459)
+// app.use(cors()); // REMOVED - duplicate CORS middleware
 app.use(securityHeaders);
 
 app.use('/api/webhooks', webhooksRoutes);
+// Body parsing middleware is configured later with size limits (line ~467)
 // Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// app.use(express.json({ limit: '10mb' })); // REMOVED - duplicate middleware
+// app.use(express.urlencoded({ extended: true })); // REMOVED - duplicate middleware
 app.use(express.text({ type: 'application/json' })); // Handle JSON sent as text
 
 // Mount routes
