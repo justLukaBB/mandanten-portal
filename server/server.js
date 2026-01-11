@@ -6913,8 +6913,12 @@ function getClientDisplayStatus(client) {
   return status;
 }
 
-// Document upload endpoint - MISSING FROM ORIGINAL CODE!
-app.post('/api/clients/:clientId/documents', upload.single('document'), async (req, res) => {
+// Document upload endpoint - DISABLED (LEGACY - uses internal Google Document AI instead of FastAPI)
+// This endpoint is REPLACED by the FastAPI endpoint at line 1462
+// DO NOT RE-ENABLE - We only use FastAPI for document processing now
+// app.post('/api/clients/:clientId/documents', upload.single('document'), async (req, res) => {
+if (false) { // Disabled legacy endpoint
+app.post('/api/clients/:clientId/documents-DISABLED-LEGACY', upload.single('document'), async (req, res) => {
   try {
     const clientId = req.params.clientId;
     const client = await getClient(clientId);
@@ -7258,6 +7262,7 @@ app.post('/api/clients/:clientId/documents', upload.single('document'), async (r
     });
   }
 });
+} // End of disabled legacy endpoint
 
 // ============================================================================
 // FINANCIAL DATA ENDPOINTS FOR CLIENT PORTAL
