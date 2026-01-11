@@ -120,9 +120,22 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
       },
       FASTAPI_TIMEOUT
     );
-    
-    const data = await response.json();
-    
+
+    // Try to parse as JSON, but handle HTML error pages
+    let data;
+    const contentType = response.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      // Not JSON - likely HTML error page
+      const text = await response.text();
+      console.error(`❌ FastAPI returned non-JSON response (${response.status}):`);
+      console.error(`📄 Content-Type: ${contentType}`);
+      console.error(`📄 Response preview: ${text.substring(0, 500)}`);
+      throw new Error(`FastAPI returned ${response.status} with HTML instead of JSON. Server may be down or endpoint doesn't exist.`);
+    }
+
     if (!response.ok) {
       throw new Error(`FastAPI returned ${response.status}: ${data.detail || JSON.stringify(data)}`);
     }
