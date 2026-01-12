@@ -21,7 +21,6 @@ const baseSchema = z.object({
     address: z.string().optional(),
     isRepresentative: z.boolean(),
     actualCreditor: z.string().optional(),
-    notes: z.string().optional(),
 });
 
 const creditorSchema = baseSchema.refine(data => {
@@ -69,8 +68,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
             amount: '',
             address: '',
             isRepresentative: false,
-            actualCreditor: '',
-            notes: ''
+            actualCreditor: ''
         }
     });
 
@@ -303,24 +301,6 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                                     )}
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Section: Notizen */}
-                    <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
-                            Zusätzliche Informationen
-                        </h4>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Notizen (optional)
-                            </label>
-                            <textarea
-                                {...register('notes')}
-                                rows={3}
-                                placeholder="Weitere Hinweise oder Besonderheiten zu diesem Gläubiger..."
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 transition-all text-sm resize-none bg-white"
-                            />
                         </div>
                     </div>
                 </div>
