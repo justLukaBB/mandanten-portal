@@ -190,10 +190,8 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
   };
 
   const filteredDocuments = documents.filter(doc => {
-    // Hide source documents that were split into multiple creditors
-    if (doc.hidden_from_portal) {
-      return false;
-    }
+    // Admin sees ALL documents including creditor splits
+    // (hidden_from_portal only affects client portal view)
 
     switch (filter) {
       case 'needs_review':
@@ -209,9 +207,8 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     }
   });
 
-  // Filter out hidden documents for all counts
-  const visibleDocuments = documents.filter(doc => !doc.hidden_from_portal);
-  const needsReviewCount = visibleDocuments.filter(doc => doc.document_status === 'needs_review').length;
+  // Admin sees all documents (no filtering for counts)
+  const needsReviewCount = documents.filter(doc => doc.document_status === 'needs_review').length;
 
   if (loading) {
     return (
@@ -239,7 +236,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 Dokument-Manager
               </h3>
               <p className="text-sm text-gray-500">
-                {visibleDocuments.length} Dokumente • {needsReviewCount} benötigen Prüfung
+                {documents.length} Dokumente • {needsReviewCount} benötigen Prüfung
               </p>
             </div>
           </div>
@@ -252,7 +249,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Alle ({visibleDocuments.length})
+              Alle ({documents.length})
             </button>
             <button
               onClick={() => setFilter('needs_review')}
@@ -268,7 +265,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'creditor' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Gläubiger ({visibleDocuments.filter(d => d.document_status === 'creditor_confirmed').length})
+              Gläubiger ({documents.filter(d => d.document_status === 'creditor_confirmed').length})
             </button>
             <button
               onClick={() => setFilter('duplicates')}
@@ -276,7 +273,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Duplikate ({visibleDocuments.filter(d => d.document_status === 'duplicate').length})
+              Duplikate ({documents.filter(d => d.document_status === 'duplicate').length})
             </button>
           </div>
         </div>

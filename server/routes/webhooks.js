@@ -202,6 +202,7 @@ router.post('/ai-processing',
                 source_document_id: docResult.source_document_id,
                 creditor_index: docResult.creditor_index,
                 creditor_count: docResult.creditor_count,
+                hidden_from_portal: true,  // Hide creditor splits from client portal
                 // Processing results
                 processing_status: docResult.processing_status,
                 document_status: docResult.document_status,
@@ -282,38 +283,65 @@ router.post('/ai-processing',
           }
         }
 
-        // Remove source documents that were split into multiple creditors
+        // Update source documents that were split into multiple creditors
         // Find all unique source_document_ids from the newly added entries
         const sourceDocumentIds = new Set();
+        const creditorEntriesBySource = new Map();
+
         client.documents.forEach(doc => {
           if (doc.source_document_id) {
             sourceDocumentIds.add(doc.source_document_id);
+
+            // Track creditor entries for this source
+            if (!creditorEntriesBySource.has(doc.source_document_id)) {
+              creditorEntriesBySource.set(doc.source_document_id, []);
+            }
+            creditorEntriesBySource.get(doc.source_document_id).push(doc);
           }
         });
 
-        console.log(`\n🔍 CHECKING FOR SOURCE DOCUMENTS TO REMOVE:`);
+        console.log(`\n🔍 UPDATING SOURCE DOCUMENTS:`);
         console.log(`   Found ${sourceDocumentIds.size} unique source document IDs`);
         sourceDocumentIds.forEach(id => console.log(`   - ${id}`));
-        console.log(`   Total documents before removal: ${client.documents.length}`);
 
-        // Remove source documents entirely so they don't appear in any view
+        // Update source documents with aggregated status
         sourceDocumentIds.forEach(sourceId => {
           console.log(`\n🔍 Looking for source document with ID: ${sourceId}`);
           const sourceDocIndex = client.documents.findIndex(d => d.id === sourceId);
           console.log(`   Found at index: ${sourceDocIndex}`);
 
           if (sourceDocIndex !== -1) {
-            const removedDoc = client.documents[sourceDocIndex];
-            console.log(`   Document name: ${removedDoc.name}`);
-            console.log(`   Removing...`);
-            client.documents.splice(sourceDocIndex, 1);
-            console.log(`🗑️  Removed source document ${sourceId} (${removedDoc.name}) - split into ${removedDoc.creditor_count || 'multiple'} creditors`);
+            const sourceDoc = client.documents[sourceDocIndex];
+            const creditorEntries = creditorEntriesBySource.get(sourceId) || [];
+
+            console.log(`   Document name: ${sourceDoc.name}`);
+            console.log(`   Split into ${creditorEntries.length} creditor entries`);
+
+            // Determine overall status for source document
+            const needsReviewCount = creditorEntries.filter(c => c.document_status === 'needs_review').length;
+            const confirmedCount = creditorEntries.filter(c => c.document_status === 'creditor_confirmed').length;
+
+            let overallStatus = 'creditor_confirmed';
+            let overallReason = `${creditorEntries.length} Gläubiger erkannt`;
+
+            if (needsReviewCount > 0) {
+              overallStatus = 'needs_review';
+              overallReason = `${needsReviewCount} von ${creditorEntries.length} Gläubigern benötigen Prüfung`;
+            }
+
+            // Update source document
+            client.documents[sourceDocIndex].processing_status = 'completed';
+            client.documents[sourceDocIndex].document_status = overallStatus;
+            client.documents[sourceDocIndex].status_reason = overallReason;
+            client.documents[sourceDocIndex].is_creditor_document = true;
+            client.documents[sourceDocIndex].creditor_count = creditorEntries.length;
+
+            console.log(`✅ Updated source document status: ${overallStatus}`);
+            console.log(`   Reason: ${overallReason}`);
           } else {
             console.log(`   ⚠️  Source document ${sourceId} not found in client.documents`);
           }
         });
-
-        console.log(`   Total documents after removal: ${client.documents.length}`);
 
         // Calculate processing stats
         const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
