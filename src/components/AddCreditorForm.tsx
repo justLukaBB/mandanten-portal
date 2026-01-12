@@ -117,7 +117,6 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                         </div>
                         <div>
                             <h3 className="text-xl font-semibold text-gray-900">Gläubiger manuell hinzufügen</h3>
-                            <p className="text-sm text-gray-500 mt-0.5">Fügen Sie einen fehlenden Gläubiger zu Ihrer Liste hinzu</p>
                         </div>
                     </div>
                     {client && (
