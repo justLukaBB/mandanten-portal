@@ -135,7 +135,59 @@ router.post('/ai-processing',
           status_reason: statusReason
         });
       }
-      
+
+      // NEW: Handle multiple creditors per document
+      // If a document contains multiple creditors, create separate entries for each
+      const expandedDocuments = [];
+      for (const doc of processedDocuments) {
+        const creditors = doc.extracted_data?.creditors;
+
+        // Check if document has multiple creditors
+        if (creditors && Array.isArray(creditors) && creditors.length > 1) {
+          console.log(`\n🔄 MULTI-CREDITOR DOCUMENT DETECTED: ${doc.filename}`);
+          console.log(`   Splitting into ${creditors.length} separate entries`);
+
+          // Create a separate document entry for each creditor
+          for (let i = 0; i < creditors.length; i++) {
+            const creditor = creditors[i];
+            const creditorDoc = {
+              ...doc,
+              id: `${doc.id}-creditor-${i+1}`,  // Unique ID for each creditor entry
+              source_document_id: doc.id,  // Link back to original document
+              creditor_index: i + 1,
+              creditor_count: creditors.length,
+              // Set extracted_data.creditor_data to this specific creditor
+              extracted_data: {
+                ...doc.extracted_data,
+                creditor_data: creditor,  // Single creditor for this entry
+                // Keep legacy fields from this creditor
+                Gläubiger_Name: creditor.glaeubiger_name || "N/A",
+                Aktenzeichen: creditor.reference_number || "N/A",
+                Gläubiger_Adresse: creditor.glaeubiger_adresse || "N/A",
+                Gläubigervertreter_Name: creditor.glaeubiger_vertreter_name || "N/A",
+                Gläubigervertreter_Adresse: creditor.glaeubiger_vertreter_adresse || "N/A",
+                Forderungsbetrag: creditor.claim_amount_raw || "N/A",
+                Email_Gläubiger: creditor.sender_email || "N/A",
+                Email_Gläubiger_Vertreter: creditor.glaeubiger_vertreter_email || "N/A"
+              },
+              summary: `Creditor ${i+1}/${creditors.length}: ${creditor.sender_name || creditor.glaeubiger_name || 'N/A'}`
+            };
+
+            console.log(`   [${i+1}/${creditors.length}] ${creditor.sender_name || creditor.glaeubiger_name} (Ref: ${creditor.reference_number})`);
+            expandedDocuments.push(creditorDoc);
+          }
+        } else {
+          // Single creditor or no creditors - keep as-is
+          expandedDocuments.push(doc);
+        }
+      }
+
+      console.log(`\n📊 EXPANDED DOCUMENTS: ${processedDocuments.length} → ${expandedDocuments.length}`);
+
+      // Replace processedDocuments with expanded list
+      processedDocuments.length = 0;
+      processedDocuments.push(...expandedDocuments);
+
       // Check for duplicates against existing documents
       for (const doc of processedDocuments) {
         if (doc.document_status === 'creditor_confirmed' && 
@@ -161,49 +213,98 @@ router.post('/ai-processing',
       await safeClientUpdate(client_id, (client) => {
         // Update each processed document
         for (const docResult of processedDocuments) {
-          const docIndex = client.documents.findIndex(d => d.id === docResult.id);
-          
-          if (docIndex !== -1) {
-            // Update existing document - preserve all original fields
-            const existingDoc = client.documents[docIndex];
-            
-            // Convert Mongoose document to plain object if needed
-            const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
-            
-            // Update only processing-related fields while preserving all original fields
-            client.documents[docIndex] = {
-              ...existingDocObj, // Preserve all existing fields first (as plain object)
-              // Explicitly ensure key metadata fields are preserved
-              id: existingDoc.id,
-              name: existingDoc.name,
-              filename: existingDoc.filename,
-              type: existingDoc.type,
-              size: existingDoc.size,
-              url: existingDoc.url,
-              uploadedAt: existingDoc.uploadedAt,
-              // Update only processing-related fields
-              processing_status: docResult.processing_status,
-              document_status: docResult.document_status,
-              status_reason: docResult.status_reason,
-              is_creditor_document: docResult.is_creditor_document,
-              confidence: docResult.confidence,
-              classification_success: docResult.classification_success,
-              manual_review_required: docResult.manual_review_required,
-              is_duplicate: docResult.is_duplicate || false,
-              duplicate_reason: docResult.duplicate_reason,
-              extracted_data: docResult.extracted_data,
-              validation: docResult.validation,
-              summary: docResult.summary,
-              processing_error: docResult.processing_error || docResult.error,
-              processing_time_ms: docResult.processing_time_ms,
-              processed_at: new Date().toISOString(),
-              processing_method: 'fastapi_gemini_ai',
-              processing_job_id: job_id
-            };
-            
-            console.log(`✅ Updated document: ${docResult.filename} -> ${docResult.document_status}`);
+          // Check if this is a multi-creditor split entry
+          if (docResult.source_document_id) {
+            // This is a creditor entry split from a multi-creditor document
+            // Find the source document to copy metadata
+            const sourceDoc = client.documents.find(d => d.id === docResult.source_document_id);
+
+            if (sourceDoc) {
+              // Create a new document entry for this creditor
+              const newCreditorEntry = {
+                id: docResult.id,
+                name: sourceDoc.name,
+                filename: sourceDoc.filename,
+                type: sourceDoc.type,
+                size: sourceDoc.size,
+                url: sourceDoc.url,
+                uploadedAt: sourceDoc.uploadedAt,
+                // Multi-creditor metadata
+                source_document_id: docResult.source_document_id,
+                creditor_index: docResult.creditor_index,
+                creditor_count: docResult.creditor_count,
+                // Processing results
+                processing_status: docResult.processing_status,
+                document_status: docResult.document_status,
+                status_reason: docResult.status_reason,
+                is_creditor_document: docResult.is_creditor_document,
+                confidence: docResult.confidence,
+                classification_success: docResult.classification_success,
+                manual_review_required: docResult.manual_review_required,
+                is_duplicate: docResult.is_duplicate || false,
+                duplicate_reason: docResult.duplicate_reason,
+                extracted_data: docResult.extracted_data,
+                validation: docResult.validation,
+                summary: docResult.summary,
+                processing_error: docResult.processing_error || docResult.error,
+                processing_time_ms: docResult.processing_time_ms,
+                processed_at: new Date().toISOString(),
+                processing_method: 'fastapi_gemini_ai',
+                processing_job_id: job_id
+              };
+
+              // Add as new entry
+              client.documents.push(newCreditorEntry);
+              console.log(`✅ Added multi-creditor entry [${docResult.creditor_index}/${docResult.creditor_count}]: ${docResult.summary}`);
+            } else {
+              console.log(`⚠️  Source document not found for multi-creditor entry: ${docResult.source_document_id}`);
+            }
           } else {
-            console.log(`⚠️  Document not found in client: ${docResult.id}`);
+            // Standard single-creditor document update
+            const docIndex = client.documents.findIndex(d => d.id === docResult.id);
+
+            if (docIndex !== -1) {
+              // Update existing document - preserve all original fields
+              const existingDoc = client.documents[docIndex];
+
+              // Convert Mongoose document to plain object if needed
+              const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
+
+              // Update only processing-related fields while preserving all original fields
+              client.documents[docIndex] = {
+                ...existingDocObj, // Preserve all existing fields first (as plain object)
+                // Explicitly ensure key metadata fields are preserved
+                id: existingDoc.id,
+                name: existingDoc.name,
+                filename: existingDoc.filename,
+                type: existingDoc.type,
+                size: existingDoc.size,
+                url: existingDoc.url,
+                uploadedAt: existingDoc.uploadedAt,
+                // Update only processing-related fields
+                processing_status: docResult.processing_status,
+                document_status: docResult.document_status,
+                status_reason: docResult.status_reason,
+                is_creditor_document: docResult.is_creditor_document,
+                confidence: docResult.confidence,
+                classification_success: docResult.classification_success,
+                manual_review_required: docResult.manual_review_required,
+                is_duplicate: docResult.is_duplicate || false,
+                duplicate_reason: docResult.duplicate_reason,
+                extracted_data: docResult.extracted_data,
+                validation: docResult.validation,
+                summary: docResult.summary,
+                processing_error: docResult.processing_error || docResult.error,
+                processing_time_ms: docResult.processing_time_ms,
+                processed_at: new Date().toISOString(),
+                processing_method: 'fastapi_gemini_ai',
+                processing_job_id: job_id
+              };
+
+              console.log(`✅ Updated document: ${docResult.filename} -> ${docResult.document_status}`);
+            } else {
+              console.log(`⚠️  Document not found in client: ${docResult.id}`);
+            }
           }
         }
         
