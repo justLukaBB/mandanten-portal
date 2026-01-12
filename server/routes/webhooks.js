@@ -225,12 +225,14 @@ router.post('/ai-processing',
 
               // Add as new entry
               console.log(`   Pushing newCreditorEntry with source_document_id: ${newCreditorEntry.source_document_id}`);
+              console.log(`   hidden_from_portal: ${newCreditorEntry.hidden_from_portal}`);
               client.documents.push(newCreditorEntry);
               console.log(`✅ Added multi-creditor entry [${docResult.creditor_index}/${docResult.creditor_count}]: ${docResult.summary}`);
 
               // Verify it was added with source_document_id
               const justAdded = client.documents[client.documents.length - 1];
               console.log(`   Verified just added doc has source_document_id: ${!!justAdded.source_document_id}`);
+              console.log(`   Verified just added doc has hidden_from_portal: ${!!justAdded.hidden_from_portal}`);
             } else {
               console.log(`⚠️  Source document not found for multi-creditor entry: ${docResult.source_document_id}`);
             }
