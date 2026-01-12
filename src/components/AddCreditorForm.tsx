@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAddCreditorMutation } from '../store/features/creditorApi';
 import { useGetCurrentClientQuery } from '../store/features/clientApi';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 
 interface Client {
     id: string;
@@ -51,6 +52,8 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
     onSuccess,
     customColors
 }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
     const {
         register,
         handleSubmit,
@@ -106,14 +109,33 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-12">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Gläubiger manuell hinzufügen</h3>
-            <p className="text-sm text-gray-600 mb-6">
-                Fügen Sie hier einen Gläubiger hinzu, der nicht automatisch erkannt wurde. Pflichtfelder sind mit * gekennzeichnet.
-            </p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-12">
+            {/* Collapsible Header */}
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+            >
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Gläubiger manuell hinzufügen</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                        Pflichtfelder sind mit * gekennzeichnet.
+                    </p>
+                </div>
+                <div className="ml-4 flex-shrink-0">
+                    {isOpen ? (
+                        <ChevronUpIcon className="h-5 w-5 text-gray-500" />
+                    ) : (
+                        <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                    )}
+                </div>
+            </button>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit(onSubmit)} className="">
+            {/* Collapsible Content */}
+            {isOpen && (
+                <div className="px-6 pb-6 border-t border-gray-200">
+                    {/* Form */}
+                    <form onSubmit={handleSubmit(onSubmit)} className="pt-6">
                 <div className="space-y-6">
                     {/* Section: Gläubiger Informationen */}
                     <div>
@@ -321,7 +343,9 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                         {isLoading ? 'Wird hinzugefügt...' : 'Gläubiger hinzufügen'}
                     </button>
                 </div>
-            </form>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };
