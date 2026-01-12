@@ -771,419 +771,419 @@ app.post('/api/clients/:clientId/documents',
             }
           }, PROCESSING_TIMEOUT);
 
-          try {
-            // Update status to processing using safe client update
-            await safeClientUpdate(clientId, (client) => {
-              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-              if (docIndex !== -1) {
-                client.documents[docIndex].processing_status = 'processing';
-                client.documents[docIndex].processing_started_at = new Date().toISOString();
-              }
-              return client;
-            });
-
-            console.log(`🤖 Calling Google Document AI processor...`);
-            const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
-
-            console.log(`✅ Google Document AI processing completed!`);
-            console.log(`📝 Extracted data keys:`, Object.keys(extractedData));
-
-            // Check if simplified creditor classification was successful
-            const classificationSuccess = !extractedData.error &&
-              extractedData.processing_status === 'completed';
-
-            console.log(`🔍 Classification Status: ${classificationSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
-
-            if (classificationSuccess) {
-              console.log(`📄 Document processed with simplified Claude AI`);
-              console.log(`📋 Is creditor document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
-              console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-              console.log(`👁️  Manual review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
-              console.log(`💭 Reasoning: ${extractedData.reasoning || 'No reasoning provided'}`);
-
-              if (extractedData.is_creditor_document && extractedData.creditor_data) {
-                console.log(`🏢 Sender: ${extractedData.creditor_data.sender_name || 'Not found'}`);
-                console.log(`📧 Email: ${extractedData.creditor_data.sender_email || 'Not found'}`);
-                console.log(`🔢 Reference: ${extractedData.creditor_data.reference_number || 'Not found'}`);
-                console.log(`💰 Amount: ${extractedData.creditor_data.claim_amount || 'Not found'}`);
-                console.log(`🔄 Is representative: ${extractedData.creditor_data.is_representative ? '✅ YES' : '❌ NO'}`);
-              }
-            } else {
-              console.log(`❌ Classification failed:`, extractedData.error || extractedData.message || 'Unknown error');
-            }
-
-            const validation = documentProcessor.validateExtraction(extractedData);
-            const summary = documentProcessor.generateSummary(extractedData);
-
-            const processingTime = Date.now() - startTime;
-
-            // Use AI-provided workflow status or fallback to legacy logic
-            let documentStatus = 'unknown';
-            let statusReason = '';
-
-            if (classificationSuccess && extractedData.workflow_status) {
-              // New AI-driven status system
-              switch (extractedData.workflow_status) {
-                case 'GLÄUBIGERDOKUMENT':
-                  documentStatus = 'creditor_confirmed';
-                  statusReason = extractedData.status_reason || 'KI: Gläubigerdokument bestätigt';
-                  break;
-                case 'KEIN_GLÄUBIGERDOKUMENT':
-                  documentStatus = 'non_creditor_confirmed';
-                  statusReason = extractedData.status_reason || 'KI: Kein Gläubigerdokument';
-                  break;
-                case 'MITARBEITER_PRÜFUNG':
-                  documentStatus = 'needs_review';
-                  statusReason = extractedData.status_reason || 'KI: Manuelle Prüfung erforderlich';
-                  break;
-                default:
-                  documentStatus = 'needs_review';
-                  statusReason = 'Unbekannter KI-Status';
-                  break;
-              }
-            } else if (classificationSuccess) {
-              // Fallback to legacy logic for older versions
-              const confidence = extractedData.confidence || 0.0;
-              const isCreditor = extractedData.is_creditor_document;
-
-              if (isCreditor) {
-                if (confidence >= 0.8) {
-                  documentStatus = 'creditor_confirmed';
-                  statusReason = 'Legacy: Hohe KI-Sicherheit bei Gläubigerdokument';
-                } else {
-                  documentStatus = 'needs_review';
-                  statusReason = 'Legacy: Gläubigerdokument erkannt, aber niedrige KI-Sicherheit';
-                }
-              } else {
-                if (confidence >= 0.8) {
-                  documentStatus = 'non_creditor_confirmed';
-                  statusReason = 'Legacy: Hohe KI-Sicherheit - kein Gläubigerdokument';
-                } else {
-                  documentStatus = 'needs_review';
-                  statusReason = 'Legacy: Unsichere Klassifikation - manuelle Prüfung erforderlich';
-                }
-              }
-            } else {
-              documentStatus = 'needs_review';
-              statusReason = 'Verarbeitungsfehler - manuelle Prüfung erforderlich';
-            }
-
-            // Check for duplicate based on reference number for creditor documents
-            let isDuplicate = false;
-            let duplicateReason = '';
-
-            if (documentStatus === 'creditor_confirmed' && extractedData.creditor_data?.reference_number) {
-              const refNumber = extractedData.creditor_data.reference_number;
-              const existingDoc = client.documents.find(doc =>
-                doc.id !== documentId &&
-                doc.extracted_data?.creditor_data?.reference_number === refNumber &&
-                (doc.document_status === 'creditor_confirmed' || doc.document_status === 'needs_review')
-              );
-
-              if (existingDoc) {
-                isDuplicate = true;
-                duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
-                documentStatus = 'duplicate';
-              }
-            }
-
-            console.log(`\n✅ =========================`);
-            console.log(`✅ CLASSIFICATION COMPLETED`);
-            console.log(`✅ =========================`);
-            console.log(`📁 Document: ${file.originalname}`);
-            console.log(`🔍 Classification Success: ${classificationSuccess ? '✅ YES' : '❌ NO'}`);
-            console.log(`📋 Is Creditor Document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
-            console.log(`📊 Document Status: ${documentStatus}`);
-            console.log(`📝 Status Reason: ${statusReason}`);
-            console.log(`🔄 Is Duplicate: ${isDuplicate ? '⚠️ YES' : '✅ NO'}`);
-            if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
-            console.log(`⏱️  Processing Time: ${processingTime}ms`);
-            console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
-            console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
-            if (validation?.requires_manual_review) {
-              console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
-            }
-            console.log(`📊 Summary: ${summary}`);
-            console.log(`✅ =========================\n`);
-
-            // Clear timeout on successful completion
-            clearTimeout(timeoutId);
-
-            // Update document record with enhanced data using safe update
-            await safeClientUpdate(clientId, (client) => {
-              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-              if (docIndex !== -1) {
-                client.documents[docIndex] = {
-                  ...client.documents[docIndex],
-                  id: client.documents[docIndex].id,
-                  name: client.documents[docIndex].name,
-                  filename: client.documents[docIndex].filename,
-                  processing_status: classificationSuccess ? 'completed' : 'failed',
-                  classification_success: classificationSuccess,
-                  is_creditor_document: extractedData.is_creditor_document || false,
-                  confidence: extractedData.confidence || 0.0,
-                  manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
-                  document_status: documentStatus,
-                  status_reason: statusReason,
-                  is_duplicate: isDuplicate,
-                  duplicate_reason: duplicateReason,
-                  extracted_data: extractedData,
-                  validation: validation,
-                  summary: summary,
-                  processed_at: new Date().toISOString(),
-                  processing_time_ms: processingTime,
-                  processing_method: 'simplified_creditor_classification'
-                };
-              }
-
-              // Update client status when documents are processed
-              const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
-              const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
-              const totalDocs = client.documents.length;
-              const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
-
-              // Update status based on processing results
-              if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
-                if (allDocsCompleted) {
-                  // All documents are processed
-                  if (creditorDocs.length > 0) {
-                    client.current_status = 'documents_completed';
-                    console.log(`✅ Status updated to 'documents_completed' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
-                  } else {
-                    client.current_status = 'no_creditors_found';
-                    console.log(`⚠️ Status updated to 'no_creditors_found' for client ${clientId}`);
-                  }
-
-                  // Add status history entry
-                  client.status_history = client.status_history || [];
-                  client.status_history.push({
-                    id: uuidv4(),
-                    status: client.current_status,
-                    changed_by: 'system',
-                    metadata: {
-                      total_documents: client.documents.length,
-                      completed_documents: completedDocs.length,
-                      creditor_documents: creditorDocs.length,
-                      processing_completed_timestamp: new Date().toISOString()
-                    },
-                    created_at: new Date()
-                  });
-                } else if (creditorDocs.length > 0) {
-                  client.current_status = 'documents_processing';
-                  console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
-
-                  // Add status history entry
-                  client.status_history = client.status_history || [];
-                  client.status_history.push({
-                    id: uuidv4(),
-                    status: 'documents_processing',
-                    changed_by: 'system',
-                    metadata: {
-                      total_documents: client.documents.length,
-                      completed_documents: completedDocs.length,
-                      creditor_documents: creditorDocs.length,
-                      processing_completed_timestamp: new Date().toISOString()
-                    },
-                    created_at: new Date()
-                  });
-                }
-              }
-
-              // Check if all documents are processed and trigger webhook for clients with payment received
-              if (allDocsCompleted && client.first_payment_received) {
-                console.log(`\n🎯 ================================`);
-                console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
-                console.log(`🎯 ================================`);
-                console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-                console.log(`💰 Payment received: ${client.first_payment_received}`);
-                console.log(`📄 All documents completed: ${allDocsCompleted}`);
-                console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
-
-                // Update final creditor list with deduplication
-                // Filter creditor documents that DON'T require manual review (auto-approved only)
-                const creditorDocuments = completedDocs.filter(doc =>
-                  doc.is_creditor_document === true &&
-                  !doc.validation?.requires_manual_review &&
-                  !doc.extracted_data?.manual_review_required
-                );
-
-                const creditorDocsNeedingReview = completedDocs.filter(doc =>
-                  doc.is_creditor_document === true &&
-                  (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
-                );
-
-                console.log(`\n📊 DOCUMENT ANALYSIS:`);
-                console.log(`📄 Total completed documents: ${completedDocs.length}`);
-                console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
-                console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
-
-                if (creditorDocuments.length > 0) {
-                  console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
-                  creditorDocuments.forEach((doc, index) => {
-                    console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
-                    console.log(`      - Processing status: ${doc.processing_status}`);
-                    console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
-                    if (doc.extracted_data?.creditor_data) {
-                      const creditorData = doc.extracted_data.creditor_data;
-                      console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
-                    }
-                  });
-
-                  console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
-
-                  // Use deduplication utility to handle duplicate creditors
-                  const creditorDeduplication = require('./utils/creditorDeduplication');
-                  const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
-                    creditorDocuments,
-                    'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
-                  );
-
-                  // Merge with existing final_creditor_list if any
-                  const existingCreditors = client.final_creditor_list || [];
-                  console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
-
-                  const mergedCreditors = creditorDeduplication.mergeCreditorLists(
-                    existingCreditors,
-                    deduplicatedCreditors,
-                    'highest_amount'
-                  );
-
-                  client.final_creditor_list = mergedCreditors;
-
-                  console.log(`\n✅ ================================`);
-                  console.log(`✅ FINAL CREDITOR LIST UPDATED`);
-                  console.log(`✅ ================================`);
-                  console.log(`👤 Client: ${clientId}`);
-                  console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
-                  console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
-                  console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
-                  console.log(`⏰ Updated at: ${new Date().toISOString()}`);
-
-                  // Log final creditor list for monitoring
-                  console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
-                  mergedCreditors.forEach((creditor, index) => {
-                    console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
-                    console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
-                    console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
-                    console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
-                    console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
-                  });
-                  console.log(`\n`);
-                } else {
-                  console.log(`⚠️ No creditor documents found in completed documents`);
-                }
-
-                // Trigger the processing-complete webhook asynchronously
-                setTimeout(async () => {
-                  await triggerProcessingCompleteWebhook(clientId, documentId);
-                }, 1000); // Small delay to ensure database save completes first
-              }
-
-              // CHECK FOR AUTO-CONFIRMATION TIMER RESET - After document processing
-              // If client is awaiting confirmation and new documents require review, reset the timer
-              if (client.current_status === 'awaiting_client_confirmation' &&
-                client.admin_approved &&
-                client.admin_approved_at) {
-
-                console.log(`🔍 Checking if new documents require agent review for client ${clientId}...`);
-
-                // Check if any newly processed documents need review
-                const documentsNeedingReview = client.documents.filter(doc => {
-                  // Only check documents uploaded after the last admin approval
-                  const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
-                  const needsReview = doc.document_status === 'needs_review' ||
-                    doc.extracted_data?.manual_review_required === true ||
-                    (doc.is_creditor_document &&
-                      (doc.extracted_data?.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
-                  const notReviewed = !doc.manually_reviewed;
-
-                  return uploadedAfterApproval && needsReview && notReviewed;
-                });
-
-                if (documentsNeedingReview.length > 0) {
-                  console.log(`🔄 ${documentsNeedingReview.length} new documents require agent review - resetting auto-confirmation timer`);
-
-                  // Reset status to require agent review again
-                  client.current_status = 'creditor_review';
-                  client.admin_approved = false;  // Reset approval flag
-
-                  const previousApprovalTime = client.admin_approved_at;
-                  client.admin_approved_at = null; // Reset approval timestamp to restart timer
-
-                  // Add status history to track the change
-                  client.status_history.push({
-                    id: uuidv4(),
-                    status: 'reverted_to_creditor_review',
-                    changed_by: 'system',
-                    metadata: {
-                      reason: 'New documents processed requiring agent review',
-                      documents_needing_review: documentsNeedingReview.length,
-                      document_names: documentsNeedingReview.map(doc => doc.name),
-                      previous_approval_at: previousApprovalTime,
-                      auto_confirmation_timer_reset: true,
-                      review_required_reasons: documentsNeedingReview.map(doc => ({
-                        document: doc.name,
-                        confidence: doc.extracted_data?.confidence || 0,
-                        manual_review_required: doc.extracted_data?.manual_review_required,
-                        is_creditor: doc.is_creditor_document,
-                        status: doc.document_status
-                      }))
-                    },
-                    created_at: new Date()
-                  });
-
-                  console.log(`⏰ Auto-confirmation timer reset for client ${clientId} - new agent review required`);
-
-                  // Log details for monitoring
-                  documentsNeedingReview.forEach(doc => {
-                    console.log(`   📄 ${doc.name}: confidence=${doc.extracted_data?.confidence || 0}, manual_review=${doc.extracted_data?.manual_review_required}, creditor=${doc.is_creditor_document}`);
-                  });
-                } else {
-                  console.log(`✅ All new documents for client ${clientId} are auto-approved - no timer reset needed`);
-                }
-              }
-
-              return client;
-            });
-
-          } catch (processingError) {
-            // Clear timeout on error
-            clearTimeout(timeoutId);
-            const processingTime = Date.now() - startTime;
-
-            console.log(`\n❌ =========================`);
-            console.log(`❌ AI PROCESSING FAILED`);
-            console.log(`❌ =========================`);
-            console.log(`📁 Document: ${file.originalname}`);
-            console.log(`💥 Error: ${processingError.message}`);
-            console.log(`⏱️  Failed after: ${processingTime}ms`);
-            console.log(`🔍 AI Pipeline Success: ❌ NO`);
-            console.log(`❌ =========================\n`);
-
-            // Update document with error status using safe update
-            await safeClientUpdate(clientId, (client) => {
-              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-              if (docIndex !== -1) {
-                client.documents[docIndex] = {
-                  ...client.documents[docIndex],
-                  processing_status: 'failed',
-                  document_status: 'processing_failed',
-                  status_reason: `Verarbeitungsfehler: ${processingError.message}`,
-                  is_duplicate: false,
-                  ai_pipeline_success: false,
-                  claude_ai_success: false,
-                  processing_error: processingError.message,
-                  processing_error_details: processingError.stack,
-                  processed_at: new Date().toISOString(),
-                  processing_time_ms: processingTime,
-                  processing_method: 'google_document_ai + claude_ai'
-                };
-              }
-              return client;
-            });
-          }
-        });
-      }
+//           try {
+//             // Update status to processing using safe client update
+//             await safeClientUpdate(clientId, (client) => {
+//               const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+//               if (docIndex !== -1) {
+//                 client.documents[docIndex].processing_status = 'processing';
+//                 client.documents[docIndex].processing_started_at = new Date().toISOString();
+//               }
+//               return client;
+//             });
+// 
+//             console.log(`🤖 Calling Google Document AI processor...`);
+//             const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
+// 
+//             console.log(`✅ Google Document AI processing completed!`);
+//             console.log(`📝 Extracted data keys:`, Object.keys(extractedData));
+// 
+//             // Check if simplified creditor classification was successful
+//             const classificationSuccess = !extractedData.error &&
+//               extractedData.processing_status === 'completed';
+// 
+//             console.log(`🔍 Classification Status: ${classificationSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
+// 
+//             if (classificationSuccess) {
+//               console.log(`📄 Document processed with simplified Claude AI`);
+//               console.log(`📋 Is creditor document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
+//               console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
+//               console.log(`👁️  Manual review: ${extractedData.manual_review_required ? '❗ YES' : '✅ NO'}`);
+//               console.log(`💭 Reasoning: ${extractedData.reasoning || 'No reasoning provided'}`);
+// 
+//               if (extractedData.is_creditor_document && extractedData.creditor_data) {
+//                 console.log(`🏢 Sender: ${extractedData.creditor_data.sender_name || 'Not found'}`);
+//                 console.log(`📧 Email: ${extractedData.creditor_data.sender_email || 'Not found'}`);
+//                 console.log(`🔢 Reference: ${extractedData.creditor_data.reference_number || 'Not found'}`);
+//                 console.log(`💰 Amount: ${extractedData.creditor_data.claim_amount || 'Not found'}`);
+//                 console.log(`🔄 Is representative: ${extractedData.creditor_data.is_representative ? '✅ YES' : '❌ NO'}`);
+//               }
+//             } else {
+//               console.log(`❌ Classification failed:`, extractedData.error || extractedData.message || 'Unknown error');
+//             }
+// 
+//             const validation = documentProcessor.validateExtraction(extractedData);
+//             const summary = documentProcessor.generateSummary(extractedData);
+// 
+//             const processingTime = Date.now() - startTime;
+// 
+//             // Use AI-provided workflow status or fallback to legacy logic
+//             let documentStatus = 'unknown';
+//             let statusReason = '';
+// 
+//             if (classificationSuccess && extractedData.workflow_status) {
+//               // New AI-driven status system
+//               switch (extractedData.workflow_status) {
+//                 case 'GLÄUBIGERDOKUMENT':
+//                   documentStatus = 'creditor_confirmed';
+//                   statusReason = extractedData.status_reason || 'KI: Gläubigerdokument bestätigt';
+//                   break;
+//                 case 'KEIN_GLÄUBIGERDOKUMENT':
+//                   documentStatus = 'non_creditor_confirmed';
+//                   statusReason = extractedData.status_reason || 'KI: Kein Gläubigerdokument';
+//                   break;
+//                 case 'MITARBEITER_PRÜFUNG':
+//                   documentStatus = 'needs_review';
+//                   statusReason = extractedData.status_reason || 'KI: Manuelle Prüfung erforderlich';
+//                   break;
+//                 default:
+//                   documentStatus = 'needs_review';
+//                   statusReason = 'Unbekannter KI-Status';
+//                   break;
+//               }
+//             } else if (classificationSuccess) {
+//               // Fallback to legacy logic for older versions
+//               const confidence = extractedData.confidence || 0.0;
+//               const isCreditor = extractedData.is_creditor_document;
+// 
+//               if (isCreditor) {
+//                 if (confidence >= 0.8) {
+//                   documentStatus = 'creditor_confirmed';
+//                   statusReason = 'Legacy: Hohe KI-Sicherheit bei Gläubigerdokument';
+//                 } else {
+//                   documentStatus = 'needs_review';
+//                   statusReason = 'Legacy: Gläubigerdokument erkannt, aber niedrige KI-Sicherheit';
+//                 }
+//               } else {
+//                 if (confidence >= 0.8) {
+//                   documentStatus = 'non_creditor_confirmed';
+//                   statusReason = 'Legacy: Hohe KI-Sicherheit - kein Gläubigerdokument';
+//                 } else {
+//                   documentStatus = 'needs_review';
+//                   statusReason = 'Legacy: Unsichere Klassifikation - manuelle Prüfung erforderlich';
+//                 }
+//               }
+//             } else {
+//               documentStatus = 'needs_review';
+//               statusReason = 'Verarbeitungsfehler - manuelle Prüfung erforderlich';
+//             }
+// 
+//             // Check for duplicate based on reference number for creditor documents
+//             let isDuplicate = false;
+//             let duplicateReason = '';
+// 
+//             if (documentStatus === 'creditor_confirmed' && extractedData.creditor_data?.reference_number) {
+//               const refNumber = extractedData.creditor_data.reference_number;
+//               const existingDoc = client.documents.find(doc =>
+//                 doc.id !== documentId &&
+//                 doc.extracted_data?.creditor_data?.reference_number === refNumber &&
+//                 (doc.document_status === 'creditor_confirmed' || doc.document_status === 'needs_review')
+//               );
+// 
+//               if (existingDoc) {
+//                 isDuplicate = true;
+//                 duplicateReason = `Duplikat gefunden - Referenznummer "${refNumber}" bereits vorhanden in "${existingDoc.name}"`;
+//                 documentStatus = 'duplicate';
+//               }
+//             }
+// 
+//             console.log(`\n✅ =========================`);
+//             console.log(`✅ CLASSIFICATION COMPLETED`);
+//             console.log(`✅ =========================`);
+//             console.log(`📁 Document: ${file.originalname}`);
+//             console.log(`🔍 Classification Success: ${classificationSuccess ? '✅ YES' : '❌ NO'}`);
+//             console.log(`📋 Is Creditor Document: ${extractedData.is_creditor_document ? '✅ YES' : '❌ NO'}`);
+//             console.log(`📊 Document Status: ${documentStatus}`);
+//             console.log(`📝 Status Reason: ${statusReason}`);
+//             console.log(`🔄 Is Duplicate: ${isDuplicate ? '⚠️ YES' : '✅ NO'}`);
+//             if (isDuplicate) console.log(`📄 Duplicate Reason: ${duplicateReason}`);
+//             console.log(`⏱️  Processing Time: ${processingTime}ms`);
+//             console.log(`🤖 Confidence: ${Math.round((extractedData.confidence || 0) * 100)}%`);
+//             console.log(`👁️  Manual Review Required: ${(extractedData.manual_review_required || validation?.requires_manual_review) ? '❗ YES' : '✅ NO'}`);
+//             if (validation?.requires_manual_review) {
+//               console.log(`📋 Validation Reasons: ${validation.review_reasons?.join(', ') || 'None specified'}`);
+//             }
+//             console.log(`📊 Summary: ${summary}`);
+//             console.log(`✅ =========================\n`);
+// 
+//             // Clear timeout on successful completion
+//             clearTimeout(timeoutId);
+// 
+//             // Update document record with enhanced data using safe update
+//             await safeClientUpdate(clientId, (client) => {
+//               const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+//               if (docIndex !== -1) {
+//                 client.documents[docIndex] = {
+//                   ...client.documents[docIndex],
+//                   id: client.documents[docIndex].id,
+//                   name: client.documents[docIndex].name,
+//                   filename: client.documents[docIndex].filename,
+//                   processing_status: classificationSuccess ? 'completed' : 'failed',
+//                   classification_success: classificationSuccess,
+//                   is_creditor_document: extractedData.is_creditor_document || false,
+//                   confidence: extractedData.confidence || 0.0,
+//                   manual_review_required: extractedData.manual_review_required || validation?.requires_manual_review || false,
+//                   document_status: documentStatus,
+//                   status_reason: statusReason,
+//                   is_duplicate: isDuplicate,
+//                   duplicate_reason: duplicateReason,
+//                   extracted_data: extractedData,
+//                   validation: validation,
+//                   summary: summary,
+//                   processed_at: new Date().toISOString(),
+//                   processing_time_ms: processingTime,
+//                   processing_method: 'simplified_creditor_classification'
+//                 };
+//               }
+// 
+//               // Update client status when documents are processed
+//               const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
+//               const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
+//               const totalDocs = client.documents.length;
+//               const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
+// 
+//               // Update status based on processing results
+//               if (client.current_status === 'documents_uploaded' && completedDocs.length > 0) {
+//                 if (allDocsCompleted) {
+//                   // All documents are processed
+//                   if (creditorDocs.length > 0) {
+//                     client.current_status = 'documents_completed';
+//                     console.log(`✅ Status updated to 'documents_completed' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+//                   } else {
+//                     client.current_status = 'no_creditors_found';
+//                     console.log(`⚠️ Status updated to 'no_creditors_found' for client ${clientId}`);
+//                   }
+// 
+//                   // Add status history entry
+//                   client.status_history = client.status_history || [];
+//                   client.status_history.push({
+//                     id: uuidv4(),
+//                     status: client.current_status,
+//                     changed_by: 'system',
+//                     metadata: {
+//                       total_documents: client.documents.length,
+//                       completed_documents: completedDocs.length,
+//                       creditor_documents: creditorDocs.length,
+//                       processing_completed_timestamp: new Date().toISOString()
+//                     },
+//                     created_at: new Date()
+//                   });
+//                 } else if (creditorDocs.length > 0) {
+//                   client.current_status = 'documents_processing';
+//                   console.log(`📊 Status updated to 'documents_processing' for client ${clientId} - found ${creditorDocs.length} creditor documents`);
+// 
+//                   // Add status history entry
+//                   client.status_history = client.status_history || [];
+//                   client.status_history.push({
+//                     id: uuidv4(),
+//                     status: 'documents_processing',
+//                     changed_by: 'system',
+//                     metadata: {
+//                       total_documents: client.documents.length,
+//                       completed_documents: completedDocs.length,
+//                       creditor_documents: creditorDocs.length,
+//                       processing_completed_timestamp: new Date().toISOString()
+//                     },
+//                     created_at: new Date()
+//                   });
+//                 }
+//               }
+// 
+//               // Check if all documents are processed and trigger webhook for clients with payment received
+//               if (allDocsCompleted && client.first_payment_received) {
+//                 console.log(`\n🎯 ================================`);
+//                 console.log(`🎯 PAYMENT + DOCUMENTS COMPLETE`);
+//                 console.log(`🎯 ================================`);
+//                 console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
+//                 console.log(`💰 Payment received: ${client.first_payment_received}`);
+//                 console.log(`📄 All documents completed: ${allDocsCompleted}`);
+//                 console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+// 
+//                 // Update final creditor list with deduplication
+//                 // Filter creditor documents that DON'T require manual review (auto-approved only)
+//                 const creditorDocuments = completedDocs.filter(doc =>
+//                   doc.is_creditor_document === true &&
+//                   !doc.validation?.requires_manual_review &&
+//                   !doc.extracted_data?.manual_review_required
+//                 );
+// 
+//                 const creditorDocsNeedingReview = completedDocs.filter(doc =>
+//                   doc.is_creditor_document === true &&
+//                   (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
+//                 );
+// 
+//                 console.log(`\n📊 DOCUMENT ANALYSIS:`);
+//                 console.log(`📄 Total completed documents: ${completedDocs.length}`);
+//                 console.log(`📄 Auto-approved creditor documents: ${creditorDocuments.length}`);
+//                 console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
+// 
+//                 if (creditorDocuments.length > 0) {
+//                   console.log(`\n📋 CREDITOR DOCUMENTS DETAILS:`);
+//                   creditorDocuments.forEach((doc, index) => {
+//                     console.log(`   ${index + 1}. ${doc.name} (${doc.id})`);
+//                     console.log(`      - Processing status: ${doc.processing_status}`);
+//                     console.log(`      - Has creditor data: ${!!doc.extracted_data?.creditor_data}`);
+//                     if (doc.extracted_data?.creditor_data) {
+//                       const creditorData = doc.extracted_data.creditor_data;
+//                       console.log(`      - Creditor: ${creditorData.sender_name || 'NO_NAME'} (${creditorData.reference_number || 'NO_REF'}) - €${creditorData.claim_amount || 0}`);
+//                     }
+//                   });
+// 
+//                   console.log(`\n🔄 STARTING CREDITOR DEDUPLICATION PROCESS...`);
+// 
+//                   // Use deduplication utility to handle duplicate creditors
+//                   const creditorDeduplication = require('./utils/creditorDeduplication');
+//                   const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+//                     creditorDocuments,
+//                     'highest_amount' // Strategy: keep creditor with highest amount for same ref+name
+//                   );
+// 
+//                   // Merge with existing final_creditor_list if any
+//                   const existingCreditors = client.final_creditor_list || [];
+//                   console.log(`\n📊 EXISTING CREDITOR LIST: ${existingCreditors.length} creditors`);
+// 
+//                   const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+//                     existingCreditors,
+//                     deduplicatedCreditors,
+//                     'highest_amount'
+//                   );
+// 
+//                   client.final_creditor_list = mergedCreditors;
+// 
+//                   console.log(`\n✅ ================================`);
+//                   console.log(`✅ FINAL CREDITOR LIST UPDATED`);
+//                   console.log(`✅ ================================`);
+//                   console.log(`👤 Client: ${clientId}`);
+//                   console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+//                   console.log(`📄 Processed from: ${creditorDocuments.length} documents`);
+//                   console.log(`🗑️ Duplicates removed: ${creditorDocuments.length - deduplicatedCreditors.length}`);
+//                   console.log(`⏰ Updated at: ${new Date().toISOString()}`);
+// 
+//                   // Log final creditor list for monitoring
+//                   console.log(`\n📋 FINAL CREDITOR LIST FOR USER DETAIL VIEW:`);
+//                   mergedCreditors.forEach((creditor, index) => {
+//                     console.log(`   ${index + 1}. ${creditor.sender_name || 'NO_NAME'} (${creditor.reference_number || 'NO_REF'}) - €${creditor.claim_amount || 0}`);
+//                     console.log(`      - Email: ${creditor.sender_email || 'NO_EMAIL'}`);
+//                     console.log(`      - Address: ${creditor.sender_address || 'NO_ADDRESS'}`);
+//                     console.log(`      - Status: ${creditor.status || 'NO_STATUS'}`);
+//                     console.log(`      - Source: ${creditor.source_document || 'NO_SOURCE'}`);
+//                   });
+//                   console.log(`\n`);
+//                 } else {
+//                   console.log(`⚠️ No creditor documents found in completed documents`);
+//                 }
+// 
+//                 // Trigger the processing-complete webhook asynchronously
+//                 setTimeout(async () => {
+//                   await triggerProcessingCompleteWebhook(clientId, documentId);
+//                 }, 1000); // Small delay to ensure database save completes first
+//               }
+// 
+//               // CHECK FOR AUTO-CONFIRMATION TIMER RESET - After document processing
+//               // If client is awaiting confirmation and new documents require review, reset the timer
+//               if (client.current_status === 'awaiting_client_confirmation' &&
+//                 client.admin_approved &&
+//                 client.admin_approved_at) {
+// 
+//                 console.log(`🔍 Checking if new documents require agent review for client ${clientId}...`);
+// 
+//                 // Check if any newly processed documents need review
+//                 const documentsNeedingReview = client.documents.filter(doc => {
+//                   // Only check documents uploaded after the last admin approval
+//                   const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(client.admin_approved_at);
+//                   const needsReview = doc.document_status === 'needs_review' ||
+//                     doc.extracted_data?.manual_review_required === true ||
+//                     (doc.is_creditor_document &&
+//                       (doc.extracted_data?.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+//                   const notReviewed = !doc.manually_reviewed;
+// 
+//                   return uploadedAfterApproval && needsReview && notReviewed;
+//                 });
+// 
+//                 if (documentsNeedingReview.length > 0) {
+//                   console.log(`🔄 ${documentsNeedingReview.length} new documents require agent review - resetting auto-confirmation timer`);
+// 
+//                   // Reset status to require agent review again
+//                   client.current_status = 'creditor_review';
+//                   client.admin_approved = false;  // Reset approval flag
+// 
+//                   const previousApprovalTime = client.admin_approved_at;
+//                   client.admin_approved_at = null; // Reset approval timestamp to restart timer
+// 
+//                   // Add status history to track the change
+//                   client.status_history.push({
+//                     id: uuidv4(),
+//                     status: 'reverted_to_creditor_review',
+//                     changed_by: 'system',
+//                     metadata: {
+//                       reason: 'New documents processed requiring agent review',
+//                       documents_needing_review: documentsNeedingReview.length,
+//                       document_names: documentsNeedingReview.map(doc => doc.name),
+//                       previous_approval_at: previousApprovalTime,
+//                       auto_confirmation_timer_reset: true,
+//                       review_required_reasons: documentsNeedingReview.map(doc => ({
+//                         document: doc.name,
+//                         confidence: doc.extracted_data?.confidence || 0,
+//                         manual_review_required: doc.extracted_data?.manual_review_required,
+//                         is_creditor: doc.is_creditor_document,
+//                         status: doc.document_status
+//                       }))
+//                     },
+//                     created_at: new Date()
+//                   });
+// 
+//                   console.log(`⏰ Auto-confirmation timer reset for client ${clientId} - new agent review required`);
+// 
+//                   // Log details for monitoring
+//                   documentsNeedingReview.forEach(doc => {
+//                     console.log(`   📄 ${doc.name}: confidence=${doc.extracted_data?.confidence || 0}, manual_review=${doc.extracted_data?.manual_review_required}, creditor=${doc.is_creditor_document}`);
+//                   });
+//                 } else {
+//                   console.log(`✅ All new documents for client ${clientId} are auto-approved - no timer reset needed`);
+//                 }
+//               }
+// 
+//               return client;
+//             });
+// 
+//           } catch (processingError) {
+//             // Clear timeout on error
+//             clearTimeout(timeoutId);
+//             const processingTime = Date.now() - startTime;
+// 
+//             console.log(`\n❌ =========================`);
+//             console.log(`❌ AI PROCESSING FAILED`);
+//             console.log(`❌ =========================`);
+//             console.log(`📁 Document: ${file.originalname}`);
+//             console.log(`💥 Error: ${processingError.message}`);
+//             console.log(`⏱️  Failed after: ${processingTime}ms`);
+//             console.log(`🔍 AI Pipeline Success: ❌ NO`);
+//             console.log(`❌ =========================\n`);
+// 
+//             // Update document with error status using safe update
+//             await safeClientUpdate(clientId, (client) => {
+//               const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+//               if (docIndex !== -1) {
+//                 client.documents[docIndex] = {
+//                   ...client.documents[docIndex],
+//                   processing_status: 'failed',
+//                   document_status: 'processing_failed',
+//                   status_reason: `Verarbeitungsfehler: ${processingError.message}`,
+//                   is_duplicate: false,
+//                   ai_pipeline_success: false,
+//                   claude_ai_success: false,
+//                   processing_error: processingError.message,
+//                   processing_error_details: processingError.stack,
+//                   processed_at: new Date().toISOString(),
+//                   processing_time_ms: processingTime,
+//                   processing_method: 'google_document_ai + claude_ai'
+//                 };
+//               }
+//               return client;
+//             });
+//           }
+//         });
+//       }
 
       // Add to client's documents using safe update to prevent race conditions
       await safeClientUpdate(clientId, (client) => {
