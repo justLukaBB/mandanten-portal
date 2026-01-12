@@ -348,7 +348,7 @@ router.post('/ai-processing',
           }
         }
 
-        // Hide source documents that were split into multiple creditors
+        // Remove source documents that were split into multiple creditors
         // Find all unique source_document_ids from the newly added entries
         const sourceDocumentIds = new Set();
         client.documents.forEach(doc => {
@@ -357,12 +357,13 @@ router.post('/ai-processing',
           }
         });
 
-        // Mark source documents as hidden so they don't appear in user portal
+        // Remove source documents entirely so they don't appear in any view
         sourceDocumentIds.forEach(sourceId => {
           const sourceDocIndex = client.documents.findIndex(d => d.id === sourceId);
           if (sourceDocIndex !== -1) {
-            client.documents[sourceDocIndex].hidden_from_portal = true;
-            console.log(`🙈 Hiding source document ${sourceId} from portal (split into multiple creditors)`);
+            const removedDoc = client.documents[sourceDocIndex];
+            client.documents.splice(sourceDocIndex, 1);
+            console.log(`🗑️  Removed source document ${sourceId} (${removedDoc.name}) - split into ${removedDoc.creditor_count || 'multiple'} creditors`);
           }
         });
 
