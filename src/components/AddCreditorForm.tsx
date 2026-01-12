@@ -16,7 +16,7 @@ interface Client {
 const baseSchema = z.object({
     name: z.string().min(1, 'Gläubigername ist erforderlich'),
     email: z.string().email('Ungültige E-Mail-Adresse').optional().or(z.literal('')),
-    referenceNumber: z.string().optional(),
+    referenceNumber: z.string().min(1, 'Aktenzeichen ist erforderlich'),
     amount: z.string().optional(),
     address: z.string().optional(),
     isRepresentative: z.boolean(),
@@ -107,7 +107,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-12">
             {/* Header */}
             <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-8 py-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -151,8 +151,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                 <div className="space-y-6">
                     {/* Section: Gläubiger Informationen */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                            <span className="w-1.5 h-1.5 bg-gray-800 rounded-full mr-2"></span>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
                             Gläubiger-Informationen
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -201,20 +200,28 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
                     {/* Section: Forderungsdetails */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                            <span className="w-1.5 h-1.5 bg-gray-800 rounded-full mr-2"></span>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
                             Forderungsdetails
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Aktenzeichen / Referenznummer
+                                    Aktenzeichen / Referenznummer <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     {...register('referenceNumber')}
                                     placeholder="z.B. AZ-2024-12345"
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 transition-all text-sm bg-white"
+                                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                        errors.referenceNumber
+                                            ? 'border-red-300 bg-red-50 text-red-900 placeholder-red-400 focus:ring-red-500/20 focus:border-red-500'
+                                            : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                    }`}
                                 />
+                                {errors.referenceNumber && (
+                                    <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                        <span className="mr-1">⚠</span> {errors.referenceNumber.message}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -246,8 +253,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
                     {/* Section: Adresse */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                            <span className="w-1.5 h-1.5 bg-gray-800 rounded-full mr-2"></span>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
                             Kontaktadresse
                         </h4>
                         <div>
@@ -265,8 +271,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
                     {/* Section: Vertretung */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                            <span className="w-1.5 h-1.5 bg-gray-800 rounded-full mr-2"></span>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
                             Vertretung
                         </h4>
                         <div className="space-y-4">
@@ -315,8 +320,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
                     {/* Section: Notizen */}
                     <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                            <span className="w-1.5 h-1.5 bg-gray-800 rounded-full mr-2"></span>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
                             Zusätzliche Informationen
                         </h4>
                         <div>
