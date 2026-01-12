@@ -1184,8 +1184,8 @@ app.post('/api/clients/:clientId/documents',
 //               return client;
 //             });
 //           }
-//         });
-//       }
+        });
+      }
 
       // Add to client's documents using safe update to prevent race conditions
       await safeClientUpdate(clientId, (client) => {
