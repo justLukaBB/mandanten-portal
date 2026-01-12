@@ -99,6 +99,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
             toast.success('Gläubiger erfolgreich hinzugefügt');
             reset();
+            setIsOpen(false); // Close the form after successful submission
             if (onSuccess) onSuccess();
         } catch (err) {
             console.error('Failed to add creditor:', err);
@@ -309,7 +310,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                 <div className="flex justify-end items-center space-x-3 pt-8 mt-8 border-t border-gray-200">
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={() => setIsOpen(false)}
                         className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900/10 transition-all"
                     >
                         Abbrechen
@@ -317,8 +318,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
                     <button
                         type="submit"
                         disabled={isLoading}
-                        style={{ backgroundColor: customColors.primary }}
-                        className="px-8 py-2.5 text-white rounded-lg font-medium shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        className="px-8 py-2.5 text-white bg-green-600 hover:bg-green-700 rounded-lg font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                     >
                         {isLoading ? 'Wird hinzugefügt...' : 'Gläubiger hinzufügen'}
                     </button>
