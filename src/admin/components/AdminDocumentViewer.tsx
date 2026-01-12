@@ -94,8 +94,19 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
   const handleDownload = (doc: Document) => {
     try {
-      // Construct the direct download URL using API_BASE_URL
-      const downloadUrl = `${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`;
+      // Prefer direct GCS URL if available, otherwise use backend proxy
+      // This allows downloads to work even when GCS keys aren't configured locally
+      let downloadUrl: string;
+
+      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
+        // Use direct GCS URL
+        downloadUrl = doc.url;
+        console.log('Using direct GCS URL for download:', downloadUrl);
+      } else {
+        // Fall back to backend proxy (for local storage or when url is not available)
+        downloadUrl = `${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`;
+        console.log('Using backend proxy for download:', downloadUrl);
+      }
 
       // Open in new tab as fallback, or direct download
       const link = window.document.createElement('a');
@@ -107,11 +118,15 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
       window.document.body.appendChild(link);
       link.click();
       window.document.body.removeChild(link);
-      
+
     } catch (error) {
       console.error('Download error:', error);
-      // Fallback: open directly in browser
-      window.open(`${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+      // Fallback: try direct GCS URL first, then backend proxy
+      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
+        window.open(doc.url, '_blank');
+      } else {
+        window.open(`${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+      }
     }
   };
 
