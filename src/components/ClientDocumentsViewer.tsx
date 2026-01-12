@@ -8,6 +8,10 @@ interface Document {
   size: number;
   uploadedAt: string;
   url?: string;
+  hidden_from_portal?: boolean;
+  source_document_id?: string;
+  creditor_index?: number;
+  creditor_count?: number;
 }
 
 interface Client {
@@ -20,7 +24,8 @@ interface ClientDocumentsViewerProps {
 }
 
 const ClientDocumentsViewer: React.FC<ClientDocumentsViewerProps> = ({ client }) => {
-  const documents = client?.documents || [];
+  // Filter out documents hidden from portal (source docs that were split into multiple creditors)
+  const documents = (client?.documents || []).filter(doc => !doc.hidden_from_portal);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';

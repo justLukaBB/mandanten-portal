@@ -252,10 +252,18 @@ router.post('/ai-processing',
             const sourceDoc = client.documents.find(d => d.id === docResult.source_document_id);
 
             if (sourceDoc) {
+              // Get creditor name for display
+              const creditorName = docResult.extracted_data?.creditor_data?.sender_name ||
+                                    docResult.extracted_data?.creditor_data?.glaeubiger_name ||
+                                    `Creditor ${docResult.creditor_index}`;
+
+              // Create descriptive name: "document.pdf - Creditor 1/5: Vodafone GmbH"
+              const displayName = `${sourceDoc.name} - Gläubiger ${docResult.creditor_index}/${docResult.creditor_count}: ${creditorName}`;
+
               // Create a new document entry for this creditor
               const newCreditorEntry = {
                 id: docResult.id,
-                name: sourceDoc.name,
+                name: displayName,  // More descriptive name
                 filename: sourceDoc.filename,
                 type: sourceDoc.type,
                 size: sourceDoc.size,
@@ -339,7 +347,25 @@ router.post('/ai-processing',
             }
           }
         }
-        
+
+        // Hide source documents that were split into multiple creditors
+        // Find all unique source_document_ids from the newly added entries
+        const sourceDocumentIds = new Set();
+        client.documents.forEach(doc => {
+          if (doc.source_document_id) {
+            sourceDocumentIds.add(doc.source_document_id);
+          }
+        });
+
+        // Mark source documents as hidden so they don't appear in user portal
+        sourceDocumentIds.forEach(sourceId => {
+          const sourceDocIndex = client.documents.findIndex(d => d.id === sourceId);
+          if (sourceDocIndex !== -1) {
+            client.documents[sourceDocIndex].hidden_from_portal = true;
+            console.log(`🙈 Hiding source document ${sourceId} from portal (split into multiple creditors)`);
+          }
+        });
+
         // Calculate processing stats
         const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
         const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
