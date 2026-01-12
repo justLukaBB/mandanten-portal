@@ -661,7 +661,7 @@ app.get('/api/clients/:clientId', async (req, res) => {
 // Upload creditor documents with AI processing
 app.post('/api/clients/:clientId/documents',
   rateLimits.upload,
-  upload.array('documents', 10),
+  upload.fields([{ name: 'documents', maxCount: 10 }, { name: 'document', maxCount: 1 }]),
   validateFileUpload,
   async (req, res) => {
     try {
@@ -676,19 +676,26 @@ app.post('/api/clients/:clientId/documents',
       console.log(`📤 DOCUMENT UPLOAD STARTED`);
       console.log(`📤 ================================`);
       console.log(`👤 Client: ${clientId} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-      console.log(`📄 Files uploaded: ${req.files.length}`);
+      const filesDict = req.files || {};
+      console.log(`📂 Processing upload - found fields: ${Object.keys(filesDict).join(', ')}`);
+
+      const allFiles = [
+        ...(filesDict['documents'] || []),
+        ...(filesDict['document'] || [])
+      ];
+      console.log(`📄 Files uploaded: ${allFiles.length}`);
       console.log(`⏰ Upload time: ${new Date().toISOString()}`);
 
       // Log uploaded files
       console.log(`\n📋 UPLOADED FILES:`);
-      req.files.forEach((file, index) => {
+      allFiles.forEach((file, index) => {
         console.log(`   ${index + 1}. ${file.originalname} (${file.size} bytes, ${file.mimetype})`);
       });
 
       const uploadedDocuments = [];
 
       // Process each uploaded file
-      for (const file of req.files) {
+      for (const file of allFiles) {
         const documentId = uuidv4();
 
         let gcsUrl;
@@ -1257,10 +1264,12 @@ app.post('/api/clients/:clientId/documents',
       });
 
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error (CRITICAL):', error);
       res.status(500).json({
         error: 'Fehler beim Hochladen der Dateien',
-        details: error.message
+        details: error.message,
+        // Only show stack in dev/test, or if explicitly requested
+        stack: error.stack
       });
     }
   });
@@ -1668,12 +1677,29 @@ app.get('/api/clients/:clientId/documents/:documentId/download', authenticateAdm
 app.get('/api/clients/:clientId/documents', async (req, res) => {
   try {
     const clientId = req.params.clientId;
-    const client = await getClient(clientId);
+    console.log(`🔍 Fetching documents (direct DB) for client: ${clientId}`);
+
+    const mongoose = require('mongoose');
+    console.log(`🔌 Connected DB: ${mongoose.connection.name} on ${mongoose.connection.host}`);
+
+    // Direct MongoDB query to ensure we get persistent data and bypass potential in-memory cache issues
+    let query;
+    if (/^[0-9a-fA-F]{24}$/.test(clientId)) {
+      // It looks like an ObjectId, so check both id (string) and _id (ObjectId)
+      query = { $or: [{ id: clientId }, { _id: clientId }] };
+    } else {
+      // It's likely a UUID or Aktenzeichen
+      query = { $or: [{ id: clientId }, { aktenzeichen: clientId }] };
+    }
+
+    const client = await Client.findOne(query);
 
     if (!client) {
+      console.log(`❌ Client not found in DB: ${clientId}`);
       return res.status(404).json({ error: 'Client not found' });
     }
 
+    console.log(`✅ Client found: ${client.aktenzeichen}, Docs: ${client.documents?.length || 0}`);
     res.json(client.documents || []);
   } catch (error) {
     console.error('Error fetching client documents:', error);
@@ -6241,351 +6267,9 @@ function getClientDisplayStatus(client) {
   return status;
 }
 
-// Document upload endpoint - MISSING FROM ORIGINAL CODE!
-app.post('/api/clients/:clientId/documents', upload.single('document'), async (req, res) => {
-  try {
-    const clientId = req.params.clientId;
-    const client = await getClient(clientId);
 
-    if (!client) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
 
-    const documentId = uuidv4();
-    const fileName = req.file.filename;
-    const originalName = req.file.originalname;
-    const filePath = req.file.path;
-
-    console.log(`📄 Processing uploaded document: ${originalName} for client ${clientId}`);
-
-    // Initialize document record
-    const documentRecord = {
-      id: documentId,
-      name: originalName,
-      filename: fileName,
-      path: filePath,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      uploadedAt: new Date().toISOString(),
-      processing_status: 'processing',
-      is_creditor_document: false,
-      extracted_data: {},
-      confidence: 0,
-      processing_method: 'pending'
-    };
-
-    // Add document to client
-    client.documents = client.documents || [];
-    client.documents.push(documentRecord);
-
-    // ===== ITERATIVE LOOP: Check if client is in confirmation phase =====
-    // IMPORTANT: Check BEFORE changing status!
-    // Include both awaiting_client_confirmation AND additional_documents_review
-    // (additional_documents_review can occur when multiple documents are uploaded in succession)
-    const previousStatus = client.current_status; // Store for Zendesk ticket logic
-    const isInConfirmationPhase = (client.current_status === 'awaiting_client_confirmation' ||
-      client.current_status === 'additional_documents_review') &&
-      client.admin_approved === true;
-
-    // Update client status to documents_uploaded if needed (but NOT if in confirmation phase)
-    if (!isInConfirmationPhase && (client.current_status === 'created' || client.current_status === 'portal_access_sent')) {
-      client.current_status = 'documents_uploaded';
-    }
-
-    // If in confirmation phase, mark additional documents uploaded
-    if (isInConfirmationPhase) {
-      console.log(`📄 Additional documents uploaded during confirmation phase for ${client.aktenzeichen || client.id}`, {
-        previousStatus,
-        newStatus: 'additional_documents_review',
-        admin_approved: client.admin_approved,
-        review_iteration: client.review_iteration_count || 0
-      });
-
-      client.additional_documents_uploaded_after_review = true;
-      client.additional_documents_uploaded_at = new Date();
-      client.current_status = 'additional_documents_review';
-
-      // Add status history
-      client.status_history = client.status_history || [];
-      client.status_history.push({
-        id: uuidv4(),
-        status: 'additional_documents_uploaded',
-        changed_by: 'client',
-        metadata: {
-          documents_count: client.documents.length,
-          upload_type: 'additional_after_review',
-          previous_status: 'awaiting_client_confirmation',
-          iteration: (client.review_iteration_count || 0) + 1,
-          document_name: originalName
-        },
-        created_at: new Date()
-      });
-    }
-
-    await saveClient(client);
-
-    console.log(`📄 Document ${originalName} added to client ${clientId}, starting processing...`);
-
-    // Process document asynchronously with delay
-    setImmediate(async () => {
-      try {
-        // Add 3-second delay before processing each document
-        console.log(`⏳ Waiting 3 seconds before processing: ${originalName}`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        console.log(`🤖 Starting AI processing for: ${originalName}`);
-
-        // Process with AI
-        const processingResult = await documentProcessor.processDocument(filePath, originalName);
-
-        // Update document with processing results
-        const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-        if (docIndex !== -1) {
-          client.documents[docIndex] = {
-            ...client.documents[docIndex],
-            processing_status: 'completed',
-            is_creditor_document: processingResult.classification.is_creditor_document,
-            extracted_data: processingResult.extracted_data,
-            confidence: processingResult.classification.confidence,
-            processing_method: 'ai_processed',
-            processed_at: new Date().toISOString(),
-            processing_time_ms: processingResult.processing_time_ms || 0
-          };
-
-          await saveClient(client);
-          console.log(`✅ Document processing completed: ${originalName} - Creditor: ${processingResult.classification.is_creditor_document}`);
-
-          // Check if all documents are now completed and trigger status updates
-          const updatedClient = await getClient(clientId);
-          const completedDocs = updatedClient.documents.filter(doc => doc.processing_status === 'completed');
-          const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);
-          const allDocsCompleted = completedDocs.length === updatedClient.documents.length && updatedClient.documents.length > 0;
-
-          // Update status based on processing results (regardless of payment status)
-          if (allDocsCompleted) {
-            if (creditorDocs.length > 0) {
-              updatedClient.current_status = 'documents_completed';
-              console.log(`✅ All documents completed for client ${clientId} - found ${creditorDocs.length} creditor documents`);
-            } else {
-              updatedClient.current_status = 'no_creditors_found';
-              console.log(`⚠️ All documents completed but no creditors found for client ${clientId}`);
-            }
-
-            // Add status history entry
-            updatedClient.status_history = updatedClient.status_history || [];
-            updatedClient.status_history.push({
-              id: uuidv4(),
-              status: updatedClient.current_status,
-              changed_by: 'system',
-              metadata: {
-                total_documents: updatedClient.documents.length,
-                completed_documents: completedDocs.length,
-                creditor_documents: creditorDocs.length,
-                processing_completed_timestamp: new Date().toISOString()
-              },
-              created_at: new Date()
-            });
-          }
-
-          // ===== ITERATIVE LOOP: Check if client is in confirmation phase BEFORE scheduling webhook =====
-          const clientStatus = updatedClient.current_status;
-          const inConfirmationPhase = (clientStatus === 'awaiting_client_confirmation' ||
-            clientStatus === 'additional_documents_review') &&
-            updatedClient.admin_approved === true;
-
-          if (inConfirmationPhase) {
-            console.log(`🔄 Client ${clientId} is in confirmation phase (${clientStatus}) - skipping processing-complete webhook (iterative loop active)`);
-          }
-
-          // If payment is also received AND NOT in confirmation phase, populate creditor list and schedule delayed webhook
-          if (allDocsCompleted && updatedClient.first_payment_received && !inConfirmationPhase) {
-            console.log(`🎯 All documents completed for client ${clientId} after upload - scheduling delayed creditor review`);
-
-            // Update final creditor list
-            // Filter creditor documents that DON'T require manual review (auto-approved only)
-            const creditorDocuments = completedDocs.filter(doc =>
-              doc.is_creditor_document === true &&
-              !doc.validation?.requires_manual_review &&
-              !doc.extracted_data?.manual_review_required
-            );
-
-            const creditorDocsNeedingReview = completedDocs.filter(doc =>
-              doc.is_creditor_document === true &&
-              (doc.validation?.requires_manual_review || doc.extracted_data?.manual_review_required)
-            );
-
-            console.log(`📊 Found ${creditorDocuments.length} auto-approved creditor documents for extraction`);
-            console.log(`⚠️ Found ${creditorDocsNeedingReview.length} creditor documents requiring manual review`);
-            const extractedCreditors = [];
-
-            creditorDocuments.forEach(doc => {
-              if (doc.extracted_data?.creditor_data) {
-                const creditorData = doc.extracted_data.creditor_data;
-                console.log(`📊 Extracting creditor from document ${doc.name}:`, creditorData);
-                extractedCreditors.push({
-                  id: uuidv4(),
-                  sender_name: creditorData.sender_name,
-                  sender_address: creditorData.sender_address,
-                  sender_email: creditorData.sender_email,
-                  reference_number: creditorData.reference_number,
-                  claim_amount: creditorData.claim_amount || 0,
-                  is_representative: creditorData.is_representative || false,
-                  actual_creditor: creditorData.actual_creditor,
-                  source_document: doc.name,
-                  source_document_id: doc.id,
-                  ai_confidence: doc.confidence || 0,
-                  status: 'confirmed',
-                  created_at: new Date(),
-                  confirmed_at: new Date()
-                });
-              }
-            });
-
-            // Update client with extracted creditors
-            if (extractedCreditors.length > 0) {
-              updatedClient.final_creditor_list = extractedCreditors;
-              updatedClient.current_status = 'documents_completed';
-              console.log(`📋 Updated final_creditor_list with ${extractedCreditors.length} creditors`);
-            } else {
-              updatedClient.current_status = 'no_creditors_found';
-              console.log(`⚠️ No creditors extracted despite creditor documents being found`);
-            }
-
-            await saveClient(updatedClient);
-
-            // Schedule delayed processing-complete webhook (24 hours)
-            const delayedProcessingService = require('./services/delayedProcessingService');
-            const delayService = new delayedProcessingService();
-
-            try {
-              await delayService.scheduleProcessingCompleteWebhook(clientId, documentId, 24);
-              console.log(`⏰ Scheduled processing-complete webhook for 24 hours from now`);
-            } catch (error) {
-              console.error(`❌ Failed to schedule delayed webhook, triggering immediately:`, error);
-              // Fallback to immediate trigger if scheduling fails
-              await triggerProcessingCompleteWebhook(clientId);
-            }
-          }
-        }
-
-      } catch (processingError) {
-        console.error(`❌ Error processing document ${originalName}:`, processingError);
-
-        // Update document with error
-        const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-        if (docIndex !== -1) {
-          client.documents[docIndex] = {
-            ...client.documents[docIndex],
-            processing_status: 'failed',
-            processing_error: processingError.message,
-            processed_at: new Date().toISOString()
-          };
-
-          await saveClient(client);
-        }
-      }
-    });
-
-    // ===== ITERATIVE LOOP: Create Zendesk ticket for additional documents =====
-    // Only create ticket on FIRST upload (transition from awaiting_client_confirmation)
-    // Subsequent uploads while already in additional_documents_review should not create duplicate tickets
-    const shouldCreateTicket = isInConfirmationPhase && previousStatus === 'awaiting_client_confirmation';
-
-    console.log(`🔍 Zendesk ticket decision for ${client.aktenzeichen}:`, {
-      isInConfirmationPhase,
-      previousStatus,
-      currentStatus: client.current_status,
-      admin_approved: client.admin_approved,
-      shouldCreateTicket
-    });
-
-    if (shouldCreateTicket) {
-      try {
-        const ZendeskService = require('./services/zendeskService');
-        const zendeskService = new ZendeskService();
-
-        if (zendeskService.isConfigured()) {
-          console.log(`🎫 Creating Zendesk ticket for additional documents upload...`);
-
-          const ticketResult = await zendeskService.createTicket({
-            subject: `🔄 Zusätzliche Dokumente hochgeladen: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
-            content: `**🔄 ZUSÄTZLICHE DOKUMENTE NACH AGENT REVIEW**
-
-👤 **Client:** ${client.firstName} ${client.lastName}
-📧 **Email:** ${client.email}
-📁 **Aktenzeichen:** ${client.aktenzeichen}
-📅 **Hochgeladen:** ${new Date().toLocaleString('de-DE')}
-📄 **Dokument:** ${originalName}
-
-📊 **Situation:**
-• Status: War in Client-Bestätigung (awaiting_client_confirmation)
-• Vorherige Agent-Review: Abgeschlossen am ${client.admin_approved_at?.toLocaleString('de-DE') || 'N/A'}
-• Anzahl bereits bestätigter Gläubiger: ${(client.final_creditor_list || []).length}
-• **NEUES** Dokument hochgeladen: ${originalName}
-• Review-Iteration: ${(client.review_iteration_count || 0) + 1}
-
-⚠️ **AKTION ERFORDERLICH:**
-1. Bitte das neue Dokument im Agent Portal prüfen
-2. Neue Gläubiger extrahieren und bestätigen
-3. Diese werden zur bestehenden Gläubigerliste hinzugefügt
-4. Client erhält automatisch aktualisierte Liste zur erneuten Bestätigung
-
-🔗 **Agent Portal:** ${process.env.FRONTEND_URL || process.env.BACKEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${clientId}
-
-📋 **STATUS:** Zusätzliche Dokumente - Review erforderlich`,
-            requesterEmail: client.email,
-            tags: ['additional-documents', 'agent-review-required', 'creditor-documents', 'iterative-review'],
-            priority: 'normal'
-          });
-
-          if (ticketResult.success) {
-            console.log(`✅ Zendesk ticket created for additional documents: ${ticketResult.ticket_id}`);
-
-            // Store new ticket
-            client.zendesk_tickets = client.zendesk_tickets || [];
-            client.zendesk_tickets.push({
-              ticket_id: ticketResult.ticket_id,
-              ticket_type: 'additional_creditor_review',
-              ticket_scenario: 'additional_documents_after_confirmation',
-              status: 'open',
-              created_at: new Date()
-            });
-
-            await saveClient(client);
-          } else {
-            console.error(`❌ Failed to create Zendesk ticket:`, ticketResult.error);
-          }
-        } else {
-          console.log(`⚠️ Zendesk not configured - skipping ticket creation`);
-        }
-      } catch (zendeskError) {
-        console.error(`❌ Error creating Zendesk ticket:`, zendeskError.message);
-      }
-    }
-
-    res.json({
-      success: true,
-      message: 'Document uploaded successfully and processing started',
-      document: {
-        id: documentId,
-        name: originalName,
-        size: req.file.size,
-        processing_status: 'processing'
-      }
-    });
-
-  } catch (error) {
-    console.error('Error uploading document:', error);
-    res.status(500).json({
-      error: 'Failed to upload document',
-      details: error.message
-    });
-  }
-});
 
 // ============================================================================
 // FINANCIAL DATA ENDPOINTS FOR CLIENT PORTAL
