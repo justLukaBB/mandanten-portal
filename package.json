@@ -4,14 +4,14 @@
   "private": true,
   "dependencies": {
     "@heroicons/react": "^2.0.18",
+    "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
+    "@reduxjs/toolkit": "^2.11.2",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.11.47",
-    "@types/react": "^18.0.15",
-    "@types/react-dom": "^18.0.6",
     "axios": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -23,14 +23,17 @@
     "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-hook-form": "^7.70.0",
+    "react-redux": "^9.2.0",
     "react-router-dom": "^6.8.0",
     "react-scripts": "5.0.1",
     "serve": "^14.2.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^3.4.17",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^4.7.4",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zod": "^4.3.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -57,7 +60,11 @@
     ]
   },
   "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-redux": "^7.1.34",
     "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6"
+    "postcss": "^8.5.6",
+    "typescript": "^5.9.3"
   }
 }

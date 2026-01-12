@@ -92,9 +92,9 @@ startxref
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    
+
     res.send(Buffer.from(mockPDFContent));
-    
+
   } catch (error) {
     console.error('❌ Error serving mock PDF:', error);
     res.status(500).json({
@@ -126,7 +126,7 @@ router.get('/available-clients', authenticateAgent, rateLimits.general, async (r
     for (const client of clients) {
       const documents = client.documents || [];
       const creditors = client.final_creditor_list || [];
-      
+
       // Find documents that need review
       const documentsToReview = documents.filter(doc => {
         const relatedCreditor = creditors.find(c =>
@@ -135,14 +135,14 @@ router.get('/available-clients', authenticateAgent, rateLimits.general, async (r
         );
 
         const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
-                                     doc.validation?.requires_manual_review === true;
+          doc.validation?.requires_manual_review === true;
 
         return (
           doc.is_creditor_document === true &&
           !doc.manually_reviewed &&
           (manualReviewRequired ||
-           !relatedCreditor ||
-           (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
+            !relatedCreditor ||
+            (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
         );
       });
 
@@ -210,11 +210,11 @@ router.get('/available-clients', authenticateAgent, rateLimits.general, async (r
 router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     console.log(`🔍 Agent Review: Getting review data for client ${clientId}`);
 
     const client = await Client.findOne({ id: clientId });
-    
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
@@ -225,13 +225,13 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
     // Get documents that need review (creditor documents with low confidence)
     const documents = client.documents || [];
     const creditors = client.final_creditor_list || [];
-    
+
     // Filter documents that need manual review based on Claude AI document confidence
     const documentsToReview = documents.filter(doc => {
       // Check if document needs manual review based on Claude AI confidence or manual_review_required flag
       const documentConfidence = doc.extracted_data?.confidence || 0;
       const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
-                                   doc.validation?.requires_manual_review === true; // ✅ ALSO CHECK validation flag
+        doc.validation?.requires_manual_review === true; // ✅ ALSO CHECK validation flag
       const isCreditorDocument = doc.is_creditor_document === true;
       const alreadyReviewed = doc.manually_reviewed === true;
 
@@ -281,7 +281,7 @@ router.get('/:clientId', authenticateAgent, rateLimits.general, async (req, res)
         confidenceType: typeof c.confidence
       }))
     });
-    
+
     // Log document structure for debugging
     if (documentsToReview.length > 0) {
       console.log(`📄 First document to review:`, {
@@ -340,7 +340,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
   try {
     const { clientId } = req.params;
     const { document_id, corrections, action } = req.body; // action: 'correct', 'skip', 'confirm'
-    
+
     console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}, action: ${action}`);
 
     // Enhanced input validation with debugging
@@ -374,7 +374,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     }
 
     const client = await Client.findOne({ id: clientId });
-    
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
@@ -395,10 +395,10 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     // Find related creditor (if any)
     let creditorIndex = -1;
     const creditors = client.final_creditor_list || [];
-    
+
     for (let i = 0; i < creditors.length; i++) {
-      if (creditors[i].document_id === document_id || 
-          creditors[i].source_document === document.name) {
+      if (creditors[i].document_id === document_id ||
+        creditors[i].source_document === document.name) {
         creditorIndex = i;
         break;
       }
@@ -409,7 +409,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
       if (creditorIndex >= 0 && creditorIndex < creditors.length) {
         // Update existing creditor - safe access
         const originalData = { ...creditors[creditorIndex] };
-        
+
         // Preserve the original creditor object and only update specific fields
         Object.assign(creditors[creditorIndex], {
           sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
@@ -427,12 +427,12 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           correction_notes: corrections.notes || '',
           review_action: 'corrected'
         });
-        
+
         console.log(`✅ Updated existing creditor for document ${document_id}`);
       } else {
         // Create new creditor from corrections
         const claimAmount = corrections.claim_amount ? parseFloat(corrections.claim_amount) : 0;
-        
+
         const newCreditor = {
           id: uuidv4(),
           document_id: document_id,
@@ -451,7 +451,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
           created_via: 'manual_review',
           correction_notes: corrections.notes || ''
         };
-        
+
         creditors.push(newCreditor);
         console.log(`✅ Created new creditor for document ${document_id}`);
       }
@@ -513,7 +513,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
             created_via: 'agent_confirmation',
             review_action: 'confirmed'
           };
-          
+
           creditors.push(newCreditor);
           console.log(`✅ Created new confirmed creditor from AI data for document ${document_id}: ${newCreditor.sender_name}`);
         } else {
@@ -580,7 +580,7 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, async (
     console.error('Document ID:', req.body.document_id);
     console.error('Action:', req.body.action);
     console.error('Corrections:', JSON.stringify(req.body.corrections, null, 2));
-    
+
     res.status(500).json({
       error: 'Failed to save corrections',
       details: error.message,
@@ -600,11 +600,11 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
   try {
     const { clientId } = req.params;
     const { zendesk_ticket_id } = req.body;
-    
+
     console.log(`✅ Agent Review: Completing review session for client ${clientId}`);
 
     const client = await Client.findOne({ id: clientId });
-    
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
@@ -615,10 +615,10 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     // Run final duplicate check before completing agent review
     const creditorDeduplication = require('../utils/creditorDeduplication');
     const finalCreditors = client.final_creditor_list || [];
-    
+
     if (finalCreditors.length > 0) {
       const deduplicatedCreditors = creditorDeduplication.deduplicateCreditors(finalCreditors, 'highest_amount');
-      
+
       if (deduplicatedCreditors.length < finalCreditors.length) {
         console.log(`🔍 Final duplicate check during agent review completion for ${clientId}: ${finalCreditors.length - deduplicatedCreditors.length} duplicates removed, ${deduplicatedCreditors.length} creditors remaining`);
         client.final_creditor_list = deduplicatedCreditors;
@@ -693,23 +693,23 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
     let zendeskService = null;
     let ticketCreated = false;
     let ticketId = null;
-    
+
     try {
       zendeskService = new ZendeskService();
       console.log(`🎫 Zendesk service configured: ${zendeskService.isConfigured()}`);
-      
+
       if (!zendeskService.isConfigured()) {
         console.log(`⚠️ Zendesk service not configured - skipping ticket operations`);
       } else {
         // Try to find existing ticket ID with better validation
-        const originalTicket = client.zendesk_tickets?.find(t => 
-          t.ticket_type === 'main_ticket' || 
-          t.ticket_type === 'payment_review' || 
+        const originalTicket = client.zendesk_tickets?.find(t =>
+          t.ticket_type === 'main_ticket' ||
+          t.ticket_type === 'payment_review' ||
           t.status === 'active'
         );
-        
+
         let originalTicketId = originalTicket?.ticket_id || client.zendesk_ticket_id || zendesk_ticket_id;
-        
+
         console.log(`🔍 Ticket ID resolution:`, {
           originalTicket: originalTicket?.ticket_id,
           clientTicketId: client.zendesk_ticket_id,
@@ -738,7 +738,7 @@ router.post('/:clientId/complete', authenticateAgent, rateLimits.general, async 
         // Create new ticket if no valid ticket found
         if (!originalTicketId) {
           console.log(`🎫 Creating new ticket for agent review completion...`);
-          
+
           const finalCreditorsList = creditors
             .filter(c => c.status === 'confirmed')
             .map((c, index) => `${index + 1}. ${c.sender_name || 'Unbekannt'} - €${(c.claim_amount || 0).toFixed(2)}`)
@@ -777,7 +777,7 @@ ${finalCreditorsList}
           if (newTicketResult.success) {
             ticketId = newTicketResult.ticket_id;
             ticketCreated = true;
-            
+
             // Store the new ticket ID in client record
             client.zendesk_ticket_id = ticketId;
             if (!client.zendesk_tickets) {
@@ -789,7 +789,7 @@ ${finalCreditorsList}
               status: 'active',
               created_at: new Date()
             });
-            
+
             console.log(`✅ Created new ticket ${ticketId} for agent review completion`);
           } else {
             console.error(`❌ Failed to create new ticket:`, newTicketResult.error);
@@ -827,7 +827,7 @@ ${finalCreditorsList}
               content: reviewCompleteComment,
               status: 'open'
             });
-            
+
             if (commentResult.success) {
               console.log(`✅ Added review completion comment to ticket ${originalTicketId}`);
               ticketId = originalTicketId;
@@ -845,11 +845,11 @@ ${finalCreditorsList}
 
     // AUTOMATICALLY SEND CLIENT CONFIRMATION REQUEST AFTER AGENT REVIEW
     let clientNotificationSent = false;
-    
+
     if (creditors.length > 0) {
       try {
         console.log(`📧 Agent review completed - sending client confirmation request for ${client.aktenzeichen}...`);
-        
+
         // Generate creditor list for client review
         const creditorsList = creditors
           .filter(c => c.status === 'confirmed')
@@ -860,7 +860,7 @@ ${finalCreditorsList}
           }).join('\n\n');
 
         const portalLink = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/portal?token=${client.portal_token}`;
-        
+
         // Send Side Conversation to client (AFTER agent approval) - IMPROVED
         if (zendeskService && zendeskService.isConfigured() && ticketId) {
           try {
@@ -885,7 +885,7 @@ Rechtsanwalt Thomas Scuric
 
             console.log(`📧 Sending client notification to ${client.email}...`);
             console.log(`📧 Using ticket ID: ${ticketId} (created: ${ticketCreated})`);
-            
+
             // Use improved notification method with automatic fallbacks
             const sideConversationResult = await zendeskService.sendClientNotification(ticketId, {
               recipient_email: client.email,
@@ -926,7 +926,7 @@ Rechtsanwalt Thomas Scuric
             } else {
               console.error(`❌ All notification methods failed:`, sideConversationResult.error);
               console.error(`❌ Methods tried:`, sideConversationResult.methods_tried);
-              
+
               // Add error comment if ticket is available
               if (ticketId) {
                 await zendeskService.addInternalComment(ticketId, {
@@ -946,11 +946,11 @@ Rechtsanwalt Thomas Scuric
                 });
               }
             }
-            
+
           } catch (error) {
             console.error(`❌ Failed to send client confirmation request:`, error.message);
             console.error(`Client notification error stack:`, error.stack);
-            
+
             // Add error comment if ticket is available
             if (ticketId) {
               try {
@@ -972,7 +972,7 @@ Rechtsanwalt Thomas Scuric
           console.log(`ℹ️ Zendesk not configured or no ticket ID - client notification skipped`);
           console.log(`Debug: zendeskService=${!!zendeskService}, configured=${zendeskService?.isConfigured()}, ticketId=${ticketId}`);
         }
-        
+
       } catch (error) {
         console.error(`❌ Failed to send client notification for ${client.aktenzeichen}:`, error.message);
         console.error(`Client notification outer error stack:`, error.stack);
@@ -1018,7 +1018,7 @@ Rechtsanwalt Thomas Scuric
     console.error('❌ Error completing review:', error);
     console.error('Error stack:', error.stack);
     console.error('Client ID:', req.params.clientId);
-    
+
     res.status(500).json({
       error: 'Failed to complete review',
       details: error.message,
@@ -1038,7 +1038,7 @@ router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.gene
     const { clientId, documentId } = req.params;
 
     const client = await Client.findOne({ id: clientId });
-    
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
@@ -1047,7 +1047,7 @@ router.get('/:clientId/document/:documentId', authenticateAgent, rateLimits.gene
     }
 
     const document = client.documents.find(d => d.id === documentId);
-    
+
     if (!document) {
       return res.status(404).json({
         error: 'Document not found',
@@ -1101,16 +1101,16 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
       // It's either ObjectId or aktenzeichen
       clientQuery = { $or: [{ _id: clientId }, { aktenzeichen: clientId }, { id: clientId }] };
     }
-    
+
     console.log(`🔍 Looking for client with ID: ${clientId}, using query:`, clientQuery);
     const client = await Client.findOne(clientQuery);
-    
+
     if (!client) {
       console.error(`❌ Client not found for ID: ${clientId}`);
     } else {
       console.log(`✅ Found client: ${client.aktenzeichen || client.id}`);
     }
-    
+
     if (!client) {
       return res.status(404).json({
         error: 'Client not found',
@@ -1119,7 +1119,7 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
     }
 
     const document = client.documents.find(d => d.id === documentId);
-    
+
     if (!document) {
       return res.status(404).json({
         error: 'Document not found',
@@ -1169,7 +1169,7 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
     const extension = document.type?.split('/')[1] || 'pdf';
     possiblePaths.push(path.join(uploadsDir, clientId, `${documentId}.${extension}`));
     possiblePaths.push(path.join(uploadsDir, safeAktenzeichen, `${documentId}.${extension}`));
-    
+
     console.log(`🔍 Agent document loading for ${documentId}:`, {
       documentId,
       clientId,
@@ -1180,15 +1180,15 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
       documentKeys: Object.keys(document)
     });
     console.log(`📁 Trying file paths:`, possiblePaths);
-    
+
     // Debug: List actual files in upload directories and check root uploads dir
     try {
       const clientUploadDir = path.join(uploadsDir, clientId);
       const aktenzeichenUploadDir = path.join(uploadsDir, safeAktenzeichen);
-      
+
       console.log(`📂 Files in ${clientUploadDir}:`, fs.existsSync(clientUploadDir) ? fs.readdirSync(clientUploadDir) : 'Directory not found');
       console.log(`📂 Files in ${aktenzeichenUploadDir}:`, fs.existsSync(aktenzeichenUploadDir) ? fs.readdirSync(aktenzeichenUploadDir) : 'Directory not found');
-      
+
       // Check if uploads directory exists and list all subdirectories
       if (fs.existsSync(uploadsDir)) {
         const allDirs = fs.readdirSync(uploadsDir).filter(item => {
@@ -1196,7 +1196,7 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
           return fs.statSync(itemPath).isDirectory();
         });
         console.log(`📁 All directories in ${uploadsDir}:`, allDirs.slice(0, 10)); // Show first 10
-        
+
         // Check if any directory contains files for this client
         for (const dir of allDirs) {
           const dirPath = path.join(uploadsDir, dir);
@@ -1229,59 +1229,59 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
 
     if (!filePath || !fs.existsSync(filePath)) {
       console.error(`❌ File not found for document ${documentId}. Tried paths:`, possiblePaths);
-      
+
       // Last resort: search for any file containing the document ID
       try {
         const searchDirs = [
           path.join(uploadsDir, clientId),
           path.join(uploadsDir, client.aktenzeichen)
         ];
-        
+
         for (const searchDir of searchDirs) {
           if (fs.existsSync(searchDir)) {
             const files = fs.readdirSync(searchDir);
             console.log(`🔍 Searching for files containing '${documentId}' in ${searchDir}:`, files);
-            
+
             // Look for files that start with the document ID
-            const matchingFile = files.find(file => 
-              file.startsWith(documentId) || 
+            const matchingFile = files.find(file =>
+              file.startsWith(documentId) ||
               file.includes(documentId.substring(0, 8)) // partial match
             );
-            
+
             if (matchingFile) {
               filePath = path.join(searchDir, matchingFile);
               console.log(`✅ Found matching file via search: ${filePath}`);
               break;
             }
-            
+
             // If no match by ID, try to match by document upload order
             if (!filePath && document.name) {
               const match = document.name.match(/Document_(\d+)_/);
               if (match) {
                 const docIndex = parseInt(match[1]) - 1; // Convert to 0-based index
-                
+
                 // Get all documents for this client and sort by upload time
                 const allDocuments = client.documents || [];
                 const sortedDocuments = allDocuments
                   .filter(doc => doc.uploadedAt) // Only documents with upload time
                   .sort((a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt));
-                
+
                 // Use document index directly (Document_1 = index 0, Document_2 = index 1, etc.)
                 // This is more reliable than upload time which can be inconsistent
                 let actualIndex = docIndex;
-                
+
                 console.log(`📋 Document mapping: ${document.name} -> index ${actualIndex}`);
-                
+
                 // Sort files by modification time to match upload order
                 const filesWithStats = files.map(file => {
                   const filePath = path.join(searchDir, file);
                   const stats = fs.statSync(filePath);
                   return { name: file, mtime: stats.mtime };
                 }).sort((a, b) => a.mtime - b.mtime);
-                
+
                 const sortedFiles = filesWithStats.map(f => f.name);
                 console.log(`📑 Trying to match document ${actualIndex} by upload order in files:`, sortedFiles);
-                
+
                 if (actualIndex >= 0 && actualIndex < sortedFiles.length) {
                   // Get the file at the same position in upload order
                   const mappedPath = path.join(searchDir, sortedFiles[actualIndex]);
@@ -1300,18 +1300,63 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
       } catch (searchError) {
         console.log(`⚠️ File search failed:`, searchError.message);
       }
-      
+
       // If still not found, check for test scenarios
       if (!filePath && client.aktenzeichen?.startsWith('TEST_REVIEW_')) {
         console.log(`📋 Serving mock PDF for test document ${document.name}`);
         return serveMockPDF(res, document.name);
       }
-      
+
       if (!filePath) {
-        return res.status(404).json({
-          error: 'Document file not found on disk',
-          document_id: documentId
-        });
+        // Local file not found, try GCS
+        console.log(`❌ Local file not found for document ${documentId}. Attempting GCS retrieval...`);
+
+        try {
+          // Import GCS service dynamically
+          const { getGCSFileStream } = require('../services/gcs-service');
+
+          // Determine GCS filename
+          let gcsFilename = document.filename || document.name;
+
+          // Fallback construction if filename is missing
+          if (!gcsFilename) {
+            const extension = document.type?.split('/')[1] || 'pdf';
+            gcsFilename = `${documentId}.${extension}`;
+          }
+
+          console.log(`☁️ Fetching from GCS: ${gcsFilename}`);
+          const fileStream = getGCSFileStream(gcsFilename);
+
+          // Set error handler for the stream
+          fileStream.on('error', (err) => {
+            console.error(`❌ GCS stream error for ${gcsFilename}:`, err.message);
+            if (!res.headersSent) {
+              res.status(404).json({
+                error: 'Document file not found (Local & GCS)',
+                document_id: documentId,
+                gcs_filename: gcsFilename
+              });
+            }
+          });
+
+          // Set appropriate headers
+          const contentType = document.type || 'application/pdf';
+          res.setHeader('Content-Type', contentType);
+
+          // For images/PDFs being viewed in browser, inline is preferred
+          res.setHeader('Content-Disposition', 'inline');
+
+          // Pipe the stream to response
+          fileStream.pipe(res);
+          return; // Stop execution here
+
+        } catch (gcsError) {
+          console.error('❌ GCS Error:', gcsError);
+          return res.status(500).json({
+            error: 'Error retrieving file from storage',
+            details: gcsError.message
+          });
+        }
       }
     }
 
@@ -1333,15 +1378,15 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
       };
       mimeType = mimeTypes[ext] || 'application/octet-stream';
     }
-    
+
     const filename = document.filename || document.name || `document_${documentId}.pdf`;
-    
+
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    
+
     // Stream the file
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
