@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   DocumentTextIcon,
   EyeIcon,
   ArrowDownTrayIcon,
@@ -13,7 +13,7 @@ import {
   UserIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
-import api from '../../config/api';
+import api, { API_BASE_URL } from '../../config/api';
 
 interface CreditorData {
   sender_name?: string;
@@ -94,16 +94,16 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
   const handleDownload = (doc: Document) => {
     try {
-      // Construct the direct download URL
-      const downloadUrl = `http://localhost:3001/api/clients/${clientId}/documents/${doc.filename}`;
-      
+      // Construct the direct download URL using API_BASE_URL
+      const downloadUrl = `${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`;
+
       // Open in new tab as fallback, or direct download
       const link = window.document.createElement('a');
       link.href = downloadUrl;
       link.download = doc.name;
       link.target = '_blank'; // Fallback: open in new tab if download fails
       link.style.display = 'none';
-      
+
       window.document.body.appendChild(link);
       link.click();
       window.document.body.removeChild(link);
@@ -111,7 +111,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     } catch (error) {
       console.error('Download error:', error);
       // Fallback: open directly in browser
-      window.open(`http://localhost:3001/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+      window.open(`${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
     }
   };
 
