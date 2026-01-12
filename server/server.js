@@ -1577,20 +1577,44 @@ app.get('/api/clients/:clientId/documents/download-all', authenticateAdmin, asyn
 // Serve uploaded documents
 app.get('/api/clients/:clientId/documents/:filename', async (req, res) => {
   const { clientId, filename } = req.params;
-  console.log(`📄 Serving document ${filename} for client ${clientId} from GCS`);
+  console.log(`📄 Serving document ${filename} for client ${clientId}`);
 
   try {
+    // Try to find document in client's documents to get GCS URL
+    const client = await getClient(clientId);
+
+    if (client && client.documents) {
+      // Find document by filename
+      const document = client.documents.find(doc =>
+        doc.filename === filename ||
+        doc.url?.includes(filename) ||
+        doc.id === filename.replace(/\.\w+$/, '') // Try matching without extension
+      );
+
+      // If document has a GCS URL, redirect to it
+      if (document && document.url && document.url.startsWith('https://storage.googleapis.com')) {
+        console.log(`📄 Redirecting to GCS URL for ${filename}`);
+        return res.redirect(document.url);
+      }
+    }
+
+    // Fall back to streaming from local storage or GCS bucket
+    console.log(`📄 Streaming ${filename} from storage`);
     const fileStream = getGCSFileStream(filename);
 
     fileStream.on('error', (err) => {
+      console.error(`❌ GCS stream error for ${filename}:`, err.message);
       if (!res.headersSent) {
-        res.status(404).json({ error: 'File not found' });
+        res.status(404).json({
+          error: 'File not found in storage',
+          details: err.message
+        });
       }
     });
 
     fileStream.pipe(res);
   } catch (error) {
-    console.error('Error serving file from GCS:', error);
+    console.error('Error serving file:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Internal server error' });
     }
