@@ -135,7 +135,7 @@ router.post('/ai-processing',
           status_reason: statusReason
         });
       }
-      
+
       // Check for duplicates against existing documents
       for (const doc of processedDocuments) {
         if (doc.document_status === 'creditor_confirmed' && 
@@ -161,52 +161,190 @@ router.post('/ai-processing',
       await safeClientUpdate(client_id, (client) => {
         // Update each processed document
         for (const docResult of processedDocuments) {
-          const docIndex = client.documents.findIndex(d => d.id === docResult.id);
-          
-          if (docIndex !== -1) {
-            // Update existing document - preserve all original fields
-            const existingDoc = client.documents[docIndex];
-            
-            // Convert Mongoose document to plain object if needed
-            const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
-            
-            // Update only processing-related fields while preserving all original fields
-            client.documents[docIndex] = {
-              ...existingDocObj, // Preserve all existing fields first (as plain object)
-              // Explicitly ensure key metadata fields are preserved
-              id: existingDoc.id,
-              name: existingDoc.name,
-              filename: existingDoc.filename,
-              type: existingDoc.type,
-              size: existingDoc.size,
-              url: existingDoc.url,
-              uploadedAt: existingDoc.uploadedAt,
-              // Update only processing-related fields
-              processing_status: docResult.processing_status,
-              document_status: docResult.document_status,
-              status_reason: docResult.status_reason,
-              is_creditor_document: docResult.is_creditor_document,
-              confidence: docResult.confidence,
-              classification_success: docResult.classification_success,
-              manual_review_required: docResult.manual_review_required,
-              is_duplicate: docResult.is_duplicate || false,
-              duplicate_reason: docResult.duplicate_reason,
-              extracted_data: docResult.extracted_data,
-              validation: docResult.validation,
-              summary: docResult.summary,
-              processing_error: docResult.processing_error || docResult.error,
-              processing_time_ms: docResult.processing_time_ms,
-              processed_at: new Date().toISOString(),
-              processing_method: 'fastapi_gemini_ai',
-              processing_job_id: job_id
-            };
-            
-            console.log(`✅ Updated document: ${docResult.filename} -> ${docResult.document_status}`);
+          // Check if this is a multi-creditor split entry
+          console.log(`\n🔍 Processing docResult:`);
+          console.log(`   ID: ${docResult.id}`);
+          console.log(`   Has source_document_id: ${!!docResult.source_document_id}`);
+          console.log(`   source_document_id value: ${docResult.source_document_id}`);
+          console.log(`   creditor_index: ${docResult.creditor_index}`);
+          console.log(`   creditor_count: ${docResult.creditor_count}`);
+
+          if (docResult.source_document_id) {
+            // This is a creditor entry split from a multi-creditor document
+            // Find the source document to copy metadata
+            const sourceDoc = client.documents.find(d => d.id === docResult.source_document_id);
+
+            console.log(`   Found source doc: ${!!sourceDoc}`);
+            if (sourceDoc) {
+              console.log(`   Source doc ID: ${sourceDoc.id}`);
+              console.log(`   Source doc name: ${sourceDoc.name}`);
+            }
+
+            if (sourceDoc) {
+              // Get creditor name for display
+              const creditorName = docResult.extracted_data?.creditor_data?.sender_name ||
+                                    docResult.extracted_data?.creditor_data?.glaeubiger_name ||
+                                    `Creditor ${docResult.creditor_index}`;
+
+              // Create descriptive name: "document.pdf - Creditor 1/5: Vodafone GmbH"
+              const displayName = `${sourceDoc.name} - Gläubiger ${docResult.creditor_index}/${docResult.creditor_count}: ${creditorName}`;
+
+              // Create a new document entry for this creditor
+              const newCreditorEntry = {
+                id: docResult.id,
+                name: displayName,  // More descriptive name
+                filename: sourceDoc.filename,
+                type: sourceDoc.type,
+                size: sourceDoc.size,
+                url: sourceDoc.url,
+                uploadedAt: sourceDoc.uploadedAt,
+                // Multi-creditor metadata
+                source_document_id: docResult.source_document_id,
+                creditor_index: docResult.creditor_index,
+                creditor_count: docResult.creditor_count,
+                hidden_from_portal: true,  // Hide creditor splits from client portal
+                // Processing results
+                processing_status: docResult.processing_status,
+                document_status: docResult.document_status,
+                status_reason: docResult.status_reason,
+                is_creditor_document: docResult.is_creditor_document,
+                confidence: docResult.confidence,
+                classification_success: docResult.classification_success,
+                manual_review_required: docResult.manual_review_required,
+                is_duplicate: docResult.is_duplicate || false,
+                duplicate_reason: docResult.duplicate_reason,
+                extracted_data: docResult.extracted_data,
+                validation: docResult.validation,
+                summary: docResult.summary,
+                processing_error: docResult.processing_error || docResult.error,
+                processing_time_ms: docResult.processing_time_ms,
+                processed_at: new Date().toISOString(),
+                processing_method: 'fastapi_gemini_ai',
+                processing_job_id: job_id
+              };
+
+              // Add as new entry
+              console.log(`   Pushing newCreditorEntry with source_document_id: ${newCreditorEntry.source_document_id}`);
+              console.log(`   hidden_from_portal: ${newCreditorEntry.hidden_from_portal}`);
+              client.documents.push(newCreditorEntry);
+              console.log(`✅ Added multi-creditor entry [${docResult.creditor_index}/${docResult.creditor_count}]: ${docResult.summary}`);
+
+              // Verify it was added with source_document_id
+              const justAdded = client.documents[client.documents.length - 1];
+              console.log(`   Verified just added doc has source_document_id: ${!!justAdded.source_document_id}`);
+              console.log(`   Verified just added doc has hidden_from_portal: ${!!justAdded.hidden_from_portal}`);
+            } else {
+              console.log(`⚠️  Source document not found for multi-creditor entry: ${docResult.source_document_id}`);
+            }
           } else {
-            console.log(`⚠️  Document not found in client: ${docResult.id}`);
+            // Standard single-creditor document update
+            const docIndex = client.documents.findIndex(d => d.id === docResult.id);
+
+            if (docIndex !== -1) {
+              // Update existing document - preserve all original fields
+              const existingDoc = client.documents[docIndex];
+
+              // Convert Mongoose document to plain object if needed
+              const existingDocObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
+
+              // Update only processing-related fields while preserving all original fields
+              client.documents[docIndex] = {
+                ...existingDocObj, // Preserve all existing fields first (as plain object)
+                // Explicitly ensure key metadata fields are preserved
+                id: existingDoc.id,
+                name: existingDoc.name,
+                filename: existingDoc.filename,
+                type: existingDoc.type,
+                size: existingDoc.size,
+                url: existingDoc.url,
+                uploadedAt: existingDoc.uploadedAt,
+                // Update only processing-related fields
+                processing_status: docResult.processing_status,
+                document_status: docResult.document_status,
+                status_reason: docResult.status_reason,
+                is_creditor_document: docResult.is_creditor_document,
+                confidence: docResult.confidence,
+                classification_success: docResult.classification_success,
+                manual_review_required: docResult.manual_review_required,
+                is_duplicate: docResult.is_duplicate || false,
+                duplicate_reason: docResult.duplicate_reason,
+                extracted_data: docResult.extracted_data,
+                validation: docResult.validation,
+                summary: docResult.summary,
+                processing_error: docResult.processing_error || docResult.error,
+                processing_time_ms: docResult.processing_time_ms,
+                processed_at: new Date().toISOString(),
+                processing_method: 'fastapi_gemini_ai',
+                processing_job_id: job_id
+              };
+
+              console.log(`✅ Updated document: ${docResult.filename} -> ${docResult.document_status}`);
+            } else {
+              console.log(`⚠️  Document not found in client: ${docResult.id}`);
+            }
           }
         }
-        
+
+        // Update source documents that were split into multiple creditors
+        // Find all unique source_document_ids from the newly added entries
+        const sourceDocumentIds = new Set();
+        const creditorEntriesBySource = new Map();
+
+        client.documents.forEach(doc => {
+          if (doc.source_document_id) {
+            sourceDocumentIds.add(doc.source_document_id);
+
+            // Track creditor entries for this source
+            if (!creditorEntriesBySource.has(doc.source_document_id)) {
+              creditorEntriesBySource.set(doc.source_document_id, []);
+            }
+            creditorEntriesBySource.get(doc.source_document_id).push(doc);
+          }
+        });
+
+        console.log(`\n🔍 UPDATING SOURCE DOCUMENTS:`);
+        console.log(`   Found ${sourceDocumentIds.size} unique source document IDs`);
+        sourceDocumentIds.forEach(id => console.log(`   - ${id}`));
+
+        // Update source documents with aggregated status
+        sourceDocumentIds.forEach(sourceId => {
+          console.log(`\n🔍 Looking for source document with ID: ${sourceId}`);
+          const sourceDocIndex = client.documents.findIndex(d => d.id === sourceId);
+          console.log(`   Found at index: ${sourceDocIndex}`);
+
+          if (sourceDocIndex !== -1) {
+            const sourceDoc = client.documents[sourceDocIndex];
+            const creditorEntries = creditorEntriesBySource.get(sourceId) || [];
+
+            console.log(`   Document name: ${sourceDoc.name}`);
+            console.log(`   Split into ${creditorEntries.length} creditor entries`);
+
+            // Determine overall status for source document
+            const needsReviewCount = creditorEntries.filter(c => c.document_status === 'needs_review').length;
+            const confirmedCount = creditorEntries.filter(c => c.document_status === 'creditor_confirmed').length;
+
+            let overallStatus = 'creditor_confirmed';
+            let overallReason = `${creditorEntries.length} Gläubiger erkannt`;
+
+            if (needsReviewCount > 0) {
+              overallStatus = 'needs_review';
+              overallReason = `${needsReviewCount} von ${creditorEntries.length} Gläubigern benötigen Prüfung`;
+            }
+
+            // Update source document
+            client.documents[sourceDocIndex].processing_status = 'completed';
+            client.documents[sourceDocIndex].document_status = overallStatus;
+            client.documents[sourceDocIndex].status_reason = overallReason;
+            client.documents[sourceDocIndex].is_creditor_document = true;
+            client.documents[sourceDocIndex].creditor_count = creditorEntries.length;
+
+            console.log(`✅ Updated source document status: ${overallStatus}`);
+            console.log(`   Reason: ${overallReason}`);
+          } else {
+            console.log(`   ⚠️  Source document ${sourceId} not found in client.documents`);
+          }
+        });
+
         // Calculate processing stats
         const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
         const creditorDocs = completedDocs.filter(doc => doc.is_creditor_document === true);

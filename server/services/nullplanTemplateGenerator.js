@@ -17,7 +17,7 @@ class NullplanTemplateGenerator {
             city: 'Bochum',
             phone: '0234 9136810',
             fax: '0234 91368129',
-            email: 'info@ra-scuric.de',
+            email: 'glaubiger@scuric.zendesk.com',
             openingHours: 'Mo. - Fr.: 09.00 - 13.00 Uhr\n14.00 - 18.00 Uhr',
             bank: 'Deutsche Bank',
             accountNumber: '172 209 900',

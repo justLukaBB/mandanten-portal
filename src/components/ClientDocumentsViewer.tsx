@@ -8,6 +8,10 @@ interface Document {
   size: number;
   uploadedAt: string;
   url?: string;
+  hidden_from_portal?: boolean;
+  source_document_id?: string;
+  creditor_index?: number;
+  creditor_count?: number;
 }
 
 interface Client {
@@ -20,7 +24,12 @@ interface ClientDocumentsViewerProps {
 }
 
 const ClientDocumentsViewer: React.FC<ClientDocumentsViewerProps> = ({ client }) => {
-  const documents = client?.documents || [];
+  // Users see ONLY source documents (documents WITHOUT source_document_id)
+  // This hides the creditor-split entries from user view
+  console.log('📄 All client documents:', client?.documents);
+  console.log('📄 Creditor split entries:', client?.documents?.filter(d => d.source_document_id));
+  const documents = (client?.documents || []).filter(doc => !doc.source_document_id);
+  console.log('📄 Filtered documents (visible to user):', documents);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';

@@ -2220,7 +2220,7 @@ class DocumentGenerator {
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: "e-Mail: info@ra-scuric.de",
+                                text: "e-Mail: glaubiger@scuric.zendesk.com",
                                 size: 18
                             })
                         ],
