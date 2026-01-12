@@ -273,15 +273,29 @@ router.post('/ai-processing',
           }
         });
 
+        console.log(`\n🔍 CHECKING FOR SOURCE DOCUMENTS TO REMOVE:`);
+        console.log(`   Found ${sourceDocumentIds.size} unique source document IDs`);
+        sourceDocumentIds.forEach(id => console.log(`   - ${id}`));
+        console.log(`   Total documents before removal: ${client.documents.length}`);
+
         // Remove source documents entirely so they don't appear in any view
         sourceDocumentIds.forEach(sourceId => {
+          console.log(`\n🔍 Looking for source document with ID: ${sourceId}`);
           const sourceDocIndex = client.documents.findIndex(d => d.id === sourceId);
+          console.log(`   Found at index: ${sourceDocIndex}`);
+
           if (sourceDocIndex !== -1) {
             const removedDoc = client.documents[sourceDocIndex];
+            console.log(`   Document name: ${removedDoc.name}`);
+            console.log(`   Removing...`);
             client.documents.splice(sourceDocIndex, 1);
             console.log(`🗑️  Removed source document ${sourceId} (${removedDoc.name}) - split into ${removedDoc.creditor_count || 'multiple'} creditors`);
+          } else {
+            console.log(`   ⚠️  Source document ${sourceId} not found in client.documents`);
           }
         });
+
+        console.log(`   Total documents after removal: ${client.documents.length}`);
 
         // Calculate processing stats
         const completedDocs = client.documents.filter(doc => doc.processing_status === 'completed');
