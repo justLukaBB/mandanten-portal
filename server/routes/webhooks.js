@@ -162,10 +162,23 @@ router.post('/ai-processing',
         // Update each processed document
         for (const docResult of processedDocuments) {
           // Check if this is a multi-creditor split entry
+          console.log(`\n🔍 Processing docResult:`);
+          console.log(`   ID: ${docResult.id}`);
+          console.log(`   Has source_document_id: ${!!docResult.source_document_id}`);
+          console.log(`   source_document_id value: ${docResult.source_document_id}`);
+          console.log(`   creditor_index: ${docResult.creditor_index}`);
+          console.log(`   creditor_count: ${docResult.creditor_count}`);
+
           if (docResult.source_document_id) {
             // This is a creditor entry split from a multi-creditor document
             // Find the source document to copy metadata
             const sourceDoc = client.documents.find(d => d.id === docResult.source_document_id);
+
+            console.log(`   Found source doc: ${!!sourceDoc}`);
+            if (sourceDoc) {
+              console.log(`   Source doc ID: ${sourceDoc.id}`);
+              console.log(`   Source doc name: ${sourceDoc.name}`);
+            }
 
             if (sourceDoc) {
               // Get creditor name for display
@@ -210,8 +223,13 @@ router.post('/ai-processing',
               };
 
               // Add as new entry
+              console.log(`   Pushing newCreditorEntry with source_document_id: ${newCreditorEntry.source_document_id}`);
               client.documents.push(newCreditorEntry);
               console.log(`✅ Added multi-creditor entry [${docResult.creditor_index}/${docResult.creditor_count}]: ${docResult.summary}`);
+
+              // Verify it was added with source_document_id
+              const justAdded = client.documents[client.documents.length - 1];
+              console.log(`   Verified just added doc has source_document_id: ${!!justAdded.source_document_id}`);
             } else {
               console.log(`⚠️  Source document not found for multi-creditor entry: ${docResult.source_document_id}`);
             }
