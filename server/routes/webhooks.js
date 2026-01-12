@@ -150,12 +150,43 @@ router.post('/ai-processing',
           // Create a separate document entry for each creditor
           for (let i = 0; i < creditors.length; i++) {
             const creditor = creditors[i];
+
+            // Use per-creditor validation flags
+            const creditorNeedsReview = creditor.manual_review_required || false;
+            const creditorReviewReasons = creditor.review_reasons || [];
+
+            // Determine status for this specific creditor
+            let creditorStatus = doc.document_status;
+            let creditorStatusReason = doc.status_reason;
+
+            if (doc.is_creditor_document && doc.processing_status === 'completed') {
+              const confidence = doc.confidence || 0;
+
+              if (creditorNeedsReview) {
+                // This specific creditor needs review
+                creditorStatus = 'needs_review';
+                creditorStatusReason = `KI: ${creditorReviewReasons.join(', ')}`;
+              } else if (confidence >= MANUAL_REVIEW_CONFIDENCE_THRESHOLD) {
+                // This creditor is auto-approved
+                creditorStatus = 'creditor_confirmed';
+                creditorStatusReason = `KI: Gläubigerdokument bestätigt (${Math.round(confidence * 100)}% Sicherheit)`;
+              } else {
+                // Low confidence
+                creditorStatus = 'needs_review';
+                creditorStatusReason = `KI: Niedrige Sicherheit (${Math.round(confidence * 100)}%)`;
+              }
+            }
+
             const creditorDoc = {
               ...doc,
               id: `${doc.id}-creditor-${i+1}`,  // Unique ID for each creditor entry
               source_document_id: doc.id,  // Link back to original document
               creditor_index: i + 1,
               creditor_count: creditors.length,
+              // Override with per-creditor status
+              document_status: creditorStatus,
+              status_reason: creditorStatusReason,
+              manual_review_required: creditorNeedsReview,
               // Set extracted_data.creditor_data to this specific creditor
               extracted_data: {
                 ...doc.extracted_data,
@@ -173,7 +204,8 @@ router.post('/ai-processing',
               summary: `Creditor ${i+1}/${creditors.length}: ${creditor.sender_name || creditor.glaeubiger_name || 'N/A'}`
             };
 
-            console.log(`   [${i+1}/${creditors.length}] ${creditor.sender_name || creditor.glaeubiger_name} (Ref: ${creditor.reference_number})`);
+            const reviewFlag = creditorNeedsReview ? '⚠️ REVIEW' : '✅ AUTO';
+            console.log(`   [${i+1}/${creditors.length}] ${reviewFlag} ${creditor.sender_name || creditor.glaeubiger_name} (Ref: ${creditor.reference_number})`);
             expandedDocuments.push(creditorDoc);
           }
         } else {
