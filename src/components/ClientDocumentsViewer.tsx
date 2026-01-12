@@ -25,7 +25,10 @@ interface ClientDocumentsViewerProps {
 
 const ClientDocumentsViewer: React.FC<ClientDocumentsViewerProps> = ({ client }) => {
   // Filter out documents hidden from portal (source docs that were split into multiple creditors)
+  console.log('📄 All client documents:', client?.documents);
+  console.log('📄 Documents with hidden_from_portal:', client?.documents?.filter(d => d.hidden_from_portal));
   const documents = (client?.documents || []).filter(doc => !doc.hidden_from_portal);
+  console.log('📄 Filtered documents (visible to user):', documents);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
