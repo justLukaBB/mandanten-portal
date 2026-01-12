@@ -10,7 +10,15 @@ export const creditorApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['Creditor'],
         }),
+        addCreditorAdmin: builder.mutation({
+            query: ({ clientId, ...creditorData }) => ({
+                url: `/api/admin/clients/${clientId}/add-creditor`,
+                method: 'POST',
+                body: creditorData,
+            }),
+            invalidatesTags: ['Creditor', 'Client'],
+        }),
     }),
 });
 
-export const { useAddCreditorMutation } = creditorApi;
+export const { useAddCreditorMutation, useAddCreditorAdminMutation } = creditorApi;

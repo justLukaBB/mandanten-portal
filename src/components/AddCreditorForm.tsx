@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAddCreditorMutation } from '../store/features/creditorApi';
+import { useAddCreditorAdminMutation } from '../store/features/creditorApi';
 import { useGetCurrentClientQuery } from '../store/features/clientApi';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
@@ -73,7 +73,7 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
     });
 
     const isRepresentative = watch('isRepresentative');
-    const [addCreditor, { isLoading, error: apiError }] = useAddCreditorMutation();
+    const [addCreditor, { isLoading, error: apiError }] = useAddCreditorAdminMutation();
 
     // Fetch current client info
     const { data: clientData, isLoading: isLoadingClient, error: clientError } = useGetCurrentClientQuery(clientId);
@@ -91,10 +91,16 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
 
     const onSubmit = async (data: CreditorFormData) => {
         try {
+            // Transform field names for admin API
             await addCreditor({
                 clientId,
-                ...data,
-                amount: data.amount ? parseFloat(data.amount) : 0
+                sender_name: data.name,
+                sender_email: data.email || '',
+                sender_address: data.address || '',
+                reference_number: data.referenceNumber,
+                claim_amount: data.amount ? parseFloat(data.amount) : 0,
+                is_representative: data.isRepresentative,
+                actual_creditor: data.actualCreditor || ''
             }).unwrap();
 
             toast.success('Gläubiger erfolgreich hinzugefügt');
