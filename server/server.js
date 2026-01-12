@@ -28,6 +28,7 @@ const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
 const creditorRoutes = require('./routes/creditorRoutes');
+const webhooksRoutes = require('./routes/webhooks');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -64,6 +65,7 @@ app.use(securityHeaders);
 
 // Mount routes
 app.use('/api/health', healthRoutes);
+app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/zendesk-webhooks', zendeskWebhooks);
 app.use('/api/portal-webhook', portalWebhooks);
 app.use('/api/agent-review', agentReviewRoutes);
