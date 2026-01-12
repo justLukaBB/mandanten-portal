@@ -654,6 +654,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         if (documentsResponse.ok) {
           const documentsData = await documentsResponse.json();
           userData.documents = documentsData || [];
+
+          console.log("=====================documentsData========================", documentsData)
         } else {
           userData.documents = [];
         }

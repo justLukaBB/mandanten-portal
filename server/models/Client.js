@@ -105,7 +105,14 @@ const creditorSchema = new mongoose.Schema({
   creditor_response_text: String,
   contact_status: {
     type: String,
-    enum: ['responded', 'no_response', 'email_failed'],
+    enum: [
+      'no_response',           // Default - no contact yet
+      'main_ticket_created',   // Main ticket created, SC not sent yet
+      'email_sent_with_document', // Side Conversation email sent successfully
+      'email_failed',          // Email delivery failed
+      'responded',             // Creditor responded
+      'no_email_manual_contact' // No email address - needs manual contact
+    ],
     default: 'no_response'
   },
   amount_source: {
@@ -114,7 +121,17 @@ const creditorSchema = new mongoose.Schema({
     default: 'original_document'
   },
   response_received_at: Date,
-  
+
+  // First Round Creditor Contact (Zendesk Side Conversation tracking)
+  main_zendesk_ticket_id: String,        // Main ticket containing all creditors for this client
+  side_conversation_id: String,          // Individual Side Conversation ID for this creditor
+  side_conversation_created_at: Date,    // When the Side Conversation was created
+  first_round_document_url: String,      // Zendesk attachment URL for the first round document
+  first_round_document_filename: String, // DOCX filename sent to creditor
+  document_sent_at: Date,                // When the first round email was sent
+  email_sent_at: Date,                   // When the email was actually sent (redundant but explicit)
+  last_contacted_at: Date,               // Last time this creditor was contacted
+
   // Settlement plan response fields
   settlement_response_status: {
     type: String,

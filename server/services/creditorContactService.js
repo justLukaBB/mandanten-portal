@@ -419,6 +419,35 @@ class CreditorContactService {
         // Store in memory (in production, save to database)
         this.creditorContacts.set(contactId, contactRecord);
 
+        // ✅ NEW: Save main_zendesk_ticket_id to MongoDB
+        try {
+            const Client = require('../models/Client');
+
+            // Find by creditor id or reference number
+            const updateQuery = creditorData.id
+                ? { aktenzeichen: creditorData.client_reference, 'final_creditor_list.id': creditorData.id }
+                : { aktenzeichen: creditorData.client_reference, 'final_creditor_list.reference_number': creditorData.reference_number };
+
+            const updateResult = await Client.updateOne(
+                updateQuery,
+                {
+                    $set: {
+                        'final_creditor_list.$.main_zendesk_ticket_id': ticketId,
+                        'final_creditor_list.$.contact_status': 'main_ticket_created'
+                    }
+                }
+            );
+
+            if (updateResult.modifiedCount > 0) {
+                console.log(`✅ Saved main ticket ID to MongoDB for ${creditorData.creditor_name || creditorData.sender_name}`);
+            } else {
+                console.warn(`⚠️ MongoDB update returned 0 modified documents for ${creditorData.creditor_name || creditorData.sender_name} (may not exist in final_creditor_list)`);
+            }
+        } catch (dbError) {
+            console.error(`❌ Failed to save main ticket ID to MongoDB:`, dbError.message);
+            // Don't throw - continue with in-memory storage
+        }
+
         console.log(`✅ Created creditor contact record: ${creditorData.creditor_name || creditorData.sender_name} (${contactId})`);
         return contactRecord;
     }
@@ -552,6 +581,32 @@ class CreditorContactService {
             manualContacts.forEach((contact, index) => {
                 console.log(`   ${index + 1}. ${contact.creditor_name}`);
             });
+
+            // ✅ NEW: Mark manual contacts in MongoDB
+            for (const contact of manualContacts) {
+                try {
+                    const Client = require('../models/Client');
+                    const fullRecord = Array.from(this.creditorContacts.values())
+                        .find(c => c.id === contact.contact_id);
+
+                    if (fullRecord) {
+                        await Client.updateOne(
+                            {
+                                aktenzeichen: fullRecord.client_reference,
+                                'final_creditor_list.id': contact.creditor_id
+                            },
+                            {
+                                $set: {
+                                    'final_creditor_list.$.contact_status': 'no_email_manual_contact'
+                                }
+                            }
+                        );
+                        console.log(`✅ Marked ${contact.creditor_name} as requiring manual contact in MongoDB`);
+                    }
+                } catch (dbError) {
+                    console.error(`❌ Failed to mark ${contact.creditor_name} for manual contact:`, dbError.message);
+                }
+            }
         }
 
         for (let i = 0; i < emailableContacts.length; i++) {
@@ -593,12 +648,47 @@ class CreditorContactService {
                     documentUrl.download_url
                 );
 
-                // Update contact record
+                // Update contact record (in-memory)
                 contactRecord.contact_status = result.success ? 'email_sent_with_document' : 'failed';
                 contactRecord.email_sent_at = result.success ? new Date().toISOString() : null;
                 contactRecord.side_conversation_id = result.side_conversation_id;
                 contactRecord.document_url = result.success ? documentUrl.download_url : null;
                 contactRecord.updated_at = new Date().toISOString();
+
+                // ✅ NEW: Save to MongoDB - Update the creditor in final_creditor_list
+                if (result.success) {
+                    try {
+                        const Client = require('../models/Client');
+                        const updateResult = await Client.updateOne(
+                            {
+                                aktenzeichen: contactRecord.client_reference,
+                                'final_creditor_list.id': contactInfo.creditor_id
+                            },
+                            {
+                                $set: {
+                                    'final_creditor_list.$.side_conversation_id': result.side_conversation_id,
+                                    'final_creditor_list.$.main_zendesk_ticket_id': mainTicketId,
+                                    'final_creditor_list.$.side_conversation_created_at': new Date(),
+                                    'final_creditor_list.$.first_round_document_url': documentUrl.download_url,
+                                    'final_creditor_list.$.first_round_document_filename': documentUrl.filename,
+                                    'final_creditor_list.$.document_sent_at': new Date(),
+                                    'final_creditor_list.$.email_sent_at': new Date(),
+                                    'final_creditor_list.$.last_contacted_at': new Date(),
+                                    'final_creditor_list.$.contact_status': 'email_sent_with_document'
+                                }
+                            }
+                        );
+
+                        if (updateResult.modifiedCount > 0) {
+                            console.log(`✅ Saved Side Conversation ID to MongoDB for ${contactInfo.creditor_name}`);
+                        } else {
+                            console.warn(`⚠️ MongoDB update returned 0 modified documents for ${contactInfo.creditor_name}`);
+                        }
+                    } catch (dbError) {
+                        console.error(`❌ Failed to save Side Conversation ID to MongoDB for ${contactInfo.creditor_name}:`, dbError.message);
+                        // Don't throw - continue processing other creditors
+                    }
+                }
 
                 sideConversationResults.push({
                     contact_id: contactInfo.contact_id,
