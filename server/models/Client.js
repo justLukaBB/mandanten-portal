@@ -8,8 +8,16 @@ const documentSchema = new mongoose.Schema({
   type: { type: String, required: false }, // Made optional for legacy data
   size: { type: Number, required: false }, // Made optional for legacy data
   uploadedAt: { type: Date, default: Date.now },
-  processing_status: { 
-    type: String, 
+  url: String, // GCS signed URL
+
+  // Multi-creditor metadata (for documents split from a source document)
+  source_document_id: String, // Original document ID this was split from
+  creditor_index: Number, // Which creditor (1, 2, 3, etc.)
+  creditor_count: Number, // Total number of creditors in source document
+  hidden_from_portal: { type: Boolean, default: false }, // Hide source docs after splitting
+
+  processing_status: {
+    type: String,
     enum: ['pending', 'processing', 'completed', 'error'],
     default: 'pending'
   },
