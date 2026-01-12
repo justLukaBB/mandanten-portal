@@ -189,10 +189,11 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     }
   };
 
-  const filteredDocuments = documents.filter(doc => {
-    // Admin sees ALL documents including creditor splits
-    // (hidden_from_portal only affects client portal view)
+  // Admin sees ONLY creditor-split entries (documents WITH source_document_id)
+  // This hides the source documents that users uploaded
+  const creditorDocuments = documents.filter(doc => doc.source_document_id);
 
+  const filteredDocuments = creditorDocuments.filter(doc => {
     switch (filter) {
       case 'needs_review':
         return doc.document_status === 'needs_review';
@@ -207,8 +208,8 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     }
   });
 
-  // Admin sees all documents (no filtering for counts)
-  const needsReviewCount = documents.filter(doc => doc.document_status === 'needs_review').length;
+  // Calculate counts from creditor documents only
+  const needsReviewCount = creditorDocuments.filter(doc => doc.document_status === 'needs_review').length;
 
   if (loading) {
     return (
@@ -236,7 +237,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 Dokument-Manager
               </h3>
               <p className="text-sm text-gray-500">
-                {documents.length} Dokumente • {needsReviewCount} benötigen Prüfung
+                {creditorDocuments.length} Gläubiger • {needsReviewCount} benötigen Prüfung
               </p>
             </div>
           </div>
@@ -249,7 +250,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Alle ({documents.length})
+              Alle ({creditorDocuments.length})
             </button>
             <button
               onClick={() => setFilter('needs_review')}
@@ -265,7 +266,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'creditor' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Gläubiger ({documents.filter(d => d.document_status === 'creditor_confirmed').length})
+              Bestätigt ({creditorDocuments.filter(d => d.document_status === 'creditor_confirmed').length})
             </button>
             <button
               onClick={() => setFilter('duplicates')}
@@ -273,7 +274,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Duplikate ({documents.filter(d => d.document_status === 'duplicate').length})
+              Duplikate ({creditorDocuments.filter(d => d.document_status === 'duplicate').length})
             </button>
           </div>
         </div>

@@ -24,10 +24,11 @@ interface ClientDocumentsViewerProps {
 }
 
 const ClientDocumentsViewer: React.FC<ClientDocumentsViewerProps> = ({ client }) => {
-  // Filter out documents hidden from portal (source docs that were split into multiple creditors)
+  // Users see ONLY source documents (documents WITHOUT source_document_id)
+  // This hides the creditor-split entries from user view
   console.log('📄 All client documents:', client?.documents);
-  console.log('📄 Documents with hidden_from_portal:', client?.documents?.filter(d => d.hidden_from_portal));
-  const documents = (client?.documents || []).filter(doc => !doc.hidden_from_portal);
+  console.log('📄 Creditor split entries:', client?.documents?.filter(d => d.source_document_id));
+  const documents = (client?.documents || []).filter(doc => !doc.source_document_id);
   console.log('📄 Filtered documents (visible to user):', documents);
 
   const formatFileSize = (bytes: number): string => {
