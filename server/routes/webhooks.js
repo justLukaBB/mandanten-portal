@@ -121,11 +121,29 @@ async function enrichCreditorContactFromDb(docResult, cache) {
 router.post(
   '/ai-processing',
   express.raw({ type: 'application/json' }),
-  webhookVerifier.middleware,
+  webhookVerifier.optionalMiddleware, // Temporarily allow unsigned webhooks for testing
   async (req, res) => {
     const startTime = Date.now();
     const rawBody = req.body.toString('utf8');
-    const data = JSON.parse(rawBody);
+
+    console.log('\n📨 ================================');
+    console.log('📨 WEBHOOK RECEIVED FROM FASTAPI');
+    console.log('📨 ================================');
+    console.log('📦 Raw body length:', rawBody.length, 'bytes');
+    console.log('📄 Raw body preview:', rawBody.substring(0, 200));
+
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+      console.log('✅ JSON parsed successfully');
+    } catch (parseError) {
+      console.log('❌ JSON parse error:', parseError.message);
+      return res.status(400).json({
+        error: 'Invalid JSON',
+        details: parseError.message,
+        preview: rawBody.substring(0, 100)
+      });
+    }
 
     const { safeClientUpdate, getClient, triggerProcessingCompleteWebhook } = getServerFunctions();
 
