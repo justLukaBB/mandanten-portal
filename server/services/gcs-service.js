@@ -22,7 +22,44 @@ const bucketName = 'automation_scuric';
 
 // Initialize GCS securely
 // Try environment variables first (multiple formats), then file
-if (process.env.GCS_KEY_BASE64) {
+// PREFER GCS_CLIENT_EMAIL + GCS_PRIVATE_KEY (most reliable)
+if (process.env.GCS_CLIENT_EMAIL && process.env.GCS_PRIVATE_KEY) {
+  try {
+    console.log('🔑 Using GCS credentials from GCS_CLIENT_EMAIL and GCS_PRIVATE_KEY');
+
+    // Handle private key - it might have literal \n that need to be converted to actual newlines
+    let privateKey = process.env.GCS_PRIVATE_KEY;
+
+    // If the key doesn't start with the expected header, it might be base64 encoded
+    if (!privateKey.startsWith('-----BEGIN')) {
+      console.log('🔓 Private key appears to be encoded, attempting base64 decode...');
+      try {
+        privateKey = Buffer.from(privateKey, 'base64').toString('utf-8');
+      } catch (decodeError) {
+        console.log('⚠️ Base64 decode failed, using raw value');
+      }
+    }
+
+    // Replace literal \n characters with actual newlines
+    privateKey = privateKey.replace(/\\n/g, '\n');
+
+    const credentials = {
+      client_email: process.env.GCS_CLIENT_EMAIL,
+      private_key: privateKey,
+    };
+
+    storage = new Storage({
+      credentials: credentials,
+      projectId: 'automationscuric'
+    });
+    bucket = storage.bucket(bucketName);
+    isGCSConfigured = true;
+    console.log('✅ GCS Service Initialized (from GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY)');
+    console.log(`📧 Using service account: ${credentials.client_email}`);
+  } catch (error) {
+    console.error('⚠️ GCS Initialization failed (GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY exist but invalid):', error.message);
+  }
+} else if (process.env.GCS_KEY_BASE64) {
   try {
     console.log('🔑 Using GCS credentials from GCS_KEY_BASE64 environment variable');
     const decodedJson = Buffer.from(process.env.GCS_KEY_BASE64, 'base64').toString('utf-8');
@@ -43,24 +80,6 @@ if (process.env.GCS_KEY_BASE64) {
     console.log(`📧 Using service account: ${credentials.client_email}`);
   } catch (error) {
     console.error('⚠️ GCS Initialization failed (GCS_KEY_BASE64 exists but invalid):', error.message);
-  }
-} else if (process.env.GCS_CLIENT_EMAIL && process.env.GCS_PRIVATE_KEY) {
-  try {
-    console.log('🔑 Using GCS credentials from GCS_CLIENT_EMAIL and GCS_PRIVATE_KEY');
-    const credentials = {
-      client_email: process.env.GCS_CLIENT_EMAIL,
-      private_key: process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle escaped newlines
-    };
-    storage = new Storage({
-      credentials: credentials,
-      projectId: 'automationscuric' // Your project ID
-    });
-    bucket = storage.bucket(bucketName);
-    isGCSConfigured = true;
-    console.log('✅ GCS Service Initialized (from GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY)');
-    console.log(`📧 Using service account: ${credentials.client_email}`);
-  } catch (error) {
-    console.error('⚠️ GCS Initialization failed (GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY exist but invalid):', error.message);
   }
 } else if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
   try {
