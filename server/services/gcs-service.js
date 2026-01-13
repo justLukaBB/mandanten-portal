@@ -188,7 +188,10 @@ const getGCSFileStream = (filename) => {
       return errorStream;
     }
   }
-  return bucket.file(filename).createReadStream();
+
+  // Extract base filename from signed URL (remove query parameters)
+  const baseFilename = filename.split('?')[0];
+  return bucket.file(baseFilename).createReadStream();
 };
 
 const getGCSFileBuffer = (filename) => {
@@ -204,7 +207,9 @@ const getGCSFileBuffer = (filename) => {
       return;
     }
 
-    const file = bucket.file(filename);
+    // Extract base filename from signed URL (remove query parameters)
+    const baseFilename = filename.split('?')[0];
+    const file = bucket.file(baseFilename);
     file.download((err, contents) => {
       if (err) {
         return reject(err);
