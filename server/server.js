@@ -1271,7 +1271,7 @@ app.post('/api/clients/:clientId/documents',
                 client.documents[docIndex] = {
                   ...client.documents[docIndex],
                   processing_status: 'failed',
-                  document_status: 'processing_failed',
+                  document_status: 'needs_review',
                   status_reason: `FastAPI Fehler: ${fastApiError.message}`,
                   processing_error: fastApiError.message,
                   processing_error_details: fastApiError.stack,
