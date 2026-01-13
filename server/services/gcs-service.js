@@ -21,19 +21,35 @@ let isGCSConfigured = false;
 const bucketName = 'automation_scuric';
 
 // Initialize GCS securely
-if (fs.existsSync(keyFilePath)) {
+// Try environment variable first, then file
+if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
   try {
+    console.log('🔑 Using GCS credentials from GOOGLE_SERVICE_ACCOUNT_KEY environment variable');
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    storage = new Storage({
+      credentials: credentials,
+      projectId: credentials.project_id
+    });
+    bucket = storage.bucket(bucketName);
+    isGCSConfigured = true;
+    console.log('✅ GCS Service Initialized (from environment variable)');
+  } catch (error) {
+    console.error('⚠️ GCS Initialization failed (env var exists but invalid):', error.message);
+  }
+} else if (fs.existsSync(keyFilePath)) {
+  try {
+    console.log('🔑 Using GCS credentials from file:', keyFilePath);
     storage = new Storage({
       keyFilename: keyFilePath,
     });
     bucket = storage.bucket(bucketName);
     isGCSConfigured = true;
-    console.log('✅ GCS Service Initialized');
+    console.log('✅ GCS Service Initialized (from file)');
   } catch (error) {
     console.error('⚠️ GCS Initialization failed (key file exists but invalid):', error.message);
   }
 } else {
-  console.log('⚠️ GCS keys not found. Falling back to local storage (server/uploads).');
+  console.log('⚠️ GCS keys not found (no env var or file). Falling back to local storage (server/uploads).');
 }
 
 const uploadToGCS = (file) => {
