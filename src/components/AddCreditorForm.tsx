@@ -1,0 +1,339 @@
+import React, { useState } from 'react';
+import { useAddCreditorAdminMutation } from '../store/features/creditorApi';
+import { useGetCurrentClientQuery } from '../store/features/clientApi';
+import { toast } from 'sonner';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+
+interface Client {
+    id: string;
+    name: string;
+    aktenzeichen: string;
+}
+
+const baseSchema = z.object({
+    name: z.string().min(1, 'Gläubigername ist erforderlich'),
+    email: z.string().email('Ungültige E-Mail-Adresse').optional().or(z.literal('')),
+    referenceNumber: z.string().min(1, 'Aktenzeichen ist erforderlich'),
+    amount: z.string().optional(),
+    address: z.string().optional(),
+    isRepresentative: z.boolean(),
+    actualCreditor: z.string().optional(),
+});
+
+const creditorSchema = baseSchema.refine(data => {
+    if (data.isRepresentative && (!data.actualCreditor || data.actualCreditor.trim() === '')) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Tatsächlicher Gläubiger ist erforderlich, wenn 'Vertretung' ausgewählt ist",
+    path: ["actualCreditor"]
+});
+
+type CreditorFormData = z.infer<typeof creditorSchema>;
+
+interface AddCreditorFormProps {
+    clientId: string;
+    onClose: () => void;
+    onSuccess?: () => void;
+    customColors: {
+        primary: string;
+        primaryHover: string;
+    };
+}
+
+const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
+    clientId,
+    onClose,
+    onSuccess,
+    customColors
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    const {
+        register,
+        handleSubmit,
+        watch,
+        reset,
+        formState: { errors }
+    } = useForm<CreditorFormData>({
+        resolver: zodResolver(creditorSchema),
+        defaultValues: {
+            name: '',
+            email: '',
+            referenceNumber: '',
+            amount: '',
+            address: '',
+            isRepresentative: false,
+            actualCreditor: ''
+        }
+    });
+
+    const isRepresentative = watch('isRepresentative');
+    const [addCreditor, { isLoading, error: apiError }] = useAddCreditorAdminMutation();
+
+    // Fetch current client info
+    const { data: clientData, isLoading: isLoadingClient, error: clientError } = useGetCurrentClientQuery(clientId);
+    const client = clientData as Client | undefined;
+
+    console.log('🔍 Client Query Debug:', {
+        clientId,
+        clientData,
+        client,
+        isLoadingClient,
+        clientError,
+        hasName: client?.name,
+        hasAktenzeichen: client?.aktenzeichen
+    });
+
+    const onSubmit = async (data: CreditorFormData) => {
+        try {
+            // Transform field names for admin API
+            await addCreditor({
+                clientId,
+                sender_name: data.name,
+                sender_email: data.email || '',
+                sender_address: data.address || '',
+                reference_number: data.referenceNumber,
+                claim_amount: data.amount ? parseFloat(data.amount) : 0,
+                is_representative: data.isRepresentative,
+                actual_creditor: data.actualCreditor || ''
+            }).unwrap();
+
+            toast.success('Gläubiger erfolgreich hinzugefügt');
+            reset();
+            setIsOpen(false); // Close the form after successful submission
+            if (onSuccess) onSuccess();
+        } catch (err) {
+            console.error('Failed to add creditor:', err);
+            toast.error('Fehler beim Hinzufügen des Gläubigers');
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-12">
+            {/* Collapsible Header */}
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+            >
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Gläubiger manuell hinzufügen</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                        Pflichtfelder sind mit * gekennzeichnet.
+                    </p>
+                </div>
+                <div className="ml-4 flex-shrink-0">
+                    {isOpen ? (
+                        <ChevronUpIcon className="h-5 w-5 text-gray-500" />
+                    ) : (
+                        <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                    )}
+                </div>
+            </button>
+
+            {/* Collapsible Content */}
+            {isOpen && (
+                <div className="px-6 pb-6 border-t border-gray-200">
+                    {/* Form */}
+                    <form onSubmit={handleSubmit(onSubmit)} className="pt-6">
+                <div className="space-y-6">
+                    {/* Section: Gläubiger Informationen */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
+                            Gläubiger-Informationen
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Name des Gläubigers <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    {...register('name')}
+                                    placeholder="z.B. Vodafone GmbH"
+                                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                        errors.name
+                                            ? 'border-red-300 bg-red-50 text-red-900 placeholder-red-400 focus:ring-red-500/20 focus:border-red-500'
+                                            : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                    }`}
+                                />
+                                {errors.name && (
+                                    <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                        <span className="mr-1">⚠</span> {errors.name.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    E-Mail-Adresse
+                                </label>
+                                <input
+                                    type="email"
+                                    {...register('email')}
+                                    placeholder="kontakt@glaeubiger.de"
+                                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                        errors.email
+                                            ? 'border-red-300 bg-red-50 text-red-900 placeholder-red-400 focus:ring-red-500/20 focus:border-red-500'
+                                            : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                    }`}
+                                />
+                                {errors.email && (
+                                    <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                        <span className="mr-1">⚠</span> {errors.email.message}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Forderungsdetails */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
+                            Forderungsdetails
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Aktenzeichen / Referenznummer <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    {...register('referenceNumber')}
+                                    placeholder="z.B. AZ-2024-12345"
+                                    className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                        errors.referenceNumber
+                                            ? 'border-red-300 bg-red-50 text-red-900 placeholder-red-400 focus:ring-red-500/20 focus:border-red-500'
+                                            : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                    }`}
+                                />
+                                {errors.referenceNumber && (
+                                    <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                        <span className="mr-1">⚠</span> {errors.referenceNumber.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Forderungsbetrag (€)
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        {...register('amount')}
+                                        placeholder="0,00"
+                                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                            errors.amount
+                                                ? 'border-red-300 bg-red-50 text-red-900 focus:ring-red-500/20 focus:border-red-500'
+                                                : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                        }`}
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">€</span>
+                                </div>
+                                {errors.amount && (
+                                    <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                        <span className="mr-1">⚠</span> {errors.amount.message}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Adresse */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
+                            Kontaktadresse
+                        </h4>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Vollständige Adresse
+                            </label>
+                            <textarea
+                                {...register('address')}
+                                rows={3}
+                                placeholder="Straße, Hausnummer&#10;PLZ Ort&#10;Land"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 transition-all text-sm resize-none bg-white"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Section: Vertretung */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4 text-center">
+                            Vertretung
+                        </h4>
+                        <div className="space-y-4">
+                            <div className="flex items-start p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="flex items-center h-5">
+                                    <input
+                                        type="checkbox"
+                                        id="isRepresentative"
+                                        {...register('isRepresentative')}
+                                        className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer transition-all"
+                                    />
+                                </div>
+                                <div className="ml-3">
+                                    <label htmlFor="isRepresentative" className="text-sm font-medium text-gray-900 cursor-pointer">
+                                        Handelt als Vertreter (z.B. Inkassobüro, Rechtsanwalt)
+                                    </label>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Aktivieren Sie diese Option, wenn es sich um einen Vertreter im Auftrag eines anderen Gläubigers handelt
+                                    </p>
+                                </div>
+                            </div>
+
+                            {isRepresentative && (
+                                <div className="animate-in slide-in-from-top-2 duration-300 pl-4 border-l-2 border-gray-300">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Tatsächlicher Gläubiger <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        {...register('actualCreditor')}
+                                        placeholder="Name des ursprünglichen Gläubigers"
+                                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${
+                                            errors.actualCreditor
+                                                ? 'border-red-300 bg-red-50 text-red-900 placeholder-red-400 focus:ring-red-500/20 focus:border-red-500'
+                                                : 'border-gray-300 bg-white focus:ring-gray-900/10 focus:border-gray-900'
+                                        }`}
+                                    />
+                                    {errors.actualCreditor && (
+                                        <p className="mt-1.5 text-xs text-red-600 flex items-center">
+                                            <span className="mr-1">⚠</span> {errors.actualCreditor.message}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end items-center space-x-3 pt-8 mt-8 border-t border-gray-200">
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(false)}
+                        className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900/10 transition-all"
+                    >
+                        Abbrechen
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="px-8 py-2.5 text-white bg-green-600 hover:bg-green-700 rounded-lg font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                        {isLoading ? 'Wird hinzugefügt...' : 'Gläubiger hinzufügen'}
+                    </button>
+                </div>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AddCreditorForm;

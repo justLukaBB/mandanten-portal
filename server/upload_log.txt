@@ -1,0 +1,45 @@
+Note: Unnecessary use of -X or --request, POST is already inferred.
+* Host localhost:10000 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying [::1]:10000...
+* Established connection to localhost (::1 port 10000) from ::1 port 56162 
+* using HTTP/1.x
+> POST /api/clients/b284e5c7-0789-4550-bdf6-a058f03ff03d/documents HTTP/1.1
+> Host: localhost:10000
+> User-Agent: curl/8.16.0
+> Accept: */*
+> Content-Length: 269
+> Content-Type: multipart/form-data; boundary=------------------------UfY3rcnVQ7voEL4v2l2tFN
+> 
+} [269 bytes data]
+* upload completely sent off: 269 bytes
+< HTTP/1.1 500 Internal Server Error
+< Access-Control-Allow-Origin: *
+< Content-Security-Policy: default-src 'self';style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;img-src 'self' data: https:;connect-src 'self';font-src 'self';object-src 'none';media-src 'self';frame-src 'none';base-uri 'self';form-action 'self';frame-ancestors 'self';script-src-attr 'none';upgrade-insecure-requests
+< Cross-Origin-Opener-Policy: same-origin
+< Cross-Origin-Resource-Policy: same-origin
+< Origin-Agent-Cluster: ?1
+< Referrer-Policy: no-referrer
+< Strict-Transport-Security: max-age=31536000; includeSubDomains
+< X-Content-Type-Options: nosniff
+< X-DNS-Prefetch-Control: off
+< X-Download-Options: noopen
+< X-Frame-Options: SAMEORIGIN
+< X-Permitted-Cross-Domain-Policies: none
+< X-XSS-Protection: 0
+< Vary: Origin
+< Access-Control-Allow-Credentials: true
+< Content-Type: application/json; charset=utf-8
+< Content-Length: 53
+< ETag: W/"35-LsYCDdybGa/Sml8XdWWd8S5yqpg"
+< Date: Mon, 12 Jan 2026 17:20:32 GMT
+< Connection: keep-alive
+< Keep-Alive: timeout=5
+< 
+{ [53 bytes data]
+100   322  100    53  100   269   4050  20557 --:--:-- --:--:-- --:--:-- 26833
+* Connection #0 to host localhost:10000 left intact
+{"error":"Server error","details":"Unexpected field"}

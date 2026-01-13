@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   DocumentTextIcon,
   EyeIcon,
   ArrowDownTrayIcon,
@@ -13,7 +13,7 @@ import {
   UserIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
-import api from '../../config/api';
+import api, { API_BASE_URL } from '../../config/api';
 
 interface CreditorData {
   sender_name?: string;
@@ -41,6 +41,10 @@ interface Document {
   is_duplicate?: boolean;
   duplicate_reason?: string;
   url?: string;
+  hidden_from_portal?: boolean;
+  source_document_id?: string;
+  creditor_index?: number;
+  creditor_count?: number;
   extracted_data?: {
     creditor_data?: CreditorData;
     confidence?: number;
@@ -90,24 +94,39 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
   const handleDownload = (doc: Document) => {
     try {
-      // Construct the direct download URL
-      const downloadUrl = `http://localhost:3001/api/clients/${clientId}/documents/${doc.filename}`;
-      
+      // Prefer direct GCS URL if available, otherwise use backend proxy
+      // This allows downloads to work even when GCS keys aren't configured locally
+      let downloadUrl: string;
+
+      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
+        // Use direct GCS URL
+        downloadUrl = doc.url;
+        console.log('Using direct GCS URL for download:', downloadUrl);
+      } else {
+        // Fall back to backend proxy (for local storage or when url is not available)
+        downloadUrl = `${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`;
+        console.log('Using backend proxy for download:', downloadUrl);
+      }
+
       // Open in new tab as fallback, or direct download
       const link = window.document.createElement('a');
       link.href = downloadUrl;
       link.download = doc.name;
       link.target = '_blank'; // Fallback: open in new tab if download fails
       link.style.display = 'none';
-      
+
       window.document.body.appendChild(link);
       link.click();
       window.document.body.removeChild(link);
-      
+
     } catch (error) {
       console.error('Download error:', error);
-      // Fallback: open directly in browser
-      window.open(`http://localhost:3001/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+      // Fallback: try direct GCS URL first, then backend proxy
+      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
+        window.open(doc.url, '_blank');
+      } else {
+        window.open(`${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+      }
     }
   };
 
@@ -185,7 +204,11 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     }
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  // Admin sees ONLY creditor-split entries (documents WITH source_document_id)
+  // This hides the source documents that users uploaded
+  const creditorDocuments = documents.filter(doc => doc.source_document_id);
+
+  const filteredDocuments = creditorDocuments.filter(doc => {
     switch (filter) {
       case 'needs_review':
         return doc.document_status === 'needs_review';
@@ -200,7 +223,8 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
     }
   });
 
-  const needsReviewCount = documents.filter(doc => doc.document_status === 'needs_review').length;
+  // Calculate counts from creditor documents only
+  const needsReviewCount = creditorDocuments.filter(doc => doc.document_status === 'needs_review').length;
 
   if (loading) {
     return (
@@ -228,7 +252,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 Dokument-Manager
               </h3>
               <p className="text-sm text-gray-500">
-                {documents.length} Dokumente • {needsReviewCount} benötigen Prüfung
+                {creditorDocuments.length} Gläubiger • {needsReviewCount} benötigen Prüfung
               </p>
             </div>
           </div>
@@ -241,7 +265,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Alle ({documents.length})
+              Alle ({creditorDocuments.length})
             </button>
             <button
               onClick={() => setFilter('needs_review')}
@@ -257,7 +281,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'creditor' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Gläubiger ({documents.filter(d => d.document_status === 'creditor_confirmed').length})
+              Bestätigt ({creditorDocuments.filter(d => d.document_status === 'creditor_confirmed').length})
             </button>
             <button
               onClick={() => setFilter('duplicates')}
@@ -265,7 +289,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Duplikate ({documents.filter(d => d.document_status === 'duplicate').length})
+              Duplikate ({creditorDocuments.filter(d => d.document_status === 'duplicate').length})
             </button>
           </div>
         </div>

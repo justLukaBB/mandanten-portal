@@ -4,30 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const { authenticateAdmin } = require('../middleware/auth');
 const CreditorDatabase = require('../models/CreditorDatabase');
+const { normalizeName, extractKeywords } = require('../utils/creditorLookup');
 
 const upload = multer({ storage: multer.memoryStorage() });
-
-const normalizeName = (name) => {
-  if (!name) return '';
-  return name
-    .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/\b(gmbh|ag|kg|ohg|ug|e\.?v\.?|mbh|co|inkasso|bank)\b/g, '')
-    .trim();
-};
-
-const extractKeywords = (name) => {
-  const normalized = normalizeName(name);
-  const stopwords = ['der', 'die', 'das', 'und', 'für', 'von', 'zu'];
-  return normalized
-    .split(' ')
-    .filter((w) => w.length > 2 && !stopwords.includes(w));
-};
 
 // GET / - list with search & pagination
 router.get('/', authenticateAdmin, async (req, res) => {
