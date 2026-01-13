@@ -5,7 +5,6 @@ const { v4: uuidv4 } = require('uuid');
 const webhookVerifier = require('../utils/webhookVerifier');          // adjust path if needed
 const creditorDeduplication = require('../utils/creditorDeduplication'); // adjust path if needed
 const Client = require('../models/Client');                           // adjust path if needed
-const { findCreditorByName } = require('../utils/creditorLookup');
 
 // Lazy load server functions to avoid circular dependency
 let serverFunctions = null;
@@ -18,101 +17,6 @@ function getServerFunctions() {
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
   parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
-
-/**
- * Enrich a creditor document with contact info from local DB when missing.
- * Uses caching to avoid repeated lookups for identical names within a request.
- */
-async function enrichCreditorContactFromDb(docResult, cache) {
-  if (!docResult?.is_creditor_document) return;
-
-  const isMissing = (val) => {
-    if (val === undefined || val === null) return true;
-    if (typeof val === 'string') {
-      const trimmed = val.trim();
-      if (!trimmed) return true;
-      const lower = trimmed.toLowerCase();
-      if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
-    }
-    return false;
-  };
-
-  const creditorData = docResult.extracted_data?.creditor_data || {};
-  const missingEmail = isMissing(creditorData.email);
-  const missingSenderEmail = isMissing(creditorData.sender_email);
-  const missingAddress = isMissing(creditorData.address);
-  const missingSenderAddress = isMissing(creditorData.sender_address);
-  const needEmail = missingEmail || missingSenderEmail;
-  const needAddress = missingAddress || missingSenderAddress;
-
-  if (!needEmail && !needAddress) return;
-
-  const candidateName =
-    creditorData.sender_name ||
-    creditorData.glaeubiger_name ||
-    creditorData.creditor_name ||
-    creditorData.name ||
-    creditorData.creditor ||
-    docResult.creditor_name ||
-    docResult.sender_name ||
-    docResult.name;
-
-  if (!candidateName) return;
-
-  const cacheKey = candidateName.toLowerCase().trim();
-  let match = cache.get(cacheKey);
-  if (match === undefined) {
-    match = await findCreditorByName(candidateName);
-    cache.set(cacheKey, match || null);
-  }
-
-  if (!match) return;
-
-  const updatedCreditorData = { ...creditorData };
-  const beforeEmail = updatedCreditorData.email;
-  const beforeAddress = updatedCreditorData.address;
-  const beforeSenderEmail = updatedCreditorData.sender_email;
-  const beforeSenderAddress = updatedCreditorData.sender_address;
-
-  if (match.email) {
-    if (missingEmail) {
-      updatedCreditorData.email = match.email;
-    }
-    if (missingSenderEmail) {
-      updatedCreditorData.sender_email = match.email;
-    }
-  }
-  if (match.address) {
-    if (missingAddress) {
-      updatedCreditorData.address = match.address;
-    }
-    if (missingSenderAddress) {
-      updatedCreditorData.sender_address = match.address;
-    }
-  }
-
-  const matchedId = match._id?.toString?.() || match.id || match._id;
-  if (matchedId) {
-    updatedCreditorData.creditor_database_id = matchedId;
-  }
-  updatedCreditorData.creditor_database_match = true;
-
-  docResult.extracted_data = docResult.extracted_data || {};
-  docResult.extracted_data.creditor_data = updatedCreditorData;
-
-  console.log('[webhook] creditor enrichment applied', {
-    name: candidateName,
-    email_before: beforeEmail || null,
-    email_after: updatedCreditorData.email || null,
-    sender_email_before: beforeSenderEmail || null,
-    sender_email_after: updatedCreditorData.sender_email || null,
-    address_before: beforeAddress || null,
-    address_after: updatedCreditorData.address || null,
-    sender_address_before: beforeSenderAddress || null,
-    sender_address_after: updatedCreditorData.sender_address || null,
-    match_id: matchedId || null,
-  });
-}
 
 /**
  * Webhook receiver for FastAPI AI processing results
@@ -165,7 +69,6 @@ router.post(
       const processedDocuments = [];
       const creditorDocuments = [];
       const documentsNeedingReview = [];
-      const creditorLookupCache = new Map();
 
       // Per-document status handling (kept as-is)
       for (const docResult of results || []) {
@@ -196,25 +99,11 @@ router.post(
           documentsNeedingReview.push(docResult);
         }
 
-        await enrichCreditorContactFromDb(docResult, creditorLookupCache);
-
         processedDocuments.push({
           ...docResult,
           document_status: finalDocumentStatus,
           status_reason: statusReason,
         });
-
-        if (docResult.is_creditor_document) {
-          const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
-          const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
-          if (enrichedEmail || enrichedAddress) {
-            console.log('[webhook] creditor doc after enrichment', {
-              doc_id: docResult.id,
-              email: enrichedEmail || null,
-              address: enrichedAddress || null,
-            });
-          }
-        }
       }
 
       // Duplicate detection against existing docs (unchanged)
@@ -554,4 +443,3 @@ router.get('/health', (req, res) => {
   });
 });
 
-module.exports = router;
