@@ -135,20 +135,44 @@ function middleware(req, res, next) {
 /**
  * Optional middleware - verifies signature if present, logs warning if not
  * Use this during development when you might not have signatures configured
+ * IMPORTANT: This middleware ALWAYS calls next(), even if signature verification fails
  */
 function optionalMiddleware(req, res, next) {
+  const payload = req.body.toString('utf8');
   const signature = req.headers['x-signature'];
   const timestamp = req.headers['x-timestamp'];
-  
+
   if (!signature || !timestamp) {
     console.log(`⚠️ Webhook received WITHOUT signature (development mode)`);
     console.log(`   Path: ${req.path}`);
     console.log(`   Source: ${req.headers['x-webhook-source'] || 'unknown'}`);
+    console.log(`   ⚠️ ALLOWING webhook to proceed without verification\n`);
     return next();
   }
-  
-  // If headers are present, verify them
-  return middleware(req, res, next);
+
+  // If headers are present, verify them but DON'T reject on failure
+  console.log(`\n🔐 ================================`);
+  console.log(`🔐 WEBHOOK SIGNATURE VERIFICATION (OPTIONAL MODE)`);
+  console.log(`🔐 ================================`);
+  console.log(`📍 Path: ${req.path}`);
+  console.log(`⏰ Timestamp: ${timestamp}`);
+  console.log(`🔑 Signature: ${signature ? signature.substring(0, 20) + '...' : 'MISSING'}`);
+  console.log(`📦 Payload size: ${payload.length} bytes`);
+
+  const result = verifyWebhookSignature(payload, signature, timestamp);
+
+  if (!result.valid) {
+    console.log(`⚠️ Verification FAILED: ${result.error}`);
+    console.log(`⚠️ ALLOWING webhook to proceed anyway (optional mode)`);
+    console.log(`🔐 ================================\n`);
+    // DON'T return - let it continue
+  } else {
+    console.log(`✅ Verification PASSED`);
+    console.log(`🔐 ================================\n`);
+  }
+
+  // Always continue to the next middleware
+  next();
 }
 
 module.exports = {
