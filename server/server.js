@@ -43,6 +43,7 @@ const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalcula
 const TestDataService = require('./services/testDataService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
 const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
+const { createProcessingJob } = require('./utils/fastApiClient');
 
 // Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
@@ -773,6 +774,55 @@ app.post('/api/clients/:clientId/documents',
             }
           }, PROCESSING_TIMEOUT);
 
+          // ==========================================
+          // NEW: FastAPI Gemini AI Processing
+          // ==========================================
+          try {
+            // Prepare webhook URL for FastAPI to send results back
+            const webhookBaseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
+            const webhookUrl = `${webhookBaseUrl}/api/webhooks/ai-processing`;
+
+            console.log(`🚀 Calling FastAPI for document processing...`);
+            console.log(`📄 Document: ${file.originalname}`);
+            console.log(`🆔 Document ID: ${documentId}`);
+            console.log(`🔔 Webhook URL: ${webhookUrl}`);
+
+            // Call FastAPI to process the document
+            const fastApiResult = await createProcessingJob({
+              clientId,
+              files: [{
+                filename: gcsUrl.split('/').pop(), // GCS filename
+                gcs_path: gcsUrl, // Full GCS URL
+                mime_type: file.mimetype,
+                size: file.size,
+                document_id: documentId
+              }],
+              webhookUrl: webhookUrl,
+              apiKey: process.env.GEMINI_API_KEY || null
+            });
+
+            if (fastApiResult.success) {
+              console.log(`✅ FastAPI job created successfully`);
+              console.log(`🔑 Job ID: ${fastApiResult.jobId}`);
+              console.log(`📊 Status: ${fastApiResult.status}`);
+
+              // Clear timeout since FastAPI will handle the processing
+              clearTimeout(timeoutId);
+
+              // Update document with job ID
+              await safeClientUpdate(clientId, (client) => {
+                const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+                if (docIndex !== -1) {
+                  client.documents[docIndex].processing_job_id = fastApiResult.jobId;
+                  client.documents[docIndex].processing_method = 'fastapi_gemini_ai';
+                }
+                return client;
+              });
+            } else {
+              throw new Error(fastApiResult.error || 'FastAPI job creation failed');
+            }
+
+//           // OLD: Google Document AI processor (DISABLED)
 //           try {
 //             // Update status to processing using safe client update
 //             await safeClientUpdate(clientId, (client) => {
@@ -783,7 +833,7 @@ app.post('/api/clients/:clientId/documents',
 //               }
 //               return client;
 //             });
-// 
+//
 //             console.log(`🤖 Calling Google Document AI processor...`);
 //             const extractedData = await documentProcessor.processDocument(file.buffer, file.originalname);
 // 
@@ -1184,6 +1234,39 @@ app.post('/api/clients/:clientId/documents',
 //               return client;
 //             });
 //           }
+
+          } catch (fastApiError) {
+            // Clear timeout on error
+            clearTimeout(timeoutId);
+            const processingTime = Date.now() - startTime;
+
+            console.log(`\n❌ ================================`);
+            console.log(`❌ FASTAPI PROCESSING FAILED`);
+            console.log(`❌ ================================`);
+            console.log(`📁 Document: ${file.originalname}`);
+            console.log(`💥 Error: ${fastApiError.message}`);
+            console.log(`⏱️  Failed after: ${processingTime}ms`);
+            console.log(`❌ ================================\n`);
+
+            // Update document with error status
+            await safeClientUpdate(clientId, (client) => {
+              const docIndex = client.documents.findIndex(doc => doc.id === documentId);
+              if (docIndex !== -1) {
+                client.documents[docIndex] = {
+                  ...client.documents[docIndex],
+                  processing_status: 'failed',
+                  document_status: 'processing_failed',
+                  status_reason: `FastAPI Fehler: ${fastApiError.message}`,
+                  processing_error: fastApiError.message,
+                  processing_error_details: fastApiError.stack,
+                  processed_at: new Date().toISOString(),
+                  processing_time_ms: processingTime,
+                  processing_method: 'fastapi_gemini_ai'
+                };
+              }
+              return client;
+            });
+          }
         });
       }
 
