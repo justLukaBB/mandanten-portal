@@ -27,6 +27,12 @@ if (process.env.GCS_KEY_BASE64) {
     console.log('🔑 Using GCS credentials from GCS_KEY_BASE64 environment variable');
     const decodedJson = Buffer.from(process.env.GCS_KEY_BASE64, 'base64').toString('utf-8');
     const credentials = JSON.parse(decodedJson);
+
+    // Fix escaped newlines in private_key
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+
     storage = new Storage({
       credentials: credentials,
       projectId: credentials.project_id
