@@ -142,8 +142,22 @@ const uploadToGCS = (file) => {
     });
 
     blobStream.on('error', (err) => reject(err));
-    blobStream.on('finish', () => {
-      resolve(`https://storage.googleapis.com/${bucketName}/${blob.name}`);
+    blobStream.on('finish', async () => {
+      try {
+        // Generate a signed URL that expires in 24 hours
+        // FastAPI can download this without needing GCS credentials
+        const [signedUrl] = await blob.getSignedUrl({
+          version: 'v4',
+          action: 'read',
+          expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+        });
+        console.log(`✅ Generated signed URL for ${filename}`);
+        resolve(signedUrl);
+      } catch (error) {
+        console.error(`⚠️ Failed to generate signed URL for ${filename}:`, error.message);
+        // Fallback to public URL if signing fails
+        resolve(`https://storage.googleapis.com/${bucketName}/${blob.name}`);
+      }
     });
 
     blobStream.end(file.buffer);
