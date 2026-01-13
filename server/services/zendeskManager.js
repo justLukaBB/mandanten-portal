@@ -1924,7 +1924,7 @@ Bongardstraße 33
 44787 Bochum
 
 Telefon: 0234 913681-0
-E-Mail: info@ra-scuric.de
+E-Mail: glaubiger@scuric.zendesk.com
 
 ---
 Aktenzeichen: ${clientData.reference}

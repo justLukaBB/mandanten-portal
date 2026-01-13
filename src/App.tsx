@@ -9,6 +9,7 @@ import AgentApp from './agent/AgentApp';
 import AgentLogin from './agent/pages/AgentLogin';
 import AdminLogin from './admin/pages/AdminLogin';
 import NotFound from './pages/NotFound';
+import { Toaster } from 'sonner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement, allowedRole: string }> = ({ children, allowedRole }) => {
   const activeRole = localStorage.getItem("active_role");
@@ -26,19 +27,19 @@ const PublicRoute: React.FC<{ children: React.ReactElement; allowedRole: string 
   const token = localStorage.getItem("auth_token");
 
   const clientData = localStorage.getItem("portal_client_data");
-  const data = clientData ? JSON.parse(clientData) : null; 
+  const data = clientData ? JSON.parse(clientData) : null;
 
   // If already logged in, redirect to dashboard
   if (token && activeRole === allowedRole) {
     if (activeRole === 'agent') {
       return <Navigate to={`/${allowedRole}/dashboard`} replace />;
-    } 
-    
-    if(activeRole === 'admin') {
+    }
+
+    if (activeRole === 'admin') {
       return <Navigate to={`/${allowedRole}`} replace />;
     }
 
-    if(activeRole === 'portal' && data) {
+    if (activeRole === 'portal' && data) {
       return <Navigate to={`/portal/${data.aktenzeichen}`} replace />;
     }
   }
@@ -49,10 +50,12 @@ const PublicRoute: React.FC<{ children: React.ReactElement; allowedRole: string 
 export { ProtectedRoute, PublicRoute };
 
 
+
 function App() {
   return (
     <Router>
       <div className="App">
+        <Toaster position="top-right" richColors closeButton />
         <Routes>
           <Route
             path="/"
