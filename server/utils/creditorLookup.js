@@ -182,9 +182,24 @@ const findCreditorByName = async (name) => {
     console.log(`  ${idx + 1}. ${item.match.creditor_name} (score: ${(item.score * 100).toFixed(1)}%)`);
   });
 
-  // Return the best match
+  // Return the best match only if score is above minimum threshold
   const bestMatch = scoredMatches[0].match;
   const bestScore = scoredMatches[0].score;
+
+  // Minimum score threshold - prevents matching unrelated creditors
+  // Example: "Andreas Thiel" should NOT match "Rechtsanwälte Witte Thiel"
+  // Configurable via CREDITOR_MATCH_MIN_SCORE (default: 0.65 = 65%)
+  const MINIMUM_SCORE_THRESHOLD = parseFloat(process.env.CREDITOR_MATCH_MIN_SCORE) || 0.65;
+
+  if (bestScore < MINIMUM_SCORE_THRESHOLD) {
+    console.log('[creditorLookup] best match REJECTED - score too low', {
+      creditor_name: bestMatch.creditor_name,
+      score: `${(bestScore * 100).toFixed(1)}%`,
+      threshold: `${(MINIMUM_SCORE_THRESHOLD * 100).toFixed(1)}%`,
+      reason: 'Likely unrelated creditor - not enough keyword overlap',
+    });
+    return null;
+  }
 
   console.log('[creditorLookup] best match selected', {
     id: bestMatch._id?.toString?.() || bestMatch.id,
