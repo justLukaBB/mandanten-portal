@@ -58,9 +58,20 @@ const app = express();
 const PORT = config.PORT;
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
+// Skip body parsing for webhook routes (they use express.raw())
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/webhooks/')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/webhooks/')) {
+    return next();
+  }
+  express.text({ type: 'application/json' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
-app.use(express.text({ type: 'application/json' })); // Handle JSON sent as text
 app.use(cors());
 app.use(securityHeaders);
 
@@ -460,8 +471,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+// Body parsing middleware (skip webhooks - they use express.raw())
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/webhooks/')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check routes (no auth required)
