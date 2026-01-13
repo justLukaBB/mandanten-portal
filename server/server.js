@@ -8012,4 +8012,12 @@ process.on('SIGTERM', async () => {
 startServer();
 
 // Export for other services
-module.exports = { app, clientsData, getClient, saveClient, getClientAktenzeichen };
+module.exports = {
+  app,
+  clientsData,
+  getClient,
+  saveClient,
+  getClientAktenzeichen,
+  safeClientUpdate,
+  triggerProcessingCompleteWebhook
+};
