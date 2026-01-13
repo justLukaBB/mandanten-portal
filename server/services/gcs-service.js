@@ -21,8 +21,42 @@ let isGCSConfigured = false;
 const bucketName = 'automation_scuric';
 
 // Initialize GCS securely
-// Try environment variable first, then file
-if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+// Try environment variables first (multiple formats), then file
+if (process.env.GCS_KEY_BASE64) {
+  try {
+    console.log('🔑 Using GCS credentials from GCS_KEY_BASE64 environment variable');
+    const decodedJson = Buffer.from(process.env.GCS_KEY_BASE64, 'base64').toString('utf-8');
+    const credentials = JSON.parse(decodedJson);
+    storage = new Storage({
+      credentials: credentials,
+      projectId: credentials.project_id
+    });
+    bucket = storage.bucket(bucketName);
+    isGCSConfigured = true;
+    console.log('✅ GCS Service Initialized (from GCS_KEY_BASE64)');
+    console.log(`📧 Using service account: ${credentials.client_email}`);
+  } catch (error) {
+    console.error('⚠️ GCS Initialization failed (GCS_KEY_BASE64 exists but invalid):', error.message);
+  }
+} else if (process.env.GCS_CLIENT_EMAIL && process.env.GCS_PRIVATE_KEY) {
+  try {
+    console.log('🔑 Using GCS credentials from GCS_CLIENT_EMAIL and GCS_PRIVATE_KEY');
+    const credentials = {
+      client_email: process.env.GCS_CLIENT_EMAIL,
+      private_key: process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle escaped newlines
+    };
+    storage = new Storage({
+      credentials: credentials,
+      projectId: 'automationscuric' // Your project ID
+    });
+    bucket = storage.bucket(bucketName);
+    isGCSConfigured = true;
+    console.log('✅ GCS Service Initialized (from GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY)');
+    console.log(`📧 Using service account: ${credentials.client_email}`);
+  } catch (error) {
+    console.error('⚠️ GCS Initialization failed (GCS_CLIENT_EMAIL/GCS_PRIVATE_KEY exist but invalid):', error.message);
+  }
+} else if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
   try {
     console.log('🔑 Using GCS credentials from GOOGLE_SERVICE_ACCOUNT_KEY environment variable');
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
@@ -32,9 +66,10 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
     });
     bucket = storage.bucket(bucketName);
     isGCSConfigured = true;
-    console.log('✅ GCS Service Initialized (from environment variable)');
+    console.log('✅ GCS Service Initialized (from GOOGLE_SERVICE_ACCOUNT_KEY)');
+    console.log(`📧 Using service account: ${credentials.client_email}`);
   } catch (error) {
-    console.error('⚠️ GCS Initialization failed (env var exists but invalid):', error.message);
+    console.error('⚠️ GCS Initialization failed (GOOGLE_SERVICE_ACCOUNT_KEY exists but invalid):', error.message);
   }
 } else if (fs.existsSync(keyFilePath)) {
   try {
