@@ -121,7 +121,7 @@ async function enrichCreditorContactFromDb(docResult, cache) {
 router.post(
   '/ai-processing',
   express.raw({ type: 'application/json' }),
-  webhookVerifier.optionalMiddleware, // Temporarily allow unsigned webhooks for testing
+  webhookVerifier.middleware,
   async (req, res) => {
     const startTime = Date.now();
     const rawBody = req.body.toString('utf8');
@@ -224,12 +224,16 @@ router.post(
 
         if (docResult.is_creditor_document) {
           const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
+          const enrichedSenderEmail = docResult.extracted_data?.creditor_data?.sender_email;
           const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
-          if (enrichedEmail || enrichedAddress) {
+          const enrichedSenderAddress = docResult.extracted_data?.creditor_data?.sender_address;
+          if (enrichedEmail || enrichedAddress || enrichedSenderEmail || enrichedSenderAddress) {
             console.log('[webhook] creditor doc after enrichment', {
               doc_id: docResult.id,
               email: enrichedEmail || null,
+              sender_email: enrichedSenderEmail || null,
               address: enrichedAddress || null,
+              sender_address: enrichedSenderAddress || null,
             });
           }
         }
