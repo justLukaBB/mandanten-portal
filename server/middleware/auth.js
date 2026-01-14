@@ -8,7 +8,7 @@ const authenticateClient = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     console.log(`🔐 Auth header: ${authHeader ? 'Present' : 'Missing'}`);
-    
+
     if (!authHeader) {
       return res.status(401).json({ error: 'No authorization header provided' });
     }
@@ -21,16 +21,16 @@ const authenticateClient = (req, res, next) => {
     console.log(`🔑 Token preview: ${token.substring(0, 20)}...`);
     const decoded = jwt.verify(token, JWT_SECRET);
     console.log(`🎯 Decoded token:`, { clientId: decoded.clientId, email: decoded.email, type: decoded.type });
-    
+
     // Accept client tokens, session tokens, or any token that has a client identifier
     const hasClientId = decoded.clientId || decoded.sessionId || decoded.id;
-    
+
     // Temporary debugging: log full token structure
     console.log(`🔍 Full token structure:`, JSON.stringify(decoded, null, 2));
-    
+
     if (decoded.type !== 'client' && !hasClientId) {
       console.log(`❌ Invalid token: missing client identifier. Token structure:`, Object.keys(decoded));
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: 'Invalid token type - client access required',
         debug: {
           tokenType: decoded.type,
@@ -73,7 +73,7 @@ const authenticateAdmin = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
     // Check if token is for admin
     if (decoded.type !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
@@ -95,10 +95,10 @@ const authenticateAdmin = (req, res, next) => {
 // Generate JWT token for client
 const generateClientToken = (clientId, email) => {
   return jwt.sign(
-    { 
-      clientId, 
-      email, 
-      type: 'client' 
+    {
+      clientId,
+      email,
+      type: 'client'
     },
     JWT_SECRET,
     { expiresIn: '24h' }
@@ -108,13 +108,53 @@ const generateClientToken = (clientId, email) => {
 // Generate JWT token for admin
 const generateAdminToken = (adminId) => {
   return jwt.sign(
-    { 
-      adminId, 
-      type: 'admin' 
+    {
+      adminId,
+      type: 'admin'
     },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
+};
+
+// Middleware for admin or agent authentication
+const authenticateAdminOrAgent = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No authorization header provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Check if token is for admin or agent
+    if (decoded.type === 'admin') {
+      req.adminId = decoded.adminId;
+      return next();
+    }
+
+    if (decoded.type === 'agent') {
+      req.agentId = decoded.agentId;
+      req.agentUsername = decoded.username;
+      req.agentRole = decoded.role;
+      return next();
+    }
+
+    return res.status(403).json({ error: 'Admin or Agent access required' });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    return res.status(500).json({ error: 'Authentication error' });
+  }
 };
 
 // Middleware for agent authentication
@@ -131,7 +171,7 @@ const authenticateAgent = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
     // Check if token is for agent
     if (decoded.type !== 'agent') {
       return res.status(403).json({ error: 'Agent access required' });
@@ -225,6 +265,7 @@ const getImpersonationMetadata = (req) => {
 module.exports = {
   authenticateClient,
   authenticateAdmin,
+  authenticateAdminOrAgent,
   authenticateAgent,
   generateClientToken,
   generateAdminToken,

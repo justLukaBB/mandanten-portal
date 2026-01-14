@@ -8,6 +8,7 @@ const CreditorContactService = require('../services/creditorContactService');
 const ZendeskService = require('../services/zendeskService');
 const config = require('../config');
 const { sanitizeAktenzeichen } = require('../utils/sanitizeAktenzeichen');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -1128,9 +1129,25 @@ router.get('/:clientId/document/:documentId/file', rateLimits.general, async (re
     }
 
     // Handle GCS or remote URLs
+    // Handle GCS or remote URLs
     if (document.url && document.url.startsWith('http')) {
-      console.log(`Redirecting to remote URL for document ${documentId}: ${document.url}`);
-      return res.redirect(document.url);
+      console.log(`streaming remote URL for document ${documentId}`);
+      try {
+        const response = await axios({
+            method: 'GET',
+            url: document.url,
+            responseType: 'stream'
+        });
+        
+        // Forward important headers
+        if (response.headers['content-type']) res.setHeader('Content-Type', response.headers['content-type']);
+        if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+        
+        return response.data.pipe(res);
+      } catch (streamError) {
+         console.error('Error streaming from Remote URL:', streamError.message);
+         // Continue to fallback paths if streaming fails (e.g. expired URL)
+      }
     }
 
     // Construct file path based on your upload structure
