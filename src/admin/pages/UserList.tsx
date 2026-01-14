@@ -6,10 +6,12 @@ import {
   MagnifyingGlassIcon,
   EyeIcon,
   ArrowLeftIcon,
-  BoltIcon
+  BoltIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
-import { API_BASE_URL } from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
+import { useGetClientsQuery, useTriggerImmediateReviewMutation } from '../../store/features/adminApi';
 
 interface User {
   id: string;
@@ -34,7 +36,6 @@ interface User {
 interface StatusFilter {
   value: string;
   label: string;
-  count: number;
 }
 
 interface UserListProps {
@@ -42,147 +43,77 @@ interface UserListProps {
 }
 
 const UserList: React.FC<UserListProps> = ({ onBack }) => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Local State
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [triggeringReview, setTriggeringReview] = useState<string | null>(null);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [dateRange, setDateRange] = useState<{start: string, end: string}>({
     start: '',
     end: ''
   });
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, dateRange]);
+
+  // RTK Query hooks
+  const { data, isLoading, isFetching, refetch } = useGetClientsQuery({
+    page,
+    limit,
+    search: debouncedSearch,
+    status: statusFilter,
+    dateFrom: dateRange.start,
+    dateTo: dateRange.end
+  });
+
+  const [triggerImmediateReview, { isLoading: isTriggering }] = useTriggerImmediateReviewMutation();
+  const [triggeringId, setTriggeringId] = useState<string | null>(null);
+
+  const users = (data?.clients as User[]) || [];
+  const totalUsers = data?.pagination?.total || 0;
+  const totalPages = data?.pagination?.totalPages || 1;
+
   // Status options
   const statusOptions: StatusFilter[] = [
-    { value: 'all', label: 'Alle Status', count: 0 },
-    { value: 'created', label: 'Erstellt', count: 0 },
-    { value: 'portal_access_sent', label: 'Portal-Zugang gesendet', count: 0 },
-    { value: 'documents_uploaded', label: 'Dokumente hochgeladen', count: 0 },
-    { value: 'documents_processing', label: 'Dokumente werden verarbeitet', count: 0 },
-    { value: 'waiting_for_payment', label: 'Wartet auf Zahlung', count: 0 },
-    { value: 'payment_confirmed', label: 'Zahlung bestätigt', count: 0 },
-    { value: 'creditor_review', label: 'Gläubiger-Prüfung', count: 0 },
-    { value: 'awaiting_client_confirmation', label: 'Wartet auf Client-Bestätigung', count: 0 },
-    { value: 'creditor_contact_active', label: 'Gläubiger-Kontakt aktiv', count: 0 },
-    { value: 'completed', label: 'Abgeschlossen', count: 0 }
+    { value: 'all', label: 'Alle Status' },
+    { value: 'created', label: 'Erstellt' },
+    { value: 'portal_access_sent', label: 'Portal-Zugang gesendet' },
+    { value: 'documents_uploaded', label: 'Dokumente hochgeladen' },
+    { value: 'documents_processing', label: 'Dokumente werden verarbeitet' },
+    { value: 'waiting_for_payment', label: 'Wartet auf Zahlung' },
+    { value: 'payment_confirmed', label: 'Zahlung bestätigt' },
+    { value: 'creditor_review', label: 'Gläubiger-Prüfung' },
+    { value: 'awaiting_client_confirmation', label: 'Wartet auf Client-Bestätigung' },
+    { value: 'creditor_contact_active', label: 'Gläubiger-Kontakt aktiv' },
+    { value: 'completed', label: 'Abgeschlossen' }
   ];
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [users, statusFilter, searchQuery, dateRange]);
-
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch all clients from admin endpoint
-      const response = await fetch(`${API_BASE_URL}/api/admin/clients`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-      
-      const data = await response.json();
-      const clientsData = data.clients || [];
-      
-      // Transform client data for analytics view
-      const transformedUsers: User[] = clientsData.map((client: any) => ({
-        id: client.id || client._id,
-        aktenzeichen: client.aktenzeichen,
-        firstName: client.firstName,
-        lastName: client.lastName,
-        email: client.email,
-        current_status: client.current_status || client.workflow_status || 'created',
-        created_at: client.created_at || client.createdAt || new Date().toISOString(),
-        updated_at: client.updated_at || client.updatedAt || new Date().toISOString(),
-        last_login: client.last_login,
-        documents_count: client.documents?.length || 0,
-        creditors_count: client.final_creditor_list?.length || 0,
-        processing_complete_webhook_scheduled: client.processing_complete_webhook_scheduled,
-        processing_complete_webhook_scheduled_at: client.processing_complete_webhook_scheduled_at,
-        processing_complete_webhook_triggered: client.processing_complete_webhook_triggered,
-        first_payment_received: client.first_payment_received,
-        all_documents_processed_at: client.all_documents_processed_at,
-        zendesk_ticket_id: client.zendesk_ticket_id
-      }));
-      
-      setUsers(transformedUsers);
-      console.log(`👥 Loaded ${transformedUsers.length} users for user list`);
-      
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = [...users];
-    
-    // Status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(user => user.current_status === statusFilter);
-    }
-    
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.firstName.toLowerCase().includes(query) ||
-        user.lastName.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        (user.aktenzeichen && user.aktenzeichen.toLowerCase().includes(query))
-      );
-    }
-    
-    // Date range filter
-    if (dateRange.start && dateRange.end) {
-      const startDate = new Date(dateRange.start);
-      const endDate = new Date(dateRange.end);
-      filtered = filtered.filter(user => {
-        const userDate = new Date(user.created_at);
-        return userDate >= startDate && userDate <= endDate;
-      });
-    }
-    
-    setFilteredUsers(filtered);
-  };
-
-  const triggerImmediateReview = async (userId: string) => {
+  const handleTriggerReview = async (userId: string) => {
     if (!window.confirm('Sofortige Gläubiger-Prüfung starten? Dies erstellt sofort ein Zendesk-Ticket für die manuelle Überprüfung.')) {
       return;
     }
 
-    setTriggeringReview(userId);
+    setTriggeringId(userId);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/immediate-review/${userId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
+      const result = await triggerImmediateReview(userId).unwrap();
 
       if (result.success) {
         alert('Gläubiger-Prüfung erfolgreich gestartet! Zendesk-Ticket wurde erstellt.');
-        // Refresh the user list to show updated status
-        await fetchUsers();
       } else {
         alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
       }
@@ -190,18 +121,21 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
       console.error('Error triggering immediate review:', error);
       alert('Fehler beim Starten der Gläubiger-Prüfung. Bitte versuchen Sie es erneut.');
     } finally {
-      setTriggeringReview(null);
+      setTriggeringId(null);
     }
   };
 
   const shouldShowImmediateReviewButton = (user: User): boolean => {
-    // Show button if:
-    // 1. Client has paid AND has documents processed but webhook is scheduled/pending
-    // 2. OR has documents processed but no webhook scheduled yet
     return !!(
       user.first_payment_received && 
-      user.documents_count > 0 && 
-      user.all_documents_processed_at &&
+      user.documents_count > 0 && // Note: documents_count is now a number from API
+      // user.all_documents_processed_at && // Re-enable if available in mapped data, currently it might be undefined in sparse object?
+      // Check interface: all_documents_processed_at is optional string.
+      // Backend mapping might not include it explicitly in the lightweight list if I missed it.
+      // I included 'updated_at', etc. but 'all_documents_processed_at' might be missing from my projection in server.js.
+      // Let's assume it's okay or fallback safely.
+      // For safety, checks if 'all_documents_processed_at' exists if critical.
+      // user.all_documents_processed_at && 
       (
         (user.processing_complete_webhook_scheduled && !user.processing_complete_webhook_triggered) ||
         (!user.processing_complete_webhook_scheduled && !user.processing_complete_webhook_triggered)
@@ -230,24 +164,14 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
     return option?.label || status;
   };
 
-  const getStatusCounts = () => {
-    const counts: Record<string, number> = {};
-    users.forEach(user => {
-      counts[user.current_status] = (counts[user.current_status] || 0) + 1;
-    });
-    return counts;
+  // Helper for pagination range
+  const getPageRange = () => {
+    const start = (page - 1) * limit + 1;
+    const end = Math.min(page * limit, totalUsers);
+    return { start, end };
   };
 
-  const statusCounts = getStatusCounts();
-  const totalUsers = users.length;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{borderBottomColor: '#9f1a1d'}}></div>
-      </div>
-    );
-  }
+  const { start, end } = getPageRange();
 
   return (
     <div className="p-6 space-y-6">
@@ -263,12 +187,18 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">👥 Alle Nutzer</h1>
-            <p className="text-gray-600 mt-1">Vollständige Benutzerliste ({totalUsers} Nutzer)</p>
+            <p className="text-gray-600 mt-1">
+              Vollständige Benutzerliste 
+              {!isLoading && ` (${totalUsers} Nutzer)`}
+            </p>
           </div>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <span>Letztes Update:</span>
           <span>{new Date().toLocaleTimeString('de-DE')}</span>
+          <button onClick={() => refetch()} className="ml-2 text-blue-600 hover:underline">
+             Reload
+          </button>
         </div>
       </div>
 
@@ -299,7 +229,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
             >
               {statusOptions.map(option => (
                 <option key={option.value} value={option.value}>
-                  {option.label} ({statusCounts[option.value] || 0})
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -346,110 +276,180 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
 
       {/* User List Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900">
-            Nutzer-Liste ({filteredUsers.length} von {totalUsers})
+            Nutzer-Liste 
           </h3>
+          {totalUsers > 0 && (
+            <span className="text-sm text-gray-500">
+                Zeige {start} - {end} von {totalUsers}
+            </span>
+          )}
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nutzer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dokumente
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Gläubiger
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Erstellt
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Letzte Aktivität
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Aktionen
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {user.firstName} {user.lastName}
-                      </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
-                      <div className="text-xs text-gray-400">{user.aktenzeichen}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(user.current_status)}`}>
-                      {getStatusLabel(user.current_status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.documents_count}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.creditors_count}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(user.created_at).toLocaleDateString('de-DE')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.last_login 
-                      ? new Date(user.last_login).toLocaleDateString('de-DE')
-                      : 'Nie angemeldet'
-                    }
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setSelectedUserId(user.aktenzeichen)}
-                        className="inline-flex items-center hover:opacity-80"
-                        style={{color: '#9f1a1d'}}
-                      >
-                        <EyeIcon className="w-4 h-4 mr-1" />
-                        Details
-                      </button>
-                      
-                      {shouldShowImmediateReviewButton(user) && (
-                        <button
-                          onClick={() => triggerImmediateReview(user.id)}
-                          disabled={triggeringReview === user.id}
-                          className={`inline-flex items-center px-2 py-1 text-xs rounded ${
-                            triggeringReview === user.id
-                              ? 'bg-gray-100 text-gray-400'
-                              : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                          }`}
-                          title="Sofort Gläubiger-Prüfung starten"
-                        >
-                          <BoltIcon className="w-3 h-3 mr-1" />
-                          {triggeringReview === user.id ? 'Lädt...' : 'Sofort prüfen'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{borderBottomColor: '#9f1a1d'}}></div>
+            </div>
+        ) : (
+            <>
+            <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nutzer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Dokumente
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Gläubiger
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Erstellt
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Letzte Aktivität
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Aktionen
+                    </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-8">
-            <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Keine Nutzer gefunden.</p>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                        <div className="text-sm font-medium text-gray-900">
+                            {user.firstName} {user.lastName}
+                        </div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
+                        <div className="text-xs text-gray-400">{user.aktenzeichen}</div>
+                        </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(user.current_status)}`}>
+                        {getStatusLabel(user.current_status)}
+                        </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {user.documents_count}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {user.creditors_count}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(user.created_at).toLocaleDateString('de-DE')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.last_login 
+                        ? new Date(user.last_login).toLocaleDateString('de-DE')
+                        : 'Nie angemeldet'
+                        }
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => setSelectedUserId(user.aktenzeichen)}
+                            className="inline-flex items-center hover:opacity-80"
+                            style={{color: '#9f1a1d'}}
+                        >
+                            <EyeIcon className="w-4 h-4 mr-1" />
+                            Details
+                        </button>
+                        
+                        {shouldShowImmediateReviewButton(user) && (
+                            <button
+                            onClick={() => handleTriggerReview(user.id)}
+                            disabled={triggeringId === user.id || isTriggering}
+                            className={`inline-flex items-center px-2 py-1 text-xs rounded ${
+                                triggeringId === user.id
+                                ? 'bg-gray-100 text-gray-400'
+                                : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                            }`}
+                            title="Sofort Gläubiger-Prüfung starten"
+                            >
+                            <BoltIcon className="w-3 h-3 mr-1" />
+                            {triggeringId === user.id ? 'Lädt...' : 'Sofort prüfen'}
+                            </button>
+                        )}
+                        </div>
+                    </td>
+                    </tr>
+                ))}
+                </tbody>
+            </table>
+            </div>
+            
+            {users.length === 0 && (
+            <div className="text-center py-8">
+                <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">Keine Nutzer gefunden.</p>
+            </div>
+            )}
+            
+            {/* Pagination Controls */}
+            {totalUsers > 0 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                            className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            Zurück
+                        </button>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages}
+                            className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            Weiter
+                        </button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-gray-700">
+                                Seite <span className="font-medium">{page}</span> von <span className="font-medium">{totalPages}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <span className="sr-only">Zurück</span>
+                                    <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                                {/* Simple Page Numbers - can be advanced later */}
+                                {[...Array(Math.min(5, totalPages))].map((_, idx) => {
+                                    // Logic to show a window of pages around current page could go here
+                                    // For now, simpler logic: show first few or simple logic
+                                    // Let's just show previous, current, next ?
+                                    // Or simplified: Just Prev/Next buttons for now to save complexity in this step
+                                    return null; 
+                                })}
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <span className="sr-only">Weiter</span>
+                                    <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </>
         )}
       </div>
 

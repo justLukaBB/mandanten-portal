@@ -16,6 +16,8 @@ import CorrectionForm from '../components/CorrectionForm';
 import ProgressBar from '../components/ProgressBar';
 import HighConfidenceSummary from '../components/HighConfidenceSummary';
 import { API_BASE_URL } from '../../config/api';
+import { truncateFilename } from '../../lib/stringUtils';
+
 
 interface ReviewData {
   client: {
@@ -76,6 +78,9 @@ interface Creditor {
   source_document: string;
   manually_reviewed?: boolean;
 }
+
+// Helper to truncate filenames
+
 
 const ReviewDashboard: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
@@ -512,9 +517,11 @@ const ReviewDashboard: React.FC = () => {
       <div className="bg-white border-t p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
           <DocumentTextIcon className="h-5 w-5 text-gray-400" />
-          <span className="text-sm text-gray-700">
-            Dokument {currentDocIndex + 1} von {documentsToReview.length}: {currentDoc.filename || currentDoc.name}
-          </span>
+       <span className="text-sm text-gray-700 max-w-[200px] truncate inline-block">
+  Dokument {currentDocIndex + 1} von {documentsToReview.length}:{' '}
+  {truncateFilename(currentDoc.filename || currentDoc.name || '', 10)}
+</span>
+
         </div>
 
         <div className="flex items-center space-x-2">
