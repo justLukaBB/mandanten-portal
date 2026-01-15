@@ -6,24 +6,24 @@ import {
   XMarkIcon,
   EyeIcon,
   EyeSlashIcon,
-  PlusIcon
 } from '@heroicons/react/24/outline';
-import api from '../config/api';
+import {
+  useGetCurrentClientQuery,
+  useGetClientDocumentsQuery,
+  useGetCreditorConfirmationStatusQuery,
+  useGetFinancialFormStatusQuery,
+  useUpdatePasswordMutation
+} from '../store/features/clientApi';
+import { useDispatch } from 'react-redux';
+import { logout, clearImpersonation } from '../store/features/authSlice';
+import { useEndImpersonationMutation } from '../store/features/authApi';
 import CreditorUploadComponent from '../components/CreditorUploadComponent';
 import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
-import ClientProgressTracker from '../components/ClientProgressTracker';
-import ClientDataComponent from '../components/ClientDataComponent';
-import ClientInvoicesViewer from '../components/ClientInvoicesViewer';
-import ClientDocumentsViewer from '../components/ClientDocumentsViewer';
 import ClientAddressForm from '../components/ClientAddressForm';
 import AddCreditorForm from '../components/AddCreditorForm';
+import api from '../config/api';
 
-/**
- * Personal/Client Portal Function Component
- * Combines all portal functionality into a reusable component
- * Optimized for mobile-first experience
- */
 export const PersonalPortal = ({
   clientId: propClientId,
   onLogout,
@@ -47,17 +47,41 @@ export const PersonalPortal = ({
 }) => {
   const { clientId: paramClientId } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const clientId = propClientId || paramClientId;
 
-  const [client, setClient] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [creditorConfirmationData, setCreditorConfirmationData] = useState<any>(null);
+  // RTK Query Hooks
+  const {
+    data: client,
+    isLoading: clientLoading,
+    error: clientError,
+    refetch: refetchClient
+  } = useGetCurrentClientQuery(clientId, { skip: !clientId });
+
+  const {
+    data: documents = [],
+    refetch: refetchDocuments
+  } = useGetClientDocumentsQuery(clientId, { skip: !clientId });
+
+  const {
+    data: creditorConfirmationData,
+    refetch: refetchCreditorConfirmation
+  } = useGetCreditorConfirmationStatusQuery(clientId, { skip: !clientId });
+
+  const {
+    data: financialStatusData,
+    refetch: refetchFinancialStatus
+  } = useGetFinancialFormStatusQuery(clientId, { skip: !clientId });
+
+  const [updatePassword, { isLoading: passwordLoading, error: passwordMutationError }] = useUpdatePasswordMutation();
+  const [endImpersonation] = useEndImpersonationMutation();
+
+  // Derived state from query data
   const [showingCreditorConfirmation, setShowingCreditorConfirmation] = useState(false);
   const [showingFinancialForm, setShowingFinancialForm] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
+  const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
 
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -67,13 +91,12 @@ export const PersonalPortal = ({
     newPassword: '',
     confirmPassword: ''
   });
-  const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
-  const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
+
   const [previewFile, setPreviewFile] = useState<{
     loading?: boolean;
     url?: string;
@@ -96,216 +119,56 @@ export const PersonalPortal = ({
 
   const progressPhases = customProgressPhases || defaultProgressPhases;
 
-  // Fetch client data and documents
-  const fetchClientData = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/api/clients/${clientId}`);
-      const clientData = response.data;
-
-      if (clientData.clickupId) {
-        try {
-          const formResponse = await api.get(`/api/proxy/forms/${clientData.clickupId}`);
-          if (formResponse.data) {
-            clientData.formData = formResponse.data;
-          }
-        } catch (formErr) {
-          console.error('Error fetching form data:', formErr);
-        }
-      }
-
-      // Fetch documents separately for better state management
-      try {
-        const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
-        setDocuments(documentsResponse.data || []);
-      } catch (docErr) {
-        console.error('Error fetching documents:', docErr);
-        setDocuments([]);
-      }
-
-      // Check for creditor confirmation status
-      try {
-        const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
-        console.log('🔍 Creditor confirmation API response:', creditorResponse.data);
-        setCreditorConfirmationData(creditorResponse.data);
-
-        // Show creditor confirmation only after 7-day review is triggered or explicitly in review status
-        // Do NOT show during the 7-day waiting period after payment + documents
-        const shouldShowCreditorConfirmation =
-          creditorResponse.data &&
-          (
-            creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
-            creditorResponse.data.workflow_status === 'client_confirmation' ||
-            creditorResponse.data.workflow_status === 'creditor_review' ||
-            (clientData.first_payment_received &&
-              clientData.seven_day_review_triggered === true &&
-              clientData.current_status === 'creditor_review')
-          ) &&
-          !creditorResponse.data.client_confirmed;
-
-        console.log('🎯 Should show creditor confirmation:', shouldShowCreditorConfirmation, {
-          workflow_status: creditorResponse.data?.workflow_status,
-          client_confirmed: creditorResponse.data?.client_confirmed,
-          current_status: clientData.current_status,
-          admin_approved: clientData.admin_approved
-        });
-
-        setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
-      } catch (creditorErr) {
-        console.log('No creditor confirmation data available yet');
-        setCreditorConfirmationData(null);
-        setShowingCreditorConfirmation(false);
-      }
-
-      // Check if financial data form should be shown (after creditor response period)
-      try {
-        const financialResponse = await api.get(`/api/clients/${clientId}/financial-form-status`);
-
-        // Defensive programming - validate response structure
-        if (financialResponse?.data) {
-          const responseData = financialResponse.data;
-          const shouldShowFinancialForm = responseData.should_show_form === true;
-          const alreadySubmitted = responseData.form_submitted === true;
-          const periodInfo = responseData.creditor_response_period || null;
-
-          console.log('📋 Financial form status:', {
-            shouldShow: shouldShowFinancialForm,
-            submitted: alreadySubmitted,
-            periodStatus: periodInfo?.status,
-            daysRemaining: periodInfo?.days_remaining,
-            responseReceived: true
-          });
-
-          // setShowAddressForm(!responseData.)
-
-          setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
-          setFinancialDataSubmitted(alreadySubmitted);
-          setCreditorResponsePeriod(periodInfo);
-          const shouldShowAddressForm = shouldShowFinancialForm || alreadySubmitted;
-
-          setShowAddressForm(shouldShowAddressForm);
-        } else {
-          console.warn('Invalid financial form status response structure');
-          setShowingFinancialForm(false);
-          setFinancialDataSubmitted(false);
-          setCreditorResponsePeriod(null);
-        }
-      } catch (financialErr: any) {
-        console.error('Financial form status error:', financialErr);
-        // Differentiate between network errors and other errors
-        if (financialErr.code === 'NETWORK_ERROR' || financialErr.response?.status >= 500) {
-          console.log('Server error - financial form status not available');
-        } else {
-          console.log('Financial form not ready yet - creditor period may not be expired');
-        }
-        setShowingFinancialForm(false);
-        setFinancialDataSubmitted(false);
-        setCreditorResponsePeriod(null);
-      }
-
-      setClient(clientData);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching client data:', err);
-      setError(
-        "Es tut uns leid, wir können die Inhalte oder die Seite für Sie nicht anzeigen. Bitte versuchen Sie es erneut oder melden Sie sich mit Ihren Zugangsdaten erneut an."
-      );
-
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Refresh documents and creditor confirmation status
-  const refreshDocuments = async () => {
-    try {
-      const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
-      setDocuments(documentsResponse.data || []);
-
-      // Also refresh creditor confirmation status
-      try {
-        const creditorResponse = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
-        setCreditorConfirmationData(creditorResponse.data);
-
-        const shouldShowCreditorConfirmation =
-          creditorResponse.data &&
-          (
-            creditorResponse.data.workflow_status === 'awaiting_client_confirmation' ||
-            creditorResponse.data.workflow_status === 'client_confirmation' ||
-            creditorResponse.data.workflow_status === 'creditor_review'
-          ) &&
-          !creditorResponse.data.client_confirmed;
-
-        setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
-      } catch (creditorErr) {
-        console.log('No creditor confirmation data available during refresh');
-        setCreditorConfirmationData(null);
-        setShowingCreditorConfirmation(false);
-      }
-    } catch (error) {
-      console.error('Error refreshing documents:', error);
-    }
-  };
-
+  // Effect to process derived state from API data
   useEffect(() => {
-    if (clientId) {
-      fetchClientData();
+    if (client && creditorConfirmationData) {
+      // Show creditor confirmation logic
+      const shouldShowCreditorConfirmation =
+        (
+          creditorConfirmationData.workflow_status === 'awaiting_client_confirmation' ||
+          creditorConfirmationData.workflow_status === 'client_confirmation' ||
+          creditorConfirmationData.workflow_status === 'creditor_review' ||
+          (client.first_payment_received &&
+            client.seven_day_review_triggered === true &&
+            client.current_status === 'creditor_review')
+        ) &&
+        !creditorConfirmationData.client_confirmed;
+
+      setShowingCreditorConfirmation(shouldShowCreditorConfirmation);
     }
-  }, [clientId]);
 
-  // Check if we're in impersonation mode
-  useEffect(() => {
-    const impersonating = localStorage.getItem('is_impersonating') === 'true';
-    const impersonationDataStr = localStorage.getItem('impersonation_data');
+    if (financialStatusData) {
+      const shouldShowFinancialForm = financialStatusData.should_show_form === true;
+      const alreadySubmitted = financialStatusData.form_submitted === true;
+      const periodInfo = financialStatusData.creditor_response_period || null;
 
-    if (impersonating && impersonationDataStr) {
-      try {
-        const data = JSON.parse(impersonationDataStr);
-        setIsImpersonating(true);
-        setImpersonationData(data);
-        console.log('🔐 Impersonation mode active:', data);
-      } catch (error) {
-        console.error('Error parsing impersonation data:', error);
-        setIsImpersonating(false);
-        setImpersonationData(null);
-      }
+      setShowingFinancialForm(shouldShowFinancialForm && !alreadySubmitted);
+      setFinancialDataSubmitted(alreadySubmitted);
+      setCreditorResponsePeriod(periodInfo);
+
+      const shouldShowAddressForm = shouldShowFinancialForm || alreadySubmitted;
+      setShowAddressForm(shouldShowAddressForm);
     }
-  }, []);
-
-  // DISABLED: Auto-reload polling every 30 seconds
-  // This was causing unwanted page refreshes in the user portal
-  // useEffect(() => {
-  //   if (!clientId) return;
-
-  //   // Poll every 30 seconds when creditor confirmation or financial form is not showing
-  //   const interval = setInterval(() => {
-  //     if (!showingCreditorConfirmation && !showingFinancialForm && !previewFile) {
-  //       fetchClientData();
-  //     }
-  //   }, 30000); // 30 seconds
-
-  //   return () => clearInterval(interval);
-  // }, [clientId, showingCreditorConfirmation, showingFinancialForm, previewFile]);
+  }, [client, creditorConfirmationData, financialStatusData]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
-    // Add new documents to existing documents list
-    // setDocuments(prevDocuments => [...prevDocuments, ...newDocuments]);
-    // refreshDocuments()
+    // RTK Query automatically handles this via tag invalidation if configured, 
+    // but we can manually refetch if needed
+    refetchDocuments();
   };
 
   // Handle financial form submission
   const handleFinancialFormSubmitted = (data: any) => {
     setFinancialDataSubmitted(true);
     setShowingFinancialForm(false);
-
-    // Refresh client data to get updated status
-    fetchClientData();
+    refetchClient();
+    refetchFinancialStatus();
   };
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.clear();
+    dispatch(logout()); // Use global action
 
     if (onLogout) {
       onLogout();
@@ -317,28 +180,14 @@ export const PersonalPortal = ({
   // Handle exit impersonation
   const handleExitImpersonation = async () => {
     try {
-      // Call backend to end impersonation session
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        await api.post('/api/auth/end-impersonation', {}, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-      }
+      // Call backend to end impersonation session using RTK Query mutation
+      await endImpersonation(undefined).unwrap();
     } catch (error) {
       console.error('Error ending impersonation session:', error);
     }
 
-    // Clear impersonation data
-    localStorage.removeItem('is_impersonating');
-    localStorage.removeItem('impersonation_data');
-
-    // Clear portal session
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('portal_session_token');
-    localStorage.removeItem('active_role');
-    localStorage.removeItem('portal_client_data');
+    // Clear local storage and state using Redux action
+    dispatch(clearImpersonation());
 
     // Close window (since it was opened in a new tab)
     window.close();
@@ -352,46 +201,40 @@ export const PersonalPortal = ({
   // Password change functions
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordLoading(true);
+
     setPasswordError(null);
     setPasswordSuccess(false);
 
     // Validation
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordError('Passwörter stimmen nicht überein');
-      setPasswordLoading(false);
       return;
     }
 
     if (passwordForm.newPassword.length < 6) {
       setPasswordError('Passwort muss mindestens 6 Zeichen lang sein');
-      setPasswordLoading(false);
       return;
     }
 
     try {
-      const { data } = await api.post('/api/client/make-new-password', {
-        file_number: passwordForm.fileNumber,
-        new_password: passwordForm.newPassword
-      });
-      if (data?.success) {
-        setPasswordSuccess(true);
-        setPasswordForm({ fileNumber: '', newPassword: '', confirmPassword: '' });
-        setTimeout(() => {
-          setShowPasswordModal(false);
-          setPasswordSuccess(false);
-          setForcePasswordChange(false);
-          // refresh client data to update isPasswordSet
-          fetchClientData();
-        }, 2000);
-      } else {
-        setPasswordError(data?.error || 'Fehler beim Ändern des Passworts');
-      }
+      // Use RTK Mutation
+      await updatePassword({
+        fileNumber: passwordForm.fileNumber,
+        newPassword: passwordForm.newPassword
+      }).unwrap();
+
+      setPasswordSuccess(true);
+      setPasswordForm({ fileNumber: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setPasswordSuccess(false);
+        setForcePasswordChange(false);
+        // refresh client data to update isPasswordSet
+        refetchClient();
+      }, 2000);
     } catch (error: any) {
-      const apiError = error?.response?.data?.error || error?.message || 'Netzwerkfehler';
+      const apiError = error?.data?.error || error?.message || 'Netzwerkfehler';
       setPasswordError(apiError);
-    } finally {
-      setPasswordLoading(false);
     }
   };
 
@@ -430,7 +273,7 @@ export const PersonalPortal = ({
     };
   }, [showDropdown]);
 
-  if (loading) {
+  if (clientLoading) {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center justify-center">
         <ArrowPathIcon className={`h-8 w-8 animate-spin mb-4`} style={{ color: customColors.primary }} />
@@ -439,12 +282,12 @@ export const PersonalPortal = ({
     );
   }
 
-  if (error) {
+  if (clientError) {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center justify-center">
         <div className="w-full max-w-lg text-center">
           <h2 className="text-xl font-bold mb-2" style={{ color: customColors.primary }}>Fehler</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-gray-600 mb-4">{(clientError as any)?.data?.error || (clientError as any)?.message || 'Ein Fehler ist aufgetreten'}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 text-white rounded-lg"
@@ -607,6 +450,8 @@ export const PersonalPortal = ({
               customColors={customColors}
               onSuccess={() => {
                 // Refresh logic if needed
+                refetchDocuments();
+                refetchCreditorConfirmation();
               }}
             />
           </div>
@@ -651,7 +496,10 @@ export const PersonalPortal = ({
         {/* Creditor confirmation component - shows when ready for client confirmation */}
         <CreditorConfirmation
           clientId={clientId!}
-          onConfirmationComplete={fetchClientData}
+          onConfirmationComplete={() => {
+            refetchClient();
+            refetchCreditorConfirmation();
+          }}
         />
 
         {/* Creditor Response Period Status - shows during 30-day waiting period */}

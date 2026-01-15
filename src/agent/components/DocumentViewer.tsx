@@ -7,6 +7,8 @@ import {
   ArrowsPointingOutIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
+import { truncateFilename } from '../../lib/stringUtils';
+
 
 interface DocumentViewerProps {
   clientId: string;
@@ -178,7 +180,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <DocumentTextIcon className="h-5 w-5 text-gray-400" />
           <div>
             <h3 className="text-sm font-medium text-gray-900">
-              {document.filename || document.name}
+                {truncateFilename(document.filename || document.name || '', 10)}
             </h3>
             <p className="text-xs text-gray-500">
               {document.type || 'Unknown type'} • {document.size ? Math.round(document.size / 1024) + ' KB' : 'Unknown size'}

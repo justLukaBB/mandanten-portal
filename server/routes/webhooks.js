@@ -421,6 +421,68 @@ router.post(
           };
         }
 
+        // NEW: Instant Add for Late Uploads - Logic to auto-add to final list (Bypass Agent Review)
+        if (
+          (clientDoc.current_status === 'awaiting_client_confirmation' || clientDoc.current_status === 'client_confirmation') &&
+          clientDoc.admin_approved
+        ) {
+          // Filter for ANY creditor document found in this batch
+          const newCreditorDocs = processedDocuments.filter(doc => 
+            doc.is_creditor_document === true
+          );
+
+          if (newCreditorDocs.length > 0) {
+            console.log(`[webhook] Found ${newCreditorDocs.length} late uploads. Auto-adding to final list (Bypassing Review).`);
+            
+            // 1. Mark these documents as "reviewed" by system to prevent status revert
+            newCreditorDocs.forEach(doc => {
+              // Find the document in the client object and update it
+              const originalDocIndex = clientDoc.documents.findIndex(d => d.id === doc.id);
+              if (originalDocIndex !== -1) {
+                clientDoc.documents[originalDocIndex].manually_reviewed = true;
+                clientDoc.documents[originalDocIndex].document_status = 'creditor_confirmed'; // Force status to confirmed
+                clientDoc.documents[originalDocIndex].status_reason = 'Late upload - Auto-added to list';
+                clientDoc.documents[originalDocIndex].review_action = 'auto_confirmed';
+              }
+              
+              // Also update the local object for current processing context
+              doc.manually_reviewed = true; 
+              doc.document_status = 'creditor_confirmed';
+            });
+
+            // 2. Extract creditor data 
+            const newCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+              newCreditorDocs,
+              'highest_amount'
+            );
+
+            // 3. Add to final list
+            if (newCreditors.length > 0) {
+              const existingList = clientDoc.final_creditor_list || [];
+              
+              clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
+                existingList,
+                newCreditors,
+                'highest_amount'
+              );
+
+              // Add status history entry
+              clientDoc.status_history = clientDoc.status_history || [];
+              clientDoc.status_history.push({
+                id: uuidv4(),
+                status: clientDoc.current_status,
+                changed_by: 'system',
+                metadata: {
+                  reason: 'Late uploads auto-added (User Request)',
+                  added_creditors_count: newCreditors.length,
+                  document_ids: newCreditorDocs.map(d => d.id)
+                },
+                created_at: new Date(),
+              });
+            }
+          }
+        }
+
         // Existing auto-confirmation timer reset logic (kept)
         if (
           clientDoc.current_status === 'awaiting_client_confirmation' &&
@@ -428,11 +490,15 @@ router.post(
           clientDoc.admin_approved_at
         ) {
           const docsNeedingReview = clientDoc.documents.filter((doc) => {
-            const uploadedAfterApproval = new Date(doc.uploadedAt) > new Date(clientDoc.admin_approved_at);
+            // Check if this document was just processed in this batch
+            const isJustProcessed = processedDocuments.some(pd => pd.id === doc.id);
+            if (!isJustProcessed) return false;
+
             const needsReview = doc.document_status === 'needs_review' || doc.manual_review_required === true;
             const notReviewed = !doc.manually_reviewed;
-            return uploadedAfterApproval && needsReview && notReviewed;
+            return needsReview && notReviewed;
           });
+
           if (docsNeedingReview.length > 0) {
             clientDoc.current_status = 'creditor_review';
             clientDoc.admin_approved = false;

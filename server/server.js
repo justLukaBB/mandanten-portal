@@ -727,10 +727,13 @@ app.post('/api/clients/:clientId/documents',
         }
 
         // Create basic document record
+        // Clean filename from GCS URL (remove query params if signed URL)
+        const cleanFilename = gcsUrl.split('?')[0].split('/').pop();
+        
         const documentRecord = {
           id: documentId,
           name: file.originalname,
-          filename: gcsUrl.split('/').pop(), // Use GCS filename
+          filename: cleanFilename, // Use clean GCS filename
           type: file.mimetype,
           size: file.size,
           uploadedAt: new Date().toISOString(),
@@ -1690,10 +1693,25 @@ app.get('/api/clients/:clientId/documents/:filename', async (req, res) => {
         doc.id === filename.replace(/\.\w+$/, '') // Try matching without extension
       );
 
-      // If document has a GCS URL, redirect to it
+      // If document has a GCS URL, stream it instead of redirecting to hide the URL
       if (document && document.url && document.url.startsWith('https://storage.googleapis.com')) {
-        console.log(`📄 Redirecting to GCS URL for ${filename}`);
-        return res.redirect(document.url);
+        console.log(`📄 Streaming GCS URL for ${filename}`);
+        try {
+            const response = await axios({
+                method: 'GET',
+                url: document.url,
+                responseType: 'stream'
+            });
+            
+            // Forward important headers
+            if (response.headers['content-type']) res.setHeader('Content-Type', response.headers['content-type']);
+            if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+            
+            return response.data.pipe(res);
+        } catch (streamError) {
+             console.error('Error streaming from GCS URL:', streamError.message);
+             // Fallback to getGCSFileStream below if URL fetch fails
+        }
       }
     }
 
@@ -2495,43 +2513,90 @@ app.get('/api/admin/clients',
   authenticateAdmin,
   async (req, res) => {
     try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 50;
+      const skip = (page - 1) * limit;
+      
+      const search = req.query.search;
+      const status = req.query.status;
+      const dateFrom = req.query.dateFrom;
+      const dateTo = req.query.dateTo;
+
+      let query = {};
+
+      if (status && status !== 'all') {
+        query.workflow_status = status;
+      }
+
+      if (search) {
+        query.$or = [
+          { firstName: { $regex: search, $options: 'i' } },
+          { lastName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { aktenzeichen: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      if (dateFrom || dateTo) {
+        query.created_at = {};
+        if (dateFrom) query.created_at.$gte = new Date(dateFrom);
+        if (dateTo) query.created_at.$lte = new Date(dateTo);
+      }
+
       let clients = [];
+      let total = 0;
 
       // Try MongoDB first
       try {
         if (databaseService.isHealthy()) {
-          clients = await Client.find({}, {
-            firstName: 1,
-            lastName: 1,
-            email: 1,
-            aktenzeichen: 1,
-            workflow_status: 1,
-            current_status: 1,
-            documents: 1,
-            final_creditor_list: 1,
-            created_at: 1,
-            updated_at: 1,
-            last_login: 1,
-            zendesk_ticket_id: 1,
-            first_payment_received: 1,
-            admin_approved: 1,
-            client_confirmed_creditors: 1
-          }).sort({ created_at: -1 });
-          console.log(`📊 Found ${clients.length} clients in MongoDB`);
+          total = await Client.countDocuments(query);
+          
+          const pipeline = [
+            { $match: query },
+            { $sort: { created_at: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                firstName: 1,
+                lastName: 1,
+                email: 1,
+                aktenzeichen: 1,
+                workflow_status: 1,
+                current_status: 1,
+                created_at: 1,
+                updated_at: 1,
+                last_login: 1,
+                zendesk_ticket_id: 1,
+                first_payment_received: 1,
+                admin_approved: 1,
+                client_confirmed_creditors: 1,
+                processing_complete_webhook_scheduled: 1,
+                processing_complete_webhook_scheduled_at: 1,
+                processing_complete_webhook_triggered: 1,
+                all_documents_processed_at: 1,
+                documents_count: { $size: { $ifNull: ["$documents", []] } },
+                creditors_count: { $size: { $ifNull: ["$final_creditor_list", []] } }
+              }
+            }
+          ];
 
-          // Debug: Log all clients with their basic info
-          clients.forEach(client => {
-            console.log(`   - ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - Email: ${client.email} - ID: ${client._id}`);
-          });
+          clients = await Client.aggregate(pipeline);
+          
+          // No need to map manually for counts anymore, but we might need to map keys if they differ
+          // Aggregation returns plain objects, precisely matching our shape.
+          console.log(`📊 Found ${clients.length} clients in MongoDB (Page ${page}/${Math.ceil(total/limit)})`);
+          console.log(`📊 Found ${clients.length} clients in MongoDB (Page ${page}/${Math.ceil(total/limit)})`);
         }
       } catch (mongoError) {
         console.error('MongoDB query failed:', mongoError);
       }
 
-      // Fallback to in-memory data if MongoDB is empty or failed
-      if (clients.length === 0) {
+      // Fallback to in-memory data
+      if (clients.length === 0 && total === 0) {
         console.log('📊 Falling back to in-memory clients data');
-        clients = Object.values(clientsData).map(client => ({
+        let allMemoryClients = Object.values(clientsData).map(client => ({
           _id: client.id,
           firstName: client.firstName,
           lastName: client.lastName,
@@ -2539,8 +2604,8 @@ app.get('/api/admin/clients',
           aktenzeichen: client.aktenzeichen,
           workflow_status: client.workflow_status,
           current_status: client.current_status,
-          documents: client.documents || [],
-          final_creditor_list: client.final_creditor_list || [],
+          documents_count: (client.documents || []).length,
+          creditors_count: (client.final_creditor_list || []).length,
           created_at: client.created_at,
           updated_at: client.updated_at,
           last_login: client.last_login,
@@ -2549,10 +2614,35 @@ app.get('/api/admin/clients',
           admin_approved: client.admin_approved,
           client_confirmed_creditors: client.client_confirmed_creditors
         }));
-        console.log(`📊 Found ${clients.length} clients in memory`);
+
+        if (status && status !== 'all') {
+            allMemoryClients = allMemoryClients.filter(c => c.workflow_status === status);
+        }
+        if (search) {
+            const lowerSearch = search.toLowerCase();
+            allMemoryClients = allMemoryClients.filter(c => 
+                (c.firstName && c.firstName.toLowerCase().includes(lowerSearch)) ||
+                (c.lastName && c.lastName.toLowerCase().includes(lowerSearch)) ||
+                (c.email && c.email.toLowerCase().includes(lowerSearch)) ||
+                (c.aktenzeichen && c.aktenzeichen.toLowerCase().includes(lowerSearch))
+            );
+        }
+
+        total = allMemoryClients.length;
+        clients = allMemoryClients
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(skip, skip + limit);
       }
 
-      res.json({ clients });
+      res.json({ 
+        clients,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+      });
     } catch (error) {
       console.error('Error fetching clients:', error);
       res.status(500).json({
@@ -2560,6 +2650,151 @@ app.get('/api/admin/clients',
         details: error.message
       });
     }
+  });
+
+  // Dashboard Stats Endpoint (New) - Now with filtering support
+  app.get('/api/admin/dashboard-stats',
+    rateLimits.admin,
+    authenticateAdmin,
+    async (req, res) => {
+      try {
+        const search = req.query.search;
+        const status = req.query.status;
+        const dateFrom = req.query.dateFrom;
+        const dateTo = req.query.dateTo;
+
+        // Build base query
+        let baseQuery = {};
+
+        // Status Filter
+        if (status && status !== 'all') {
+             baseQuery.workflow_status = status;
+        }
+
+        // Search Filter
+        if (search) {
+             baseQuery.$or = [
+               { firstName: { $regex: search, $options: 'i' } },
+               { lastName: { $regex: search, $options: 'i' } },
+               { email: { $regex: search, $options: 'i' } },
+               { aktenzeichen: { $regex: search, $options: 'i' } }
+             ];
+        }
+
+        // Date Filter
+        if (dateFrom || dateTo) {
+             baseQuery.created_at = {};
+             if (dateFrom) baseQuery.created_at.$gte = new Date(dateFrom);
+             if (dateTo) baseQuery.created_at.$lte = new Date(dateTo);
+        }
+
+        // Initialize default stats structure
+        const stats = {
+          total_users: 0,
+          payment_confirmed: 0,
+          processing: 0,
+          needs_attention: 0,
+          awaiting_documents: 0,
+          active_users: 0,
+          total_documents: 0,
+          total_creditors: 0,
+          status_counts: {}
+        };
+
+        if (databaseService.isHealthy()) {
+            // Helper to merge queries
+            const merge = (extra) => ({ ...baseQuery, ...extra });
+            // Note: For $or queries in baseQuery, merging another $or (like for 'needs_attention') requires $and
+            const mergeOr = (extraOr) => {
+                if (baseQuery.$or) {
+                    return { $and: [baseQuery, extraOr] };
+                }
+                return { ...baseQuery, ...extraOr };
+            };
+
+            // Execute independent counts in parallel for performance
+            const [
+                totalCount,
+                paymentCount,
+                processingCount,
+                attentionCount,
+                awaitingDocsCount,
+                activeCount,
+                docCredSum
+            ] = await Promise.all([
+                Client.countDocuments(baseQuery),
+                Client.countDocuments(merge({ first_payment_received: true })),
+                Client.countDocuments(merge({ workflow_status: 'processing' })), 
+                Client.countDocuments(mergeOr({ 
+                    $or: [
+                        { workflow_status: 'manual_review' },
+                        { workflow_status: 'problem' },
+                        { needs_attention: true }
+                    ]
+                })),
+                Client.countDocuments(mergeOr({ 
+                    $or: [
+                        { workflow_status: 'document_upload' },
+                        { payment_ticket_type: 'document_request' }
+                    ]
+                })),
+                Client.countDocuments(merge({ last_login: { $exists: true, $ne: null } })),
+                Client.aggregate([
+                    { $match: baseQuery },
+                    {
+                        $group: {
+                            _id: null,
+                            totalDocs: { $sum: { $size: { $ifNull: ["$documents", []] } } },
+                            totalCreds: { $sum: { $size: { $ifNull: ["$final_creditor_list", []] } } }
+                        }
+                    }
+                ])
+            ]);
+
+            stats.total_users = totalCount;
+            stats.payment_confirmed = paymentCount;
+            stats.processing = processingCount;
+            stats.needs_attention = attentionCount;
+            stats.awaiting_documents = awaitingDocsCount;
+            stats.active_users = activeCount;
+            stats.total_documents = docCredSum[0]?.totalDocs || 0;
+            stats.total_creditors = docCredSum[0]?.totalCreds || 0;
+            
+        } else {
+             // Fallback to memory data if database is offline
+             // Apply filters to memory array first
+             let filteredUsers = Object.values(clientsData);
+
+             if (status && status !== 'all') {
+                filteredUsers = filteredUsers.filter(u => u.workflow_status === status);
+             }
+             if (search) {
+                const lowerSearch = search.toLowerCase();
+                filteredUsers = filteredUsers.filter(u => 
+                    (u.firstName && u.firstName.toLowerCase().includes(lowerSearch)) ||
+                    (u.lastName && u.lastName.toLowerCase().includes(lowerSearch)) ||
+                    (u.email && u.email.toLowerCase().includes(lowerSearch)) ||
+                    (u.aktenzeichen && u.aktenzeichen.toLowerCase().includes(lowerSearch))
+                );
+             }
+
+             const users = filteredUsers;
+             stats.total_users = users.length;
+             stats.payment_confirmed = users.filter(u => u.first_payment_received).length;
+             stats.processing = users.filter(u => u.workflow_status === 'processing').length;
+             stats.needs_attention = users.filter(u => u.workflow_status === 'manual_review').length;
+             stats.awaiting_documents = users.filter(u => u.workflow_status === 'document_upload').length;
+             stats.active_users = users.filter(u => u.last_login).length;
+             stats.total_documents = users.reduce((sum, u) => sum + (u.documents ? u.documents.length : 0), 0);
+             stats.total_creditors = users.reduce((sum, u) => sum + (u.final_creditor_list ? u.final_creditor_list.length : 0), 0);
+        }
+
+        res.json(stats);
+
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        res.status(500).json({ error: 'Failed to fetch stats' });
+      }
   });
 
 // Admin: Create new client
