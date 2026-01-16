@@ -2103,7 +2103,9 @@ app.get('/api/clients/:clientId/creditor-confirmation', async (req, res) => {
 
     // If agent approved and status is awaiting_client_confirmation, show creditors
     // Also include creditor_review status when 7-day review has been triggered and payment received
+    // Include creditor_contact_initiated to show confirmation status after client confirms
     if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
+      status === 'creditor_contact_initiated' ||
       (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
 
       // Filter out creditors that belong to documents marked as "not a creditor"
