@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 
-const webhookVerifier = require('../utils/webhookVerifier');          // adjust path if needed
-const creditorDeduplication = require('../utils/creditorDeduplication'); // adjust path if needed
-const Client = require('../models/Client');                           // adjust path if needed
+const webhookVerifier = require('../utils/webhookVerifier');          
+const creditorDeduplication = require('../utils/creditorDeduplication'); 
+const Client = require('../models/Client');                           
+const { findCreditorByName } = require('../utils/creditorLookup');
 
 // Lazy load server functions to avoid circular dependency
 let serverFunctions = null;
@@ -18,6 +19,103 @@ function getServerFunctions() {
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
   parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
 
+
+
+/**
+ * Enrich a creditor document with contact info from local DB when missing.
+ * Uses caching to avoid repeated lookups for identical names within a request.
+ */
+async function enrichCreditorContactFromDb(docResult, cache) {
+  if (!docResult?.is_creditor_document) return;
+
+  const isMissing = (val) => {
+    if (val === undefined || val === null) return true;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return true;
+      const lower = trimmed.toLowerCase();
+      if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+    }
+    return false;
+  };
+
+  const creditorData = docResult.extracted_data?.creditor_data || {};
+  const missingEmail = isMissing(creditorData.email);
+  const missingSenderEmail = isMissing(creditorData.sender_email);
+  const missingAddress = isMissing(creditorData.address);
+  const missingSenderAddress = isMissing(creditorData.sender_address);
+  const needEmail = missingEmail || missingSenderEmail;
+  const needAddress = missingAddress || missingSenderAddress;
+
+  if (!needEmail && !needAddress) return;
+
+  const candidateName =
+    creditorData.sender_name ||
+    creditorData.glaeubiger_name ||
+    creditorData.creditor_name ||
+    creditorData.name ||
+    creditorData.creditor ||
+    docResult.creditor_name ||
+    docResult.sender_name ||
+    docResult.name;
+
+  if (!candidateName) return;
+
+  const cacheKey = candidateName.toLowerCase().trim();
+  let match = cache.get(cacheKey);
+  if (match === undefined) {
+    match = await findCreditorByName(candidateName);
+    cache.set(cacheKey, match || null);
+  }
+
+  if (!match) return;
+
+  const updatedCreditorData = { ...creditorData };
+  const beforeEmail = updatedCreditorData.email;
+  const beforeAddress = updatedCreditorData.address;
+  const beforeSenderEmail = updatedCreditorData.sender_email;
+  const beforeSenderAddress = updatedCreditorData.sender_address;
+
+  if (match.email) {
+    if (missingEmail) {
+      updatedCreditorData.email = match.email;
+    }
+    if (missingSenderEmail) {
+      updatedCreditorData.sender_email = match.email;
+    }
+  }
+  if (match.address) {
+    if (missingAddress) {
+      updatedCreditorData.address = match.address;
+    }
+    if (missingSenderAddress) {
+      updatedCreditorData.sender_address = match.address;
+    }
+  }
+
+  const matchedId = match._id?.toString?.() || match.id || match._id;
+  if (matchedId) {
+    updatedCreditorData.creditor_database_id = matchedId;
+  }
+  updatedCreditorData.creditor_database_match = true;
+
+  docResult.extracted_data = docResult.extracted_data || {};
+  docResult.extracted_data.creditor_data = updatedCreditorData;
+
+  console.log('[webhook] creditor enrichment applied', {
+    name: candidateName,
+    email_before: beforeEmail || null,
+    email_after: updatedCreditorData.email || null,
+    sender_email_before: beforeSenderEmail || null,
+    sender_email_after: updatedCreditorData.sender_email || null,
+    address_before: beforeAddress || null,
+    address_after: updatedCreditorData.address || null,
+    sender_address_before: beforeSenderAddress || null,
+    sender_address_after: updatedCreditorData.sender_address || null,
+    match_id: matchedId || null,
+  });
+}
+
 /**
  * Webhook receiver for FastAPI AI processing results
  * POST /webhooks/ai-processing
@@ -25,7 +123,7 @@ const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
 router.post(
   '/ai-processing',
   express.raw({ type: 'application/json' }),
-  webhookVerifier.optionalMiddleware, // Temporarily allow unsigned webhooks for testing
+  webhookVerifier.middleware, 
   async (req, res) => {
     const startTime = Date.now();
     const rawBody = req.body.toString('utf8');
@@ -49,7 +147,7 @@ router.post(
       });
     }
 
-    const { safeClientUpdate, getClient, triggerProcessingCompleteWebhook } = getServerFunctions();
+    const { safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO } = getServerFunctions();
 
     try {
       const {
@@ -60,8 +158,8 @@ router.post(
         review_reasons,
         results,
         summary,
-        deduplication,          // NEW from FastAPI
-        deduplicated_creditors, // NEW from FastAPI
+        deduplication,          
+        deduplicated_creditors, 
       } = data;
 
       console.log(`\n🔔 WEBHOOK RECEIVED`);
@@ -84,9 +182,18 @@ router.post(
         return res.status(404).json({ error: 'Client not found' });
       }
 
+      // Normalize deduplicated creditors (FastAPI) and ensure IDs exist for persistence
+      const normalizedDedupCreditors = Array.isArray(deduplicated_creditors)
+        ? deduplicated_creditors.map((c) => ({
+            ...c,
+            id: c.id || uuidv4(),
+          }))
+        : [];
+
       const processedDocuments = [];
       const creditorDocuments = [];
       const documentsNeedingReview = [];
+      const creditorLookupCache = new Map();
 
       // Per-document status handling (kept as-is)
       for (const docResult of results || []) {
@@ -117,11 +224,29 @@ router.post(
           documentsNeedingReview.push(docResult);
         }
 
+        await enrichCreditorContactFromDb(docResult, creditorLookupCache);
+
         processedDocuments.push({
           ...docResult,
           document_status: finalDocumentStatus,
           status_reason: statusReason,
         });
+
+        if (docResult.is_creditor_document) {
+          const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
+          const enrichedSenderEmail = docResult.extracted_data?.creditor_data?.sender_email;
+          const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
+          const enrichedSenderAddress = docResult.extracted_data?.creditor_data?.sender_address;
+          if (enrichedEmail || enrichedAddress || enrichedSenderEmail || enrichedSenderAddress) {
+            console.log('[webhook] creditor doc after enrichment', {
+              doc_id: docResult.id,
+              email: enrichedEmail || null,
+              sender_email: enrichedSenderEmail || null,
+              address: enrichedAddress || null,
+              sender_address: enrichedSenderAddress || null,
+            });
+          }
+        }
       }
 
       // Duplicate detection against existing docs (unchanged)
@@ -292,20 +417,37 @@ router.post(
         }
 
         // Node-side merge of FastAPI-deduped creditors (cross-job guard)
-        if (Array.isArray(deduplicated_creditors) && deduplicated_creditors.length > 0) {
+        if (normalizedDedupCreditors.length > 0) {
           const existing = clientDoc.final_creditor_list || [];
           clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
             existing,
-            deduplicated_creditors,
+            normalizedDedupCreditors,
             'highest_amount'
           );
-          clientDoc.deduplication_stats = deduplication || {
-            original_count: deduplicated_creditors.length,
-            unique_count: deduplicated_creditors.length,
-            duplicates_removed: 0,
-          };
+          clientDoc.deduplication_stats =
+            deduplication || {
+              original_count: normalizedDedupCreditors.length,
+              unique_count: normalizedDedupCreditors.length,
+              duplicates_removed: 0,
+            };
         }
 
+
+        if (normalizedDedupCreditors.length > 0) {
+          const existing = clientDoc.final_creditor_list || [];
+          // Make sure mergeCreditorLists returns objects with all fields intact
+          clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
+            existing,
+            normalizedDedupCreditors,
+            'highest_amount'
+          );
+          clientDoc.deduplication_stats =
+            deduplication || {
+              original_count: normalizedDedupCreditors.length,
+              unique_count: normalizedDedupCreditors.length,
+              duplicates_removed: 0,
+            };
+        }
         // Existing auto-confirmation timer reset logic (kept)
         if (
           clientDoc.current_status === 'awaiting_client_confirmation' &&
@@ -362,6 +504,22 @@ router.post(
 
         return clientDoc;
       });
+
+      // Emit live update to admin sockets
+      const io = getIO ? getIO() : null;
+      if (io) {
+        try {
+          const latestClient = await getClient(client_id);
+          io.to(`client:${client_id}`).emit('client_updated', {
+            client_id,
+            documents: latestClient.documents || [],
+            final_creditor_list: latestClient.final_creditor_list || [],
+            deduplication_stats: latestClient.deduplication_stats || null,
+          });
+        } catch (emitErr) {
+          console.error('❌ Socket emit failed:', emitErr.message || emitErr);
+        }
+      }
 
       // Zendesk logic (kept)
       if (documentsNeedingReview.length > 0) {
@@ -460,4 +618,6 @@ router.get('/health', (req, res) => {
     endpoints: ['POST /webhooks/ai-processing'],
   });
 });
+
+module.exports = router;
 

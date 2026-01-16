@@ -75,6 +75,12 @@ function App() {
             }
           />
 
+          {/* Backward-compat: redirect /portal/login to portal login */}
+          <Route
+            path="/portal/login"
+            element={<Navigate to="/login" replace />}
+          />
+
           <Route
             path="/auth/impersonate"
             element={<ImpersonationAuth />}

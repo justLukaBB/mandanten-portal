@@ -4,6 +4,8 @@
  * Verifies HMAC-SHA256 signatures from FastAPI webhooks.
  */
 const crypto = require('crypto');
+const dotenv = require('dotenv');
+dotenv.config();
 
 // Webhook secret - should match WEBHOOK_SECRET in FastAPI
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret-key';
@@ -53,7 +55,9 @@ function verifyWebhookSignature(payload, signature, timestamp) {
       // Allow 60 seconds clock skew into the future
       return { valid: false, error: 'Webhook timestamp is in the future' };
     }
-    
+    console.log("================================")
+    console.log("webhook screet",WEBHOOK_SECRET)
+    console.log("================================")
     // Compute expected signature
     // FastAPI signs: timestamp + payload
     const signaturePayload = timestamp + payload;
