@@ -3,10 +3,15 @@ const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs-extra');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const archiver = require('archiver');
 require('dotenv').config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 // Import configuration and middleware
 const config = require('./config');
@@ -29,6 +34,7 @@ const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
 const creditorRoutes = require('./routes/creditorRoutes');
 const webhooksRoutes = require('./routes/webhooks');
+const testRoutes = require('./routes/test-routes');
 
 // MongoDB
 const databaseService = require('./services/database');
@@ -56,6 +62,57 @@ const financialDataReminderService = new FinancialDataReminderService();
 
 const app = express();
 const PORT = config.PORT;
+const httpServer = http.createServer(app);
+
+let io;
+const getIO = () => io;
+
+// Setup Socket.IO with basic admin JWT auth and per-client rooms
+function setupSocket() {
+  if (io) return io;
+
+  const extractToken = (socket) => {
+    const fromAuth = socket.handshake.auth?.token;
+    const authHeader = socket.handshake.headers?.authorization;
+    const fromHeader = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
+    return fromAuth || fromHeader;
+  };
+
+  io = new Server(httpServer, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+    path: '/socket.io',
+  });
+
+  io.use((socket, next) => {
+    try {
+      const token = extractToken(socket);
+      if (!token) return next(new Error('unauthorized'));
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.type !== 'admin') return next(new Error('forbidden'));
+      socket.data.adminId = decoded.adminId;
+      return next();
+    } catch (err) {
+      return next(new Error('unauthorized'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    const clientId = socket.handshake.auth?.clientId || socket.handshake.query?.clientId;
+    if (clientId) {
+      socket.join(`client:${clientId}`);
+    }
+    socket.emit('socket_ready', { connected: true, adminId: socket.data.adminId || null, clientId: clientId || null });
+  });
+
+  return io;
+}
+
+setupSocket();
 
 // Middleware
 // Skip body parsing for webhook routes (they use express.raw())
@@ -91,6 +148,7 @@ app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
 app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
 app.use('/api', creditorRoutes);
+app.use('/api/test', testRoutes);
 
 // Serve generated documents statically
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
@@ -434,6 +492,21 @@ async function safeClientUpdate(clientId, updateFunction) {
 
       // Save to database
       await saveClient(updatedClient);
+
+      // Emit live update via socket (best-effort)
+      try {
+        if (io) {
+          io.to(`client:${clientId}`).emit('client_updated', {
+            client_id: clientId,
+            documents: updatedClient.documents || [],
+            final_creditor_list: updatedClient.final_creditor_list || [],
+            deduplication_stats: updatedClient.deduplication_stats || null,
+            current_status: updatedClient.current_status,
+          });
+        }
+      } catch (emitErr) {
+        console.error('❌ Socket emit from safeClientUpdate failed:', emitErr?.message || emitErr);
+      }
 
       console.log(`✅ Lock released for client ${clientId}`);
       return updatedClient;
@@ -798,7 +871,7 @@ app.post('/api/clients/:clientId/documents',
           // ==========================================
           try {
             // Prepare webhook URL for FastAPI to send results back
-            const webhookBaseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
+            const webhookBaseUrl = process.env.BACKEND_URL || 'http://localhost:10000';
             const webhookUrl = `${webhookBaseUrl}/api/webhooks/ai-processing`;
 
             console.log(`🚀 Calling FastAPI for document processing...`);
@@ -1841,6 +1914,10 @@ app.get('/api/clients/:clientId/documents', async (req, res) => {
       console.log(`❌ Client not found in DB: ${clientId}`);
       return res.status(404).json({ error: 'Client not found' });
     }
+
+    console.log("================================")
+    console.log("client.documents",client.documents)
+    console.log("================================")
 
     console.log(`✅ Client found: ${client.aktenzeichen}, Docs: ${client.documents?.length || 0}`);
     res.json(client.documents || []);
@@ -6418,7 +6495,7 @@ async function startServer() {
     await initializeDatabase();
 
     // Start the server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`💾 Database: ${databaseService.isHealthy() ? 'MongoDB Connected' : 'In-Memory Fallback'}`);
@@ -8254,5 +8331,6 @@ module.exports = {
   saveClient,
   getClientAktenzeichen,
   safeClientUpdate,
-  triggerProcessingCompleteWebhook
+  triggerProcessingCompleteWebhook,
+  getIO
 };

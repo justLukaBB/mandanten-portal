@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 
-const webhookVerifier = require('../utils/webhookVerifier');          // adjust path if needed
-const creditorDeduplication = require('../utils/creditorDeduplication'); // adjust path if needed
-const Client = require('../models/Client');                           // adjust path if needed
+const webhookVerifier = require('../utils/webhookVerifier');          
+const creditorDeduplication = require('../utils/creditorDeduplication'); 
+const Client = require('../models/Client');                           
 const { findCreditorByName } = require('../utils/creditorLookup');
 
 // Lazy load server functions to avoid circular dependency
@@ -18,6 +18,8 @@ function getServerFunctions() {
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
   parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
+
+
 
 /**
  * Enrich a creditor document with contact info from local DB when missing.
@@ -145,7 +147,7 @@ router.post(
       });
     }
 
-    const { safeClientUpdate, getClient, triggerProcessingCompleteWebhook } = getServerFunctions();
+    const { safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO } = getServerFunctions();
 
     try {
       const {
@@ -156,8 +158,8 @@ router.post(
         review_reasons,
         results,
         summary,
-        deduplication,          // NEW from FastAPI
-        deduplicated_creditors, // NEW from FastAPI
+        deduplication,          
+        deduplicated_creditors, 
       } = data;
 
       console.log(`\n🔔 WEBHOOK RECEIVED`);
@@ -179,6 +181,14 @@ router.post(
       if (!client) {
         return res.status(404).json({ error: 'Client not found' });
       }
+
+      // Normalize deduplicated creditors (FastAPI) and ensure IDs exist for persistence
+      const normalizedDedupCreditors = Array.isArray(deduplicated_creditors)
+        ? deduplicated_creditors.map((c) => ({
+            ...c,
+            id: c.id || uuidv4(),
+          }))
+        : [];
 
       const processedDocuments = [];
       const creditorDocuments = [];
@@ -407,18 +417,19 @@ router.post(
         }
 
         // Node-side merge of FastAPI-deduped creditors (cross-job guard)
-        if (Array.isArray(deduplicated_creditors) && deduplicated_creditors.length > 0) {
+        if (normalizedDedupCreditors.length > 0) {
           const existing = clientDoc.final_creditor_list || [];
           clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
             existing,
-            deduplicated_creditors,
+            normalizedDedupCreditors,
             'highest_amount'
           );
-          clientDoc.deduplication_stats = deduplication || {
-            original_count: deduplicated_creditors.length,
-            unique_count: deduplicated_creditors.length,
-            duplicates_removed: 0,
-          };
+          clientDoc.deduplication_stats =
+            deduplication || {
+              original_count: normalizedDedupCreditors.length,
+              unique_count: normalizedDedupCreditors.length,
+              duplicates_removed: 0,
+            };
         }
 
         // NEW: Instant Add for Late Uploads - Logic to auto-add to final list (Bypass Agent Review)
@@ -544,6 +555,22 @@ router.post(
         return clientDoc;
       });
 
+      // Emit live update to admin sockets
+      const io = getIO ? getIO() : null;
+      if (io) {
+        try {
+          const latestClient = await getClient(client_id);
+          io.to(`client:${client_id}`).emit('client_updated', {
+            client_id,
+            documents: latestClient.documents || [],
+            final_creditor_list: latestClient.final_creditor_list || [],
+            deduplication_stats: latestClient.deduplication_stats || null,
+          });
+        } catch (emitErr) {
+          console.error('❌ Socket emit failed:', emitErr.message || emitErr);
+        }
+      }
+
       // Zendesk logic (kept)
       if (documentsNeedingReview.length > 0) {
         const updatedClient = await getClient(client_id);
@@ -643,3 +670,4 @@ router.get('/health', (req, res) => {
 });
 
 module.exports = router;
+

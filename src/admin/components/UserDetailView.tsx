@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { io, Socket } from 'socket.io-client';
+import * as XLSX from 'xlsx';
 import {
   XMarkIcon,
   UserIcon,
@@ -65,6 +67,7 @@ interface DetailedUser {
   seven_day_review_scheduled?: boolean;
   seven_day_review_triggered?: boolean;
   seven_day_review_scheduled_at?: string;
+  deduplication_stats?: any;
 }
 
 interface Document {
@@ -105,6 +108,7 @@ interface Creditor {
   sender_address?: string;
   reference_number?: string;
   claim_amount?: number;
+  claim_amount_raw?: string;
   status: string;
   settlement_plan_sent_at?: string;
   settlement_side_conversation_id?: string;
@@ -114,6 +118,20 @@ interface Creditor {
   nullplan_side_conversation_id?: string;
   nullplan_response_status?: string;
   nullplan_response_received_at?: string;
+  dokumenttyp?: string;
+  glaeubiger_name?: string;
+  glaeubiger_adresse?: string;
+  glaeubigervertreter_name?: string;
+  glaeubigervertreter_adresse?: string;
+  forderungbetrag?: string;
+  email_glaeubiger?: string;
+  email_glaeubiger_vertreter?: string;
+  source_documents?: string[];
+  merged_from?: number;
+  needs_manual_review?: boolean;
+  review_reasons?: string[];
+  document_id?: string;
+  source_document_id?: string;
 }
 
 const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
@@ -123,10 +141,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [showSettlementPlan, setShowSettlementPlan] = useState(false);
   const [settlementSummary, setSettlementSummary] = useState<any>(null);
-  const [loadingSettlement, setLoadingSettlement] = useState(false);
-  const [showNullplan, setShowNullplan] = useState(false);
+  // const [loadingSettlement, setLoadingSettlement] = useState(false);
+  // const [showNullplan, setShowNullplan] = useState(false);
   const [nullplanSummary, setNullplanSummary] = useState<any>(null);
-  const [loadingNullplan, setLoadingNullplan] = useState(false);
+  // const [loadingNullplan, setLoadingNullplan] = useState(false);
   const [skippingDelay, setSkippingDelay] = useState(false);
 
   // Delete user state
@@ -160,49 +178,61 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     fetchUserDetails();
   }, [userId]);
 
-  // Auto-fetch settlement responses if settlement plans have been sent
+  // Socket: live updates for documents/creditors
+  useEffect(() => {
+    const token = localStorage.getItem('admin_token');
+    const socket: Socket = io(API_BASE_URL, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      auth: {
+        token: token ? token.replace('Bearer ', '') : token,
+        clientId: userId,
+      },
+    });
+
+    socket.on('connect', () => {
+      console.log('[socket] connected', { socketId: socket.id, userId, API_BASE_URL });
+    });
+
+    socket.on('connect_error', (err: unknown) => {
+      const msg = typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : err;
+      console.error('[socket] connect_error', msg);
+    });
+
+    socket.on('client_updated', (payload: any) => {
+      console.log('[socket] client_updated', {
+        clientId: payload?.client_id,
+        documents: payload?.documents?.length,
+        creditors: payload?.final_creditor_list?.length,
+      });
+      setUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          documents: payload?.documents || prev.documents,
+          final_creditor_list: payload?.final_creditor_list || prev.final_creditor_list,
+          deduplication_stats: payload?.deduplication_stats || prev.deduplication_stats,
+        };
+      });
+    });
+
+    return () => {
+      console.log('[socket] disconnect');
+      socket.disconnect();
+    };
+  }, [userId]);
+
+  // Single fetch for settlement responses when they become available (no polling)
   useEffect(() => {
     if (hasSettlementPlansSent) {
-      // Initial fetch
       fetchSettlementResponses();
-
-      // Set up 1-minute interval for auto-refresh
-      const interval = setInterval(() => {
-        fetchSettlementResponses();
-      }, 60000); // 1 minute = 60,000ms
-
-      return () => clearInterval(interval);
-    } else {
-      // If no settlement plans detected yet, periodically check if they've been sent
-      // This handles the case where settlement emails are sent after the admin panel is open
-      const checkInterval = setInterval(async () => {
-        await fetchUserDetails(); // Refresh user data to check for new settlement_plan_sent_at fields
-      }, 30000); // Check every 30 seconds
-
-      return () => clearInterval(checkInterval);
     }
   }, [hasSettlementPlansSent, userId]);
 
-  // Auto-fetch nullplan responses if nullplan has been sent
+  // Single fetch for nullplan responses when they become available (no polling)
   useEffect(() => {
     if (isNullplanClient && hasNullplanSent) {
-      // Initial fetch
       fetchNullplanResponses();
-
-      // Set up 1-minute interval for auto-refresh
-      const interval = setInterval(() => {
-        fetchNullplanResponses();
-      }, 60000); // 1 minute = 60,000ms
-
-      return () => clearInterval(interval);
-    } else if (isNullplanClient) {
-      // If nullplan client but no nullplan sent yet, periodically check if they've been sent
-      // This handles the case where nullplan emails are sent after the admin panel is open
-      const checkInterval = setInterval(async () => {
-        await fetchUserDetails(); // Refresh user data to check for new nullplan_sent_at fields
-      }, 30000); // Check every 30 seconds
-
-      return () => clearInterval(checkInterval);
     }
   }, [isNullplanClient, hasNullplanSent, userId]);
 
@@ -247,6 +277,34 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } finally {
       setDownloadingDocs(prev => ({ ...prev, [documentId]: false }));
     }
+  };
+
+  const exportCreditorTableToXLSX = () => {
+    if (!user?.final_creditor_list || user.final_creditor_list.length === 0) {
+      alert('Keine Gläubiger-Daten zum Exportieren.');
+      return;
+    }
+
+    const rows = user.final_creditor_list.map((c) => ({
+      'Manuelle Prüfung': c.needs_manual_review ? 'Ja' : 'Nein',
+      'Prüfungsgrund': c.review_reasons && c.review_reasons.length > 0 ? c.review_reasons.join(', ') : 'Keine',
+      'Dokumenttyp': c.dokumenttyp || 'N/A',
+      'Gläubiger Name': c.glaeubiger_name || c.sender_name || 'N/A',
+      'Aktenzeichen': c.reference_number || 'N/A',
+      'Gläubiger Adresse': c.glaeubiger_adresse || c.sender_address || 'N/A',
+      'Gläubigervertreter Name': c.glaeubigervertreter_name || 'N/A',
+      'Gläubigervertreter Adresse': c.glaeubigervertreter_adresse || 'N/A',
+      'Forderungsbetrag': c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? `€${c.claim_amount}` : 'N/A'),
+      'Email Gläubiger': c.email_glaeubiger || c.sender_email || 'N/A',
+      'Email Gläubigervertreter': c.email_glaeubiger_vertreter || 'N/A',
+      'Anzahl Dokumente': (c.source_documents || []).length || 0,
+      'Quell-Dokumente': (c.source_documents || []).join(', ') || 'N/A',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Glaeubiger');
+    XLSX.writeFile(workbook, `glaeubiger_tabelle_${user.aktenzeichen || user.id}.xlsx`);
   };
 
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
@@ -378,26 +436,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       setShowReprocessModal(false);
       setReprocessConfirmText('');
 
-      // Set up polling to refresh user data
-      const pollInterval = setInterval(async () => {
-        await fetchUserDetails();
-
-        // Check if all documents are processed
-        const allProcessed = user?.documents?.every(doc =>
-          doc.processing_status === 'completed' || doc.processing_status === 'failed'
-        );
-
-        if (allProcessed) {
-          clearInterval(pollInterval);
-          // alert(`✅ Dokumenten-Neuverarbeitung abgeschlossen!\n\nAlle Dokumente wurden erfolgreich neu verarbeitet.`);
-        }
-      }, 10000); // Poll every 10 seconds
-
-      // Stop polling after estimated time + buffer
-      setTimeout(() => {
-        clearInterval(pollInterval);
-      }, (result.estimated_time_minutes * 60 * 1000) + 60000); // estimated time + 1 minute buffer
-
+      // Rely on socket updates; do a one-time silent refresh as a baseline
+      await fetchUserDetails({ silent: true });
     } catch (error: any) {
       console.error('❌ Error reprocessing documents:', error);
       alert(`Fehler beim Neuverarbeiten der Dokumente: ${error.message}`);
@@ -625,9 +665,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
   };
 
-  const fetchUserDetails = async () => {
+  const fetchUserDetails = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
 
       // Fetch user data
@@ -672,7 +713,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       console.error('Error fetching user details:', error);
       setError('Failed to load user details');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -985,7 +1026,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               Letzte Zahlung bestätigen
             </button>
             <button
-              onClick={fetchUserDetails}
+              onClick={() => fetchUserDetails()}
               disabled={loading}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border hover:bg-red-50 transition-colors"
               style={{ color: '#9f1a1d', borderColor: '#9f1a1d' }}
@@ -1277,6 +1318,82 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   <p className="text-gray-500 text-sm">No creditors identified</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Detailed Creditor Table (AI extraction) */}
+          <div className="mt-6 bg-white rounded-lg border border-gray-200">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BuildingOfficeIcon className="w-6 h-6 text-red-700" />
+                <h3 className="text-lg font-semibold text-gray-900">Gläubiger-Tabelle</h3>
+              </div>
+              <button
+                onClick={exportCreditorTableToXLSX}
+                className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                title="Tabelle als Excel exportieren"
+              >
+                Exportieren (XLSX)
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Manuelle Prüfung</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Prüfungsgrund</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Dokumenttyp</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubiger Name</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Aktenzeichen</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubiger Adresse</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Name</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Adresse</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Forderungsbetrag</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubiger</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubigervertreter</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Anzahl Dokumente</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Quell-Dokumente</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {user.final_creditor_list && user.final_creditor_list.length > 0 ? (
+                    user.final_creditor_list.map((c) => {
+                      const docs = c.source_documents || [];
+                      return (
+                        <tr key={c.id || c.reference_number || c.sender_name}>
+                          <td className="px-3 py-2 text-gray-800">
+                            {c.needs_manual_review ? 'Ja' : 'Nein'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-800">
+                            {(c.review_reasons && c.review_reasons.length > 0) ? c.review_reasons.join(', ') : 'Keine'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-800">{c.dokumenttyp || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.glaeubiger_name || c.sender_name || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.reference_number || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.glaeubiger_adresse || c.sender_address || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.glaeubigervertreter_name || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.glaeubigervertreter_adresse || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">
+                            {c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? `€${c.claim_amount}` : 'N/A')}
+                          </td>
+                          <td className="px-3 py-2 text-gray-800">{c.email_glaeubiger || c.sender_email || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800">{c.email_glaeubiger_vertreter || 'N/A'}</td>
+                          <td className="px-3 py-2 text-gray-800 text-center">{docs.length || 0}</td>
+                          <td className="px-3 py-2 text-gray-800">
+                            {docs.length > 0 ? docs.join(', ') : 'N/A'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={13} className="px-3 py-4 text-center text-gray-500">
+                        Keine Gläubiger-Daten vorhanden.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1958,11 +2075,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     <button
                       onClick={() => deleteDocument(selectedDocument.id, selectedDocument.name)}
                       disabled={deletingDocs[selectedDocument.id]}
-                      className={`px-6 py-2 text-white rounded-md transition-colors ${
-                        deletingDocs[selectedDocument.id]
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-red-600 hover:bg-red-700'
-                      }`}
+                      className={`px-6 py-2 text-white rounded-md transition-colors ${deletingDocs[selectedDocument.id]
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-700'
+                        }`}
                       title="Dokument unwiderruflich löschen"
                     >
                       {deletingDocs[selectedDocument.id] ? 'Wird gelöscht...' : 'Dokument löschen'}
