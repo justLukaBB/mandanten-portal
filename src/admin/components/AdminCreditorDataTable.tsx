@@ -222,8 +222,10 @@ const AdminCreditorDataTable: React.FC = () => {
           
           if (doc.processing_status === 'completed') {
             displayCreditorName = creditor?.sender_name || 'Nicht gefunden';
-            displayEmail = creditor?.sender_email || 'Nicht gefunden';
-            displayAddress = creditor?.sender_address || 'Nicht gefunden';
+            // Prefer enriched 'email' field over 'sender_email'
+            displayEmail = creditor?.email || creditor?.sender_email || 'Nicht gefunden';
+            // Prefer enriched 'address' field over 'sender_address' (avoids Postfach)
+            displayAddress = creditor?.address || creditor?.sender_address || 'Nicht gefunden';
             displayReference = creditor?.reference_number || 'Nicht gefunden';
           } else if (doc.processing_status === 'failed') {
             displayCreditorName = 'Verarbeitungsfehler';
