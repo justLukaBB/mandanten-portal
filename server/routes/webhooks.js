@@ -40,16 +40,26 @@ async function enrichCreditorContactFromDb(docResult, cache) {
   };
 
   const creditorData = docResult.extracted_data?.creditor_data || {};
+  const updatedCreditorData = { ...creditorData };
+
+  // Track what was missing before enrichment
   const missingEmail = isMissing(creditorData.email);
   const missingSenderEmail = isMissing(creditorData.sender_email);
   const missingAddress = isMissing(creditorData.address);
   const missingSenderAddress = isMissing(creditorData.sender_address);
-  const needEmail = missingEmail || missingSenderEmail;
-  const needAddress = missingAddress || missingSenderAddress;
+  const missingVertreterEmail = isMissing(creditorData.glaeubiger_vertreter_email);
+  const missingVertreterAddress = isMissing(creditorData.glaeubiger_vertreter_adresse);
+  const missingGlaubigerAddress = isMissing(creditorData.glaeubiger_adresse);
 
-  if (!needEmail && !needAddress) return;
+  // Check if we need to do any enrichment at all
+  const needSenderEnrichment = missingEmail || missingSenderEmail || missingAddress || missingSenderAddress;
+  const needVertreterEnrichment = missingVertreterEmail || missingVertreterAddress;
+  const needGlaubigerEnrichment = missingGlaubigerAddress;
 
-  const candidateName =
+  if (!needSenderEnrichment && !needVertreterEnrichment && !needGlaubigerEnrichment) return;
+
+  // ===== FIRST LOOKUP: For sender (could be representative OR creditor) =====
+  const senderName =
     creditorData.sender_name ||
     creditorData.glaeubiger_name ||
     creditorData.creditor_name ||
@@ -59,60 +69,92 @@ async function enrichCreditorContactFromDb(docResult, cache) {
     docResult.sender_name ||
     docResult.name;
 
-  if (!candidateName) return;
-
-  const cacheKey = candidateName.toLowerCase().trim();
-  let match = cache.get(cacheKey);
-  if (match === undefined) {
-    match = await findCreditorByName(candidateName);
-    cache.set(cacheKey, match || null);
-  }
-
-  if (!match) return;
-
-  const updatedCreditorData = { ...creditorData };
-  const beforeEmail = updatedCreditorData.email;
-  const beforeAddress = updatedCreditorData.address;
-  const beforeSenderEmail = updatedCreditorData.sender_email;
-  const beforeSenderAddress = updatedCreditorData.sender_address;
-
-  if (match.email) {
-    if (missingEmail) {
-      updatedCreditorData.email = match.email;
-    }
-    if (missingSenderEmail) {
-      updatedCreditorData.sender_email = match.email;
-    }
-  }
-  if (match.address) {
-    if (missingAddress) {
-      updatedCreditorData.address = match.address;
-    }
-    if (missingSenderAddress) {
-      updatedCreditorData.sender_address = match.address;
+  let senderMatch = null;
+  if (senderName) {
+    const senderCacheKey = senderName.toLowerCase().trim();
+    senderMatch = cache.get(senderCacheKey);
+    if (senderMatch === undefined) {
+      senderMatch = await findCreditorByName(senderName);
+      cache.set(senderCacheKey, senderMatch || null);
     }
   }
 
-  const matchedId = match._id?.toString?.() || match.id || match._id;
-  if (matchedId) {
-    updatedCreditorData.creditor_database_id = matchedId;
+  // Fill sender fields from first lookup
+  if (senderMatch) {
+    if (senderMatch.email) {
+      if (missingEmail) {
+        updatedCreditorData.email = senderMatch.email;
+      }
+      if (missingSenderEmail) {
+        updatedCreditorData.sender_email = senderMatch.email;
+      }
+    }
+    if (senderMatch.address) {
+      if (missingAddress) {
+        updatedCreditorData.address = senderMatch.address;
+      }
+      if (missingSenderAddress) {
+        updatedCreditorData.sender_address = senderMatch.address;
+      }
+    }
+
+    const matchedId = senderMatch._id?.toString?.() || senderMatch.id || senderMatch._id;
+    if (matchedId) {
+      updatedCreditorData.creditor_database_id = matchedId;
+    }
+    updatedCreditorData.creditor_database_match = true;
+
+    // If sender is representative, also fill representative fields
+    if (creditorData.is_representative) {
+      if (senderMatch.email && missingVertreterEmail) {
+        updatedCreditorData.glaeubiger_vertreter_email = senderMatch.email;
+      }
+      if (senderMatch.address && missingVertreterAddress) {
+        updatedCreditorData.glaeubiger_vertreter_adresse = senderMatch.address;
+      }
+    }
   }
-  updatedCreditorData.creditor_database_match = true;
+
+  // ===== SECOND LOOKUP: For actual creditor (only if representative exists) =====
+  if (creditorData.is_representative && creditorData.actual_creditor) {
+    const actualCreditorName = creditorData.actual_creditor;
+
+    if (actualCreditorName && actualCreditorName !== 'N/A' && actualCreditorName !== '') {
+      const creditorCacheKey = actualCreditorName.toLowerCase().trim();
+      let creditorMatch = cache.get(creditorCacheKey);
+      if (creditorMatch === undefined) {
+        creditorMatch = await findCreditorByName(actualCreditorName);
+        cache.set(creditorCacheKey, creditorMatch || null);
+      }
+
+      // Fill actual creditor fields from second lookup
+      if (creditorMatch) {
+        if (creditorMatch.address && missingGlaubigerAddress) {
+          updatedCreditorData.glaeubiger_adresse = creditorMatch.address;
+        }
+
+        console.log('[webhook] actual creditor enrichment applied', {
+          creditor_name: actualCreditorName,
+          address_found: creditorMatch.address || null,
+          glaeubiger_adresse_before: creditorData.glaeubiger_adresse || null,
+          glaeubiger_adresse_after: updatedCreditorData.glaeubiger_adresse || null,
+        });
+      }
+    }
+  }
 
   docResult.extracted_data = docResult.extracted_data || {};
   docResult.extracted_data.creditor_data = updatedCreditorData;
 
   console.log('[webhook] creditor enrichment applied', {
-    name: candidateName,
-    email_before: beforeEmail || null,
-    email_after: updatedCreditorData.email || null,
-    sender_email_before: beforeSenderEmail || null,
+    sender_name: senderName,
+    is_representative: creditorData.is_representative || false,
+    actual_creditor: creditorData.actual_creditor || null,
     sender_email_after: updatedCreditorData.sender_email || null,
-    address_before: beforeAddress || null,
-    address_after: updatedCreditorData.address || null,
-    sender_address_before: beforeSenderAddress || null,
     sender_address_after: updatedCreditorData.sender_address || null,
-    match_id: matchedId || null,
+    vertreter_email_after: updatedCreditorData.glaeubiger_vertreter_email || null,
+    vertreter_address_after: updatedCreditorData.glaeubiger_vertreter_adresse || null,
+    glaeubiger_address_after: updatedCreditorData.glaeubiger_adresse || null,
   });
 }
 
