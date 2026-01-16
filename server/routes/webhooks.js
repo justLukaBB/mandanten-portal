@@ -331,6 +331,78 @@ router.post(
         }
       }
 
+      // ✅ FIX: Update deduplicated_creditors with enriched values from documents
+      // FastAPI sends deduplicated_creditors with values BEFORE enrichment
+      // We need to sync them with the enriched document values
+      if (normalizedDedupCreditors.length > 0) {
+        console.log('[webhook] Syncing deduplicated_creditors with enriched document values...');
+
+        normalizedDedupCreditors.forEach((dedupCreditor) => {
+          // Find the corresponding document by reference number or sender name
+          const matchingDoc = processedDocuments.find(doc => {
+            const docCreditor = doc.extracted_data?.creditor_data;
+            if (!docCreditor) return false;
+
+            // Match by reference number (most reliable)
+            if (docCreditor.reference_number && docCreditor.reference_number !== 'N/A' &&
+                dedupCreditor.Aktenzeichen === docCreditor.reference_number) {
+              return true;
+            }
+
+            // Fallback: match by sender name
+            if (docCreditor.sender_name && docCreditor.sender_name !== 'N/A' &&
+                dedupCreditor.Gläubiger_Name === docCreditor.sender_name) {
+              return true;
+            }
+
+            return false;
+          });
+
+          if (matchingDoc) {
+            const enrichedCreditor = matchingDoc.extracted_data.creditor_data;
+
+            // Update with enriched email values
+            if (enrichedCreditor.sender_email && enrichedCreditor.sender_email !== 'N/A') {
+              if (!enrichedCreditor.is_representative) {
+                dedupCreditor.Email_Gläubiger = enrichedCreditor.sender_email;
+              } else {
+                dedupCreditor.Email_Gläubiger_Vertreter = enrichedCreditor.sender_email;
+              }
+            }
+
+            // Update with enriched address values
+            if (enrichedCreditor.sender_address && enrichedCreditor.sender_address !== 'N/A') {
+              dedupCreditor.Gläubiger_Adresse = enrichedCreditor.sender_address;
+            }
+
+            // Update representative email if available
+            if (enrichedCreditor.glaeubiger_vertreter_email &&
+                enrichedCreditor.glaeubiger_vertreter_email !== 'N/A') {
+              dedupCreditor.Email_Gläubiger_Vertreter = enrichedCreditor.glaeubiger_vertreter_email;
+            }
+
+            // Update representative address if available
+            if (enrichedCreditor.glaeubiger_vertreter_adresse &&
+                enrichedCreditor.glaeubiger_vertreter_adresse !== 'N/A') {
+              dedupCreditor.Gläubigervertreter_Adresse = enrichedCreditor.glaeubiger_vertreter_adresse;
+            }
+
+            // Update actual creditor address if available
+            if (enrichedCreditor.glaeubiger_adresse &&
+                enrichedCreditor.glaeubiger_adresse !== 'N/A') {
+              dedupCreditor.Gläubiger_Adresse = enrichedCreditor.glaeubiger_adresse;
+            }
+
+            console.log('[webhook] Synced deduplicated creditor:', {
+              name: dedupCreditor.Gläubiger_Name,
+              email_before: dedupCreditor.Email_Gläubiger === enrichedCreditor.sender_email ? '(same)' : 'updated',
+              email_after: dedupCreditor.Email_Gläubiger,
+              address_after: dedupCreditor.Gläubiger_Adresse
+            });
+          }
+        });
+      }
+
       // Persist documents + merge FastAPI-deduped creditors into final_creditor_list
       await safeClientUpdate(client_id, (clientDoc) => {
         // Handle multi-creditor splits and standard updates (kept as in your snippet)

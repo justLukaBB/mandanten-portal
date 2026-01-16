@@ -161,9 +161,10 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
                 : f
             )
           );
-          // Call onUploadComplete with the response
+          // Show success message (documents will appear in list after page reload)
           if (response.documents) {
-            onUploadComplete(response.documents);
+            // ✅ Don't call onUploadComplete - prevents duplicate display
+            // Documents will appear in "Bereits erfolgreich hochgeladene Dokumente" after page reload
             setSuccessMessage(`${response.documents.length} Dokument(e) erfolgreich hochgeladen!`);
             setTimeout(() => setSuccessMessage(''), 6000);
           }
