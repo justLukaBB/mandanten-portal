@@ -123,7 +123,7 @@ async function enrichCreditorContactFromDb(docResult, cache) {
 router.post(
   '/ai-processing',
   express.raw({ type: 'application/json' }),
-  webhookVerifier.middleware, 
+  webhookVerifier.middleware,
   async (req, res) => {
     const startTime = Date.now();
     const rawBody = req.body.toString('utf8');
@@ -432,22 +432,6 @@ router.post(
             };
         }
 
-
-        if (normalizedDedupCreditors.length > 0) {
-          const existing = clientDoc.final_creditor_list || [];
-          // Make sure mergeCreditorLists returns objects with all fields intact
-          clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
-            existing,
-            normalizedDedupCreditors,
-            'highest_amount'
-          );
-          clientDoc.deduplication_stats =
-            deduplication || {
-              original_count: normalizedDedupCreditors.length,
-              unique_count: normalizedDedupCreditors.length,
-              duplicates_removed: 0,
-            };
-        }
         // Existing auto-confirmation timer reset logic (kept)
         if (
           clientDoc.current_status === 'awaiting_client_confirmation' &&
