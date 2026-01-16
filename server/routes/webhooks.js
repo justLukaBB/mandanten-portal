@@ -362,17 +362,31 @@ router.post(
             const enrichedCreditor = matchingDoc.extracted_data.creditor_data;
 
             // Update with enriched email values
-            if (enrichedCreditor.sender_email && enrichedCreditor.sender_email !== 'N/A') {
+            // Prefer 'email' field, fallback to 'sender_email'
+            const bestEmail = (enrichedCreditor.email && enrichedCreditor.email !== 'N/A')
+              ? enrichedCreditor.email
+              : (enrichedCreditor.sender_email && enrichedCreditor.sender_email !== 'N/A')
+                ? enrichedCreditor.sender_email
+                : null;
+
+            if (bestEmail) {
               if (!enrichedCreditor.is_representative) {
-                dedupCreditor.Email_Gläubiger = enrichedCreditor.sender_email;
+                dedupCreditor.Email_Gläubiger = bestEmail;
               } else {
-                dedupCreditor.Email_Gläubiger_Vertreter = enrichedCreditor.sender_email;
+                dedupCreditor.Email_Gläubiger_Vertreter = bestEmail;
               }
             }
 
             // Update with enriched address values
-            if (enrichedCreditor.sender_address && enrichedCreditor.sender_address !== 'N/A') {
-              dedupCreditor.Gläubiger_Adresse = enrichedCreditor.sender_address;
+            // Prefer 'address' field over 'sender_address' (avoids Postfach)
+            const bestAddress = (enrichedCreditor.address && enrichedCreditor.address !== 'N/A')
+              ? enrichedCreditor.address
+              : (enrichedCreditor.sender_address && enrichedCreditor.sender_address !== 'N/A')
+                ? enrichedCreditor.sender_address
+                : null;
+
+            if (bestAddress) {
+              dedupCreditor.Gläubiger_Adresse = bestAddress;
             }
 
             // Update representative email if available
@@ -395,9 +409,10 @@ router.post(
 
             console.log('[webhook] Synced deduplicated creditor:', {
               name: dedupCreditor.Gläubiger_Name,
-              email_before: dedupCreditor.Email_Gläubiger === enrichedCreditor.sender_email ? '(same)' : 'updated',
               email_after: dedupCreditor.Email_Gläubiger,
-              address_after: dedupCreditor.Gläubiger_Adresse
+              address_after: dedupCreditor.Gläubiger_Adresse,
+              used_email_field: bestEmail ? (enrichedCreditor.email === bestEmail ? 'email' : 'sender_email') : 'none',
+              used_address_field: bestAddress ? (enrichedCreditor.address === bestAddress ? 'address' : 'sender_address') : 'none'
             });
           }
         });
