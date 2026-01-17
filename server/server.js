@@ -66,7 +66,7 @@ const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
 const DelayedProcessingService = require('./services/delayedProcessingService');
-const { getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
+const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
 
 // Webhook & Monitor Services
 const ZendeskService = require('./services/zendeskService');
@@ -78,7 +78,6 @@ const DocumentReminderService = require('./services/documentReminderService');
 const LoginReminderService = require('./services/loginReminderService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
 const aiDedupScheduler = require('./services/aiDedupScheduler');
-const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
 const { createProcessingJob } = require('./utils/fastApiClient');
 
 // =============================================================================
