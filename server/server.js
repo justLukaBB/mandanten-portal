@@ -48,6 +48,7 @@ const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
+const aiDedupScheduler = require('./services/aiDedupScheduler');
 const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
 const { createProcessingJob } = require('./utils/fastApiClient');
 
@@ -2517,6 +2518,75 @@ app.post('/api/admin/clients/:clientId/trigger-seven-day-review', authenticateAd
     console.error('❌ Error triggering 7-day review:', error);
     res.status(500).json({
       error: 'Failed to trigger 7-day review',
+      details: error.message
+    });
+  }
+});
+
+// Admin: Manually trigger AI re-deduplication for a client
+app.post('/api/admin/clients/:clientId/trigger-ai-dedup', authenticateAdmin, async (req, res) => {
+  try {
+    const clientId = req.params.clientId;
+
+    // Find client by ID or Aktenzeichen
+    let client = await Client.findOne({ id: clientId });
+    if (!client) {
+      client = await Client.findOne({ aktenzeichen: clientId });
+    }
+
+    if (!client) {
+      return res.status(404).json({
+        error: 'Client not found',
+        client_id: clientId
+      });
+    }
+
+    console.log(`🔄 Manual trigger of AI re-deduplication for ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+    const creditorList = client.final_creditor_list || [];
+
+    if (creditorList.length === 0) {
+      return res.status(400).json({
+        error: 'No creditors to deduplicate',
+        message: 'Client has no creditors in final_creditor_list'
+      });
+    }
+
+    const beforeCount = creditorList.length;
+    console.log(`📊 Starting manual AI deduplication: ${beforeCount} creditors`);
+
+    // Run AI deduplication immediately (not scheduled)
+    const startTime = Date.now();
+    await aiDedupScheduler.runAIRededup(clientId, getClient);
+    const processingTime = Date.now() - startTime;
+
+    // Fetch updated client to get results
+    const updatedClient = await getClient(clientId);
+    const afterCount = (updatedClient.final_creditor_list || []).length;
+    const duplicatesRemoved = beforeCount - afterCount;
+
+    console.log(`✅ Manual AI deduplication complete: ${beforeCount} → ${afterCount} (${duplicatesRemoved} removed)`);
+
+    res.json({
+      success: true,
+      message: 'AI re-deduplication completed',
+      client: {
+        id: client.id,
+        aktenzeichen: client.aktenzeichen,
+        name: `${client.firstName} ${client.lastName}`
+      },
+      deduplication_result: {
+        before_count: beforeCount,
+        after_count: afterCount,
+        duplicates_removed: duplicatesRemoved,
+        processing_time_ms: processingTime
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error triggering AI re-deduplication:', error);
+    res.status(500).json({
+      error: 'Failed to trigger AI re-deduplication',
       details: error.message
     });
   }

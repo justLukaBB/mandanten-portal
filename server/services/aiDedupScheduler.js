@@ -16,6 +16,14 @@ const DEDUP_DELAY_MS = 30 * 60 * 1000; // 30 minutes
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
 const FASTAPI_API_KEY = process.env.FASTAPI_API_KEY;
 
+// Validate configuration on startup
+if (process.env.NODE_ENV === 'production' && !process.env.FASTAPI_URL) {
+  console.warn('[ai-dedup-scheduler] ⚠️  FASTAPI_URL not set in production - using localhost:8000');
+}
+if (process.env.NODE_ENV === 'production' && !FASTAPI_API_KEY) {
+  console.warn('[ai-dedup-scheduler] ⚠️  FASTAPI_API_KEY not set in production - API calls may fail');
+}
+
 /**
  * Schedule AI re-deduplication for a client
  *
@@ -23,6 +31,16 @@ const FASTAPI_API_KEY = process.env.FASTAPI_API_KEY;
  * This ensures we wait for all uploads to finish before running dedup.
  */
 function scheduleAIRededup(clientId, getClientFunction) {
+  // Input validation
+  if (!clientId) {
+    console.error('[ai-dedup-scheduler] Cannot schedule - clientId is required');
+    return;
+  }
+  if (typeof getClientFunction !== 'function') {
+    console.error('[ai-dedup-scheduler] Cannot schedule - getClientFunction must be a function');
+    return;
+  }
+
   console.log(`[ai-dedup-scheduler] Scheduling AI re-dedup for client ${clientId} in 30 minutes...`);
 
   // Cancel existing pending job if any
@@ -84,6 +102,14 @@ async function runAIRededup(clientId, getClientFunction) {
     );
 
     const { deduplicated_creditors, stats } = response.data;
+
+    // Validate response data
+    if (!Array.isArray(deduplicated_creditors)) {
+      throw new Error('Invalid response from FastAPI: deduplicated_creditors is not an array');
+    }
+    if (!stats || typeof stats.unique_count !== 'number') {
+      throw new Error('Invalid response from FastAPI: missing or invalid stats');
+    }
 
     console.log(`[ai-dedup-scheduler] AI deduplication complete for ${clientId}:`, {
       original_count: stats.original_count,

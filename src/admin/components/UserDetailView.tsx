@@ -146,6 +146,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [nullplanSummary, setNullplanSummary] = useState<any>(null);
   // const [loadingNullplan, setLoadingNullplan] = useState(false);
   const [skippingDelay, setSkippingDelay] = useState(false);
+  const [aiDedupLoading, setAiDedupLoading] = useState(false);
+  const [aiDedupMessage, setAiDedupMessage] = useState<string | null>(null);
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -305,6 +307,55 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Glaeubiger');
     XLSX.writeFile(workbook, `glaeubiger_tabelle_${user.aktenzeichen || user.id}.xlsx`);
+  };
+
+  const triggerAIRededup = async () => {
+    if (!user?.final_creditor_list || user.final_creditor_list.length === 0) {
+      alert('Keine Gläubiger zum Deduplizieren.');
+      return;
+    }
+
+    if (!window.confirm(`AI Re-Deduplication für ${user.final_creditor_list.length} Gläubiger starten?\n\nDies kann mehrere Sekunden dauern.`)) {
+      return;
+    }
+
+    try {
+      setAiDedupLoading(true);
+      setAiDedupMessage(null);
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/trigger-ai-dedup`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `AI Re-Dedup failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const stats = result.deduplication_result;
+
+      setAiDedupMessage(
+        `✅ AI Re-Deduplication erfolgreich!\n` +
+        `Vorher: ${stats.before_count} Gläubiger\n` +
+        `Nachher: ${stats.after_count} Gläubiger\n` +
+        `Duplikate entfernt: ${stats.duplicates_removed}\n` +
+        `Dauer: ${(stats.processing_time_ms / 1000).toFixed(1)}s`
+      );
+
+      // Reload user data to show updated creditor list
+      await fetchUser();
+
+    } catch (error: any) {
+      console.error('AI Re-Dedup error:', error);
+      setAiDedupMessage(`❌ Fehler: ${error.message}`);
+    } finally {
+      setAiDedupLoading(false);
+    }
   };
 
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
@@ -1328,14 +1379,39 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 <BuildingOfficeIcon className="w-6 h-6 text-red-700" />
                 <h3 className="text-lg font-semibold text-gray-900">Gläubiger-Tabelle</h3>
               </div>
-              <button
-                onClick={exportCreditorTableToXLSX}
-                className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
-                title="Tabelle als Excel exportieren"
-              >
-                Exportieren (XLSX)
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={triggerAIRededup}
+                  disabled={aiDedupLoading}
+                  className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  title="AI Re-Deduplication jetzt ausführen"
+                >
+                  {aiDedupLoading ? (
+                    <>
+                      <ArrowPathIcon className="w-4 h-4 mr-1 animate-spin" />
+                      Läuft...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowPathIcon className="w-4 h-4 mr-1" />
+                      AI Re-Dedup
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={exportCreditorTableToXLSX}
+                  className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                  title="Tabelle als Excel exportieren"
+                >
+                  Exportieren (XLSX)
+                </button>
+              </div>
             </div>
+            {aiDedupMessage && (
+              <div className={`px-4 py-2 text-xs border-b ${aiDedupMessage.startsWith('✅') ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                <pre className="whitespace-pre-wrap font-mono">{aiDedupMessage}</pre>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50">
