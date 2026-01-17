@@ -1041,6 +1041,74 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
             }
         },
 
+        /**
+         * Get creditors for a client
+         * GET /api/clients/:clientId/creditors
+         */
+        handleGetCreditors: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+
+                console.log(`📋 Client requesting creditors for client ${clientId}`);
+
+                const client = await getClient(clientId);
+                if (!client) {
+                    return res.status(404).json({
+                        error: 'Client not found',
+                        client_id: clientId
+                    });
+                }
+
+                // Authorization check - clients can only access their own data
+                const isAuthorized = req.clientId === client.id ||
+                                    req.clientId === client.aktenzeichen ||
+                                    req.clientId === clientId ||
+                                    req.type === 'admin'; // Allow admin access too
+
+                if (!isAuthorized) {
+                    return res.status(403).json({
+                        error: 'Access denied - you can only access your own creditor data'
+                    });
+                }
+
+                const creditors = client.final_creditor_list || [];
+
+                res.json({
+                    success: true,
+                    client: {
+                        id: client.id,
+                        name: `${client.firstName} ${client.lastName}`,
+                        aktenzeichen: client.aktenzeichen,
+                        current_status: client.current_status,
+                        workflow_status: client.workflow_status
+                    },
+                    creditors: creditors.map(creditor => ({
+                        id: creditor.id,
+                        sender_name: creditor.sender_name,
+                        sender_email: creditor.sender_email,
+                        sender_address: creditor.sender_address,
+                        reference_number: creditor.reference_number,
+                        claim_amount: creditor.claim_amount,
+                        status: creditor.status,
+                        confidence: creditor.confidence,
+                        is_representative: creditor.is_representative,
+                        actual_creditor: creditor.actual_creditor,
+                        manually_reviewed: creditor.manually_reviewed,
+                        created_at: creditor.created_at,
+                        created_via: creditor.created_via
+                    })),
+                    total: creditors.length
+                });
+
+            } catch (error) {
+                console.error('❌ Error getting creditors:', error);
+                res.status(500).json({
+                    error: 'Failed to get creditors',
+                    details: error.message
+                });
+            }
+        },
+
         handleAddCreditor: async (req, res) => {
             try {
                 const { clientId } = req.params;

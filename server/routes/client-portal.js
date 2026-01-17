@@ -73,6 +73,12 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
         controller.handleDeleteFinancialData
     );
 
+    // Get creditors for client
+    router.get('/clients/:clientId/creditors',
+        authenticateClient,
+        controller.handleGetCreditors
+    );
+
     // Add manual creditor
     router.post('/clients/:clientId/creditors',
         rateLimits.general,
