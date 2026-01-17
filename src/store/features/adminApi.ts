@@ -2,7 +2,7 @@ import { baseApi } from '../api/baseApi';
 
 export interface AdminUser {
     id: string; // Mapped from _id by transformResponse
-    _id: string; 
+    _id: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -43,7 +43,7 @@ export const adminApi = baseApi.injectEndpoints({
                     limit: limit.toString(),
                     status, // 'all' is default
                 });
-                
+
                 if (search) params.append('search', search);
                 if (dateFrom) params.append('dateFrom', dateFrom);
                 if (dateTo) params.append('dateTo', dateTo);
@@ -65,9 +65,28 @@ export const adminApi = baseApi.injectEndpoints({
                 return response;
             }
         }),
+        getWorkflowStatus: builder.query<{ status: string; label: string }, string>({
+            query: (clientId) => `/api/admin/clients/${clientId}/workflow-status`,
+            providesTags: ['User'],
+        }),
+        getSettlementResponses: builder.query<any, string>({
+            query: (clientId) => `/api/admin/clients/${clientId}/settlement-responses`,
+            providesTags: ['User'],
+        }),
+        getNullplanResponses: builder.query<any, string>({
+            query: (clientId) => `/api/admin/clients/${clientId}/nullplan-responses`,
+            providesTags: ['User'],
+        }),
         triggerImmediateReview: builder.mutation<{ success: boolean; error?: string }, string>({
             query: (userId) => ({
                 url: `/admin/immediate-review/${userId}`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['User'],
+        }),
+        skipSevenDayDelay: builder.mutation<{ success: boolean }, string>({
+            query: (clientId) => ({
+                url: `/api/admin/clients/${clientId}/skip-seven-day-delay`,
                 method: 'POST',
             }),
             invalidatesTags: ['User'],
@@ -97,7 +116,7 @@ export const adminApiExtended = adminApi.injectEndpoints({
                 if (params.status && params.status !== 'all') queryParams.append('status', params.status);
                 if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
                 if (params.dateTo) queryParams.append('dateTo', params.dateTo);
-                
+
                 return `/api/admin/dashboard-stats?${queryParams.toString()}`;
             },
             providesTags: ['User'], // Invalidate when Users change
@@ -107,6 +126,10 @@ export const adminApiExtended = adminApi.injectEndpoints({
 
 export const {
     useGetClientsQuery,
+    useGetWorkflowStatusQuery,
+    useGetSettlementResponsesQuery,
+    useGetNullplanResponsesQuery,
     useTriggerImmediateReviewMutation,
+    useSkipSevenDayDelayMutation,
     useGetDashboardStatsQuery
 } = adminApiExtended;

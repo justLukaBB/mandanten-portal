@@ -19,12 +19,14 @@ function getServerFunctions() {
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
   parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
+const webhookVerifier = require('../utils/webhookVerifier');
+const createWebhookController = require('../controllers/webhookController');
 
 
 
 /**
- * Enrich a creditor document with contact info from local DB when missing.
- * Uses caching to avoid repeated lookups for identical names within a request.
+ * Webhook Routes Factory
+ * @param {Object} dependencies - dependencies injected from server.js
  */
 async function enrichCreditorContactFromDb(docResult, cache) {
   if (!docResult?.is_creditor_document) return;
@@ -815,15 +817,35 @@ Job ID: ${job_id}`,
     }
   }
 );
-
-/** Health check */
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    endpoints: ['POST /webhooks/ai-processing'],
+module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook }) => {
+  const controller = createWebhookController({
+    Client,
+    safeClientUpdate,
+    getClient,
+    triggerProcessingCompleteWebhook
   });
-});
+
+  /**
+   * Webhook receiver for FastAPI AI processing results
+   * POST /webhooks/ai-processing
+   */
+  router.post(
+    '/ai-processing',
+    express.raw({ type: 'application/json' }),
+    webhookVerifier.optionalMiddleware, // Temporarily allow unsigned webhooks for testing
+    controller.handleAiProcessing
+  );
+
+  /** Health check */
+  router.get('/health', (req, res) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      endpoints: ['POST /webhooks/ai-processing'],
+    });
+  });
 
 module.exports = router;
 
+  return router;
+};
