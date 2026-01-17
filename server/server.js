@@ -39,11 +39,9 @@ const multer = require('multer');
 require('dotenv').config();
 
 // =============================================================================
-// 1. CONFIGURATION & DATABASE
+// 1. DATABASE SERVICE
 // =============================================================================
-const config = require('./config');
 const databaseService = require('./services/database');
-const { uploadsDir } = require('./middleware/upload');
 
 // =============================================================================
 // 2. MODELS
@@ -52,11 +50,9 @@ const Client = require('./models/Client');
 const Agent = require('./models/Agent');
 
 // =============================================================================
-// 3. MIDDLEWARE & UTILS
+// 3. ADDITIONAL UTILS
 // =============================================================================
-const { rateLimits, securityHeaders } = require('./middleware/security');
 const { triggerProcessingCompleteWebhook } = require('./utils/webhookUtils');
-const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
 const clientService = require('./services/clientService');
 const Scheduler = require('./scheduler');
 
