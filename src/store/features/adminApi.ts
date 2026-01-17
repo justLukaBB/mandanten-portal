@@ -79,7 +79,7 @@ export const adminApi = baseApi.injectEndpoints({
         }),
         triggerImmediateReview: builder.mutation<{ success: boolean; error?: string }, string>({
             query: (userId) => ({
-                url: `/admin/immediate-review/${userId}`,
+                url: `/api/admin/immediate-review/${userId}`,
                 method: 'POST',
             }),
             invalidatesTags: ['User'],
@@ -87,6 +87,20 @@ export const adminApi = baseApi.injectEndpoints({
         skipSevenDayDelay: builder.mutation<{ success: boolean }, string>({
             query: (clientId) => ({
                 url: `/api/admin/clients/${clientId}/skip-seven-day-delay`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['User'],
+        }),
+        triggerAIDedup: builder.mutation<{ success: boolean; message?: string }, string>({
+            query: (clientId) => ({
+                url: `/api/admin/clients/${clientId}/trigger-ai-dedup`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['User'],
+        }),
+        simulate30DayPeriod: builder.mutation<{ success: boolean; message?: string }, string>({
+            query: (clientId) => ({
+                url: `/api/admin/clients/${clientId}/simulate-30-day-period`,
                 method: 'POST',
             }),
             invalidatesTags: ['User'],
@@ -131,5 +145,7 @@ export const {
     useGetNullplanResponsesQuery,
     useTriggerImmediateReviewMutation,
     useSkipSevenDayDelayMutation,
+    useTriggerAIDedupMutation,
+    useSimulate30DayPeriodMutation,
     useGetDashboardStatsQuery
 } = adminApiExtended;

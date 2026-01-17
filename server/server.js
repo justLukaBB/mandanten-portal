@@ -19,22 +19,7 @@ const { uploadsDir, upload } = require('./middleware/upload');
 const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
 const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
 const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
-const healthRoutes = require('./routes/health');
-const zendeskWebhooks = require('./routes/zendesk-webhooks');
-const portalWebhooks = require('./routes/portal-webhooks');
-const agentReviewRoutes = require('./routes/agent-review');
-const agentAuthRoutes = require('./routes/agent-auth');
-const testAgentReviewRoutes = require('./routes/test-agent-review');
-const documentGenerationRoutes = require('./routes/document-generation');
-const insolvenzantragRoutes = require('./routes/insolvenzantrag');
-const secondRoundApiRoutes = require('./routes/second-round-api');
-const adminImpersonationRoutes = require('./routes/admin-impersonation');
-const authImpersonationRoutes = require('./routes/auth-impersonation');
-const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
-const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
-const creditorRoutes = require('./routes/creditorRoutes');
-const webhooksRoutes = require('./routes/webhooks');
-const testRoutes = require('./routes/test-routes');
+const { triggerProcessingCompleteWebhook } = require('./utils/webhookUtils');
 const databaseService = require('./services/database');
 
 // =============================================================================
@@ -44,11 +29,8 @@ const Client = require('./models/Client');
 const Agent = require('./models/Agent');
 
 // =============================================================================
-// 3. MIDDLEWARE & UTILS
+// 3. SERVICES & UTILS initialization
 // =============================================================================
-const { rateLimits, securityHeaders } = require('./middleware/security');
-const { triggerProcessingCompleteWebhook } = require('./utils/webhookUtils');
-const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
 const clientService = require('./services/clientService');
 const Scheduler = require('./scheduler');
 
@@ -113,7 +95,20 @@ const zendeskWebhookController = new ZendeskWebhookController({
 });
 
 // =============================================================================
-// 8. ROUTE FACTORIES
+// 8. LEGACY COMPATIBILITY (In-Memory Fallback Stub)
+// =============================================================================
+// Block all old dashboard access - force error for old routes
+const clientsData = new Proxy({}, {
+  get(target, prop) {
+    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
+  },
+  set(target, prop, value) {
+    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
+  }
+});
+
+// =============================================================================
+// 9. ROUTE MODULES
 // =============================================================================
 // Core Routes
 const healthRoutes = require('./routes/health');
@@ -136,7 +131,7 @@ const createClientCreditorRouter = require('./routes/client-creditor');
 const createTestDataRouter = require('./routes/test-data');
 
 // Legacy/Direct Routes
-const agentReviewRoutes = require('./routes/agent-review');
+const createAgentReviewRouter = require('./routes/agent-review');
 const agentAuthRoutes = require('./routes/agent-auth');
 const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
@@ -146,8 +141,8 @@ const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
-const creditorRoutes = require('./routes/creditorRoutes');
 const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
+const testRoutes = require('./routes/test-routes');
 
 // =============================================================================
 // 9. APP INITIALIZATION & MIDDLEWARE
@@ -263,15 +258,13 @@ app.use('/api/portal-webhook', createPortalWebhooksRouter({
   triggerProcessingCompleteWebhook
 }));
 
-// Legacy Inline Webhook (Refactored to Controller Call)
-app.post('/api/zendesk-webhook/portal-link',
-  (req, res, next) => zendeskWebhookController.parseZendeskPayload(req, res, next),
-  (req, res) => zendeskWebhookController.handlePortalLinkSent(req, res)
-);
-
 // 10.3 Agent Routes
 app.use('/api/agent-auth', agentAuthRoutes);
-app.use('/api/agent-review', agentReviewRoutes);
+app.use('/api/agent-review', createAgentReviewRouter({
+  Client,
+  getGCSFileStream,
+  uploadsDir
+}));
 app.use('/api/test/agent-review', testAgentReviewRoutes);
 
 // 10.4 Document & Filing Routes
@@ -291,12 +284,15 @@ app.use('/api/test', testRoutes);
 app.use('/api/admin', createAdminDashboardRouter({
   Client,
   databaseService,
-  clientsData: require('./server').clientsData, // Legacy support linked to exports
+  clientsData, // FIXED: Use local clientsData
   uploadsDir: path.join(__dirname, 'uploads'),
-  DelayedProcessingService
+  DelayedProcessingService,
+  garnishmentCalculator,
+  financialDataReminderService,
+  safeClientUpdate: clientService.safeClientUpdate.bind(clientService)
 }));
 
-app.use('/api', createAdminDocumentsRouter({
+app.use('/api/admin', createAdminDocumentsRouter({
   Client,
   documentProcessor,
   getGCSFileStream,
@@ -306,7 +302,7 @@ app.use('/api', createAdminDocumentsRouter({
   uploadsDir: path.join(__dirname, 'uploads')
 }));
 
-app.use('/api', createAdminFinancialRouter({
+app.use('/api/admin', createAdminFinancialRouter({
   Client,
   garnishmentCalculator,
   saveClient: clientService.saveClient.bind(clientService),
@@ -314,7 +310,7 @@ app.use('/api', createAdminFinancialRouter({
   getClient: clientService.getClient.bind(clientService)
 }));
 
-app.use('/api', createAdminMaintenanceRouter({
+app.use('/api/admin', createAdminMaintenanceRouter({
   creditorContactService,
   documentReminderService,
   Client,
@@ -329,14 +325,13 @@ app.use('/api/admin', createAdminSettlementRouter(
 app.use('/api/admin', createAdminClientCreditorRouter({
   Client,
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  DelayedProcessingService
+  DelayedProcessingService,
+  aiDedupScheduler
 }));
 
-app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
-app.use('/api', adminDelayedProcessingRoutes);
+app.use('/api/admin', adminDelayedProcessingRoutes);
 
 // 10.7 Client Portal Global Routes
-app.use('/api', creditorRoutes); // Legacy creditor routes
 
 app.use('/api', createClientPortalRouter({
   Client,
@@ -347,7 +342,7 @@ app.use('/api', createClientPortalRouter({
 app.use('/api', createClientCreditorRouter({
   Client,
   // clientsData passed as legacy, but should be handled by DB now
-  clientsData: require('./server').clientsData,
+  clientsData, // FIXED: Use local clientsData
   creditorContactService,
   sideConversationMonitor: globalSideConversationMonitor
 }));
@@ -356,7 +351,7 @@ app.use('/api', createClientCreditorRouter({
 app.use('/api', createTestDataRouter({
   testDataService,
   creditorContactService,
-  clientsData: require('./server').clientsData,
+  clientsData, // FIXED: Use local clientsData
   Client,
   Agent
 }));
@@ -395,20 +390,7 @@ app.use((error, req, res, next) => {
 });
 
 // =============================================================================
-// 12. LEGACY COMPATIBILITY (In-Memory Fallback Stub)
-// =============================================================================
-// Block all old dashboard access - force error for old routes
-const clientsData = new Proxy({}, {
-  get(target, prop) {
-    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
-  },
-  set(target, prop, value) {
-    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
-  }
-});
-
-// =============================================================================
-// 13. SERVER STARTUP
+// 12. SERVER STARTUP (Section Re-numbered)
 // =============================================================================
 async function startServer() {
   try {

@@ -31,6 +31,7 @@ module.exports = (dependencies) => {
     router.post('/clients/:clientId/reset-payment', rateLimits.admin, authenticateAdmin, adminDashboardController.resetPaymentStatus);
     router.post('/clients/:clientId/trigger-seven-day-review', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerSevenDayReview);
     router.post('/clients/:clientId/generate-creditor-list', rateLimits.admin, authenticateAdmin, adminDashboardController.generateCreditorList);
+    router.post('/clients/:clientId/simulate-30-day-period', rateLimits.admin, authenticateAdmin, adminDashboardController.simulate30DayPeriod);
 
     return router;
 };

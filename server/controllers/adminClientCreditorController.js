@@ -1,7 +1,47 @@
 const { v4: uuidv4 } = require('uuid');
 
-const createAdminClientCreditorController = ({ Client, safeClientUpdate, DelayedProcessingService }) => {
+const createAdminClientCreditorController = ({ Client, safeClientUpdate, DelayedProcessingService, aiDedupScheduler }) => {
     return {
+
+        // Admin: Trigger AI Deduplication for a client
+        triggerAIDedup: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                console.log(`🤖 Admin triggering manual AI dedup for client ${clientId}`);
+
+                if (!aiDedupScheduler) {
+                    return res.status(500).json({ error: 'AI Dedup Scheduler not initialized' });
+                }
+
+                // runAIRededup(clientId, getClientFunction)
+                const result = await aiDedupScheduler.runAIRededup(clientId, async (id) => {
+                    return await Client.findOne({ $or: [{ id: id }, { aktenzeichen: id }] });
+                });
+
+                if (result && result.success) {
+                    res.json({
+                        success: true,
+                        message: 'AI deduplication completed successfully',
+                        stats: {
+                            before_count: result.before_count,
+                            after_count: result.after_count,
+                            duplicates_removed: result.duplicates_removed
+                        }
+                    });
+                } else {
+                    res.status(500).json({
+                        success: false,
+                        error: result?.error || 'AI deduplication failed'
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error in manual AI dedup trigger:', error);
+                res.status(500).json({
+                    error: 'Error triggering AI deduplication',
+                    details: error.message
+                });
+            }
+        },
         // Admin: Add manual creditor to any client (unrestricted)
         addCreditor: async (req, res) => {
             try {

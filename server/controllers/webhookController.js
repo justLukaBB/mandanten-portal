@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const webhookVerifier = require('../utils/webhookVerifier');
 const creditorDeduplication = require('../utils/creditorDeduplication');
 const { findCreditorByName } = require('../utils/creditorLookup');
+const aiDedupScheduler = require('../services/aiDedupScheduler');
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
     parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
@@ -557,6 +558,17 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             unique_count: normalizedDedupCreditors.length,
                             duplicates_removed: 0,
                         };
+
+                        // 🚀 TRIGGER GLOBAL AI DEDUPLICATION (CROSS-JOB)
+                        // Launch it asynchronously so we don't block the webhook response
+                        setImmediate(async () => {
+                            try {
+                                console.log(`[webhook] 🦾 Launching cross-job AI deduplication for client ${client_id}...`);
+                                await aiDedupScheduler.runAIRededup(client_id, getClient);
+                            } catch (err) {
+                                console.error(`[webhook] ❌ Failed to trigger global AI deduplication:`, err);
+                            }
+                        });
                     }
 
                     // NEW: Instant Add for Late Uploads

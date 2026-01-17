@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   MagnifyingGlassPlusIcon,
   MagnifyingGlassMinusIcon,
   DocumentTextIcon,
@@ -22,10 +22,10 @@ interface DocumentViewerProps {
   className?: string;
 }
 
-const DocumentViewer: React.FC<DocumentViewerProps> = ({ 
-  clientId, 
-  document, 
-  className = '' 
+const DocumentViewer: React.FC<DocumentViewerProps> = ({
+  clientId,
+  document,
+  className = ''
 }) => {
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,31 +48,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       setError(null);
 
       const token = localStorage.getItem('agent_token');
-      
-      // First get document metadata
+
+      // NOTE: Metadata fetch removed as the endpoint returns the file content (binary), causing JSON parse error.
+      // We rely on the 'document' prop passed to this component for metadata.
       console.log(`📄 Loading document: ${document.id} for client: ${clientId}`);
-      const metadataResponse = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
 
-      if (!metadataResponse.ok) {
-        throw new Error('Failed to load document metadata');
-      }
+      // Create document URL for secure access (matches backend route)
+      const fileUrl = `${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}`;
 
-      const metadata = await metadataResponse.json();
-      console.log('📄 Document metadata received:', metadata);
-      
-      // Update document object with metadata if available
-      if (metadata.success && metadata.document) {
-        Object.assign(document, metadata.document);
-      }
-      
-      // Create document URL for secure access
-      const fileUrl = `${API_BASE_URL}/api/agent-review/${clientId}/document/${document.id}/file`;
-      
       // Add auth header by creating a blob URL
       const fileResponse = await fetch(fileUrl, {
         headers: {
@@ -81,17 +64,21 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       });
 
       if (!fileResponse.ok) {
+        if (fileResponse.status === 404) {
+          setError('FILE_NOT_FOUND');
+          return;
+        }
         throw new Error('Failed to load document file');
       }
 
       const blob = await fileResponse.blob();
       console.log('📄 File blob received:', { type: blob.type, size: blob.size });
-      
+
       // Update document type from blob if not already set
       if (!document.type && blob.type) {
         document.type = blob.type;
       }
-      
+
       const url = URL.createObjectURL(blob);
       setDocumentUrl(url);
 
@@ -120,23 +107,23 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     // Check document.type first
     if (document.type?.includes('pdf')) return { isPDF: true, isImage: false };
     if (document.type?.includes('image')) return { isPDF: false, isImage: true };
-    
+
     // Check file extensions from document name
     const fileName = document.filename || document.name || '';
     const lowerName = fileName.toLowerCase();
-    
+
     if (lowerName.endsWith('.pdf')) return { isPDF: true, isImage: false };
     if (/\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(lowerName)) return { isPDF: false, isImage: true };
-    
+
     // Check blob content type if available
     if (documentUrl) {
       // For blob URLs, we can't directly check content type, but we can infer from successful loading
       return { isPDF: false, isImage: true }; // Default to image for display
     }
-    
+
     return { isPDF: false, isImage: false };
   };
-  
+
   const { isPDF, isImage } = detectFileType();
 
   if (loading) {
@@ -144,10 +131,50 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderBottomColor: '#9f1a1d'}}></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{ borderBottomColor: '#9f1a1d' }}></div>
             <p className="text-gray-600">Lade Dokument...</p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  const DocumentNotFoundPlaceholder = () => (
+    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+      <div className="relative mb-6">
+        <div className="absolute -inset-1 bg-gradient-to-r from-red-100 to-orange-100 rounded-full blur opacity-75"></div>
+        <div className="relative bg-white p-4 rounded-full shadow-sm">
+          <svg className="w-16 h-16 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" className="text-red-500" />
+          </svg>
+        </div>
+      </div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Dokument nicht gefunden</h3>
+      <p className="text-gray-600 max-w-xs mx-auto mb-6">
+        Dieses Dokument ist im Speicher nicht mehr verfügbar. Dies kann bei älteren Datensätzen oder nach einer Systemmigration vorkommen.
+      </p>
+      <div className="flex flex-col space-y-3 w-full max-w-xs">
+        <div className="bg-white p-3 rounded-md border border-gray-200 text-left">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Details</p>
+          <p className="text-sm text-gray-700 truncate">ID: {document.id}</p>
+          <p className="text-sm text-gray-700 truncate">Datei: {document.filename || document.name}</p>
+        </div>
+        <button
+          onClick={loadDocument}
+          className="px-4 py-2 text-white rounded-md hover:opacity-90 shadow-sm transition-all"
+          style={{ backgroundColor: '#9f1a1d' }}
+        >
+          Erneut versuchen
+        </button>
+      </div>
+    </div>
+  );
+
+  if (error === 'FILE_NOT_FOUND') {
+    return (
+      <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
+        <DocumentNotFoundPlaceholder />
       </div>
     );
   }
@@ -159,10 +186,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <div className="text-center">
             <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <p className="text-gray-600 mb-4">{error}</p>
-            <button 
+            <button
               onClick={loadDocument}
               className="px-4 py-2 text-white rounded-md hover:opacity-90"
-              style={{backgroundColor: '#9f1a1d'}}
+              style={{ backgroundColor: '#9f1a1d' }}
             >
               Erneut versuchen
             </button>
@@ -180,14 +207,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <DocumentTextIcon className="h-5 w-5 text-gray-400" />
           <div>
             <h3 className="text-sm font-medium text-gray-900">
-                {truncateFilename(document.filename || document.name || '', 10)}
+              {truncateFilename(document.filename || document.name || '', 10)}
             </h3>
             <p className="text-xs text-gray-500">
               {document.type || 'Unknown type'} • {document.size ? Math.round(document.size / 1024) + ' KB' : 'Unknown size'}
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button
             onClick={handleZoomOut}
@@ -197,11 +224,11 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           >
             <MagnifyingGlassMinusIcon className="h-4 w-4 text-gray-600" />
           </button>
-          
+
           <span className="text-xs text-gray-600 min-w-[3rem] text-center">
             {Math.round(zoom * 100)}%
           </span>
-          
+
           <button
             onClick={handleZoomIn}
             disabled={zoom >= 3}
@@ -210,7 +237,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           >
             <MagnifyingGlassPlusIcon className="h-4 w-4 text-gray-600" />
           </button>
-          
+
           <button
             onClick={handleFitToWidth}
             className="p-1 rounded hover:bg-gray-100"
@@ -250,7 +277,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                   href={documentUrl}
                   download={document.filename || document.name}
                   className="inline-flex items-center px-4 py-2 text-white rounded-md hover:opacity-90"
-                  style={{backgroundColor: '#9f1a1d'}}
+                  style={{ backgroundColor: '#9f1a1d' }}
                 >
                   Dokument herunterladen
                 </a>

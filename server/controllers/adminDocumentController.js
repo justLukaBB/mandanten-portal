@@ -84,7 +84,9 @@ const createAdminDocumentController = ({
                 res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
                 try {
-                    const fileStream = getGCSFileStream(filename);
+                    // Decode filename in case it was stored encoded in DB
+                    const decodedFilename = decodeURIComponent(filename);
+                    const fileStream = getGCSFileStream(decodedFilename);
 
                     fileStream.on('error', (err) => {
                         console.error(`❌ GCS stream error for ${filename}:`, err.message);
@@ -153,14 +155,27 @@ const createAdminDocumentController = ({
                         // Fetch file buffer
                         let fileBuffer;
                         try {
-                            fileBuffer = await getGCSFileBuffer(gcsFilename);
+                            // Decode filename to handle special characters (e.g. %28 -> () )
+                            const decodedFilename = decodeURIComponent(gcsFilename);
+                            fileBuffer = await getGCSFileBuffer(decodedFilename); // Try decoded first
                         } catch (err) {
-                            // Try local file if GCS fails
-                            const localPath = path.join(uploadsDir, clientId, gcsFilename);
-                            if (fs.existsSync(localPath)) {
-                                fileBuffer = fs.readFileSync(localPath);
-                            } else {
-                                throw err;
+                            try {
+                                // Try original if decoded fails
+                                fileBuffer = await getGCSFileBuffer(gcsFilename);
+                            } catch (err2) {
+                                // Try local file if GCS fails
+                                // Check both root and client subfolder (legacy support)
+                                const decodedFilename = decodeURIComponent(gcsFilename);
+                                const rootPath = path.join(uploadsDir, decodedFilename);
+                                const clientPath = path.join(uploadsDir, clientId, decodedFilename);
+
+                                if (fs.existsSync(rootPath)) {
+                                    fileBuffer = fs.readFileSync(rootPath);
+                                } else if (fs.existsSync(clientPath)) {
+                                    fileBuffer = fs.readFileSync(clientPath);
+                                } else {
+                                    throw err;
+                                }
                             }
                         }
 

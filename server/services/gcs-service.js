@@ -117,6 +117,14 @@ const uploadToGCS = (file) => {
     // Generate unique filename
     const filename = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
 
+    console.log(`📤 Upload Request:`, {
+      originalName: file.originalname,
+      generatedFilename: filename,
+      size: file.size,
+      mimetype: file.mimetype,
+      gcsConfigured: isGCSConfigured
+    });
+
     // FALLBACK: Local Storage
     if (!isGCSConfigured) {
       const localPath = path.join(uploadsDir, filename);
@@ -124,8 +132,10 @@ const uploadToGCS = (file) => {
 
       fs.writeFile(localPath, file.buffer, (err) => {
         if (err) {
+          console.error(`❌ Local save failed for ${filename}:`, err.message);
           return reject(new Error(`Failed to save file locally: ${err.message}`));
         }
+        console.log(`✅ File saved locally: ${filename}`);
         // Return the filename as the identity, which can be used to construct a local URL later if needed
         resolve(filename);
       });
@@ -133,6 +143,7 @@ const uploadToGCS = (file) => {
     }
 
     // ORIGINAL: GCS Storage
+    console.log(`☁️ Uploading to GCS bucket: ${bucketName}/${filename}`);
     const blob = bucket.file(filename);
     const blobStream = blob.createWriteStream({
       resumable: false,
@@ -141,7 +152,10 @@ const uploadToGCS = (file) => {
       },
     });
 
-    blobStream.on('error', (err) => reject(err));
+    blobStream.on('error', (err) => {
+      console.error(`❌ GCS upload failed for ${filename}:`, err.message);
+      reject(err);
+    });
     blobStream.on('finish', async () => {
       try {
         // Generate a signed URL that expires in 24 hours
@@ -151,12 +165,15 @@ const uploadToGCS = (file) => {
           action: 'read',
           expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
         });
-        console.log(`✅ Generated signed URL for ${filename}`);
+        console.log(`✅ GCS upload complete: ${filename}`);
+        console.log(`🔗 Generated signed URL (expires in 24h)`);
         resolve(signedUrl);
       } catch (error) {
         console.error(`⚠️ Failed to generate signed URL for ${filename}:`, error.message);
         // Fallback to public URL if signing fails
-        resolve(`https://storage.googleapis.com/${bucketName}/${blob.name}`);
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
+        console.log(`🔗 Using public URL instead: ${publicUrl}`);
+        resolve(publicUrl);
       }
     });
 
@@ -165,6 +182,10 @@ const uploadToGCS = (file) => {
 };
 
 const getGCSFileStream = (filename) => {
+  console.log(`📥 File stream request for: ${filename}`, {
+    gcsConfigured: isGCSConfigured
+  });
+
   if (!isGCSConfigured) {
     // Remove full path if present in filename to avoid traversal issues, or simple join
     // Assuming filename is just the basename
@@ -172,11 +193,21 @@ const getGCSFileStream = (filename) => {
     const localPath = path.join(uploadsDir, cleanFilename);
     const altLocalPath = path.join(uploadsDir, filename); // In case it wasn't cleaned
 
+    console.log(`🔍 Checking local storage:`, {
+      cleanPath: localPath,
+      altPath: altLocalPath,
+      cleanExists: fs.existsSync(localPath),
+      altExists: fs.existsSync(altLocalPath)
+    });
+
     if (fs.existsSync(localPath)) {
+      console.log(`✅ Found locally: ${localPath}`);
       return fs.createReadStream(localPath);
     } else if (fs.existsSync(altLocalPath)) {
+      console.log(`✅ Found locally (alt path): ${altLocalPath}`);
       return fs.createReadStream(altLocalPath);
     } else {
+      console.error(`❌ Local file not found: ${filename}`);
       // Return a stream that emits an error immediately
       const { Readable } = require('stream');
       const errorStream = new Readable({
@@ -190,7 +221,23 @@ const getGCSFileStream = (filename) => {
   }
 
   // Extract base filename from signed URL (remove query parameters)
+  // Ensure we handle both encoded and decoded filenames for local check
   const baseFilename = filename.split('?')[0];
+  const decodedFilename = decodeURIComponent(baseFilename);
+
+  // Prioritize Local File if it exists (Faster, and handles legacy/fallback files)
+  const localPath = path.join(uploadsDir, decodedFilename);
+  const altLocalPath = path.join(uploadsDir, baseFilename);
+
+  if (fs.existsSync(localPath)) {
+    console.log(`✅ Found locally (preferring local over GCS): ${localPath}`);
+    return fs.createReadStream(localPath);
+  } else if (fs.existsSync(altLocalPath)) {
+    console.log(`✅ Found locally (preferring local over GCS - alt): ${altLocalPath}`);
+    return fs.createReadStream(altLocalPath);
+  }
+
+  console.log(`☁️ Fetching from GCS: ${baseFilename}`);
   return bucket.file(baseFilename).createReadStream();
 };
 

@@ -48,11 +48,35 @@ function levenshteinDistance(a, b) {
  */
 function calculateSimilarity(str1, str2) {
   if (!str1 || !str2) return 0;
-  const normalized1 = str1.toLowerCase().replace(/\s+/g, '').replace(/[^\w]/g, '');
-  const normalized2 = str2.toLowerCase().replace(/\s+/g, '').replace(/[^\w]/g, '');
+
+  // Improved normalization for German legal entities
+  const normalize = (s) => {
+    return s.toLowerCase()
+      .replace(/\s+/g, '')              // Remove spaces
+      .replace(/[^\w]/g, '')           // Remove special chars
+      .replace(/^anwalt/g, '')         // Strip "Anwalt" prefix
+      .replace(/^rechtsanwalt/g, '')   // Strip "Rechtsanwalt" prefix
+      .replace(/^ra/g, '')             // Strip "RA" prefix
+      .replace(/^inkasso/g, '')        // Strip "Inkasso" prefix
+      .replace(/^kanzlei/g, '')        // Strip "Kanzlei" prefix
+      .replace(/gmbh$/g, '')           // Strip "GmbH" suffix
+      .replace(/ag$/g, '')             // Strip "AG" suffix
+      .replace(/ug$/g, '')             // Strip "UG" suffix
+      .replace(/kg$/g, '')             // Strip "KG" suffix
+      .replace(/\.\.\.$/g, '');        // Strip truncation dots
+  };
+
+  const normalized1 = normalize(str1);
+  const normalized2 = normalize(str2);
 
   if (normalized1 === normalized2) return 1;
-  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) return 0.95;
+
+  // Handle truncation: "Georg We..." vs "Georg Weah"
+  if (normalized1.length > 4 && normalized2.length > 4) {
+    if (normalized1.startsWith(normalized2) || normalized2.startsWith(normalized1)) {
+      return 0.95;
+    }
+  }
 
   const distance = levenshteinDistance(normalized1, normalized2);
   const maxLength = Math.max(normalized1.length, normalized2.length);
