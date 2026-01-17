@@ -31,12 +31,14 @@ const authenticateClient = (req, res, next) => {
     // Allow admin tokens to access client data (admins can view any client)
     if (decoded.type === 'admin') {
       // Extract clientId from URL path if present (e.g., /api/clients/:clientId/...)
-      const pathMatch = req.path.match(/\/clients\/([a-f0-9-]+)/i);
+      // Match UUIDs (hex+hyphens) AND aktenzeichen (e.g., MAND_2026_2718)
+      const pathMatch = req.path.match(/\/clients\/([a-zA-Z0-9_-]+)/);
       if (pathMatch) {
         req.clientId = pathMatch[1];
       }
       req.adminId = decoded.adminId;
       req.isAdmin = true;
+      req.type = 'admin'; // Ensure req.type is set for authorization checks
       console.log(`✅ Admin authenticated: ${decoded.adminId} accessing client: ${req.clientId || 'N/A'}`);
       return next();
     }

@@ -1059,11 +1059,20 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     });
                 }
 
-                // Authorization check - clients can only access their own data
-                const isAuthorized = req.clientId === client.id ||
+                // Authorization check - clients can only access their own data, admins can access any
+                const isAuthorized = req.isAdmin || // Admin can access any client
+                                    req.clientId === client.id ||
                                     req.clientId === client.aktenzeichen ||
-                                    req.clientId === clientId ||
-                                    req.type === 'admin'; // Allow admin access too
+                                    req.clientId === clientId;
+
+                console.log(`🔐 Authorization check:`, {
+                    isAdmin: req.isAdmin,
+                    reqClientId: req.clientId,
+                    clientId: client.id,
+                    aktenzeichen: client.aktenzeichen,
+                    pathClientId: clientId,
+                    isAuthorized
+                });
 
                 if (!isAuthorized) {
                     return res.status(403).json({
