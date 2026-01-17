@@ -205,6 +205,41 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         docResult.extracted_data.creditor_data = docResult.creditor_data;
                     }
 
+                    // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
+                    if (docResult.is_creditor_document) {
+                        const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
+                        const enrichedSenderEmail = docResult.extracted_data?.creditor_data?.sender_email;
+                        const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
+                        const enrichedSenderAddress = docResult.extracted_data?.creditor_data?.sender_address;
+
+                        // Check if BOTH email AND address are missing after enrichment
+                        const hasEmail = (enrichedEmail && enrichedEmail !== 'N/A') || (enrichedSenderEmail && enrichedSenderEmail !== 'N/A');
+                        const hasAddress = (enrichedAddress && enrichedAddress !== 'N/A') || (enrichedSenderAddress && enrichedSenderAddress !== 'N/A');
+
+                        if (!hasEmail && !hasAddress) {
+                            // Override status to needs_review if both email and address are missing
+                            if (finalDocumentStatus === 'creditor_confirmed') {
+                                finalDocumentStatus = 'needs_review';
+                                statusReason = 'KI: Kontaktdaten fehlen - Manuelle Prüfung erforderlich (Email und Adresse nicht gefunden)';
+                                documentsNeedingReview.push(docResult);
+                                console.log('[webhook] Manual review triggered: Missing email AND address after DB enrichment', {
+                                    doc_id: docResult.id,
+                                    creditor_name: docResult.extracted_data?.creditor_data?.sender_name || 'N/A'
+                                });
+                            }
+                        }
+
+                        if (hasEmail || hasAddress) {
+                            console.log('[webhook] creditor doc after enrichment', {
+                                doc_id: docResult.id,
+                                email: enrichedEmail || null,
+                                sender_email: enrichedSenderEmail || null,
+                                address: enrichedAddress || null,
+                                sender_address: enrichedSenderAddress || null,
+                            });
+                        }
+                    }
+
                     processedDocuments.push({
                         ...docResult,
                         document_status: finalDocumentStatus,
@@ -214,18 +249,6 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             creditor_data: docResult.creditor_data || {}
                         }
                     });
-
-                    if (docResult.is_creditor_document) {
-                        const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
-                        const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
-                        if (enrichedEmail || enrichedAddress) {
-                            console.log('[webhook] creditor doc after enrichment', {
-                                doc_id: docResult.id,
-                                email: enrichedEmail || null,
-                                address: enrichedAddress || null,
-                            });
-                        }
-                    }
                 }
 
                 // Duplicate detection against existing docs
