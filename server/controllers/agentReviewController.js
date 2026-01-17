@@ -1,13 +1,17 @@
-const Client = require('../models/Client');
 const config = require('../config');
 const { v4: uuidv4 } = require('uuid');
 const creditorDeduplication = require('../utils/creditorDeduplication');
 
 /**
- * Agent Review Controller
+ * Agent Review Controller Factory
  * Handles business logic for the Agent Review Dashboard
+ * @param {Object} dependencies - Dependencies injected from route
+ * @param {Object} dependencies.Client - Client model
+ * @param {Function} dependencies.getGCSFileStream - Function to get GCS file stream
+ * @param {String} dependencies.uploadsDir - Uploads directory path
  */
-const agentReviewController = {
+const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) => {
+    return {
 
     /**
      * Get available clients for review
@@ -566,7 +570,7 @@ const agentReviewController = {
                 details: error.message
             });
         }
-    }
+    };
 };
 
-module.exports = agentReviewController;
+module.exports = createAgentReviewController;
