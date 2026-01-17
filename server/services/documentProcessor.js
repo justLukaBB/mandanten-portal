@@ -1,141 +1,60 @@
-const GoogleDocumentAI_REST = require('./googleDocumentAI_REST');
+const GeminiServiceAdapter = require('./geminiServiceAdapter');
 const fs = require('fs-extra');
 const path = require('path');
 
-// Initialize Google Document AI REST client with error handling
-let googleDocAI = null;
+// Initialize Gemini Service Adapter (Local Python Service)
+let geminiAdapter = null;
 try {
-  googleDocAI = new GoogleDocumentAI_REST();
-  console.log('✅ Google Document AI REST client initialized successfully');
+  geminiAdapter = new GeminiServiceAdapter();
+  console.log('✅ Gemini Service Adapter initialized successfully');
 } catch (error) {
-  console.error('❌ Failed to initialize Google Document AI REST client:', error.message);
-  console.log('📝 Document processing will continue with mock data for development');
+  console.error('❌ Failed to initialize Gemini Service Adapter:', error.message);
 }
 
 class DocumentProcessor {
   constructor() {
-    this.extractionPrompt = `
-Du bist ein Experte für deutsche Rechtsdokumente. Analysiere das Dokument und extrahiere alle relevanten Informationen.
-
-SCHRITT 1: Identifiziere zuerst den Dokumenttyp
-- Ist dies ein Gläubigerdokument (Rechnung, Mahnung, Forderung)?
-- Ist es an einen Privatperson oder Anwaltskanzlei adressiert?
-- Fordert es eine Zahlung?
-
-SCHRITT 2: Extrahiere systematisch folgende Daten:
-
-**ABSENDER (oberster Bereich des Dokuments):**
-- Firmenname/Name (meist im Briefkopf)
-- Vollständige Adresse (Straße, PLZ, Stadt)
-- E-Mail-Adresse (falls sichtbar)
-- Telefonnummer (falls sichtbar)
-
-**AKTENZEICHEN/REFERENZ:**
-- Suche nach: "Az:", "Aktenzeichen:", "Referenz:", "Kundennummer:", "Vertragsnummer:", "Rechnungsnummer:"
-- Auch numerische Codes in der Betreffzeile
-
-**GLÄUBIGER vs. VERTRETER:**
-- Achte auf: "im Auftrag von", "für", "im Namen von", "als Rechtsanwalt für"
-- Bei Inkassobüros: Wer ist der ursprüngliche Gläubiger?
-
-**GELDBETRAG:**
-- Suche nach €-Zeichen, "EUR", "Euro"
-- "Forderung:", "Betrag:", "Summe:", "zu zahlen:"
-- Auch Tabellen mit Beträgen
-
-**EMPFÄNGER/ADRESSAT:**
-- An wen ist das Dokument adressiert?
-- Steht da eine Privatperson oder "Rechtsanwalt"/"Kanzlei"?
-
-Gib das Ergebnis in folgendem JSON-Format zurück:
-
-{
-  "sender": {
-    "name": "Exact company/person name",
-    "address": "Complete address",
-    "email": "Email if found",
-    "phone": "Phone if found"
-  },
-  "reference_number": "Any reference numbers found",
-  "creditor_vs_representative": {
-    "is_representative": true/false,
-    "actual_creditor": "Real creditor if different from sender",
-    "relationship": "Rechtsanwalt/Inkassobüro/etc."
-  },
-  "claim_amount": "Exact amount with currency",
-  "document_type": "Rechnung/Mahnung/Zahlungsaufforderung/etc.",
-  "recipient": "Who is this addressed to",
-  "classification": {
-    "is_creditor_document": true/false,
-    "addressed_to_client": true/false,
-    "demands_payment": true/false,
-    "confidence_score": 0.0-1.0
-  },
-  "extracted_text_key_phrases": ["important phrases found"]
-}
-
-WICHTIG: 
-- Gib NUR das JSON-Objekt zurück, keinen anderen Text
-- Bei Unsicherheit: niedrigere confidence_score
-- Alle gefundenen Informationen vollständig extrahieren
-- Bei fehlenden Daten: null verwenden`;
+    this.extractionPrompt = `(Prompt handled by Python Service)`;
   }
 
   /**
-   * Process uploaded document and extract creditor information using Google Document AI
+   * Process uploaded document and extract creditor information using Local Python Gemini Service
    */
   async processDocument(filePath, originalName) {
     try {
-      console.log(`=== DOCUMENT PROCESSOR START ===`);
+      console.log(`=== DOCUMENT PROCESSOR START (Gemini Mode) ===`);
       console.log(`Processing document: ${originalName}`);
       console.log(`File path: ${filePath}`);
-      
+
       const fileExtension = path.extname(originalName).toLowerCase();
       console.log(`File extension: ${fileExtension}`);
-      
+
       // Check if file type is supported
       if (!['.pdf', '.jpg', '.jpeg', '.png'].includes(fileExtension)) {
         throw new Error(`Unsupported file type: ${fileExtension}`);
       }
 
-      // Process document with Google Document AI or fallback
+      // Process document with Gemini Service or fallback
       let extractedData;
-      if (googleDocAI) {
-        console.log('Calling Google Document AI...');
-        extractedData = await googleDocAI.processDocument(filePath, originalName);
-        
-        // Handle case where no text was extracted (e.g., blank images, screenshots without text)
-        if (!extractedData.success && extractedData.error === 'No text extracted') {
-          console.log('📄 Document marked for manual review due to no text extraction');
-          extractedData = {
-            processing_status: 'completed',
-            is_creditor_document: false,
-            confidence: 0,
-            manual_review_required: true,
-            reasoning: extractedData.message,
-            creditor_data: {},
-            raw_text: '',
-            document_metadata: extractedData.document_metadata
-          };
-        } else {
-          console.log('Google Document AI processing completed successfully');
-        }
+      if (geminiAdapter) {
+        console.log('Calling Gemini Python Service...');
+        extractedData = await geminiAdapter.processDocument(filePath, originalName);
+        console.log('Gemini processing completed successfully');
       } else {
-        console.log('⚠️ Google Document AI not available, using mock data for testing...');
+        console.log('⚠️ Gemini Adapter not available, using mock data for testing...');
         extractedData = {
           processing_status: 'completed',
           is_creditor_document: true,
           confidence: 0.85,
           manual_review_required: false,
-          reasoning: 'Mock processing - Google Document AI not configured',
+          reasoning: 'Mock processing - Gemini Service not available',
           creditor_data: {
-            sender_name: 'Mock Gläubiger GmbH',
-            sender_email: 'info@mockglaeubiger.de',
-            reference_number: 'MOCK-2024-001',
-            claim_amount: '€ 1.250,00',
+            sender_name: 'Mock Gemini Gläubiger',
+            sender_email: 'gemini@mock.de',
+            reference_number: 'GEMINI-TEST-001',
+            claim_amount: '€ 500,00',
             is_representative: false
           },
-          raw_text: 'Mock extracted text from document processing...'
+          raw_text: 'Mock extracted text...'
         };
       }
 
@@ -219,21 +138,21 @@ WICHTIG:
     if (extractedData.is_creditor_document && extractedData.creditor_data) {
       const sender = extractedData.creditor_data.sender_name || 'Unbekannter Absender';
       const amount = extractedData.creditor_data.claim_amount ? `${extractedData.creditor_data.claim_amount}€` : 'Unbekannter Betrag';
-      
+
       let summary = `Gläubigerdokument von ${sender}`;
-      
+
       if (extractedData.creditor_data.is_representative && extractedData.creditor_data.actual_creditor) {
         summary += ` (für ${extractedData.creditor_data.actual_creditor})`;
       }
-      
+
       summary += ` - Forderung: ${amount}`;
-      
+
       if (extractedData.creditor_data.reference_number) {
         summary += ` (Az: ${extractedData.creditor_data.reference_number})`;
       }
-      
+
       summary += ` (${Math.round((extractedData.confidence || 0) * 100)}% Sicherheit)`;
-      
+
       return summary;
     }
 
