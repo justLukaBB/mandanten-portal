@@ -348,13 +348,13 @@ router.post(
 
             // Match by reference number (most reliable)
             if (docCreditor.reference_number && docCreditor.reference_number !== 'N/A' &&
-                dedupCreditor.Aktenzeichen === docCreditor.reference_number) {
+                dedupCreditor.reference_number === docCreditor.reference_number) {
               return true;
             }
 
             // Fallback: match by sender name
             if (docCreditor.sender_name && docCreditor.sender_name !== 'N/A' &&
-                dedupCreditor.Gläubiger_Name === docCreditor.sender_name) {
+                dedupCreditor.sender_name === docCreditor.sender_name) {
               return true;
             }
 
@@ -373,11 +373,8 @@ router.post(
                 : null;
 
             if (bestEmail) {
-              if (!enrichedCreditor.is_representative) {
-                dedupCreditor.Email_Gläubiger = bestEmail;
-              } else {
-                dedupCreditor.Email_Gläubiger_Vertreter = bestEmail;
-              }
+              dedupCreditor.email = bestEmail;
+              dedupCreditor.sender_email = bestEmail;
             }
 
             // Update with enriched address values
@@ -389,31 +386,14 @@ router.post(
                 : null;
 
             if (bestAddress) {
-              dedupCreditor.Gläubiger_Adresse = bestAddress;
-            }
-
-            // Update representative email if available
-            if (enrichedCreditor.glaeubiger_vertreter_email &&
-                enrichedCreditor.glaeubiger_vertreter_email !== 'N/A') {
-              dedupCreditor.Email_Gläubiger_Vertreter = enrichedCreditor.glaeubiger_vertreter_email;
-            }
-
-            // Update representative address if available
-            if (enrichedCreditor.glaeubiger_vertreter_adresse &&
-                enrichedCreditor.glaeubiger_vertreter_adresse !== 'N/A') {
-              dedupCreditor.Gläubigervertreter_Adresse = enrichedCreditor.glaeubiger_vertreter_adresse;
-            }
-
-            // Update actual creditor address if available
-            if (enrichedCreditor.glaeubiger_adresse &&
-                enrichedCreditor.glaeubiger_adresse !== 'N/A') {
-              dedupCreditor.Gläubiger_Adresse = enrichedCreditor.glaeubiger_adresse;
+              dedupCreditor.address = bestAddress;
+              dedupCreditor.sender_address = bestAddress;
             }
 
             console.log('[webhook] Synced deduplicated creditor:', {
-              name: dedupCreditor.Gläubiger_Name,
-              email_after: dedupCreditor.Email_Gläubiger,
-              address_after: dedupCreditor.Gläubiger_Adresse,
+              name: dedupCreditor.sender_name,
+              email_after: dedupCreditor.email,
+              address_after: dedupCreditor.address,
               used_email_field: bestEmail ? (enrichedCreditor.email === bestEmail ? 'email' : 'sender_email') : 'none',
               used_address_field: bestAddress ? (enrichedCreditor.address === bestAddress ? 'address' : 'sender_address') : 'none'
             });
