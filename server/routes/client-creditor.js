@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const ClientCreditorController = require('../controllers/clientCreditorController');
 
-const { authenticateClient } = require('../middleware/auth');
-const { rateLimits } = require('../middleware/security');
-
 module.exports = ({ Client, clientsData, creditorContactService, sideConversationMonitor }) => {
     const controller = new ClientCreditorController({
         Client,
@@ -12,12 +9,6 @@ module.exports = ({ Client, clientsData, creditorContactService, sideConversatio
         creditorContactService,
         sideConversationMonitor
     });
-
-    // Client: Get creditor list (Basic list)
-    router.get('/clients/:clientId/creditors', rateLimits.general, authenticateClient, controller.getCreditors);
-
-    // Client: Add manual creditor
-    router.post('/clients/:clientId/creditors', rateLimits.general, authenticateClient, controller.addCreditor);
 
     // Client: Get creditor list (Confirmation view)
     router.get('/clients/:clientId/creditor-confirmation', controller.getCreditorConfirmation);

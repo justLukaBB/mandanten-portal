@@ -1,6 +1,4 @@
 const { v4: uuidv4 } = require('uuid');
-const CreditorService = require('../services/creditorService');
-const creditorService = new CreditorService();
 
 /**
  * Controller for Client Creditor Operations
@@ -353,71 +351,6 @@ class ClientCreditorController {
             });
         } catch (error) {
             res.status(500).json({ error: error.message });
-        }
-    }
-
-    /**
-     * Add a new creditor (client-facing)
-     * POST /api/clients/:clientId/creditors
-     */
-    addCreditor = async (req, res) => {
-        try {
-            const { clientId } = req.params;
-            const creditorData = req.body;
-
-            console.log(`👤 Client ${clientId} adding manual creditor: ${creditorData.name}`);
-
-            const result = await creditorService.addCreditorToClient(
-                clientId,
-                creditorData,
-                'client',
-                'client'
-            );
-
-            if (!result.success) {
-                return res.status(400).json({ error: result.error });
-            }
-
-            res.json({
-                success: true,
-                message: `Gläubiger "${creditorData.name}" erfolgreich hinzugefügt`,
-                creditor: result.creditor
-            });
-        } catch (error) {
-            console.error('❌ Error adding manual creditor (client):', error);
-            res.status(500).json({ error: 'Fehler beim Hinzufügen des Gläubigers', details: error.message });
-        }
-    }
-
-    /**
-     * Get creditors for a client (client-facing)
-     * GET /api/clients/:clientId/creditors
-     */
-    getCreditors = async (req, res) => {
-        try {
-            const { clientId } = req.params;
-
-            // Security: Verify authenticated client matches requested client
-            if (req.clientId && req.clientId !== clientId) {
-                return res.status(403).json({ error: 'Forbidden: You can only access your own creditors' });
-            }
-
-            console.log(`📋 Client ${clientId} fetching creditors list`);
-
-            const result = await creditorService.getClientWithCreditors(clientId);
-
-            if (!result.success) {
-                return res.status(404).json({ error: result.error });
-            }
-
-            res.json({
-                success: true,
-                client: result.client,
-                creditors: result.creditors
-            });
-        } catch (error) {
-            console.error('❌ Error fetching creditors (client):', error);
-            res.status(500).json({ error: 'Failed to fetch creditors', details: error.message });
         }
     }
 

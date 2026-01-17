@@ -49,12 +49,5 @@ module.exports = ({ Client, safeClientUpdate, DelayedProcessingService }) => {
         controller.skipSevenDayDelay
     );
 
-    // Admin: Trigger AI Deduplication
-    router.post('/clients/:clientId/trigger-ai-dedup',
-        securityRateLimits.admin,
-        authenticateAdmin,
-        controller.triggerAIDedup
-    );
-
     return router;
 };
