@@ -2556,16 +2556,14 @@ app.post('/api/admin/clients/:clientId/trigger-ai-dedup', authenticateAdmin, asy
     console.log(`📊 Starting manual AI deduplication: ${beforeCount} creditors`);
 
     // Run AI deduplication immediately (not scheduled)
-    const startTime = Date.now();
-    await aiDedupScheduler.runAIRededup(clientId, getClient);
-    const processingTime = Date.now() - startTime;
+    const result = await aiDedupScheduler.runAIRededup(clientId, getClient);
 
-    // Fetch updated client to get results
-    const updatedClient = await getClient(clientId);
-    const afterCount = (updatedClient.final_creditor_list || []).length;
-    const duplicatesRemoved = beforeCount - afterCount;
+    // Check if deduplication was successful
+    if (!result || !result.success) {
+      throw new Error(result?.error || 'AI re-deduplication failed');
+    }
 
-    console.log(`✅ Manual AI deduplication complete: ${beforeCount} → ${afterCount} (${duplicatesRemoved} removed)`);
+    console.log(`✅ Manual AI deduplication complete: ${result.before_count} → ${result.after_count} (${result.duplicates_removed} removed)`);
 
     res.json({
       success: true,
@@ -2576,10 +2574,10 @@ app.post('/api/admin/clients/:clientId/trigger-ai-dedup', authenticateAdmin, asy
         name: `${client.firstName} ${client.lastName}`
       },
       deduplication_result: {
-        before_count: beforeCount,
-        after_count: afterCount,
-        duplicates_removed: duplicatesRemoved,
-        processing_time_ms: processingTime
+        before_count: result.before_count,
+        after_count: result.after_count,
+        duplicates_removed: result.duplicates_removed,
+        processing_time_ms: result.processing_time_ms
       }
     });
 

@@ -63,6 +63,8 @@ function scheduleAIRededup(clientId, getClientFunction) {
 
 /**
  * Execute AI re-deduplication for a client
+ *
+ * @returns {Promise<Object|null>} Result object with before/after counts, or null on error
  */
 async function runAIRededup(clientId, getClientFunction) {
   const startTime = Date.now();
@@ -139,6 +141,15 @@ async function runAIRededup(clientId, getClientFunction) {
 
     console.log(`[ai-dedup-scheduler] ✅ AI re-dedup completed for ${clientId}: ${beforeCount} → ${deduplicated_creditors.length} creditors`);
 
+    // Return result for manual triggers
+    return {
+      success: true,
+      before_count: beforeCount,
+      after_count: deduplicated_creditors.length,
+      duplicates_removed: stats.duplicates_removed,
+      processing_time_ms: Date.now() - startTime
+    };
+
   } catch (error) {
     console.error(`[ai-dedup-scheduler] ❌ AI re-dedup failed for ${clientId}:`, error.message);
 
@@ -149,6 +160,12 @@ async function runAIRededup(clientId, getClientFunction) {
         data: error.response.data
       });
     }
+
+    // Return error result
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
