@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticateAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
-const agentReviewController = require('../controllers/agentReviewController');
+const createAgentReviewController = require('../controllers/agentReviewController');
 
 module.exports = ({ Client, getGCSFileStream, uploadsDir }) => {
   const router = express.Router();
@@ -12,10 +12,9 @@ module.exports = ({ Client, getGCSFileStream, uploadsDir }) => {
     getGCSFileStream,
     uploadsDir
   });
-});
 
-// Helper function to serve mock PDF for test scenarios
-function serveMockPDF(res, documentName) {
+  // Helper function to serve mock PDF for test scenarios
+  function serveMockPDF(res, documentName) {
   try {
     const mockPDFContent = `%PDF-1.4
 1 0 obj
@@ -85,24 +84,24 @@ startxref
       error: 'Failed to serve mock PDF',
       details: error.message
     });
+    }
   }
-}
 
-// Get available clients for review
-// GET /api/agent-review/available-clients
-router.get('/available-clients', authenticateAgent, rateLimits.general, agentReviewController.getAvailableClients);
+  // Get available clients for review
+  // GET /api/agent-review/available-clients
+  router.get('/available-clients', authenticateAgent, rateLimits.general, agentReviewController.getAvailableClients);
 
-// Get review data for a specific client
-// GET /api/agent-review/:clientId
-router.get('/:clientId', authenticateAgent, rateLimits.general, agentReviewController.getClientReviewData);
+  // Get review data for a specific client
+  // GET /api/agent-review/:clientId
+  router.get('/:clientId', authenticateAgent, rateLimits.general, agentReviewController.getClientReviewData);
 
-// Save corrections for a specific document
-// POST /api/agent-review/:clientId/correct
-router.post('/:clientId/correct', authenticateAgent, rateLimits.general, agentReviewController.saveCorrections);
+  // Save corrections for a specific document
+  // POST /api/agent-review/:clientId/correct
+  router.post('/:clientId/correct', authenticateAgent, rateLimits.general, agentReviewController.saveCorrections);
 
-// Complete the review session
-// POST /api/agent-review/:clientId/complete
-router.post('/:clientId/complete', authenticateAgent, rateLimits.general, agentReviewController.completeReviewSession);
+  // Complete the review session
+  // POST /api/agent-review/:clientId/complete
+  router.post('/:clientId/complete', authenticateAgent, rateLimits.general, agentReviewController.completeReviewSession);
 
   return router;
 };
