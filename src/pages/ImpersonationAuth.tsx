@@ -60,7 +60,9 @@ const ImpersonationAuth: React.FC = () => {
 
         // Redirect to portal after a brief delay
         setTimeout(() => {
-          navigate(`/portal/${result.client_id}`);
+          // Use aktenzeichen instead of client_id for the portal URL
+          const portalId = result.client_data.aktenzeichen || result.client_id;
+          navigate(`/portal/${portalId}`);
         }, 1000);
 
       } catch (error: any) {
