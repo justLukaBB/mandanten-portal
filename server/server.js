@@ -1,5 +1,7 @@
 const express = require('express');
+const multer = require('multer');
 const cors = require('cors');
+const fs = require('fs-extra');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -35,128 +37,30 @@ const webhooksRoutes = require('./routes/webhooks');
 const testRoutes = require('./routes/test-routes');
 
 // MongoDB
-const multer = require('multer');
-require('dotenv').config();
-
-// =============================================================================
-// 1. DATABASE SERVICE
-// =============================================================================
 const databaseService = require('./services/database');
-
-// =============================================================================
-// 2. MODELS
-// =============================================================================
 const Client = require('./models/Client');
-const Agent = require('./models/Agent');
 
-// =============================================================================
-// 3. ADDITIONAL UTILS
-// =============================================================================
-const { triggerProcessingCompleteWebhook } = require('./utils/webhookUtils');
-const clientService = require('./services/clientService');
-const Scheduler = require('./scheduler');
-
-// =============================================================================
-// 4. SERVICES
-// =============================================================================
-// Core Services
 const DocumentProcessor = require('./services/documentProcessor');
 const CreditorContactService = require('./services/creditorContactService');
+const SideConversationMonitor = require('./services/sideConversationMonitor');
+const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
 const DebtAmountExtractor = require('./services/debtAmountExtractor');
 const GermanGarnishmentCalculator = require('./services/germanGarnishmentCalculator');
 const TestDataService = require('./services/testDataService');
-const DelayedProcessingService = require('./services/delayedProcessingService');
-const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
-
-// Webhook & Monitor Services
-const ZendeskService = require('./services/zendeskService');
-const ConditionCheckService = require('./services/conditionCheckService');
-const WelcomeEmailService = require('./services/welcomeEmailService');
-const SideConversationMonitor = require('./services/sideConversationMonitor');
-const SettlementResponseMonitor = require('./services/settlementResponseMonitor');
-const DocumentReminderService = require('./services/documentReminderService');
-const LoginReminderService = require('./services/loginReminderService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
 const aiDedupScheduler = require('./services/aiDedupScheduler');
+const { uploadToGCS, getGCSFileStream, getGCSFileBuffer } = require('./services/gcs-service');
 const { createProcessingJob } = require('./utils/fastApiClient');
 
-// =============================================================================
-// 5. OBSERVER INSTANTIATION (Global State)
-// =============================================================================
+// Initialize global side conversation monitor
 const globalSideConversationMonitor = new SideConversationMonitor();
+
+// Initialize global settlement response monitor
 const globalSettlementResponseMonitor = new SettlementResponseMonitor();
 
-// =============================================================================
-// 6. SERVICE INSTANTIATION
-// =============================================================================
-// Basic Services
-const documentProcessor = new DocumentProcessor();
-const creditorContactService = new CreditorContactService();
-const debtAmountExtractor = new DebtAmountExtractor();
-const garnishmentCalculator = new GermanGarnishmentCalculator();
-const testDataService = new TestDataService();
+// Initialize financial data reminder service
 const financialDataReminderService = new FinancialDataReminderService();
 
-// Reminder Services (for Scheduler & Routes)
-const documentReminderService = new DocumentReminderService();
-const loginReminderService = new LoginReminderService();
-
-// Zendesk Services
-const zendeskService = new ZendeskService();
-const conditionCheckService = new ConditionCheckService();
-const welcomeEmailService = new WelcomeEmailService();
-
-// =============================================================================
-// 7. CONTROLLERS
-// =============================================================================
-const ZendeskWebhookController = require('./controllers/zendeskWebhookController');
-const zendeskWebhookController = new ZendeskWebhookController({
-  zendeskService,
-  sideConversationMonitor: globalSideConversationMonitor,
-  conditionCheckService,
-  welcomeEmailService
-});
-
-// =============================================================================
-// 8. ROUTE FACTORIES
-// =============================================================================
-// Core Routes
-const healthRoutes = require('./routes/health');
-const createWebhooksRouter = require('./routes/webhooks');
-const createZendeskWebhooksRouter = require('./routes/zendesk-webhooks-factory');
-const createPortalWebhooksRouter = require('./routes/portal-webhooks');
-
-// Admin Routes
-const createAdminDashboardRouter = require('./routes/admin-dashboard');
-const createAdminDocumentsRouter = require('./routes/admin-documents');
-const createAdminMaintenanceRouter = require('./routes/admin-maintenance');
-const createAdminAuthRouter = require('./routes/admin-auth');
-const createAdminSettlementRouter = require('./routes/admin-settlement');
-const createAdminClientCreditorRouter = require('./routes/admin-client-creditor');
-const createAdminFinancialRouter = require('./routes/admin-financial');
-
-// Client Routes
-const createClientPortalRouter = require('./routes/client-portal');
-const createClientCreditorRouter = require('./routes/client-creditor');
-const createTestDataRouter = require('./routes/test-data');
-
-// Legacy/Direct Routes
-const agentReviewRoutes = require('./routes/agent-review');
-const agentAuthRoutes = require('./routes/agent-auth');
-const testAgentReviewRoutes = require('./routes/test-agent-review');
-const documentGenerationRoutes = require('./routes/document-generation');
-const insolvenzantragRoutes = require('./routes/insolvenzantrag');
-const secondRoundApiRoutes = require('./routes/second-round-api');
-const adminImpersonationRoutes = require('./routes/admin-impersonation');
-const authImpersonationRoutes = require('./routes/auth-impersonation');
-const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
-const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
-const creditorRoutes = require('./routes/creditorRoutes');
-const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
-
-// =============================================================================
-// 9. APP INITIALIZATION & MIDDLEWARE
-// =============================================================================
 const app = express();
 const PORT = config.PORT;
 const httpServer = http.createServer(app);
@@ -211,20 +115,8 @@ function setupSocket() {
 
 setupSocket();
 
-// Trust proxy for Render deployment
-app.set('trust proxy', true);
-
-// 9.1 Security & CORS
-app.use(securityHeaders);
-app.use(rateLimits.general);
-app.use(cors({
-  origin: true, // Allow all origins temporarily
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
-}));
-
-// 9.2 Body Parsing (with webhook exception)
+// Middleware
+// Skip body parsing for webhook routes (they use express.raw())
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/webhooks/')) {
     return next();
@@ -237,55 +129,21 @@ app.use((req, res, next) => {
   }
   express.text({ type: 'application/json' })(req, res, next);
 });
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cors());
+app.use(securityHeaders);
 
-// =============================================================================
-// 10. ROUTE MOUNTING
-// =============================================================================
-
-// 10.1 Health & Static
+// Mount routes
 app.use('/api/health', healthRoutes);
-app.use('/documents', express.static(path.join(__dirname, 'documents')));
-app.use('/docs', express.static(path.join(__dirname, 'docs')));
-
-// 10.2 Webhooks
-app.use('/api/webhooks', createWebhooksRouter({
-  Client,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  getClient: clientService.getClient.bind(clientService),
-  triggerProcessingCompleteWebhook
-}));
-
-app.use('/api/zendesk-webhooks', createZendeskWebhooksRouter({
-  Client,
-  rateLimits,
-  zendeskWebhookController
-}));
-
-app.use('/api/portal-webhook', createPortalWebhooksRouter({
-  Client,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  triggerProcessingCompleteWebhook
-}));
-
-// Legacy Inline Webhook (Refactored to Controller Call)
-app.post('/api/zendesk-webhook/portal-link',
-  (req, res, next) => zendeskWebhookController.parseZendeskPayload(req, res, next),
-  (req, res) => zendeskWebhookController.handlePortalLinkSent(req, res)
-);
-
-// 10.3 Agent Routes
-app.use('/api/agent-auth', agentAuthRoutes);
+app.use('/api/webhooks', webhooksRoutes);
+app.use('/api/zendesk-webhooks', zendeskWebhooks);
+app.use('/api/portal-webhook', portalWebhooks);
 app.use('/api/agent-review', agentReviewRoutes);
+app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/test/agent-review', testAgentReviewRoutes);
-
-// 10.4 Document & Filing Routes
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 app.use('/api/second-round', secondRoundApiRoutes);
-
-// 10.5 Admin Core Routes
-app.use('/api/admin', createAdminAuthRouter()); // Login
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
@@ -296,150 +154,317 @@ app.use('/api/test', testRoutes);
 // Serve generated documents statically
 app.use('/documents', express.static(path.join(__dirname, 'documents')));
 
-// 10.6 Admin Dashboard & Management
-app.use('/api/admin', createAdminDashboardRouter({
-  Client,
-  databaseService,
-  clientsData: require('./server').clientsData, // Legacy support linked to exports
-  uploadsDir: path.join(__dirname, 'uploads'),
-  DelayedProcessingService
-}));
+// Serve docs folder for visual flowcharts
+app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
-app.use('/api', createAdminDocumentsRouter({
-  Client,
-  documentProcessor,
-  getGCSFileStream,
-  getGCSFileBuffer,
-  saveClient: clientService.saveClient.bind(clientService),
-  sanitizeAktenzeichen,
-  uploadsDir: path.join(__dirname, 'uploads')
-}));
-
-app.use('/api', createAdminFinancialRouter({
-  Client,
-  garnishmentCalculator,
-  saveClient: clientService.saveClient.bind(clientService),
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  getClient: clientService.getClient.bind(clientService)
-}));
-
-app.use('/api', createAdminMaintenanceRouter({
-  creditorContactService,
-  documentReminderService,
-  Client,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService)
-}));
-
-app.use('/api/admin', createAdminSettlementRouter(
-  globalSettlementResponseMonitor,
-  creditorContactService
-));
-
-app.use('/api/admin', createAdminClientCreditorRouter({
-  Client,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  DelayedProcessingService
-}));
-
-app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
-app.use('/api', adminDelayedProcessingRoutes);
-
-// 10.7 Client Portal Global Routes
-app.use('/api', creditorRoutes); // Legacy creditor routes
-
-app.use('/api', createClientPortalRouter({
-  Client,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  getClient: clientService.getClient.bind(clientService)
-}));
-
-app.use('/api', createClientCreditorRouter({
-  Client,
-  // clientsData passed as legacy, but should be handled by DB now
-  clientsData: require('./server').clientsData,
-  creditorContactService,
-  sideConversationMonitor: globalSideConversationMonitor
-}));
-
-// 10.8 Test Routes
-app.use('/api', createTestDataRouter({
-  testDataService,
-  creditorContactService,
-  clientsData: require('./server').clientsData,
-  Client,
-  Agent
-}));
-
-// =============================================================================
-// 11. ERROR HANDLING
-// =============================================================================
-app.use((error, req, res, next) => {
-  console.error('❌ Express Error Handler:', error);
-  console.error('Error Type:', error.constructor.name);
-  console.error('Error Stack:', error.stack);
-
-  // Handle JSON parsing errors
-  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
-    console.error('JSON Parse Error - Request Body:', req.body);
-    console.error('JSON Parse Error - Raw Body:', error.body);
-    return res.status(400).json({
-      error: 'Invalid JSON',
-      details: error.message,
-      type: 'JSON_PARSE_ERROR'
-    });
-  }
-
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        error: 'Datei zu groß. Maximale Größe: 10MB'
-      });
-    }
-  }
-
-  res.status(500).json({
-    error: 'Server error',
-    details: error.message
-  });
-});
-
-// =============================================================================
-// 12. LEGACY COMPATIBILITY (In-Memory Fallback Stub)
-// =============================================================================
-// Block all old dashboard access - force error for old routes
-const clientsData = new Proxy({}, {
-  get(target, prop) {
-    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
-  },
-  set(target, prop, value) {
-    throw new Error('OLD_DASHBOARD_DISABLED: In-memory storage removed. Use MongoDB and Analytics Dashboard only.');
-  }
-});
-
-// =============================================================================
-// 13. SERVER STARTUP
-// =============================================================================
-async function startServer() {
+// Test endpoint to list available documents (for debugging)
+app.get('/api/documents-list', (req, res) => {
   try {
-    // Initialize database first
-    await databaseService.connect();
+    const documentsDir = path.join(__dirname, 'documents');
+    const files = fs.readdirSync(documentsDir).filter(file => file.endsWith('.docx'));
+    const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
 
-    // Start the server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`📁 Uploads directory: ${uploadsDir}`);
-      console.log(`💾 Database: ${databaseService.isHealthy() ? 'MongoDB Connected' : 'In-Memory Fallback'}`);
+    const documentUrls = files.map(filename => ({
+      filename,
+      url: `${baseUrl}/documents/${filename}`,
+      size: fs.statSync(path.join(documentsDir, filename)).size
+    }));
 
-      // Start scheduled tasks (using Scheduler module)
-      const scheduler = new Scheduler({
-        documentReminderService,
-        loginReminderService
-      });
-      scheduler.startScheduledTasks();
+    res.json({
+      success: true,
+      count: files.length,
+      documents: documentUrls,
+      documentsDir: documentsDir,
+      baseUrl: baseUrl
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+    res.json({
+      success: false,
+      error: error.message,
+      documentsDir: path.join(__dirname, 'documents')
+    });
+  }
+});
+
+// Test endpoint to check if static file serving is working
+app.get('/api/test-document', (req, res) => {
+  try {
+    const testFile = path.join(__dirname, 'documents', 'TEST_Schuldenbereinigungsplan.docx');
+    if (fs.existsSync(testFile)) {
+      const stats = fs.statSync(testFile);
+      res.json({
+        success: true,
+        message: 'TEST document exists',
+        file: testFile,
+        size: stats.size,
+        testUrl: `${process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/documents/TEST_Schuldenbereinigungsplan.docx`
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'TEST document not found',
+        file: testFile
+      });
+    }
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Settlement response monitoring endpoints
+app.get('/api/admin/clients/:clientId/settlement-responses', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    const summary = await globalSettlementResponseMonitor.generateSettlementSummary(aktenzeichen);
+    res.json({
+      success: true,
+      summary: summary
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting settlement responses:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/admin/clients/:clientId/process-settlement-timeouts', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { timeoutDays = 30 } = req.body;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    const result = await globalSettlementResponseMonitor.processTimeouts(aktenzeichen, timeoutDays);
+    res.json({
+      success: true,
+      result: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing settlement timeouts:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/admin/clients/:clientId/settlement-monitoring-status', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    const status = globalSettlementResponseMonitor.getMonitoringStatus(aktenzeichen);
+    res.json({
+      success: true,
+      status: status
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting monitoring status:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Nullplan response monitoring endpoints
+app.get('/api/admin/clients/:clientId/nullplan-responses', authenticateAdmin, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Convert clientId to aktenzeichen
+    const aktenzeichen = await getClientAktenzeichen(clientId);
+    if (!aktenzeichen) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    // Get client data to analyze nullplan responses
+    const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    // Generate nullplan summary from creditor data
+    const nullplanCreditors = client.final_creditor_list?.filter(c =>
+      c.nullplan_side_conversation_id || c.nullplan_sent_at
+    ) || [];
+
+    const summary = {
+      total_creditors: nullplanCreditors.length,
+      accepted: nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length,
+      declined: nullplanCreditors.filter(c => c.nullplan_response_status === 'declined').length,
+      no_responses: nullplanCreditors.filter(c => c.nullplan_response_status === 'no_response').length,
+      pending: nullplanCreditors.filter(c => !c.nullplan_response_status || c.nullplan_response_status === 'pending').length,
+      total_debt: nullplanCreditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0),
+      acceptance_rate: nullplanCreditors.length > 0 ?
+        Math.round((nullplanCreditors.filter(c => c.nullplan_response_status === 'accepted').length / nullplanCreditors.length) * 100) : 0,
+      plan_type: 'Nullplan',
+      garnishable_amount: 0,
+      legal_reference: '§ 305 Abs. 1 Nr. 1 InsO'
+    };
+
+    res.json({
+      success: true,
+      summary: summary
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting nullplan responses:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Promise-based mutex for database operations to prevent race conditions
+const processingMutex = new Map();
+
+// Helper function to trigger processing-complete webhook
+async function triggerProcessingCompleteWebhook(clientId, documentId = null) {
+  try {
+    const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
+    const webhookUrl = `${baseUrl}/api/zendesk-webhooks/processing-complete`;
+
+    console.log(`🔗 Triggering processing-complete webhook for client ${clientId}`);
+
+    const response = await axios.post(webhookUrl, {
+      client_id: clientId,
+      document_id: documentId,
+      timestamp: new Date().toISOString(),
+      triggered_by: 'document_processing_completion'
+    }, {
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'MandarenPortal-Server/1.0'
+      }
+    });
+
+    console.log(`✅ Processing-complete webhook triggered successfully for client ${clientId}`);
+    return response.data;
+
+  } catch (error) {
+    console.error(`❌ Failed to trigger processing-complete webhook for client ${clientId}:`, error.message);
+    // Don't throw - webhook failure shouldn't break document processing
+    return null;
+  }
+}
+
+// Helper function to serve mock PDF download for test scenarios
+function serveMockPDFDownload(res, documentName) {
+  try {
+    const mockPDFContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+
+4 0 obj
+<<
+/Length 140
+>>
+stream
+BT
+/F1 12 Tf
+50 700 Td
+(Mock Test Document: ${documentName}) Tj
+0 -20 Td
+(This is a test document for download testing) Tj
+0 -40 Td
+(Generated by Mandanten-Portal Admin System) Tj
+0 -60 Td
+(Document ID and client data would be stored here) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000208 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+400
+%%EOF`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${documentName}"`);
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+    res.send(Buffer.from(mockPDFContent));
+
+  } catch (error) {
+    console.error('❌ Error serving mock PDF download:', error);
+    res.status(500).json({
+      error: 'Failed to serve mock PDF download',
+      details: error.message
+    });
   }
 }
 
@@ -494,21 +519,12 @@ async function safeClientUpdate(clientId, updateFunction) {
 
   // Update the lock to point to the new promise
   processingMutex.set(clientId, newLock);
-// Graceful Shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
-  await databaseService.disconnect();
-  process.exit(0);
-});
 
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
-  await databaseService.disconnect();
-  process.exit(0);
-});
+  return newLock;
+}
 
-// Start the server
-startServer();
+// Trust proxy for Render deployment
+app.set('trust proxy', true);
 
 // Initialize services
 const documentProcessor = new DocumentProcessor();
@@ -8387,15 +8403,4 @@ module.exports = {
   safeClientUpdate,
   triggerProcessingCompleteWebhook,
   getIO
-// =============================================================================
-// 14. EXPORTS
-// =============================================================================
-module.exports = {
-  app,
-  clientsData,
-  getClient: clientService.getClient.bind(clientService),
-  saveClient: clientService.saveClient.bind(clientService),
-  getClientAktenzeichen: clientService.getClientAktenzeichen.bind(clientService),
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  triggerProcessingCompleteWebhook
 };
