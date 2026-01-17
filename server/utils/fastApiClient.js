@@ -23,7 +23,7 @@ const { getSignedUrl } = require("../services/gcs-service");
 async function fetchWithTimeout(url, options = {}, timeout = FASTAPI_TIMEOUT) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -59,7 +59,7 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
   console.log(`📄 Files: ${files.length}`);
   console.log(`🔔 Webhook URL: ${webhookUrl}`);
   console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
-  
+
   // Log files being sent
   console.log(`\n📋 FILES TO PROCESS:`);
   files.forEach((file, index) => {
@@ -67,18 +67,26 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
     console.log(`      GCS: ${file.gcs_path}`);
     console.log(`      Type: ${file.mime_type}`);
   });
-  
+
   try {
 
     const requestBody = {
       client_id: clientId,
       files: await Promise.all(files.map(async (f) => {
-        const gcsPath = f.gcs_path || await getSignedUrl(f.filename); // prefer provided
-        console.log("gcsPath======",gcsPath)
-        console.log("mime type======",f.mime_type)
+        let gcsPath = f.gcs_path;
+        // Only attempt to get signed URL if no local path is provided and no gcs path exists
+        if (!f.local_path && !gcsPath) {
+          try {
+            gcsPath = await getSignedUrl(f.filename);
+          } catch (e) {
+            console.warn("⚠️ Failed to get signed URL for", f.filename, e.message);
+          }
+        }
+
         return {
           filename: f.filename,            // blob name
           gcs_path: gcsPath,               // signed URL
+          local_path: f.local_path,        // local path for testing/local-dev
           mime_type: f.mime_type || 'image/png',
           size: f.size || 0,
           document_id: f.document_id || f.id,
@@ -86,30 +94,30 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
       })),
       webhook_url: webhookUrl,
     };
-    
+
     // Add API key if provided
     if (apiKey) {
       requestBody.api_key = apiKey;
     }
-    
+
     console.log(`\n📤 Sending request to FastAPI...`);
-    
+
     // Prepare headers with API key authentication
     const headers = {
       'Content-Type': 'application/json',
       'User-Agent': 'NodeJS-DocumentProcessor/1.0'
     };
-    
+
     // Add API key if configured
     if (FASTAPI_API_KEY) {
       headers['X-API-Key'] = FASTAPI_API_KEY;
     } else {
       console.warn(`⚠️  WARNING: FASTAPI_API_KEY not set - request may be rejected`);
     }
-    
 
 
-    console.log("=====================requestBody========================",requestBody)
+
+    console.log("=====================requestBody========================", requestBody)
 
     const response = await fetchWithTimeout(
       `${FASTAPI_URL}/processing/jobs`,
@@ -139,7 +147,7 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
     if (!response.ok) {
       throw new Error(`FastAPI returned ${response.status}: ${data.detail || JSON.stringify(data)}`);
     }
-    
+
     console.log(`\n✅ ================================`);
     console.log(`✅ FASTAPI JOB CREATED`);
     console.log(`✅ ================================`);
@@ -148,39 +156,39 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
     console.log(`💬 Message: ${data.message}`);
     console.log(`⏰ Created at: ${new Date().toISOString()}`);
     console.log(`\n`);
-    
+
     return {
       success: true,
       jobId: data.job_id,
       status: data.status,
       message: data.message
     };
-    
+
   } catch (error) {
     console.log(`\n❌ ================================`);
     console.log(`❌ FASTAPI REQUEST FAILED`);
     console.log(`❌ ================================`);
     console.log(`💥 Error: ${error.message}`);
-    
+
     // Try to extract status code and details from error
     let statusCode = null;
     let details = null;
-    
+
     if (error.message.includes('returned')) {
       const match = error.message.match(/returned (\d+)/);
       if (match) {
         statusCode = parseInt(match[1]);
       }
     }
-    
+
     console.log(`📊 Status Code: ${statusCode || 'N/A'}`);
     if (details) {
       console.log(`📝 Response: ${JSON.stringify(details)}`);
     }
-    
+
     console.log(`⏰ Failed at: ${new Date().toISOString()}`);
     console.log(`\n`);
-    
+
     return {
       success: false,
       error: error.message,
@@ -201,11 +209,11 @@ async function getJobStatus(jobId) {
     const headers = {
       'User-Agent': 'NodeJS-DocumentProcessor/1.0'
     };
-    
+
     if (FASTAPI_API_KEY) {
       headers['X-API-Key'] = FASTAPI_API_KEY;
     }
-    
+
     const response = await fetchWithTimeout(
       `${FASTAPI_URL}/processing/jobs/${jobId}/status`,
       {
@@ -214,19 +222,19 @@ async function getJobStatus(jobId) {
       },
       FASTAPI_TIMEOUT
     );
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(`FastAPI returned ${response.status}: ${errorData.detail || 'Unknown error'}`);
     }
-    
+
     const data = await response.json();
-    
+
     return {
       success: true,
       ...data
     };
-    
+
   } catch (error) {
     return {
       success: false,
@@ -247,11 +255,11 @@ async function getJobResults(jobId) {
     const headers = {
       'User-Agent': 'NodeJS-DocumentProcessor/1.0'
     };
-    
+
     if (FASTAPI_API_KEY) {
       headers['X-API-Key'] = FASTAPI_API_KEY;
     }
-    
+
     const response = await fetchWithTimeout(
       `${FASTAPI_URL}/processing/jobs/${jobId}/results`,
       {
@@ -260,19 +268,19 @@ async function getJobResults(jobId) {
       },
       FASTAPI_TIMEOUT
     );
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(`FastAPI returned ${response.status}: ${errorData.detail || 'Unknown error'}`);
     }
-    
+
     const data = await response.json();
-    
+
     return {
       success: true,
       ...data
     };
-    
+
   } catch (error) {
     return {
       success: false,
@@ -292,12 +300,12 @@ async function checkHealth() {
     const headers = {
       'User-Agent': 'NodeJS-DocumentProcessor/1.0'
     };
-    
+
     // Health check may not require API key, but include it if available
     if (FASTAPI_API_KEY) {
       headers['X-API-Key'] = FASTAPI_API_KEY;
     }
-    
+
     const response = await fetchWithTimeout(
       `${FASTAPI_URL}/health`,
       {
@@ -306,14 +314,14 @@ async function checkHealth() {
       },
       5000 // 5 second timeout for health check
     );
-    
+
     if (!response.ok) {
       return false;
     }
-    
+
     const data = await response.json();
     return data.status === 'healthy';
-    
+
   } catch (error) {
     console.error(`FastAPI health check failed: ${error.message}`);
     return false;
