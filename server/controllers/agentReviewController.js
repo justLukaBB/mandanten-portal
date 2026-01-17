@@ -570,6 +570,7 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) =
                 details: error.message
             });
         }
+    }
     };
 };
 
