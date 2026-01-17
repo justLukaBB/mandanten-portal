@@ -19,10 +19,7 @@ function getServerFunctions() {
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
   parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
-const webhookVerifier = require('../utils/webhookVerifier');
 const createWebhookController = require('../controllers/webhookController');
-
-
 
 /**
  * Webhook Routes Factory
