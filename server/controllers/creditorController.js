@@ -106,10 +106,19 @@ class CreditorController {
             const { clientId } = req.params;
 
             // Security: Verify authenticated client matches requested client
+            // Support both UUID and Aktenzeichen for impersonation compatibility
             if (req.clientId !== clientId) {
-                return res.status(403).json({
-                    error: 'Forbidden: You can only access your own creditors'
+                // Double-check: fetch client to compare both id and aktenzeichen
+                const Client = require('../models/Client');
+                const client = await Client.findOne({
+                    $or: [{ id: clientId }, { aktenzeichen: clientId }]
                 });
+
+                if (!client || (client.id !== req.clientId && client.aktenzeichen !== req.clientId)) {
+                    return res.status(403).json({
+                        error: 'Forbidden: You can only access your own creditors'
+                    });
+                }
             }
 
             console.log(`📋 Client ${clientId} fetching creditors list`);
