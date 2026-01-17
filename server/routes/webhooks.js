@@ -117,13 +117,66 @@ async function enrichCreditorContactFromDb(docResult, cache) {
 }
 
 /**
+ * Enrich deduplicated creditor entry (table data) with local DB info for creditor and representative.
+ */
+async function enrichDedupedCreditorFromDb(entry, cache) {
+  if (!entry) return;
+
+  const isMissing = (val) => {
+    if (val === undefined || val === null) return true;
+    if (typeof val === 'string') {
+      const t = val.trim();
+      if (!t) return true;
+      const lower = t.toLowerCase();
+      if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+    }
+    return false;
+  };
+
+  const ensureMatch = async (name) => {
+    if (!name) return null;
+    const key = name.toLowerCase().trim();
+    if (cache.has(key)) return cache.get(key);
+    const m = await findCreditorByName(name);
+    cache.set(key, m || null);
+    return m;
+  };
+
+  // Creditor (glaeubiger_name)
+  if (entry.glaeubiger_name) {
+    const needAddr = isMissing(entry.glaeubiger_adresse);
+    const needEmail = isMissing(entry.email_glaeubiger);
+    if (needAddr || needEmail) {
+      const match = await ensureMatch(entry.glaeubiger_name);
+      if (match) {
+        if (needAddr && match.address) entry.glaeubiger_adresse = match.address;
+        if (needEmail && match.email) entry.email_glaeubiger = match.email;
+      }
+    }
+  }
+
+  // Representative (glaeubigervertreter_name)
+  if (entry.glaeubigervertreter_name) {
+    const needAddr = isMissing(entry.glaeubigervertreter_adresse);
+    const needEmail = isMissing(entry.email_glaeubiger_vertreter);
+    if (needAddr || needEmail) {
+      const match = await ensureMatch(entry.glaeubigervertreter_name);
+      if (match) {
+        if (needAddr && match.address) entry.glaeubigervertreter_adresse = match.address;
+        if (needEmail && match.email) entry.email_glaeubiger_vertreter = match.email;
+      }
+    }
+  }
+}
+
+/**
  * Webhook receiver for FastAPI AI processing results
  * POST /webhooks/ai-processing
  */
 router.post(
   '/ai-processing',
   express.raw({ type: 'application/json' }),
-  webhookVerifier.middleware, 
+  webhookVerifier.middleware,
   async (req, res) => {
     const startTime = Date.now();
     const rawBody = req.body.toString('utf8');
@@ -271,7 +324,7 @@ router.post(
       }
 
       // Persist documents + merge FastAPI-deduped creditors into final_creditor_list
-      await safeClientUpdate(client_id, (clientDoc) => {
+      await safeClientUpdate(client_id, async (clientDoc) => {
         // Handle multi-creditor splits and standard updates (kept as in your snippet)
         for (const docResult of processedDocuments) {
           if (docResult.source_document_id) {
@@ -418,36 +471,28 @@ router.post(
 
         // Node-side merge of FastAPI-deduped creditors (cross-job guard)
         if (normalizedDedupCreditors.length > 0) {
+          // Enrich missing addresses/emails for creditor and representative from local DB
+          const credCache = new Map();
+          const enrichedDedups = [];
+          for (const c of normalizedDedupCreditors) {
+            await enrichDedupedCreditorFromDb(c, credCache);
+            enrichedDedups.push(c);
+          }
+
           const existing = clientDoc.final_creditor_list || [];
           clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
             existing,
-            normalizedDedupCreditors,
+            enrichedDedups,
             'highest_amount'
           );
           clientDoc.deduplication_stats =
             deduplication || {
-              original_count: normalizedDedupCreditors.length,
-              unique_count: normalizedDedupCreditors.length,
+              original_count: enrichedDedups.length,
+              unique_count: enrichedDedups.length,
               duplicates_removed: 0,
             };
         }
 
-
-        if (normalizedDedupCreditors.length > 0) {
-          const existing = clientDoc.final_creditor_list || [];
-          // Make sure mergeCreditorLists returns objects with all fields intact
-          clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
-            existing,
-            normalizedDedupCreditors,
-            'highest_amount'
-          );
-          clientDoc.deduplication_stats =
-            deduplication || {
-              original_count: normalizedDedupCreditors.length,
-              unique_count: normalizedDedupCreditors.length,
-              duplicates_removed: 0,
-            };
-        }
         // Existing auto-confirmation timer reset logic (kept)
         if (
           clientDoc.current_status === 'awaiting_client_confirmation' &&
@@ -562,7 +607,7 @@ Job ID: ${job_id}`,
               });
 
               if (ticketResult.success) {
-                await safeClientUpdate(client_id, (clientDoc) => {
+                await safeClientUpdate(client_id, async (clientDoc) => {
                   clientDoc.zendesk_tickets = clientDoc.zendesk_tickets || [];
                   clientDoc.zendesk_tickets.push({
                     ticket_id: ticketResult.ticket_id,
