@@ -28,6 +28,19 @@ const authenticateClient = (req, res, next) => {
     // Temporary debugging: log full token structure
     console.log(`🔍 Full token structure:`, JSON.stringify(decoded, null, 2));
 
+    // Allow admin tokens to access client data (admins can view any client)
+    if (decoded.type === 'admin') {
+      // Extract clientId from URL path if present (e.g., /api/clients/:clientId/...)
+      const pathMatch = req.path.match(/\/clients\/([a-f0-9-]+)/i);
+      if (pathMatch) {
+        req.clientId = pathMatch[1];
+      }
+      req.adminId = decoded.adminId;
+      req.isAdmin = true;
+      console.log(`✅ Admin authenticated: ${decoded.adminId} accessing client: ${req.clientId || 'N/A'}`);
+      return next();
+    }
+
     if (decoded.type !== 'client' && !hasClientId) {
       console.log(`❌ Invalid token: missing client identifier. Token structure:`, Object.keys(decoded));
       return res.status(403).json({

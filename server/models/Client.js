@@ -84,8 +84,24 @@ const creditorSchema = new mongoose.Schema({
   sender_email: String,
   reference_number: String,
   claim_amount: Number,
+  // Raw formatted claim amount (e.g., "1.876,40 €")
+  claim_amount_raw: String,
   is_representative: { type: Boolean, default: false },
   actual_creditor: String,
+  // Display/meta fields for table rendering
+  dokumenttyp: String,
+  glaeubiger_name: String,
+  glaeubiger_adresse: String,
+  glaeubigervertreter_name: String,
+  glaeubigervertreter_adresse: String,
+  forderungbetrag: String,
+  email_glaeubiger: String,
+  email_glaeubiger_vertreter: String,
+  // Provenance
+  source_documents: [String],
+  merged_from: Number,
+  needs_manual_review: { type: Boolean, default: false },
+  review_reasons: [String],
   source_document: String,
   source_document_id: String,
   document_id: String, // Link to document
@@ -274,7 +290,17 @@ const clientSchema = new mongoose.Schema({
   // Document processing
   documents: [documentSchema],
   final_creditor_list: [creditorSchema],
-  
+
+  // Deduplication history (for monitoring AI re-dedup performance)
+  deduplication_history: [{
+    timestamp: Date,
+    method: String, // 'initial', 'periodic-ai-rededup', 'manual'
+    before_count: Number,
+    after_count: Number,
+    duplicates_removed: Number,
+    processing_time_ms: Number
+  }],
+
   // Payment and Review Tracking
   payment_ticket_type: {
     type: String,

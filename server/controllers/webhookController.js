@@ -22,16 +22,26 @@ async function enrichCreditorContactFromDb(docResult, cache) {
     };
 
     const creditorData = docResult.extracted_data?.creditor_data || {};
+    const updatedCreditorData = { ...creditorData };
+
+    // Track what was missing before enrichment
     const missingEmail = isMissing(creditorData.email);
     const missingSenderEmail = isMissing(creditorData.sender_email);
     const missingAddress = isMissing(creditorData.address);
     const missingSenderAddress = isMissing(creditorData.sender_address);
-    const needEmail = missingEmail || missingSenderEmail;
-    const needAddress = missingAddress || missingSenderAddress;
+    const missingVertreterEmail = isMissing(creditorData.glaeubiger_vertreter_email);
+    const missingVertreterAddress = isMissing(creditorData.glaeubiger_vertreter_adresse);
+    const missingGlaubigerAddress = isMissing(creditorData.glaeubiger_adresse);
 
-    if (!needEmail && !needAddress) return;
+    // Check if we need to do any enrichment at all
+    const needSenderEnrichment = missingEmail || missingSenderEmail || missingAddress || missingSenderAddress;
+    const needVertreterEnrichment = missingVertreterEmail || missingVertreterAddress;
+    const needGlaubigerEnrichment = missingGlaubigerAddress;
 
-    const candidateName =
+    if (!needSenderEnrichment && !needVertreterEnrichment && !needGlaubigerEnrichment) return;
+
+    // ===== FIRST LOOKUP: For sender (could be representative OR creditor) =====
+    const senderName =
         creditorData.sender_name ||
         creditorData.glaeubiger_name ||
         creditorData.creditor_name ||
@@ -41,67 +51,92 @@ async function enrichCreditorContactFromDb(docResult, cache) {
         docResult.sender_name ||
         docResult.name;
 
-    if (!candidateName) return;
-
-    const cacheKey = candidateName.toLowerCase().trim();
-    let match = cache.get(cacheKey);
-    if (match === undefined) {
-        match = await findCreditorByName(candidateName);
-        cache.set(cacheKey, match || null);
-    }
-
-    if (!match) return;
-
-    const updatedCreditorData = { ...creditorData };
-    const beforeEmail = updatedCreditorData.email;
-    const beforeAddress = updatedCreditorData.address;
-    const beforeSenderEmail = updatedCreditorData.sender_email;
-    const beforeSenderAddress = updatedCreditorData.sender_address;
-
-    if (match.email) {
-        if (missingEmail) {
-            updatedCreditorData.email = match.email;
-        }
-        if (missingSenderEmail) {
-            updatedCreditorData.sender_email = match.email;
-        }
-    }
-    if (match.address) {
-        if (missingAddress) {
-            updatedCreditorData.address = match.address;
-        }
-        if (missingSenderAddress) {
-            updatedCreditorData.sender_address = match.address;
+    let senderMatch = null;
+    if (senderName) {
+        const senderCacheKey = senderName.toLowerCase().trim();
+        senderMatch = cache.get(senderCacheKey);
+        if (senderMatch === undefined) {
+            senderMatch = await findCreditorByName(senderName);
+            cache.set(senderCacheKey, senderMatch || null);
         }
     }
 
-    const matchedId = match._id?.toString?.() || match.id || match._id;
-    if (matchedId) {
-        updatedCreditorData.creditor_database_id = matchedId;
+    // Fill sender fields from first lookup
+    if (senderMatch) {
+        if (senderMatch.email) {
+            if (missingEmail) {
+                updatedCreditorData.email = senderMatch.email;
+            }
+            if (missingSenderEmail) {
+                updatedCreditorData.sender_email = senderMatch.email;
+            }
+        }
+        if (senderMatch.address) {
+            if (missingAddress) {
+                updatedCreditorData.address = senderMatch.address;
+            }
+            if (missingSenderAddress) {
+                updatedCreditorData.sender_address = senderMatch.address;
+            }
+        }
+
+        const matchedId = senderMatch._id?.toString?.() || senderMatch.id || senderMatch._id;
+        if (matchedId) {
+            updatedCreditorData.creditor_database_id = matchedId;
+        }
+        updatedCreditorData.creditor_database_match = true;
+
+        // If sender is representative, also fill representative fields
+        if (creditorData.is_representative) {
+            if (senderMatch.email && missingVertreterEmail) {
+                updatedCreditorData.glaeubiger_vertreter_email = senderMatch.email;
+            }
+            if (senderMatch.address && missingVertreterAddress) {
+                updatedCreditorData.glaeubiger_vertreter_adresse = senderMatch.address;
+            }
+        }
     }
-    updatedCreditorData.creditor_database_match = true;
+
+    // ===== SECOND LOOKUP: For actual creditor (only if representative exists) =====
+    if (creditorData.is_representative && creditorData.actual_creditor) {
+        const actualCreditorName = creditorData.actual_creditor;
+
+        if (actualCreditorName && actualCreditorName !== 'N/A' && actualCreditorName !== '') {
+            const creditorCacheKey = actualCreditorName.toLowerCase().trim();
+            let creditorMatch = cache.get(creditorCacheKey);
+            if (creditorMatch === undefined) {
+                creditorMatch = await findCreditorByName(actualCreditorName);
+                cache.set(creditorCacheKey, creditorMatch || null);
+            }
+
+            // Fill actual creditor fields from second lookup
+            if (creditorMatch) {
+                if (creditorMatch.address && missingGlaubigerAddress) {
+                    updatedCreditorData.glaeubiger_adresse = creditorMatch.address;
+                }
+
+                console.log('[webhook] actual creditor enrichment applied', {
+                    creditor_name: actualCreditorName,
+                    address_found: creditorMatch.address || null,
+                    glaeubiger_adresse_before: creditorData.glaeubiger_adresse || null,
+                    glaeubiger_adresse_after: updatedCreditorData.glaeubiger_adresse || null,
+                });
+            }
+        }
+    }
 
     docResult.extracted_data = docResult.extracted_data || {};
-
-    // Ensure we write back to the normalized location
-    if (!docResult.extracted_data.creditor_data) {
-        docResult.extracted_data.creditor_data = {};
-    }
-
-    // Merge updates
-    Object.assign(docResult.extracted_data.creditor_data, updatedCreditorData);
+    docResult.extracted_data.creditor_data = updatedCreditorData;
 
     console.log('[webhook] creditor enrichment applied', {
-        name: candidateName,
-        email_before: beforeEmail || null,
-        email_after: updatedCreditorData.email || null,
-        sender_email_before: beforeSenderEmail || null,
+        sender_name: senderName,
+        is_representative: creditorData.is_representative || false,
+        actual_creditor: creditorData.actual_creditor || null,
         sender_email_after: updatedCreditorData.sender_email || null,
-        address_before: beforeAddress || null,
-        address_after: updatedCreditorData.address || null,
-        sender_address_before: beforeSenderAddress || null,
         sender_address_after: updatedCreditorData.sender_address || null,
-        match_id: matchedId || null,
+        vertreter_email_after: updatedCreditorData.glaeubiger_vertreter_email || null,
+        vertreter_address_after: updatedCreditorData.glaeubiger_vertreter_adresse || null,
+        glaeubiger_address_after: updatedCreditorData.glaeubiger_adresse || null,
     });
 }
 
@@ -199,6 +234,41 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
 
                     await enrichCreditorContactFromDb(docResult, creditorLookupCache);
 
+                    // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
+                    if (docResult.is_creditor_document) {
+                        const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
+                        const enrichedSenderEmail = docResult.extracted_data?.creditor_data?.sender_email;
+                        const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
+                        const enrichedSenderAddress = docResult.extracted_data?.creditor_data?.sender_address;
+
+                        // Check if BOTH email AND address are missing after enrichment
+                        const hasEmail = enrichedEmail && enrichedEmail !== 'N/A' || enrichedSenderEmail && enrichedSenderEmail !== 'N/A';
+                        const hasAddress = enrichedAddress && enrichedAddress !== 'N/A' || enrichedSenderAddress && enrichedSenderAddress !== 'N/A';
+
+                        if (!hasEmail && !hasAddress) {
+                            // Override status to needs_review if both email and address are missing
+                            if (finalDocumentStatus === 'creditor_confirmed') {
+                                finalDocumentStatus = 'needs_review';
+                                statusReason = 'KI: Kontaktdaten fehlen - Manuelle Prüfung erforderlich (Email und Adresse nicht gefunden)';
+                                documentsNeedingReview.push(docResult);
+                                console.log('[webhook] Manual review triggered: Missing email AND address after DB enrichment', {
+                                    doc_id: docResult.id,
+                                    creditor_name: docResult.extracted_data?.creditor_data?.sender_name || 'N/A'
+                                });
+                            }
+                        }
+
+                        if (hasEmail || hasAddress) {
+                            console.log('[webhook] creditor doc after enrichment', {
+                                doc_id: docResult.id,
+                                email: enrichedEmail || null,
+                                sender_email: enrichedSenderEmail || null,
+                                address: enrichedAddress || null,
+                                sender_address: enrichedSenderAddress || null,
+                            });
+                        }
+                    }
+
                     // Normalize extracted_data structure if needed
                     if (docResult.creditor_data && !docResult.extracted_data?.creditor_data) {
                         docResult.extracted_data = docResult.extracted_data || {};
@@ -214,18 +284,6 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             creditor_data: docResult.creditor_data || {}
                         }
                     });
-
-                    if (docResult.is_creditor_document) {
-                        const enrichedEmail = docResult.extracted_data?.creditor_data?.email;
-                        const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
-                        if (enrichedEmail || enrichedAddress) {
-                            console.log('[webhook] creditor doc after enrichment', {
-                                doc_id: docResult.id,
-                                email: enrichedEmail || null,
-                                address: enrichedAddress || null,
-                            });
-                        }
-                    }
                 }
 
                 // Duplicate detection against existing docs
@@ -395,17 +453,108 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         }
                     }
 
-                    // Node-side merge of FastAPI-deduped creditors
-                    if (Array.isArray(deduplicated_creditors) && deduplicated_creditors.length > 0) {
+                    // ✅ FIX: Update deduplicated_creditors with enriched values from documents
+                    // FastAPI sends deduplicated_creditors with values BEFORE enrichment
+                    // We need to sync them with the enriched document values
+                    const normalizedDedupCreditors = Array.isArray(deduplicated_creditors)
+                        ? deduplicated_creditors.map((c) => ({
+                            ...c,
+                            id: c.id || uuidv4(),
+                        }))
+                        : [];
+
+                    if (normalizedDedupCreditors.length > 0) {
+                        console.log('[webhook] Syncing deduplicated_creditors with enriched document values...');
+
+                        normalizedDedupCreditors.forEach((dedupCreditor) => {
+                            // Find the corresponding document by reference number or sender name
+                            const matchingDoc = processedDocuments.find(doc => {
+                                const docCreditor = doc.extracted_data?.creditor_data;
+                                if (!docCreditor) return false;
+
+                                // Match by reference number (most reliable)
+                                if (docCreditor.reference_number && docCreditor.reference_number !== 'N/A' &&
+                                    dedupCreditor.Aktenzeichen === docCreditor.reference_number) {
+                                    return true;
+                                }
+
+                                // Fallback: match by sender name
+                                if (docCreditor.sender_name && docCreditor.sender_name !== 'N/A' &&
+                                    dedupCreditor.Gläubiger_Name === docCreditor.sender_name) {
+                                    return true;
+                                }
+
+                                return false;
+                            });
+
+                            if (matchingDoc) {
+                                const enrichedCreditor = matchingDoc.extracted_data.creditor_data;
+
+                                // Update with enriched email values
+                                // Prefer 'email' field, fallback to 'sender_email'
+                                const bestEmail = (enrichedCreditor.email && enrichedCreditor.email !== 'N/A')
+                                    ? enrichedCreditor.email
+                                    : (enrichedCreditor.sender_email && enrichedCreditor.sender_email !== 'N/A')
+                                        ? enrichedCreditor.sender_email
+                                        : null;
+
+                                if (bestEmail) {
+                                    if (!enrichedCreditor.is_representative) {
+                                        dedupCreditor.Email_Gläubiger = bestEmail;
+                                    } else {
+                                        dedupCreditor.Email_Gläubiger_Vertreter = bestEmail;
+                                    }
+                                }
+
+                                // Update with enriched address values
+                                // Prefer 'address' field over 'sender_address' (avoids Postfach)
+                                const bestAddress = (enrichedCreditor.address && enrichedCreditor.address !== 'N/A')
+                                    ? enrichedCreditor.address
+                                    : (enrichedCreditor.sender_address && enrichedCreditor.sender_address !== 'N/A')
+                                        ? enrichedCreditor.sender_address
+                                        : null;
+
+                                if (bestAddress) {
+                                    dedupCreditor.Gläubiger_Adresse = bestAddress;
+                                }
+
+                                // Update representative email if available
+                                if (enrichedCreditor.glaeubiger_vertreter_email &&
+                                    enrichedCreditor.glaeubiger_vertreter_email !== 'N/A') {
+                                    dedupCreditor.Email_Gläubiger_Vertreter = enrichedCreditor.glaeubiger_vertreter_email;
+                                }
+
+                                // Update representative address if available
+                                if (enrichedCreditor.glaeubiger_vertreter_adresse &&
+                                    enrichedCreditor.glaeubiger_vertreter_adresse !== 'N/A') {
+                                    dedupCreditor.Gläubigervertreter_Adresse = enrichedCreditor.glaeubiger_vertreter_adresse;
+                                }
+
+                                // Update actual creditor address if available
+                                if (enrichedCreditor.glaeubiger_adresse &&
+                                    enrichedCreditor.glaeubiger_adresse !== 'N/A') {
+                                    dedupCreditor.Gläubiger_Adresse = enrichedCreditor.glaeubiger_adresse;
+                                }
+
+                                console.log('[webhook] Synced deduplicated creditor:', {
+                                    name: dedupCreditor.Gläubiger_Name,
+                                    email_after: dedupCreditor.Email_Gläubiger,
+                                    address_after: dedupCreditor.Gläubiger_Adresse,
+                                    used_email_field: bestEmail ? (enrichedCreditor.email === bestEmail ? 'email' : 'sender_email') : 'none',
+                                    used_address_field: bestAddress ? (enrichedCreditor.address === bestAddress ? 'address' : 'sender_address') : 'none'
+                                });
+                            }
+                        });
+
                         const existing = clientDoc.final_creditor_list || [];
                         clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
                             existing,
-                            deduplicated_creditors,
+                            normalizedDedupCreditors,
                             'highest_amount'
                         );
                         clientDoc.deduplication_stats = deduplication || {
-                            original_count: deduplicated_creditors.length,
-                            unique_count: deduplicated_creditors.length,
+                            original_count: normalizedDedupCreditors.length,
+                            unique_count: normalizedDedupCreditors.length,
                             duplicates_removed: 0,
                         };
                     }

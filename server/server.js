@@ -1,15 +1,41 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+const archiver = require('archiver');
 const multer = require('multer');
+const fs = require('fs');
 require('dotenv').config();
 
-// =============================================================================
-// 1. CONFIGURATION & DATABASE
-// =============================================================================
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+
+// Import configuration and middleware
 const config = require('./config');
+const { uploadsDir, upload } = require('./middleware/upload');
+const { rateLimits, securityHeaders, validateRequest, validationRules, validateFileUpload } = require('./middleware/security');
+const { authenticateClient, authenticateAdmin, generateClientToken, generateAdminToken } = require('./middleware/auth');
+const { sanitizeAktenzeichen } = require('./utils/sanitizeAktenzeichen');
+const healthRoutes = require('./routes/health');
+const zendeskWebhooks = require('./routes/zendesk-webhooks');
+const portalWebhooks = require('./routes/portal-webhooks');
+const agentReviewRoutes = require('./routes/agent-review');
+const agentAuthRoutes = require('./routes/agent-auth');
+const testAgentReviewRoutes = require('./routes/test-agent-review');
+const documentGenerationRoutes = require('./routes/document-generation');
+const insolvenzantragRoutes = require('./routes/insolvenzantrag');
+const secondRoundApiRoutes = require('./routes/second-round-api');
+const adminImpersonationRoutes = require('./routes/admin-impersonation');
+const authImpersonationRoutes = require('./routes/auth-impersonation');
+const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
+const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
+const creditorRoutes = require('./routes/creditorRoutes');
+const webhooksRoutes = require('./routes/webhooks');
+const testRoutes = require('./routes/test-routes');
 const databaseService = require('./services/database');
-const { uploadsDir } = require('./middleware/upload');
 
 // =============================================================================
 // 2. MODELS
@@ -47,6 +73,7 @@ const SettlementResponseMonitor = require('./services/settlementResponseMonitor'
 const DocumentReminderService = require('./services/documentReminderService');
 const LoginReminderService = require('./services/loginReminderService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
+const aiDedupScheduler = require('./services/aiDedupScheduler');
 
 // =============================================================================
 // 5. OBSERVER INSTANTIATION (Global State)
@@ -127,6 +154,57 @@ const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing'
 // =============================================================================
 const app = express();
 const PORT = config.PORT;
+const httpServer = http.createServer(app);
+
+let io;
+const getIO = () => io;
+
+// Setup Socket.IO with basic admin JWT auth and per-client rooms
+function setupSocket() {
+  if (io) return io;
+
+  const extractToken = (socket) => {
+    const fromAuth = socket.handshake.auth?.token;
+    const authHeader = socket.handshake.headers?.authorization;
+    const fromHeader = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
+    return fromAuth || fromHeader;
+  };
+
+  io = new Server(httpServer, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+    path: '/socket.io',
+  });
+
+  io.use((socket, next) => {
+    try {
+      const token = extractToken(socket);
+      if (!token) return next(new Error('unauthorized'));
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.type !== 'admin') return next(new Error('forbidden'));
+      socket.data.adminId = decoded.adminId;
+      return next();
+    } catch (err) {
+      return next(new Error('unauthorized'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    const clientId = socket.handshake.auth?.clientId || socket.handshake.query?.clientId;
+    if (clientId) {
+      socket.join(`client:${clientId}`);
+    }
+    socket.emit('socket_ready', { connected: true, adminId: socket.data.adminId || null, clientId: clientId || null });
+  });
+
+  return io;
+}
+
+setupSocket();
 
 // Trust proxy for Render deployment
 app.set('trust proxy', true);
@@ -206,6 +284,8 @@ app.use('/api/admin', createAdminAuthRouter()); // Login
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
+app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
+app.use('/api/test', testRoutes);
 
 // 10.6 Admin Dashboard & Management
 app.use('/api/admin', createAdminDashboardRouter({
@@ -336,7 +416,7 @@ async function startServer() {
     await databaseService.connect();
 
     // Start the server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📁 Uploads directory: ${uploadsDir}`);
       console.log(`💾 Database: ${databaseService.isHealthy() ? 'MongoDB Connected' : 'In-Memory Fallback'}`);
@@ -380,5 +460,6 @@ module.exports = {
   saveClient: clientService.saveClient.bind(clientService),
   getClientAktenzeichen: clientService.getClientAktenzeichen.bind(clientService),
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  triggerProcessingCompleteWebhook
+  triggerProcessingCompleteWebhook,
+  getIO
 };
