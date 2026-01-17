@@ -348,7 +348,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       );
 
       // Reload user data to show updated creditor list
-      await fetchUser();
+      await fetchUserDetails({ silent: true });
 
     } catch (error: any) {
       console.error('AI Re-Dedup error:', error);
