@@ -85,6 +85,8 @@ interface Document {
       sender_name?: string;
       sender_email?: string;
       sender_address?: string;
+      address?: string;
+      email?: string;
       reference_number?: string;
       claim_amount?: number;
       is_representative?: boolean;
@@ -251,7 +253,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
       setDownloadingDocs(prev => ({ ...prev, [documentId]: true }));
 
-      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/documents/${documentId}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/documents/${documentId}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }

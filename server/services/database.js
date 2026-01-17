@@ -9,18 +9,15 @@ class DatabaseService {
   async connect() {
     try {
       const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice';
-      
+
       console.log('🔌 Connecting to MongoDB...');
       console.log('📍 MongoDB URI:', mongoUri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@')); // Hide credentials in logs
-      
-      await mongoose.connect(mongoUri, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      });
+
+      await mongoose.connect(mongoUri);
 
       this.isConnected = true;
       console.log('✅ Connected to MongoDB successfully');
-      
+
       // Handle connection events
       mongoose.connection.on('error', (error) => {
         console.error('❌ MongoDB connection error:', error);
@@ -74,9 +71,9 @@ class DatabaseService {
   async migrateInMemoryData(inMemoryData) {
     try {
       const Client = require('../models/Client');
-      
+
       console.log('🔄 Starting migration of in-memory data to MongoDB...');
-      
+
       let migratedCount = 0;
       let skippedCount = 0;
 
@@ -84,7 +81,7 @@ class DatabaseService {
         try {
           // Check if client already exists
           const existingClient = await Client.findOne({ id: clientId });
-          
+
           if (existingClient) {
             console.log(`⏭️ Client ${clientId} already exists, skipping...`);
             skippedCount++;
@@ -94,10 +91,10 @@ class DatabaseService {
           // Create new client
           const newClient = new Client(clientData);
           await newClient.save();
-          
+
           console.log(`✅ Migrated client: ${clientId} (${clientData.firstName} ${clientData.lastName})`);
           migratedCount++;
-          
+
         } catch (error) {
           console.error(`❌ Error migrating client ${clientId}:`, error.message);
         }
@@ -105,7 +102,7 @@ class DatabaseService {
 
       console.log(`🎉 Migration completed: ${migratedCount} migrated, ${skippedCount} skipped`);
       return { migrated: migratedCount, skipped: skippedCount };
-      
+
     } catch (error) {
       console.error('❌ Migration failed:', error);
       throw error;

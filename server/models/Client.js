@@ -122,7 +122,7 @@ const creditorSchema = new mongoose.Schema({
   original_ai_data: mongoose.Schema.Types.Mixed,
   correction_notes: String,
   created_via: String, // 'ai_extraction', 'manual_review', etc.
-  
+
   // Creditor response fields
   current_debt_amount: Number, // Amount from creditor response
   creditor_response_amount: Number, // Alternative field name
@@ -168,7 +168,7 @@ const creditorSchema = new mongoose.Schema({
   settlement_plan_sent_at: Date,
   settlement_acceptance_confidence: Number, // AI confidence in acceptance/rejection detection
   settlement_response_metadata: mongoose.Schema.Types.Mixed,
-  
+
   // Nullplan response fields
   nullplan_response_status: {
     type: String,
@@ -209,7 +209,7 @@ const clientSchema = new mongoose.Schema({
   phone: String,
   address: String,
   geburtstag: String,
-  
+
   // Portal access
   portal_link_sent: { type: Boolean, default: false },
   portal_link_sent_at: Date,
@@ -221,12 +221,12 @@ const clientSchema = new mongoose.Schema({
   // Client credentials
   password_hash: { type: String },
   isPasswordSet: { type: Boolean, default: false },
-  
+
   // Welcome email
   welcome_email_sent: { type: Boolean, default: false },
   welcome_email_sent_at: Date,
   welcome_side_conversation_id: String,
-  
+
   // Zendesk integration
   zendesk_user_id: String,
   zendesk_ticket_id: String,
@@ -242,7 +242,7 @@ const clientSchema = new mongoose.Schema({
     last_comment_at: Date,
     processing_complete_scenario: String
   }],
-  
+
   // Workflow - updated for Zendesk-centric approach
   phase: { type: Number, default: 1 },
   current_status: {
@@ -275,18 +275,18 @@ const clientSchema = new mongoose.Schema({
     type: String,
     enum: [
       'portal_access_sent',
-      'documents_processing', 
-      'admin_review', 
-      'client_confirmation', 
+      'documents_processing',
+      'admin_review',
+      'client_confirmation',
       'completed',
       'creditor_contact_active'
     ],
     default: 'portal_access_sent'
   },
-  
+
   // Status tracking
   status_history: [statusHistorySchema],
-  
+
   // Document processing
   documents: [documentSchema],
   final_creditor_list: [creditorSchema],
@@ -310,36 +310,36 @@ const clientSchema = new mongoose.Schema({
   document_request_sent_at: Date,
   document_request_email_sent_at: Date,
   all_documents_processed_at: Date,
-  
+
   // Document reminder tracking
   document_reminder_count: { type: Number, default: 0 },
   last_document_reminder_at: Date,
   documents_uploaded_after_payment_at: Date,
-  
+
   // Login reminder tracking (7-day cycle)
   login_reminder_sent: { type: Boolean, default: false },
   login_reminder_sent_at: Date,
   login_document_reminder_sent: { type: Boolean, default: false },
   login_document_reminder_sent_at: Date,
-  
+
   // Delayed processing webhook tracking
   processing_complete_webhook_scheduled: { type: Boolean, default: false },
   processing_complete_webhook_scheduled_at: Date,
   processing_complete_webhook_triggered: { type: Boolean, default: false },
   processing_complete_webhook_triggered_at: Date,
-  
+
   // 7-day delay tracking for payment + document upload
   both_conditions_met_at: Date, // When both payment and documents are uploaded
   seven_day_review_scheduled: { type: Boolean, default: false },
   seven_day_review_scheduled_at: Date,
   seven_day_review_triggered: { type: Boolean, default: false },
   seven_day_review_triggered_at: Date,
-  
+
   // Document reminder via side conversation
   document_reminder_sent_via_side_conversation: { type: Boolean, default: false },
   document_reminder_side_conversation_at: Date,
   document_reminder_side_conversation_id: String,
-  
+
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },
@@ -353,11 +353,11 @@ const clientSchema = new mongoose.Schema({
   additional_documents_uploaded_after_review: { type: Boolean, default: false },
   additional_documents_uploaded_at: Date,
   review_iteration_count: { type: Number, default: 0 }, // Track how many review cycles have been completed
-  
+
   // Creditor contact
   creditor_contact_started: { type: Boolean, default: false },
   creditor_contact_started_at: Date,
-  
+
   // Settlement plan tracking
   settlement_plan_sent_at: Date,
 
@@ -382,7 +382,7 @@ const clientSchema = new mongoose.Schema({
     form_filled_at: Date,
     calculation_completed_at: Date
   },
-  
+
   // Debt settlement plan (Schuldenbereinigungsplan)
   debt_settlement_plan: {
     created_at: Date,
@@ -413,7 +413,7 @@ const clientSchema = new mongoose.Schema({
     generated_by: String, // Agent or 'system' for automated
     plan_notes: String
   },
-  
+
   // Creditor calculation table for Schuldenbereinigungsplan (new approach)
   creditor_calculation_table: [{
     id: String,
@@ -438,29 +438,29 @@ const clientSchema = new mongoose.Schema({
   }],
   creditor_calculation_created_at: Date,
   creditor_calculation_total_debt: Number,
-  
+
   // New calculated settlement plan (from German garnishment calculator)
   calculated_settlement_plan: mongoose.Schema.Types.Mixed,
-  
+
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
 
 // Update the updated_at field before saving
-clientSchema.pre('save', function(next) {
+clientSchema.pre('save', function (next) {
   this.updated_at = new Date();
   next();
 });
 
 // Compare a plain password with the stored hash
-clientSchema.methods.comparePassword = async function(password) {
+clientSchema.methods.comparePassword = async function (password) {
   if (!this.password_hash) return false;
   return await bcrypt.compare(password, this.password_hash);
 };
 
 // Hash password before saving if it was modified via password_hash
-clientSchema.pre('save', async function(next) {
+clientSchema.pre('save', async function (next) {
   if (!this.isModified('password_hash')) return next();
   try {
     const salt = await bcrypt.genSalt(12);
@@ -472,8 +472,6 @@ clientSchema.pre('save', async function(next) {
 });
 
 // Indexes for faster queries
-clientSchema.index({ email: 1 });
-clientSchema.index({ aktenzeichen: 1 });
 clientSchema.index({ workflow_status: 1 });
 clientSchema.index({ session_token: 1 });
 clientSchema.index({ created_at: -1 }); // For recent clients

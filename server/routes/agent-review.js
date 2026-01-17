@@ -3,19 +3,14 @@ const { authenticateAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const agentReviewController = require('../controllers/agentReviewController');
 
-const router = express.Router();
+module.exports = ({ Client, getGCSFileStream, uploadsDir }) => {
+  const router = express.Router();
 
-// Debug endpoint to test agent authentication
-router.get('/debug/auth', authenticateAgent, rateLimits.general, async (req, res) => {
-  res.json({
-    success: true,
-    message: 'Agent authentication working',
-    agent: {
-      id: req.agentId,
-      username: req.agentUsername,
-      role: req.agentRole
-    },
-    timestamp: new Date().toISOString()
+  // Create controller with dependencies
+  const agentReviewController = createAgentReviewController({
+    Client,
+    getGCSFileStream,
+    uploadsDir
   });
 });
 
@@ -109,4 +104,5 @@ router.post('/:clientId/correct', authenticateAgent, rateLimits.general, agentRe
 // POST /api/agent-review/:clientId/complete
 router.post('/:clientId/complete', authenticateAgent, rateLimits.general, agentReviewController.completeReviewSession);
 
-module.exports = router;
+  return router;
+};

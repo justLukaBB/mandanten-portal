@@ -23,7 +23,5 @@ const CreditorDatabaseSchema = new mongoose.Schema(
 );
 
 CreditorDatabaseSchema.index({ creditor_name: 1 });
-CreditorDatabaseSchema.index({ name_normalized: 1 });
-CreditorDatabaseSchema.index({ name_keywords: 1 });
 
 module.exports = mongoose.model('CreditorDatabase', CreditorDatabaseSchema);

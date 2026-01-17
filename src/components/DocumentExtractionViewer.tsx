@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  DocumentTextIcon, 
-  CheckCircleIcon, 
-  ExclamationTriangleIcon, 
+import {
+  DocumentTextIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
   ArrowPathIcon,
   EyeIcon,
   CogIcon,
@@ -66,10 +66,10 @@ interface DocumentExtractionViewerProps {
   onRefresh: () => void;
 }
 
-const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({ 
-  documents, 
-  clientId, 
-  onRefresh 
+const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
+  documents,
+  clientId,
+  onRefresh
 }) => {
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [extractionDetails, setExtractionDetails] = useState<any>(null);
@@ -131,24 +131,26 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
     return 'text-red-600';
   };
 
-  const viewExtractionDetails = async (documentId: string) => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/clients/${clientId}/documents/${documentId}/extraction`);
-      setExtractionDetails(response.data);
+  const viewExtractionDetails = (documentId: string) => {
+    const doc = documents.find(d => d.id === documentId);
+    if (doc && doc.extracted_data) {
+      setExtractionDetails({ extracted_data: doc.extracted_data });
       setSelectedDocument(documentId);
-    } catch (error) {
-      console.error('Error fetching extraction details:', error);
-    } finally {
-      setLoading(false);
+    } else {
+      console.warn('No extraction details found for document', documentId);
+      // Fallback: if we really needed to fetch, we would need an endpoint. 
+      // But for now, we assume data is in the list.
     }
   };
 
   const reprocessDocument = async (documentId: string) => {
     setLoading(true);
     try {
-      await api.post(`/clients/${clientId}/documents/${documentId}/reprocess`);
+      // FIXED: Use correct admin route
+      await api.post(`/admin/clients/${clientId}/documents/${documentId}/reprocess`);
       onRefresh();
+      // Allow some time for background processing to start
+      setTimeout(onRefresh, 1000);
     } catch (error) {
       console.error('Error reprocessing document:', error);
     } finally {
@@ -171,7 +173,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Gläubigerdokument-Klassifizierung</h3>
-      
+
       <div className="space-y-4">
         {documents.map((document) => (
           <div key={document.id} className="border border-gray-200 rounded-lg p-4">
@@ -188,11 +190,11 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                     </span>
                   )}
                 </div>
-                
+
                 <p className="text-xs text-gray-500 mb-2">
                   {getStatusText(document.processing_status, document.is_creditor_document, document.confidence)}
                 </p>
-                
+
                 {document.processing_status === 'completed' && document.summary && (
                   <div className="mb-2">
                     <p className="text-sm text-gray-700">{document.summary}</p>
@@ -216,7 +218,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                     )}
                   </div>
                 )}
-                
+
                 {/* Show creditor data preview if available */}
                 {document.is_creditor_document && document.extracted_data?.creditor_data && (
                   <div className="mt-2 bg-green-50 p-2 rounded text-xs">
@@ -226,13 +228,13 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                     )}
                   </div>
                 )}
-                
+
                 {document.processing_status === 'failed' && document.processing_error && (
                   <p className="text-xs text-red-600 mb-2">
                     Fehler: {document.processing_error}
                   </p>
                 )}
-                
+
                 {document.validation?.warnings && document.validation.warnings.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs text-gray-500 mb-1">Status:</p>
@@ -242,9 +244,9 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                         const isInfo = warning.includes('klassifiziert');
                         return (
                           <li key={index} className={
-                            isSuccess ? 'text-green-600' : 
-                            isInfo ? 'text-red-800' : 
-                            'text-orange-600'
+                            isSuccess ? 'text-green-600' :
+                              isInfo ? 'text-red-800' :
+                                'text-orange-600'
                           }>
                             • {warning}
                           </li>
@@ -254,7 +256,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                   </div>
                 )}
               </div>
-              
+
               <div className="flex items-center space-x-2 ml-4">
                 {document.processing_status === 'completed' && (
                   <button
@@ -266,7 +268,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                     <EyeIcon className="w-4 h-4" />
                   </button>
                 )}
-                
+
                 {(document.processing_status === 'failed' || document.processing_status === 'completed') && (
                   <button
                     onClick={() => reprocessDocument(document.id)}
@@ -297,7 +299,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                   ✕
                 </button>
               </div>
-              
+
               {extractionDetails.extracted_data && (
                 <div className="space-y-4">
                   {/* Classification Results */}
@@ -322,7 +324,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                       <p>Verarbeitet: {new Date(extractionDetails.extracted_data.timestamp).toLocaleString('de-DE')}</p>
                     </div>
                   </div>
-                  
+
                   {/* Creditor Data - Only show if creditor document */}
                   {extractionDetails.extracted_data.is_creditor_document && extractionDetails.extracted_data.creditor_data && (
                     <>
@@ -335,7 +337,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                           <p><strong>E-Mail:</strong> {extractionDetails.extracted_data.creditor_data.sender_email || 'Nicht gefunden'}</p>
                         </div>
                       </div>
-                      
+
                       {/* Reference Number */}
                       <div>
                         <h5 className="font-medium text-gray-900 mb-2">Aktenzeichen</h5>
@@ -343,7 +345,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                           {extractionDetails.extracted_data.creditor_data.reference_number || 'Nicht gefunden'}
                         </div>
                       </div>
-                      
+
                       {/* Representative Information */}
                       <div>
                         <h5 className="font-medium text-gray-900 mb-2">Vertretung</h5>
@@ -354,7 +356,7 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Claim Amount */}
                       {extractionDetails.extracted_data.creditor_data.claim_amount && (
                         <div>

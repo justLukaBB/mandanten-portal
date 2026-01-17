@@ -10,24 +10,24 @@ const loginReminderService = new LoginReminderService();
 /**
  * Get all clients with scheduled processing webhooks
  */
-router.get('/admin/delayed-processing', async (req, res) => {
+router.get('/delayed-processing', async (req, res) => {
   try {
     const pendingClients = await Client.find({
       processing_complete_webhook_scheduled: true,
       processing_complete_webhook_triggered: { $ne: true }
     })
-    .select({
-      id: 1,
-      aktenzeichen: 1,
-      firstName: 1,
-      lastName: 1,
-      email: 1,
-      processing_complete_webhook_scheduled_at: 1,
-      all_documents_processed_at: 1,
-      'documents.length': 1,
-      'final_creditor_list.length': 1
-    })
-    .sort({ processing_complete_webhook_scheduled_at: 1 });
+      .select({
+        id: 1,
+        aktenzeichen: 1,
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        processing_complete_webhook_scheduled_at: 1,
+        all_documents_processed_at: 1,
+        'documents.length': 1,
+        'final_creditor_list.length': 1
+      })
+      .sort({ processing_complete_webhook_scheduled_at: 1 });
 
     const clientsWithTimeRemaining = pendingClients.map(client => {
       const scheduledTime = new Date(client.processing_complete_webhook_scheduled_at);
@@ -69,10 +69,10 @@ router.get('/admin/delayed-processing', async (req, res) => {
 /**
  * Trigger processing immediately for a specific client (admin override)
  */
-router.post('/admin/delayed-processing/:clientId/trigger-now', async (req, res) => {
+router.post('/delayed-processing/:clientId/trigger-now', async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       return res.status(404).json({
@@ -96,7 +96,7 @@ router.post('/admin/delayed-processing/:clientId/trigger-now', async (req, res) 
       // Mark as triggered
       client.processing_complete_webhook_triggered = true;
       client.processing_complete_webhook_triggered_at = new Date();
-      
+
       client.status_history.push({
         id: require('uuid').v4(),
         status: 'processing_complete_webhook_triggered_manual',
@@ -136,10 +136,10 @@ router.post('/admin/delayed-processing/:clientId/trigger-now', async (req, res) 
 /**
  * Cancel scheduled webhook for a client
  */
-router.post('/admin/delayed-processing/:clientId/cancel', async (req, res) => {
+router.post('/delayed-processing/:clientId/cancel', async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       return res.status(404).json({
@@ -176,11 +176,11 @@ router.post('/admin/delayed-processing/:clientId/cancel', async (req, res) => {
 /**
  * Reschedule webhook with custom delay
  */
-router.post('/admin/delayed-processing/:clientId/reschedule', async (req, res) => {
+router.post('/delayed-processing/:clientId/reschedule', async (req, res) => {
   try {
     const { clientId } = req.params;
     const { delayHours = 24 } = req.body;
-    
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       return res.status(404).json({
@@ -196,8 +196,8 @@ router.post('/admin/delayed-processing/:clientId/reschedule', async (req, res) =
 
     // Schedule with new delay
     const result = await delayedProcessingService.scheduleProcessingCompleteWebhook(
-      clientId, 
-      null, 
+      clientId,
+      null,
       delayHours
     );
 
@@ -221,10 +221,10 @@ router.post('/admin/delayed-processing/:clientId/reschedule', async (req, res) =
 /**
  * Immediate review trigger - creates Zendesk ticket instantly for any client ready for review
  */
-router.post('/admin/immediate-review/:clientId', async (req, res) => {
+router.post('/immediate-review/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       return res.status(404).json({
@@ -277,7 +277,7 @@ router.post('/admin/immediate-review/:clientId', async (req, res) => {
       // Mark as triggered with admin override
       client.processing_complete_webhook_triggered = true;
       client.processing_complete_webhook_triggered_at = new Date();
-      
+
       client.status_history.push({
         id: require('uuid').v4(),
         status: 'processing_complete_webhook_triggered_admin',
@@ -320,12 +320,12 @@ router.post('/admin/immediate-review/:clientId', async (req, res) => {
 /**
  * Manual trigger of the delayed webhook check (for testing)
  */
-router.post('/admin/delayed-processing/check-now', async (req, res) => {
+router.post('/delayed-processing/check-now', async (req, res) => {
   try {
     console.log('📧 Admin triggered manual delayed webhook check');
-    
+
     const result = await delayedProcessingService.checkAndTriggerPendingWebhooks();
-    
+
     res.json({
       success: true,
       message: 'Delayed webhook check completed',
@@ -333,7 +333,7 @@ router.post('/admin/delayed-processing/check-now', async (req, res) => {
       webhooksTriggered: result.webhooksTriggered,
       errors: result.errors
     });
-    
+
   } catch (error) {
     console.error('Error in manual delayed webhook check:', error);
     res.status(500).json({
@@ -347,12 +347,12 @@ router.post('/admin/delayed-processing/check-now', async (req, res) => {
 /**
  * Manual trigger of the login reminder check (for testing)
  */
-router.post('/admin/login-reminders/check-now', async (req, res) => {
+router.post('/login-reminders/check-now', async (req, res) => {
   try {
     console.log('📧 Admin triggered manual login reminder check');
-    
+
     const result = await loginReminderService.checkAndSendLoginReminders();
-    
+
     res.json({
       success: true,
       message: 'Login reminder check completed',
@@ -361,7 +361,7 @@ router.post('/admin/login-reminders/check-now', async (req, res) => {
       documentRemindersSent: result.documentRemindersSent,
       errors: result.errors
     });
-    
+
   } catch (error) {
     console.error('Error in manual login reminder check:', error);
     res.status(500).json({
@@ -376,27 +376,27 @@ router.post('/admin/login-reminders/check-now', async (req, res) => {
  * Get clients awaiting confirmation (for monitoring auto-confirmation)
  * TEST MODE: 3 minutes instead of 7 days
  */
-router.get('/admin/auto-confirmation/pending', async (req, res) => {
+router.get('/auto-confirmation/pending', async (req, res) => {
   try {
     const threeMinutesAgo = new Date();
     threeMinutesAgo.setMinutes(threeMinutesAgo.getMinutes() - 3);
-    
+
     // Find clients awaiting confirmation
     const awaitingClients = await Client.find({
       current_status: 'awaiting_client_confirmation',
       admin_approved: true,
       client_confirmed_creditors: { $ne: true }
     })
-    .select({
-      id: 1,
-      aktenzeichen: 1,
-      firstName: 1,
-      lastName: 1,
-      email: 1,
-      admin_approved_at: 1,
-      final_creditor_list: 1
-    })
-    .sort({ admin_approved_at: 1 });
+      .select({
+        id: 1,
+        aktenzeichen: 1,
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        admin_approved_at: 1,
+        final_creditor_list: 1
+      })
+      .sort({ admin_approved_at: 1 });
 
     const clientsWithTimeInfo = awaitingClients.map(client => {
       const approvalTime = new Date(client.admin_approved_at);
@@ -423,7 +423,7 @@ router.get('/admin/auto-confirmation/pending', async (req, res) => {
         stillWaiting: clientsWithTimeInfo.filter(c => !c.readyForAutoConfirmation).length
       }
     });
-    
+
   } catch (error) {
     console.error('Error fetching pending auto-confirmations:', error);
     res.status(500).json({
@@ -437,12 +437,12 @@ router.get('/admin/auto-confirmation/pending', async (req, res) => {
 /**
  * Manual trigger of auto-confirmation check (for testing)
  */
-router.post('/admin/auto-confirmation/check-now', async (req, res) => {
+router.post('/auto-confirmation/check-now', async (req, res) => {
   try {
     console.log('⏰ Admin triggered manual auto-confirmation check');
-    
+
     const result = await delayedProcessingService.checkAndAutoConfirmCreditors();
-    
+
     res.json({
       success: true,
       message: 'Auto-confirmation check completed',
@@ -450,7 +450,7 @@ router.post('/admin/auto-confirmation/check-now', async (req, res) => {
       autoConfirmed: result.autoConfirmed,
       errors: result.errors
     });
-    
+
   } catch (error) {
     console.error('Error in manual auto-confirmation check:', error);
     res.status(500).json({
@@ -464,10 +464,10 @@ router.post('/admin/auto-confirmation/check-now', async (req, res) => {
 /**
  * Force auto-confirm a specific client (admin override)
  */
-router.post('/admin/auto-confirmation/:clientId/force-confirm', async (req, res) => {
+router.post('/auto-confirmation/:clientId/force-confirm', async (req, res) => {
   try {
     const { clientId } = req.params;
-    
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       return res.status(404).json({
@@ -491,14 +491,14 @@ router.post('/admin/auto-confirmation/:clientId/force-confirm', async (req, res)
     }
 
     const minutesSinceApproval = Math.floor((new Date() - new Date(client.admin_approved_at)) / (1000 * 60));
-    
+
     console.log(`⚡ Force auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - admin override (TEST MODE)`);
-    
+
     // Auto-confirm the creditors
     client.client_confirmed_creditors = true;
     client.client_confirmed_at = new Date();
     client.current_status = 'creditor_contact_initiated';
-    
+
     // Add to status history
     client.status_history.push({
       id: require('uuid').v4(),
@@ -530,7 +530,7 @@ router.post('/admin/auto-confirmation/:clientId/force-confirm', async (req, res)
 
     // Trigger creditor contact process
     const triggerResult = await delayedProcessingService.triggerCreditorContactService(client.id);
-    
+
     res.json({
       success: true,
       message: 'Client creditors force auto-confirmed',
@@ -544,7 +544,7 @@ router.post('/admin/auto-confirmation/:clientId/force-confirm', async (req, res)
       },
       creditorContactTriggered: triggerResult.success
     });
-    
+
   } catch (error) {
     console.error('Error force auto-confirming client:', error);
     res.status(500).json({

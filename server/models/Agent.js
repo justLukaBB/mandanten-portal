@@ -8,7 +8,7 @@ const agentSchema = new mongoose.Schema({
   password_hash: { type: String, required: true },
   first_name: { type: String, required: true },
   last_name: { type: String, required: true },
-  
+
   // Agent permissions and role
   role: {
     type: String,
@@ -21,12 +21,12 @@ const agentSchema = new mongoose.Schema({
     can_complete_sessions: { type: Boolean, default: true },
     can_skip_documents: { type: Boolean, default: true }
   },
-  
+
   // Agent activity tracking
   is_active: { type: Boolean, default: true },
   last_login: Date,
   last_activity: Date,
-  
+
   // Review statistics
   stats: {
     total_sessions: { type: Number, default: 0 },
@@ -35,31 +35,31 @@ const agentSchema = new mongoose.Schema({
     creditors_corrected: { type: Number, default: 0 },
     average_session_time: { type: Number, default: 0 } // in minutes
   },
-  
+
   // Zendesk integration
   zendesk_user_id: String,
   zendesk_agent_id: String,
-  
+
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
 
 // Update the updated_at field before saving
-agentSchema.pre('save', function(next) {
+agentSchema.pre('save', function (next) {
   this.updated_at = new Date();
   next();
 });
 
 // Method to compare password
-agentSchema.methods.comparePassword = async function(password) {
+agentSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password_hash);
 };
 
 // Method to hash password before saving
-agentSchema.pre('save', async function(next) {
+agentSchema.pre('save', async function (next) {
   if (!this.isModified('password_hash')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(12);
     this.password_hash = await bcrypt.hash(this.password_hash, salt);
@@ -70,7 +70,7 @@ agentSchema.pre('save', async function(next) {
 });
 
 // Instance methods
-agentSchema.methods.comparePassword = async function(candidatePassword) {
+agentSchema.methods.comparePassword = async function (candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password_hash);
   } catch (error) {
@@ -79,8 +79,6 @@ agentSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Indexes for performance
-agentSchema.index({ username: 1 });
-agentSchema.index({ email: 1 });
 agentSchema.index({ is_active: 1 });
 agentSchema.index({ last_activity: -1 });
 

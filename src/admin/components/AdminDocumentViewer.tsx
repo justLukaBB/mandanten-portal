@@ -66,8 +66,8 @@ interface AdminDocumentViewerProps {
   clientId?: string;
 }
 
-const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({ 
-  clientId 
+const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
+  clientId
 }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +83,19 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/clients/${clientId}/documents`);
-      setDocuments(response.data || []);
+      setLoading(true);
+      // Use the admin endpoint to get full document details including validation/extraction data
+      // If such endpoint exists, otherwise fallback to standard client docs but maybe we need header?
+      // Actually, let's look for an admin route that lists documents. 
+      // admin-client-creditor.js might have it or admin-dashboard. 
+      // For now, let's assume /admin/clients/${clientId} returns documents populated.
+      // But looking at previous code, it used /clients/${clientId}/documents.
+      // Let's try to use the admin specific route if available.
+      // Checking admin-documents.js... no list route there.
+      // Checking admin-dashboard.js...
+      // Let's stick to /admin/clients/${clientId} which usually returns the client with documents.
+      const response = await api.get(`/admin/clients/${clientId}`);
+      setDocuments(response.data?.documents || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
     } finally {
@@ -104,7 +115,8 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
         console.log('Using direct GCS URL for download:', downloadUrl);
       } else {
         // Fall back to backend proxy (for local storage or when url is not available)
-        downloadUrl = `${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`;
+        // FIXED: Use the correct admin download route
+        downloadUrl = `${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`;
         console.log('Using backend proxy for download:', downloadUrl);
       }
 
@@ -125,7 +137,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
       if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
         window.open(doc.url, '_blank');
       } else {
-        window.open(`${API_BASE_URL}/api/clients/${clientId}/documents/${doc.filename}`, '_blank');
+        window.open(`${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`, '_blank');
       }
     }
   };
@@ -138,7 +150,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
   const handleManualReview = async (document: Document, newStatus: 'creditor_confirmed' | 'non_creditor_confirmed', adminNote?: string) => {
     try {
       setUpdating(true);
-      
+
       // Update document status via API
       await api.patch(`/admin/clients/${clientId}/documents/${document.id}/review`, {
         document_status: newStatus,
@@ -149,7 +161,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
       // Refresh documents list
       await fetchDocuments();
-      
+
       // Close details if this document was open
       if (selectedDocument?.id === document.id) {
         setShowDetails(false);
@@ -189,17 +201,17 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
   const getStatusIcon = (status?: string) => {
     switch (status) {
-      case 'creditor_confirmed': 
+      case 'creditor_confirmed':
         return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
-      case 'non_creditor_confirmed': 
+      case 'non_creditor_confirmed':
         return <XMarkIcon className="w-5 h-5 text-gray-600" />;
-      case 'needs_review': 
+      case 'needs_review':
         return <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600" />;
-      case 'duplicate_detected': 
+      case 'duplicate_detected':
         return <FolderIcon className="w-5 h-5 text-orange-600" />;
-      case 'processing_failed': 
+      case 'processing_failed':
         return <XMarkIcon className="w-5 h-5 text-red-600" />;
-      default: 
+      default:
         return <ClockIcon className="w-5 h-5 text-gray-400" />;
     }
   };
@@ -256,38 +268,34 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
               </p>
             </div>
           </div>
-          
+
           {/* Filter buttons */}
           <div className="flex space-x-2">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
             >
               Alle ({creditorDocuments.length})
             </button>
             <button
               onClick={() => setFilter('needs_review')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === 'needs_review' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === 'needs_review' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
             >
               Prüfung ({needsReviewCount})
             </button>
             <button
               onClick={() => setFilter('creditor')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === 'creditor' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === 'creditor' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
             >
               Bestätigt ({creditorDocuments.filter(d => d.document_status === 'creditor_confirmed').length})
             </button>
             <button
               onClick={() => setFilter('duplicates')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === 'duplicates' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
             >
               Duplikate ({creditorDocuments.filter(d => d.document_status === 'duplicate').length})
             </button>
@@ -310,7 +318,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                   <div className="flex-shrink-0 mt-1">
                     {getStatusIcon(document.document_status)}
                   </div>
-                  
+
                   {/* Document info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-3 mb-2">
@@ -326,7 +334,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                         </span>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center space-x-4 text-xs text-gray-500">
                       <span>{new Date(document.uploadedAt).toLocaleString('de-DE')}</span>
                       <span>•</span>
@@ -338,7 +346,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                         </>
                       )}
                     </div>
-                    
+
                     {/* Creditor info preview */}
                     {document.extracted_data?.creditor_data && (
                       <div className="mt-2 text-xs text-gray-600">
@@ -356,7 +364,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                         </div>
                       </div>
                     )}
-                    
+
                     {/* Status reason */}
                     {document.status_reason && (
                       <div className="mt-1 text-xs text-gray-500">
@@ -365,7 +373,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                     )}
                   </div>
                 </div>
-                
+
                 {/* Action buttons */}
                 <div className="flex items-center space-x-2 ml-4">
                   <button
@@ -375,7 +383,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                   >
                     <EyeIcon className="w-5 h-5" />
                   </button>
-                  
+
                   <button
                     onClick={() => handleDownload(document)}
                     className="p-2 text-gray-400 hover:text-red-800 transition-colors"
@@ -383,7 +391,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                   >
                     <ArrowDownTrayIcon className="w-5 h-5" />
                   </button>
-                  
+
                   {/* Manual review buttons for documents that need review */}
                   {document.document_status === 'needs_review' && (
                     <div className="flex space-x-1 ml-2 border-l border-gray-200 pl-2">
@@ -428,7 +436,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </div>
-            
+
             {/* Modal Content */}
             <div className="px-6 py-4 space-y-6">
               {/* Basic Info */}

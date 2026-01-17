@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  PencilIcon, 
-  CheckCircleIcon, 
+import {
+  PencilIcon,
+  CheckCircleIcon,
   ExclamationTriangleIcon,
   ArrowDownTrayIcon,
   EyeIcon,
@@ -15,6 +15,8 @@ interface CreditorData {
   sender_name?: string;
   sender_address?: string;
   sender_email?: string;
+  address?: string;
+  email?: string;
   reference_number?: string;
   is_representative?: boolean;
   actual_creditor?: string;
@@ -101,25 +103,25 @@ const AdminCreditorDataTable: React.FC = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      
+
       // Get all clients from admin endpoint
       const allClientsResponse = await api.get('/api/admin/clients');
       const allClients = allClientsResponse.data.clients || [];
-      
+
       const clientsData: ClientData[] = [];
 
       for (const clientMeta of allClients) {
         // Use aktenzeichen as the ID for API calls
         const clientId = clientMeta.aktenzeichen || clientMeta._id;
-        
+
         try {
           const response = await api.get(`/api/clients/${clientId}`);
           const client = response.data;
-          
+
           // Fetch documents separately
           const documentsResponse = await api.get(`/api/clients/${clientId}/documents`);
           client.documents = documentsResponse.data || [];
-          
+
           clientsData.push(client);
         } catch (error) {
           console.error(`Error fetching client ${clientId}:`, error);
@@ -127,15 +129,15 @@ const AdminCreditorDataTable: React.FC = () => {
       }
 
       setClients(clientsData);
-      
+
       // Convert to admin creditor table rows
       const allCreditorRows: AdminCreditorTableRow[] = [];
-      
+
       clientsData.forEach(client => {
         // Show all documents, not just completed ones
         const allDocs = client.documents || [];
-        
-        console.log(`Client ${client.firstName} ${client.lastName} has ${allDocs.length} documents:`, 
+
+        console.log(`Client ${client.firstName} ${client.lastName} has ${allDocs.length} documents:`,
           allDocs.map(d => ({
             name: d.name,
             processing_status: d.processing_status,
@@ -143,11 +145,11 @@ const AdminCreditorDataTable: React.FC = () => {
             hasCreditorData: !!d.extracted_data?.creditor_data
           }))
         );
-        
+
         allDocs.forEach(doc => {
           const creditor = doc.extracted_data?.creditor_data;
           const validation = doc.validation;
-          
+
           // Debug logging for empty creditor data
           if (!creditor && doc.processing_status === 'completed') {
             console.warn(`Document ${doc.name} completed but no creditor data:`, {
@@ -158,11 +160,11 @@ const AdminCreditorDataTable: React.FC = () => {
               hasCreditorData: !!doc.extracted_data?.creditor_data
             });
           }
-          
+
           // Determine row status based on processing and document status
           let rowStatus: 'ready' | 'needs_review' | 'incomplete' | 'duplicate' | 'non_creditor' = 'incomplete';
           let rowWarnings = validation?.warnings || [];
-          
+
           // First check processing status
           if (doc.processing_status === 'processing') {
             rowStatus = 'incomplete';
@@ -213,13 +215,13 @@ const AdminCreditorDataTable: React.FC = () => {
               rowStatus = 'needs_review';
             }
           }
-          
+
           // Show status based on processing state
           let displayCreditorName = 'Wird verarbeitet...';
           let displayEmail = 'Wird verarbeitet...';
           let displayAddress = 'Wird verarbeitet...';
           let displayReference = 'Wird verarbeitet...';
-          
+
           if (doc.processing_status === 'completed') {
             displayCreditorName = creditor?.sender_name || 'Nicht gefunden';
             // Prefer enriched 'email' field over 'sender_email'
@@ -233,7 +235,7 @@ const AdminCreditorDataTable: React.FC = () => {
             displayAddress = 'Verarbeitungsfehler';
             displayReference = 'Verarbeitungsfehler';
           }
-          
+
           // Add ALL documents to the admin table (including processing ones)
           // Admins need to see everything for monitoring
           allCreditorRows.push({
@@ -272,8 +274,8 @@ const AdminCreditorDataTable: React.FC = () => {
     }
   };
 
-  const filteredData = selectedClient === 'all' 
-    ? creditorData 
+  const filteredData = selectedClient === 'all'
+    ? creditorData
     : creditorData.filter(row => row.clientId === selectedClient);
 
   const getStatusColor = (status: string) => {
@@ -297,7 +299,7 @@ const AdminCreditorDataTable: React.FC = () => {
         default: return 'Unbekannt';
       }
     }
-    
+
     // Fallback logic for legacy documents
     if (row.status === 'duplicate') {
       return 'Duplikat';
@@ -322,9 +324,9 @@ const AdminCreditorDataTable: React.FC = () => {
   const handleSave = async (documentId: string) => {
     try {
       // Update local state
-      setCreditorData(prev => 
-        prev.map(row => 
-          row.documentId === documentId 
+      setCreditorData(prev =>
+        prev.map(row =>
+          row.documentId === documentId
             ? { ...row, ...editData, status: 'ready' }
             : row
         )
@@ -362,12 +364,12 @@ const AdminCreditorDataTable: React.FC = () => {
   const exportToCSV = () => {
     const selectedData = filteredData.filter(row => selectedRows.has(row.documentId));
     const dataToExport = selectedData.length > 0 ? selectedData : filteredData;
-    
+
     if (dataToExport.length === 0) {
       alert('Keine Daten zum Exportieren verfügbar. Bitte überprüfen Sie, ob Gläubigerdokumente verarbeitet wurden.');
       return;
     }
-    
+
     const headers = [
       'Mandant',
       'Mandant E-Mail',
@@ -386,20 +388,20 @@ const AdminCreditorDataTable: React.FC = () => {
       'Dokument',
       'Verarbeitet am'
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...dataToExport.map(row => {
         // Use ACTUAL AI classification, not derived status
-        const isCreditorDoc = row.aiClassifiedAsCreditor === true ? 'Ja' : 
-                             row.aiClassifiedAsCreditor === false ? 'Nein' : 
-                             'Unbekannt';
-        
+        const isCreditorDoc = row.aiClassifiedAsCreditor === true ? 'Ja' :
+          row.aiClassifiedAsCreditor === false ? 'Nein' :
+            'Unbekannt';
+
         // Use ACTUAL manual review requirement from AI or validation
-        const needsReview = row.manualReviewRequired === true ? 'Ja' : 
-                           row.status === 'needs_review' || row.status === 'duplicate' ? 'Ja' : 
-                           'Nein';
-        
+        const needsReview = row.manualReviewRequired === true ? 'Ja' :
+          row.status === 'needs_review' || row.status === 'duplicate' ? 'Ja' :
+            'Nein';
+
         return [
           `"${row.clientName}"`,
           `"${row.clientEmail}"`,
@@ -420,7 +422,7 @@ const AdminCreditorDataTable: React.FC = () => {
         ].join(',');
       })
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -439,7 +441,7 @@ const AdminCreditorDataTable: React.FC = () => {
     const incomplete = filteredData.filter(r => r.status === 'incomplete').length;
     const duplicate = filteredData.filter(r => r.status === 'duplicate').length;
     const highConfidence = filteredData.filter(r => r.confidence >= 0.9).length;
-    
+
     return { total, ready, needsReview, incomplete, duplicate, highConfidence };
   };
 
@@ -532,7 +534,7 @@ const AdminCreditorDataTable: React.FC = () => {
                   </option>
                 ))}
               </select>
-              
+
               {selectedRows.size > 0 && (
                 <span className="text-sm text-gray-600">
                   {selectedRows.size} ausgewählt
@@ -606,7 +608,7 @@ const AdminCreditorDataTable: React.FC = () => {
                       <input
                         type="text"
                         value={editData.creditorName || row.creditorName}
-                        onChange={(e) => setEditData({...editData, creditorName: e.target.value})}
+                        onChange={(e) => setEditData({ ...editData, creditorName: e.target.value })}
                         className="block w-full border-gray-300 rounded-md shadow-sm text-sm"
                       />
                     ) : (
@@ -632,7 +634,7 @@ const AdminCreditorDataTable: React.FC = () => {
                           type="email"
                           placeholder="E-Mail"
                           value={editData.email || row.email}
-                          onChange={(e) => setEditData({...editData, email: e.target.value})}
+                          onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                           className="block w-full border-gray-300 rounded-md shadow-sm text-sm"
                         />
                       </div>
@@ -651,7 +653,7 @@ const AdminCreditorDataTable: React.FC = () => {
                         type="number"
                         step="0.01"
                         value={editData.claimAmount || row.claimAmount || ''}
-                        onChange={(e) => setEditData({...editData, claimAmount: parseFloat(e.target.value) || null})}
+                        onChange={(e) => setEditData({ ...editData, claimAmount: parseFloat(e.target.value) || null })}
                         className="block w-full border-gray-300 rounded-md shadow-sm text-sm"
                       />
                     ) : (
@@ -728,7 +730,7 @@ const AdminCreditorDataTable: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h4 className="text-lg font-medium text-gray-900 mb-4">Systemhinweise</h4>
           <div className="space-y-2">
-            {filteredData.map(row => 
+            {filteredData.map(row =>
               row.warnings.map((warning, idx) => (
                 <div key={`${row.documentId}-${idx}`} className="flex items-start space-x-2 text-sm">
                   <ExclamationTriangleIcon className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
