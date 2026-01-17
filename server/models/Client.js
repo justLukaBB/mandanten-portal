@@ -290,7 +290,17 @@ const clientSchema = new mongoose.Schema({
   // Document processing
   documents: [documentSchema],
   final_creditor_list: [creditorSchema],
-  
+
+  // Deduplication history (for monitoring AI re-dedup performance)
+  deduplication_history: [{
+    timestamp: Date,
+    method: String, // 'initial', 'periodic-ai-rededup', 'manual'
+    before_count: Number,
+    after_count: Number,
+    duplicates_removed: Number,
+    processing_time_ms: Number
+  }],
+
   // Payment and Review Tracking
   payment_ticket_type: {
     type: String,

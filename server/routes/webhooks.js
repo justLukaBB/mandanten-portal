@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 
-const webhookVerifier = require('../utils/webhookVerifier');          
-const creditorDeduplication = require('../utils/creditorDeduplication'); 
-const Client = require('../models/Client');                           
+const webhookVerifier = require('../utils/webhookVerifier');
+const creditorDeduplication = require('../utils/creditorDeduplication');
+const Client = require('../models/Client');
 const { findCreditorByName } = require('../utils/creditorLookup');
+const aiDedupScheduler = require('../services/aiDedupScheduler');
 
 // Lazy load server functions to avoid circular dependency
 let serverFunctions = null;
@@ -790,6 +791,13 @@ Job ID: ${job_id}`,
             console.error('Failed to trigger internal webhook:', err);
           }
         });
+      }
+
+      // Schedule AI re-deduplication (30 minutes after upload)
+      // This ensures cross-job deduplication works correctly
+      if (normalizedDedupCreditors.length > 0) {
+        console.log(`[webhook] Scheduling AI re-dedup for client ${client_id} in 30 minutes...`);
+        aiDedupScheduler.scheduleAIRededup(client_id, getClient);
       }
 
       const processingTime = Date.now() - startTime;
