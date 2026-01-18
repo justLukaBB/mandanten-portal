@@ -578,7 +578,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
 
                 const response = await axios.post(
-                    `${FASTAPI_URL}/deduplicate-all`,
+                    `${FASTAPI_URL}/api/dedup/deduplicate-all`,
                     {
                         creditors: client.final_creditor_list
                     },
