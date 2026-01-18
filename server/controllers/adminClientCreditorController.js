@@ -1,4 +1,59 @@
 const { v4: uuidv4 } = require('uuid');
+const { findCreditorByName } = require('../utils/creditorLookup');
+
+/**
+ * Enrich deduplicated creditor entry (table data) with local DB info for creditor and representative.
+ * This is used for final_creditor_list entries that have German field names.
+ */
+async function enrichDedupedCreditorFromDb(entry, cache) {
+    if (!entry) return;
+
+    const isMissing = (val) => {
+        if (val === undefined || val === null) return true;
+        if (typeof val === 'string') {
+            const t = val.trim();
+            if (!t) return true;
+            const lower = t.toLowerCase();
+            if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+        }
+        return false;
+    };
+
+    const ensureMatch = async (name) => {
+        if (!name) return null;
+        const key = name.toLowerCase().trim();
+        if (cache.has(key)) return cache.get(key);
+        const m = await findCreditorByName(name);
+        cache.set(key, m || null);
+        return m;
+    };
+
+    // Creditor (glaeubiger_name)
+    if (entry.glaeubiger_name) {
+        const needAddr = isMissing(entry.glaeubiger_adresse);
+        const needEmail = isMissing(entry.email_glaeubiger);
+        if (needAddr || needEmail) {
+            const match = await ensureMatch(entry.glaeubiger_name);
+            if (match) {
+                if (needAddr && match.address) entry.glaeubiger_adresse = match.address;
+                if (needEmail && match.email) entry.email_glaeubiger = match.email;
+            }
+        }
+    }
+
+    // Representative (glaeubigervertreter_name)
+    if (entry.glaeubigervertreter_name) {
+        const needAddr = isMissing(entry.glaeubigervertreter_adresse);
+        const needEmail = isMissing(entry.email_glaeubiger_vertreter);
+        if (needAddr || needEmail) {
+            const match = await ensureMatch(entry.glaeubigervertreter_name);
+            if (match) {
+                if (needAddr && match.address) entry.glaeubigervertreter_adresse = match.address;
+                if (needEmail && match.email) entry.email_glaeubiger_vertreter = match.email;
+            }
+        }
+    }
+}
 
 const createAdminClientCreditorController = ({ Client, safeClientUpdate, DelayedProcessingService }) => {
     return {
@@ -596,6 +651,19 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 console.log(`✅ AI re-deduplication complete:`, stats);
                 console.log(`📊 Received ${deduplicated_creditors?.length || 0} deduplicated creditors from FastAPI`);
                 console.log(`📋 First creditor sample:`, JSON.stringify(deduplicated_creditors?.[0], null, 2));
+
+                // Enrich missing addresses/emails from local DB
+                try {
+                    console.log(`🔍 Enriching ${deduplicated_creditors.length} creditors from local DB...`);
+                    const credCache = new Map();
+                    await Promise.all(
+                        deduplicated_creditors.map(c => enrichDedupedCreditorFromDb(c, credCache))
+                    );
+                    console.log(`✅ Enrichment complete. Cache hits: ${credCache.size}`);
+                } catch (enrichError) {
+                    console.error('⚠️ Enrichment failed, continuing without enrichment:', enrichError);
+                    // Continue processing even if enrichment fails
+                }
 
                 // Ensure all creditors have required fields (especially 'id')
                 const processedCreditors = deduplicated_creditors.map(creditor => {
