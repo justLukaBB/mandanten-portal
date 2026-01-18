@@ -64,6 +64,13 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       });
 
       if (!fileResponse.ok) {
+        if (fileResponse.status === 401) {
+          console.warn('⚠️ Token expired in DocumentViewer, redirecting...');
+          localStorage.removeItem('agent_token');
+          localStorage.removeItem('agent_data');
+          window.location.href = `/agent/login?clientId=${clientId}`;
+          return;
+        }
         if (fileResponse.status === 404) {
           setError('FILE_NOT_FOUND');
           return;
