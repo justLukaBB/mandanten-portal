@@ -355,15 +355,15 @@ const Settings: React.FC = () => {
                 <p className="font-medium">🔗 Review-Links:</p>
                 <div className="mt-1 space-y-1">
                   <div>
-                    <span className="text-xs text-gray-600">Lokal:</span>
+                    <span className="text-xs text-gray-600">Direct Link:</span>
                     <code className="ml-2 text-xs bg-gray-100 px-1 rounded">
-                      http://localhost:3000{lastTestResult.test_client.review_url}
+                      {lastTestResult.test_client.direct_review_url}
                     </code>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-600">Production:</span>
+                    <span className="text-xs text-gray-600">Relative Path:</span>
                     <code className="ml-2 text-xs bg-gray-100 px-1 rounded">
-                      {lastTestResult.test_client.direct_review_url}
+                      {lastTestResult.test_client.review_url}
                     </code>
                   </div>
                 </div>

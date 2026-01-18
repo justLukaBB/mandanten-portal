@@ -8,9 +8,15 @@
 
 // Configuration
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
-const FASTAPI_TIMEOUT = parseInt(process.env.FASTAPI_TIMEOUT) || 1200000; // 30 seconds
+const FASTAPI_TIMEOUT = parseInt(process.env.FASTAPI_TIMEOUT) || 1200000; // 20 minutes
 const FASTAPI_API_KEY = process.env.FASTAPI_API_KEY || ''; // API key for authentication
 const { getSignedUrl } = require("../services/gcs-service");
+
+// Production warning
+if (process.env.NODE_ENV === 'production' && FASTAPI_URL.includes('localhost')) {
+  console.warn('⚠️  WARNING: FASTAPI_URL not set in production environment - using localhost:8000');
+  console.warn('⚠️  Please set FASTAPI_URL environment variable to your production FastAPI service URL');
+}
 
 /**
  * Helper function to create a fetch request with timeout

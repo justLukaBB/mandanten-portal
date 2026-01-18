@@ -499,7 +499,7 @@ class DelayedProcessingService {
    */
   async triggerCreditorReviewProcess(clientId) {
     try {
-      const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+      const baseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
       const webhookUrl = `${baseUrl}/api/zendesk-webhooks/creditor-review-ready`;
       
       console.log(`🔗 Triggering creditor review for client ${clientId}`);

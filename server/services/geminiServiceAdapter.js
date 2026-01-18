@@ -5,11 +5,17 @@ const { v4: uuidv4 } = require('uuid');
 
 class GeminiServiceAdapter {
     constructor() {
-        this.baseUrl = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
+        this.baseUrl = process.env.PYTHON_SERVICE_URL || process.env.FASTAPI_URL || 'http://localhost:8000';
         this.tempDir = path.join(__dirname, '../../uploads/temp_gemini');
         fs.ensureDirSync(this.tempDir);
         console.log(`GeminiServiceAdapter initialized. Service URL: ${this.baseUrl}`);
         console.log(`Temp directory: ${this.tempDir}`);
+
+        // Production warning
+        if (process.env.NODE_ENV === 'production' && this.baseUrl.includes('localhost')) {
+            console.warn('⚠️  WARNING: PYTHON_SERVICE_URL/FASTAPI_URL not set in production environment');
+            console.warn('⚠️  Please set PYTHON_SERVICE_URL or FASTAPI_URL environment variable to your production FastAPI service URL');
+        }
     }
 
     /**
