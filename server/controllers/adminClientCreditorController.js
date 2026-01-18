@@ -595,8 +595,31 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                 console.log(`✅ AI re-deduplication complete:`, stats);
 
+                // Ensure all creditors have required fields (especially 'id')
+                const processedCreditors = deduplicated_creditors.map(creditor => {
+                    // If creditor has no id, generate one
+                    if (!creditor.id) {
+                        creditor.id = uuidv4();
+                        console.log(`⚙️ Generated new ID for merged creditor: ${creditor.sender_name}`);
+                    }
+
+                    // Ensure other required fields have defaults
+                    return {
+                        ...creditor,
+                        contact_status: creditor.contact_status || 'no_response',
+                        amount_source: creditor.amount_source || 'original_document',
+                        settlement_response_status: creditor.settlement_response_status || 'pending',
+                        nullplan_response_status: creditor.nullplan_response_status || 'pending',
+                        manually_reviewed: creditor.manually_reviewed || false,
+                        status: creditor.status || 'confirmed',
+                        created_at: creditor.created_at || new Date().toISOString(),
+                        needs_manual_review: creditor.needs_manual_review || false,
+                        review_reasons: creditor.review_reasons || []
+                    };
+                });
+
                 // Update client with deduplicated creditors
-                client.final_creditor_list = deduplicated_creditors;
+                client.final_creditor_list = processedCreditors;
                 client.updated_at = new Date();
 
                 // Add to status history
