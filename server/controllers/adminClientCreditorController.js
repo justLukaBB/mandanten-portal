@@ -606,6 +606,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     }
 
                     // Ensure other required fields have defaults
+                    // Note: Keep existing review_reasons as-is (don't clean them)
                     return {
                         ...creditor,
                         contact_status: creditor.contact_status || 'no_response',
