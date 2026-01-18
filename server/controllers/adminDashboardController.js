@@ -828,8 +828,6 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 // Try MongoDB first
                 try {
                     if (databaseService.isHealthy()) {
-                        total = await Client.countDocuments(query);
-
                         const pipeline = [
                             { $match: query },
                             { $sort: { created_at: -1 } },
@@ -861,7 +859,14 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                             }
                         ];
 
-                        clients = await Client.aggregate(pipeline);
+                        // Run count and data fetch in parallel
+                        const [totalResult, clientsResult] = await Promise.all([
+                            Client.countDocuments(query),
+                            Client.aggregate(pipeline)
+                        ]);
+
+                        total = totalResult;
+                        clients = clientsResult;
 
                         console.log(`📊 Found ${clients.length} clients in MongoDB (Page ${page}/${Math.ceil(total / limit)})`);
                     }

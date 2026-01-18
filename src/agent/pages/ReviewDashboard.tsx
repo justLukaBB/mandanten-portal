@@ -113,24 +113,39 @@ const ReviewDashboard: React.FC = () => {
     }
   }, [clientId]);
 
+  // Authentication helper
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('agent_token');
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+
+    if (response.status === 401) {
+      console.warn('⚠️ Token expired, redirecting to login...');
+      localStorage.removeItem('agent_token');
+      localStorage.removeItem('agent_data');
+      navigate(`/agent/login?clientId=${clientId}`);
+      // Throw a specific error to stop processing but we won't display it
+      throw new Error('AUTH_REDIRECT');
+    }
+
+    return response;
+  };
+
   const loadReviewData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('agent_token');
-      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}`);
 
       if (!response.ok) {
-        if (response.status === 401) {
-          navigate(`/agent/login?clientId=${clientId}`);
-          return;
-        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -150,9 +165,14 @@ const ReviewDashboard: React.FC = () => {
       }
 
     } catch (error: any) {
+      if (error.message === 'AUTH_REDIRECT') return; // Silent return
       console.error('❌ Error loading review data:', error);
       setError(error.message || 'Failed to load review data');
     } finally {
+      // Only stop loading if we're not redirecting
+      // But verify logic: if we redirected, component might unmount. 
+      // Safe to set false?
+      // If we navigate, state update on unmounted component warning might occur, but it's minor.
       setLoading(false);
     }
   };
@@ -164,22 +184,16 @@ const ReviewDashboard: React.FC = () => {
 
     try {
       const currentDoc = reviewData.documents.need_review[currentDocIndex];
-      const token = localStorage.getItem('agent_token');
 
       console.log(`📤 Sending correction request:`, {
         clientId,
         document_id: currentDoc.id,
         action,
-        corrections,
-        hasToken: !!token
+        corrections
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           document_id: currentDoc.id,
           corrections: corrections,
@@ -205,6 +219,7 @@ const ReviewDashboard: React.FC = () => {
       }
 
     } catch (error: any) {
+      if (error.message === 'AUTH_REDIRECT') return;
       console.error(`❌ Error saving ${action}:`, error);
       setError(error.message || `Failed to save ${action}`);
     } finally {
@@ -218,8 +233,6 @@ const ReviewDashboard: React.FC = () => {
     setSaving(true);
 
     try {
-      const token = localStorage.getItem('agent_token');
-
       // First, auto-confirm all high-confidence creditors
       const highConfidenceCreditors = reviewData.creditors.verified || [];
       for (const creditor of highConfidenceCreditors) {
@@ -231,12 +244,8 @@ const ReviewDashboard: React.FC = () => {
 
         if (relatedDoc && !relatedDoc.manually_reviewed) {
           // Auto-confirm high-confidence creditor
-          await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
+          await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
             body: JSON.stringify({
               document_id: relatedDoc.id,
               corrections: {},
@@ -247,12 +256,8 @@ const ReviewDashboard: React.FC = () => {
       }
 
       // Now complete the entire session
-      const response = await fetch(`${API_BASE_URL}/api/agent-review/${clientId}/complete`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/complete`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           zendesk_ticket_id: reviewData.client.id // Or get from elsewhere if needed
         })
@@ -517,10 +522,10 @@ const ReviewDashboard: React.FC = () => {
       <div className="bg-white border-t p-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
           <DocumentTextIcon className="h-5 w-5 text-gray-400" />
-       <span className="text-sm text-gray-700 max-w-[200px] truncate inline-block">
-  Dokument {currentDocIndex + 1} von {documentsToReview.length}:{' '}
-  {truncateFilename(currentDoc.filename || currentDoc.name || '', 10)}
-</span>
+          <span className="text-sm text-gray-700 max-w-[200px] truncate inline-block">
+            Dokument {currentDocIndex + 1} von {documentsToReview.length}:{' '}
+            {truncateFilename(currentDoc.filename || currentDoc.name || '', 10)}
+          </span>
 
         </div>
 

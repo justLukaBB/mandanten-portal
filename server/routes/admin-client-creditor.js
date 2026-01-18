@@ -11,8 +11,8 @@ const { authenticateAdmin, rateLimits } = require('../middleware/auth');
 const { rateLimits: securityRateLimits } = require('../middleware/security');
 
 
-module.exports = ({ Client, safeClientUpdate, DelayedProcessingService }) => {
-    const controller = createAdminClientCreditorController({ Client, safeClientUpdate, DelayedProcessingService });
+module.exports = ({ Client, safeClientUpdate, DelayedProcessingService, aiDedupScheduler }) => {
+    const controller = createAdminClientCreditorController({ Client, safeClientUpdate, DelayedProcessingService, aiDedupScheduler });
 
     // Admin: Add manual creditor to any client
     router.post('/clients/:clientId/add-creditor',

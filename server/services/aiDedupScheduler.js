@@ -7,6 +7,7 @@
  */
 
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
 // Store pending dedup jobs per client
 const pendingJobs = new Map();
@@ -120,8 +121,14 @@ async function runAIRededup(clientId, getClientFunction) {
       processing_time_ms: Date.now() - startTime
     });
 
-    // Update client with deduplicated list
-    client.final_creditor_list = deduplicated_creditors;
+    // Ensure all creditors have IDs before saving
+    client.final_creditor_list = deduplicated_creditors.map(c => ({
+      ...c,
+      id: c.id || uuidv4(), // Preserve existing ID or generate new one
+      status: c.status || 'confirmed', // Ensure status exists
+      ai_confidence: c.ai_confidence || 1.0,
+      created_at: c.created_at || new Date()
+    }));
 
     // Add deduplication history entry
     if (!client.deduplication_history) {
