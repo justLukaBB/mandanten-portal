@@ -529,6 +529,119 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     details: error.message
                 });
             }
+        },
+
+        // Admin: Trigger AI Re-Deduplication for a client
+        triggerAIReDedup: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+
+                console.log(`🤖 Admin triggering AI re-deduplication for client ${clientId}`);
+
+                // Find client
+                let client;
+                try {
+                    client = await Client.findOne({
+                        $or: [
+                            { id: clientId },
+                            { aktenzeichen: clientId }
+                        ]
+                    });
+
+                    if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+                        client = await Client.findOne({ _id: clientId });
+                    }
+                } catch (findError) {
+                    console.error('Error finding client:', findError);
+                    client = null;
+                }
+
+                if (!client) {
+                    return res.status(404).json({
+                        error: 'Client not found',
+                        client_id: clientId
+                    });
+                }
+
+                // Check if client has creditors
+                if (!client.final_creditor_list || client.final_creditor_list.length === 0) {
+                    return res.status(400).json({
+                        error: 'No creditors found',
+                        message: 'Client has no creditors to deduplicate'
+                    });
+                }
+
+                console.log(`📊 Starting AI re-deduplication for ${client.final_creditor_list.length} creditors`);
+
+                // Call FastAPI deduplication endpoint
+                const axios = require('axios');
+                const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
+
+                const response = await axios.post(
+                    `${FASTAPI_URL}/deduplicate-all`,
+                    {
+                        creditors: client.final_creditor_list
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': process.env.FASTAPI_API_KEY || ''
+                        },
+                        timeout: 120000 // 2 minutes
+                    }
+                );
+
+                const { deduplicated_creditors, stats } = response.data;
+
+                console.log(`✅ AI re-deduplication complete:`, stats);
+
+                // Update client with deduplicated creditors
+                client.final_creditor_list = deduplicated_creditors;
+                client.updated_at = new Date();
+
+                // Add to status history
+                client.status_history.push({
+                    id: uuidv4(),
+                    status: 'ai_rededup_triggered',
+                    changed_by: 'admin',
+                    metadata: {
+                        original_count: stats.original_count,
+                        unique_count: stats.unique_count,
+                        duplicates_removed: stats.duplicates_removed,
+                        triggered_by: req.adminEmail || 'admin'
+                    }
+                });
+
+                await client.save();
+
+                res.json({
+                    success: true,
+                    message: 'AI re-deduplication completed successfully',
+                    stats: {
+                        original_count: stats.original_count,
+                        unique_count: stats.unique_count,
+                        duplicates_removed: stats.duplicates_removed
+                    },
+                    creditors: deduplicated_creditors
+                });
+
+            } catch (error) {
+                console.error('❌ Error triggering AI re-dedup:', error);
+
+                let errorMessage = error.message;
+                let statusCode = 500;
+
+                if (error.response) {
+                    // FastAPI returned an error
+                    errorMessage = error.response.data?.detail || error.response.data?.error || error.message;
+                    statusCode = error.response.status;
+                }
+
+                res.status(statusCode).json({
+                    error: 'Failed to trigger AI re-deduplication',
+                    details: errorMessage
+                });
+            }
         }
     };
 };
