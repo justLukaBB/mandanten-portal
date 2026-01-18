@@ -594,6 +594,8 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 const { deduplicated_creditors, stats } = response.data;
 
                 console.log(`✅ AI re-deduplication complete:`, stats);
+                console.log(`📊 Received ${deduplicated_creditors?.length || 0} deduplicated creditors from FastAPI`);
+                console.log(`📋 First creditor sample:`, JSON.stringify(deduplicated_creditors?.[0], null, 2));
 
                 // Ensure all creditors have required fields (especially 'id')
                 const processedCreditors = deduplicated_creditors.map(creditor => {
@@ -619,6 +621,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 });
 
                 // Update client with deduplicated creditors
+                console.log(`💾 Saving ${processedCreditors.length} processed creditors to database`);
                 client.final_creditor_list = processedCreditors;
                 client.updated_at = new Date();
 
@@ -636,6 +639,8 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 });
 
                 await client.save();
+
+                console.log(`✅ Client saved successfully with ${client.final_creditor_list.length} creditors`);
 
                 res.json({
                     success: true,
