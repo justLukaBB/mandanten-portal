@@ -399,7 +399,23 @@ class ClientCreditorController {
 
             // Security: Verify authenticated client matches requested client
             if (req.clientId && req.clientId !== clientId) {
-                return res.status(403).json({ error: 'Forbidden: You can only access your own creditors' });
+                // Allow access if clientId matches the authenticated client's aktenzeichen
+                // We need to look up the client to verify
+                try {
+                    const client = await this.Client.findOne({ id: req.clientId });
+                    // If client found, check if requested ID matches ID OR Aktenzeichen
+                    if (!client || (client.id !== clientId && client.aktenzeichen !== clientId)) {
+                        console.log(`❌ Access denied: Token ClientId (${req.clientId}) !== Requested ClientId (${clientId}) and not matching Aktenzeichen`);
+                        return res.status(403).json({
+                            error: 'Forbidden: You can only access your own creditors',
+                            debug: { tokenClientId: req.clientId, requestedClientId: clientId }
+                        });
+                    }
+                    // If we get here, it was a valid alias match
+                } catch (err) {
+                    console.error('Error verifying client access alias:', err);
+                    return res.status(403).json({ error: 'Forbidden: You can only access your own creditors' });
+                }
             }
 
             console.log(`📋 Client ${clientId} fetching creditors list`);

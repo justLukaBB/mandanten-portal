@@ -214,6 +214,20 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
+// Performance Logging Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > 1000) {
+      console.log(`[SLOW API] ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms 🐢`);
+    } else {
+      console.log(`[API] ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+    }
+  });
+  next();
+});
+
 // 9.2 Body Parsing (with webhook exception)
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/webhooks/')) {
