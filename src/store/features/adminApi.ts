@@ -105,6 +105,13 @@ export const adminApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['User'],
         }),
+        skipSevenDayDelay: builder.mutation<{ success: boolean }, string>({
+            query: (clientId) => ({
+                url: `/api/admin/clients/${clientId}/skip-seven-day-delay`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['User'],
+        }),
     }),
 });
 
@@ -145,7 +152,5 @@ export const {
     useGetNullplanResponsesQuery,
     useTriggerImmediateReviewMutation,
     useSkipSevenDayDelayMutation,
-    useTriggerAIDedupMutation,
-    useSimulate30DayPeriodMutation,
     useGetDashboardStatsQuery
 } = adminApiExtended;

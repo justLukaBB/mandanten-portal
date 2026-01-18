@@ -1,6 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const webhookVerifier = require('../utils/webhookVerifier');
+const creditorDeduplication = require('../utils/creditorDeduplication');
+const Client = require('../models/Client');
+const { findCreditorByName } = require('../utils/creditorLookup');
+const aiDedupScheduler = require('../services/aiDedupScheduler');
+
+// Lazy load server functions to avoid circular dependency
+let serverFunctions = null;
+function getServerFunctions() {
+  if (!serverFunctions) {
+    serverFunctions = require('../server');
+  }
+  return serverFunctions;
+}
+
+const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
+  parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
 const createWebhookController = require('../controllers/webhookController');
 
 /**
