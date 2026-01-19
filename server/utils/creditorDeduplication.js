@@ -198,7 +198,15 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
  * @param {string} strategy
  */
 function mergeCreditorLists(existingCreditors = [], newCreditors = [], strategy = 'highest_amount') {
-  const allCreditors = [...existingCreditors, ...newCreditors];
+  // Ensure all new creditors have fresh unique IDs to prevent ID collisions
+  // This is critical for the frontend selection logic which relies on unique IDs
+  const newWithFreshIds = newCreditors.map(c => ({
+    ...c,
+    id: uuidv4(),
+    _original_id: c.id  // Keep original ID for reference
+  }));
+
+  const allCreditors = [...existingCreditors, ...newWithFreshIds];
   return deduplicateCreditors(allCreditors, strategy);
 }
 

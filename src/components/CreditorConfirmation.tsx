@@ -55,10 +55,30 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
       setLoading(true);
       setError(null);
       const response = await api.get(`/api/clients/${clientId}/creditor-confirmation`);
-      setConfirmationData(response.data);
+
+      // Ensure all creditors have unique IDs (fallback for backend issues)
+      const creditorsWithUniqueIds = response.data.creditors.map((c: Creditor, idx: number) => ({
+        ...c,
+        id: c.id || `fallback-${idx}-${Date.now()}`
+      }));
+
+      // Check for duplicate IDs and fix them
+      const seenIds = new Set<string>();
+      creditorsWithUniqueIds.forEach((c: Creditor, idx: number) => {
+        if (seenIds.has(c.id)) {
+          console.warn(`[CreditorConfirmation] Duplicate creditor ID detected: ${c.id}, generating new ID`);
+          c.id = `dedup-${idx}-${Date.now()}`;
+        }
+        seenIds.add(c.id);
+      });
+
+      setConfirmationData({
+        ...response.data,
+        creditors: creditorsWithUniqueIds
+      });
 
       // Pre-select all creditors by default
-      const allCreditorIds = new Set<string>(response.data.creditors.map((c: Creditor) => c.id));
+      const allCreditorIds = new Set<string>(creditorsWithUniqueIds.map((c: Creditor) => c.id));
       setSelectedCreditors(allCreditorIds);
     } catch (error: any) {
       console.error('Error fetching confirmation data:', error);

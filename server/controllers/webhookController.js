@@ -107,7 +107,8 @@ async function enrichCreditorContactFromDb(docResult, cache) {
 
 /**
  * Enrich deduplicated creditor entry (table data) with local DB info for creditor and representative.
- * This is used for final_creditor_list entries that have German field names.
+ * Supports BOTH German field names (glaeubiger_name, etc.) AND English field names (sender_name, etc.)
+ * This is critical for late uploads which use English field names from deduplicateCreditorsFromDocuments()
  */
 async function enrichDedupedCreditorFromDb(entry, cache) {
     if (!entry) return;
@@ -132,28 +133,46 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
         return m;
     };
 
-    // Creditor (glaeubiger_name)
-    if (entry.glaeubiger_name) {
-        const needAddr = isMissing(entry.glaeubiger_adresse);
-        const needEmail = isMissing(entry.email_glaeubiger);
+    // Creditor - support BOTH German (glaeubiger_name) AND English (sender_name) field names
+    const creditorName = entry.glaeubiger_name || entry.sender_name;
+    if (creditorName) {
+        // Check if address is missing in either field format
+        const needAddrGerman = isMissing(entry.glaeubiger_adresse);
+        const needAddrEnglish = isMissing(entry.sender_address);
+        const needAddr = needAddrGerman && needAddrEnglish;
+
+        // Check if email is missing in either field format
+        const needEmailGerman = isMissing(entry.email_glaeubiger);
+        const needEmailEnglish = isMissing(entry.sender_email);
+        const needEmail = needEmailGerman && needEmailEnglish;
+
         if (needAddr || needEmail) {
-            const match = await ensureMatch(entry.glaeubiger_name);
+            const match = await ensureMatch(creditorName);
             if (match) {
-                if (needAddr && match.address) entry.glaeubiger_adresse = match.address;
-                if (needEmail && match.email) entry.email_glaeubiger = match.email;
+                if (needAddr && match.address) {
+                    // Set BOTH field formats for compatibility
+                    entry.glaeubiger_adresse = match.address;
+                    entry.sender_address = match.address;
+                }
+                if (needEmail && match.email) {
+                    // Set BOTH field formats for compatibility
+                    entry.email_glaeubiger = match.email;
+                    entry.sender_email = match.email;
+                }
             }
         }
     }
 
-    // Representative (glaeubigervertreter_name)
-    if (entry.glaeubigervertreter_name) {
-        const needAddr = isMissing(entry.glaeubigervertreter_adresse);
-        const needEmail = isMissing(entry.email_glaeubiger_vertreter);
-        if (needAddr || needEmail) {
-            const match = await ensureMatch(entry.glaeubigervertreter_name);
+    // Representative - support BOTH German (glaeubigervertreter_name) AND English (actual_creditor for representatives)
+    const repName = entry.glaeubigervertreter_name || (entry.is_representative ? entry.actual_creditor : null);
+    if (repName) {
+        const needAddrGerman = isMissing(entry.glaeubigervertreter_adresse);
+        const needEmailGerman = isMissing(entry.email_glaeubiger_vertreter);
+        if (needAddrGerman || needEmailGerman) {
+            const match = await ensureMatch(repName);
             if (match) {
-                if (needAddr && match.address) entry.glaeubigervertreter_adresse = match.address;
-                if (needEmail && match.email) entry.email_glaeubiger_vertreter = match.email;
+                if (needAddrGerman && match.address) entry.glaeubigervertreter_adresse = match.address;
+                if (needEmailGerman && match.email) entry.email_glaeubiger_vertreter = match.email;
             }
         }
     }
