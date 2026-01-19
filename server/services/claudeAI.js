@@ -223,12 +223,10 @@ WICHTIG:
       }
       
       // Add processing metadata
-      const CONFIDENCE_THRESHOLD = 0.80;
-      
       result.document_id = documentId;
       result.original_name = originalName;
       result.processing_status = 'completed';
-      result.manual_review_required = result.confidence < CONFIDENCE_THRESHOLD;
+      // manual_review_required is set by Claude AI directly - don't override it
       result.timestamp = new Date().toISOString();
       result.processing_method = 'claude_simplified_creditor_classification';
       

@@ -449,13 +449,10 @@ class ZendeskWebhookController {
             const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
             const creditors = client.final_creditor_list || [];
 
-            // Helper to check if creditor needs review (from creditor flag OR linked document)
-            // Match same logic as AdminCreditorDataTable.tsx
+            // Helper to check if creditor needs review (from linked document flags ONLY)
+            // Match same logic as AdminCreditorDataTable.tsx - only document-level flags
             const creditorNeedsManualReview = (creditor) => {
-                // Check creditor's own flag
-                if (creditor.needs_manual_review === true) return true;
-
-                // Check linked document's flags
+                // Check linked document's flags (NOT creditor.needs_manual_review)
                 const linkedDocs = documents.filter(doc =>
                     creditor.document_id === doc.id ||
                     creditor.source_document === doc.name ||
@@ -471,17 +468,17 @@ class ZendeskWebhookController {
                 );
             };
 
-            // Check which creditors need manual review (using needs_manual_review flag, NOT confidence)
+            // Check which creditors need manual review (using document flags, NOT creditor.needs_manual_review)
             const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
             const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
 
             console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
-            console.log(`   Creditors needing manual review: ${needsReview.length}`);
+            console.log(`   Creditors needing manual review (from doc flags): ${needsReview.length}`);
             needsReview.forEach(c => {
-                console.log(`      - ${c.sender_name} (creditor flag: ${c.needs_manual_review}, doc: ${c.document_id || c.source_document})`);
+                console.log(`      - ${c.sender_name} (doc: ${c.document_id || c.source_document})`);
             });
-            console.log(`   Creditors OK (no review needed): ${confidenceOk.length}`);
+            console.log(`   Creditors OK (no doc review flags): ${confidenceOk.length}`);
 
             // Determine next action
             // Simplified logic for this port, assuming manual review if any needs review
@@ -504,7 +501,7 @@ class ZendeskWebhookController {
                 client.current_status = "creditor_review";
                 client.payment_ticket_type = "manual_review";
             } else {
-                // AUTO-APPROVED: No creditors have needs_manual_review=true
+                // AUTO-APPROVED: No documents have manual review flags
                 // Skip agent review and go directly to client confirmation
                 client.current_status = "awaiting_client_confirmation";
                 client.payment_ticket_type = "auto_approved";
@@ -517,13 +514,13 @@ class ZendeskWebhookController {
                     status: "awaiting_client_confirmation",
                     changed_by: "system",
                     metadata: {
-                        reason: "Auto-approved: No creditors require manual review",
+                        reason: "Auto-approved: No documents require manual review",
                         creditors_count: creditors.length,
                         auto_approved: true,
                     },
                 });
 
-                console.log(`🤖 AUTO-APPROVED: ${client.aktenzeichen} - All ${creditors.length} creditors have needs_manual_review=false`);
+                console.log(`🤖 AUTO-APPROVED: ${client.aktenzeichen} - All ${creditors.length} creditors' documents have no manual review flags`);
             }
             client.payment_processed_at = new Date();
 
@@ -687,10 +684,9 @@ class ZendeskWebhookController {
             0
         );
 
-        // Helper to check if creditor needs review (from creditor flag OR linked document)
-        // Match same logic as AdminCreditorDataTable.tsx
+        // Helper to check if creditor needs review (from linked document flags ONLY)
+        // Match same logic as AdminCreditorDataTable.tsx - only document-level flags
         const creditorNeedsReview = (creditor) => {
-            if (creditor.needs_manual_review === true) return true;
             const linkedDocs = documents.filter(doc =>
                 creditor.document_id === doc.id ||
                 creditor.source_document === doc.name ||
@@ -705,7 +701,7 @@ class ZendeskWebhookController {
             );
         };
 
-        // Separate creditors by needs_manual_review (from creditor OR document)
+        // Separate creditors by document-level manual review flags
         const verifiedOk = creditors.filter(c => !creditorNeedsReview(c));
         const needsReviewList = creditors.filter(c => creditorNeedsReview(c));
 
@@ -1046,13 +1042,10 @@ Diese E-Mail wurde automatisch generiert.
             // All documents processed - analyze creditors
             const creditors = client.final_creditor_list || [];
 
-            // Helper to check if creditor needs review (from creditor flag OR linked document)
-            // Match same logic as AdminCreditorDataTable.tsx
+            // Helper to check if creditor needs review (from linked document flags ONLY)
+            // Match same logic as AdminCreditorDataTable.tsx - only document-level flags
             const creditorNeedsManualReview = (creditor) => {
-                // Check creditor's own flag
-                if (creditor.needs_manual_review === true) return true;
-
-                // Check linked document's flags
+                // Check linked document's flags (NOT creditor.needs_manual_review)
                 const linkedDocs = documents.filter(doc =>
                     creditor.document_id === doc.id ||
                     creditor.source_document === doc.name ||
@@ -1068,15 +1061,15 @@ Diese E-Mail wurde automatisch generiert.
                 );
             };
 
-            // Check if ANY creditor needs manual review (from creditor flag OR linked document)
+            // Check if ANY creditor needs manual review (based on document flags)
             const creditorsNeedingManualReview = creditors.filter(c => creditorNeedsManualReview(c));
             const manualReviewRequired = creditorsNeedingManualReview.length > 0;
 
             console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
-            console.log(`   Creditors needing manual review: ${creditorsNeedingManualReview.length}`);
+            console.log(`   Creditors needing manual review (from doc flags): ${creditorsNeedingManualReview.length}`);
             creditorsNeedingManualReview.forEach(c => {
-                console.log(`      - ${c.sender_name} (creditor flag: ${c.needs_manual_review}, doc linked: ${c.document_id || c.source_document})`);
+                console.log(`      - ${c.sender_name} (doc: ${c.document_id || c.source_document})`);
             });
             console.log(`   Manual review required: ${manualReviewRequired}`);
 

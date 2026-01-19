@@ -326,30 +326,10 @@ Diese E-Mail wurde automatisch generiert.
                 return needsReview;
             });
 
-            // Get creditors that need review
-            const creditorsToReview = creditors.filter(c => (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
-            const verifiedCreditors = creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+            // Note: creditorsToReview/verifiedCreditors will be set AFTER creditorsWithDocuments is built
+            // (see below) - we use doc-based flags, not confidence threshold
 
-            console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs, ${creditorsToReview.length} creditors need review`);
-            console.log(`📊 Creditor details:`, {
-                totalCreditors: creditors.length,
-                verifiedCreditors: verifiedCreditors.length,
-                confidenceThreshold: config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD,
-                creditorsSample: creditors.slice(0, 2).map(c => ({
-                    id: c.id,
-                    name: c.sender_name,
-                    amount: c.claim_amount,
-                    confidence: c.confidence
-                })),
-                verifiedSample: verifiedCreditors.slice(0, 2).map(c => ({
-                    id: c.id,
-                    name: c.sender_name,
-                    amount: c.claim_amount,
-                    amountType: typeof c.claim_amount,
-                    confidence: c.confidence,
-                    confidenceType: typeof c.confidence
-                }))
-            });
+            console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs need review`);
 
             // Log document structure for debugging
             if (documentsToReview.length > 0) {
@@ -362,28 +342,25 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // Build creditors with their associated documents for the new UI
-            // Check needs_manual_review from: 1) creditor flag, 2) linked document's validation flag
+            // Check needs_manual_review from linked document's validation flags ONLY
+            // This matches the logic in AdminCreditorDataTable.tsx (doc.manual_review_required || validation?.requires_manual_review)
             const creditorsWithDocuments = creditors.map(creditor => {
                 const creditorDocs = getDocumentsForCreditor(creditor, documents);
 
-                // Check if creditor or ANY linked document needs manual review
-                // Match same logic as AdminCreditorDataTable.tsx line 264
-                const creditorNeedsReview = creditor.needs_manual_review === true;
-                const documentNeedsReview = creditorDocs.some(doc =>
+                // Check if ANY linked document needs manual review
+                // Uses same logic as AdminCreditorDataTable.tsx - only document-level flags
+                const needsManualReview = creditorDocs.some(doc =>
                     doc.manual_review_required === true ||
                     doc.validation?.requires_manual_review === true ||
                     doc.extracted_data?.manual_review_required === true
                 );
 
-                // Collect review reasons from creditor and documents
+                // Collect review reasons from documents only (not creditor flag)
                 const allReviewReasons = [
-                    ...(creditor.review_reasons || []),
                     ...creditorDocs.flatMap(doc => doc.validation?.review_reasons || [])
                 ];
 
-                const needsManualReview = creditorNeedsReview || documentNeedsReview;
-
-                console.log(`   Creditor ${creditor.sender_name}: creditorFlag=${creditorNeedsReview}, docFlag=${documentNeedsReview}, final=${needsManualReview}`);
+                console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (from ${creditorDocs.length} docs)`);
 
                 return {
                     creditor: creditor,
@@ -417,11 +394,12 @@ Diese E-Mail wurde automatisch generiert.
                 },
                 creditors: {
                     all: creditors,
-                    need_review: creditorsToReview,
-                    verified: creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD),
+                    // Use doc-based flags for need_review/verified (not confidence threshold)
+                    need_review: creditorsNeedingReview.map(c => c.creditor),
+                    verified: verifiedCreditorsWithDocs.map(c => c.creditor),
                     total_count: creditors.length,
-                    review_count: creditorsToReview.length,
-                    // NEW: Creditors with their associated documents for the agent review UI
+                    review_count: creditorsNeedingReview.length,
+                    // Creditors with their associated documents for the agent review UI
                     with_documents: creditorsWithDocuments,
                     needing_review_with_docs: creditorsNeedingReview,
                     verified_with_docs: verifiedCreditorsWithDocs
@@ -736,12 +714,9 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
             const documents = client.documents || [];
 
-            // Helper to check if creditor needs review (from creditor flag OR linked document)
-            // Match same logic as AdminCreditorDataTable.tsx
+            // Helper to check if creditor needs review (from linked document flags ONLY)
+            // Match same logic as AdminCreditorDataTable.tsx - only document-level flags
             const creditorNeedsManualReview = (creditor) => {
-                // Check creditor's own flag
-                if (creditor.needs_manual_review === true) return true;
-
                 // Check linked document's flags (flexible matching for timestamp prefixes)
                 const linkedDocs = documents.filter(doc =>
                     creditor.document_id === doc.id ||
@@ -788,7 +763,7 @@ Diese E-Mail wurde automatisch generiert.
             });
 
             if (autoConfirmedCount > 0) {
-                console.log(`✅ Auto-confirmed ${autoConfirmedCount} creditors (needs_manual_review=false)`);
+                console.log(`✅ Auto-confirmed ${autoConfirmedCount} creditors (no document-level manual review flags)`);
             }
 
             // Also mark all creditor documents as reviewed
