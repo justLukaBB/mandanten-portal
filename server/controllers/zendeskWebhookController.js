@@ -373,13 +373,15 @@ class ZendeskWebhookController {
                 req.body
             );
 
-            const {
-                user_id, // Zendesk user ID
-                email,
-                external_id, // This is the aktenzeichen
-                name,
-                agent_email,
-            } = req.body;
+            // Support both flat format and nested ticket.requester format
+            const ticket = req.body.ticket;
+            const requester = ticket?.requester;
+
+            const user_id = req.body.user_id || ticket?.id;
+            const email = req.body.email || requester?.email;
+            const external_id = req.body.external_id || requester?.aktenzeichen;
+            const name = req.body.name || requester?.name;
+            const agent_email = req.body.agent_email;
 
             if (!external_id && !email) {
                 return res.status(400).json({
