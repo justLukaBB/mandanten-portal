@@ -35,6 +35,8 @@ interface Creditor {
   needs_manual_review?: boolean;
   review_reasons?: string[];
   manually_reviewed?: boolean;
+  document_id?: string;
+  source_document?: string;
 }
 
 interface CreditorWithDocuments {
@@ -106,8 +108,8 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
       notes: formData.notes.trim()
     };
 
-    // Get the first document ID for this creditor
-    const documentId = documents[0]?.id;
+    // Get the document ID from: 1) first document, 2) creditor.document_id
+    const documentId = documents[0]?.id || creditor.document_id;
     onCorrectCreditor(creditor.id, corrections, documentId);
     setShowCorrectionForm(false);
   };
@@ -117,14 +119,19 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
       alert('Bitte wählen Sie einen Grund aus.');
       return;
     }
-    const documentId = documents[0]?.id;
+    // Get the document ID from: 1) first document, 2) creditor.document_id
+    const documentId = documents[0]?.id || creditor.document_id;
     onSkipCreditor(creditor.id, skipReason, documentId);
     setShowSkipForm(false);
     setSkipReason('');
   };
 
   const handleConfirm = () => {
-    const documentId = documents[0]?.id;
+    // Try to get document ID from: 1) first document, 2) creditor.document_id, 3) creditor.source_document
+    const documentId = documents[0]?.id || creditor.document_id;
+    if (!documentId) {
+      console.error('No document ID found for creditor:', creditor.id, creditor.sender_name);
+    }
     onConfirmCreditor(creditor.id, documentId);
   };
 

@@ -430,23 +430,25 @@ Diese E-Mail wurde automatisch generiert.
     saveCorrections: async (req, res) => {
         try {
             const { clientId } = req.params;
-            const { document_id, corrections, action } = req.body; // action: 'correct', 'skip', 'confirm'
+            const { document_id, creditor_id, corrections, action } = req.body; // action: 'correct', 'skip', 'confirm'
 
-            console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}, action: ${action}`);
+            console.log(`✏️ Agent Review: Saving corrections for client ${clientId}, document ${document_id}, creditor ${creditor_id}, action: ${action}`);
 
             // Enhanced input validation with debugging
             console.log(`📝 Correction request data:`, {
                 document_id,
+                creditor_id,
                 action,
                 corrections: corrections ? Object.keys(corrections) : 'null',
                 agentId: req.agentId,
                 agentUsername: req.agentUsername
             });
 
-            if (!document_id) {
-                console.log(`❌ Missing document_id in correction request`);
+            // Either document_id or creditor_id is required
+            if (!document_id && !creditor_id) {
+                console.log(`❌ Missing both document_id and creditor_id in correction request`);
                 return res.status(400).json({
-                    error: 'document_id is required'
+                    error: 'Either document_id or creditor_id is required'
                 });
             }
 
@@ -473,25 +475,39 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Safe document lookup
+            // Safe document lookup - document is optional now
             const documents = client.documents || [];
-            const document = documents.find(d => d.id === document_id);
-            if (!document) {
-                return res.status(404).json({
-                    error: 'Document not found',
-                    document_id: document_id
-                });
+            let document = null;
+            if (document_id) {
+                document = documents.find(d => d.id === document_id);
+                // Document not found is only an error if we don't have a creditor_id fallback
+                if (!document && !creditor_id) {
+                    return res.status(404).json({
+                        error: 'Document not found',
+                        document_id: document_id
+                    });
+                }
             }
 
-            // Find related creditor (if any)
+            // Find related creditor - try multiple methods
             let creditorIndex = -1;
             const creditors = client.final_creditor_list || [];
 
-            for (let i = 0; i < creditors.length; i++) {
-                if (creditors[i].document_id === document_id ||
-                    creditors[i].source_document === document.name) {
-                    creditorIndex = i;
-                    break;
+            // Method 1: Find by creditor_id directly
+            if (creditor_id) {
+                creditorIndex = creditors.findIndex(c => c.id === creditor_id);
+                console.log(`   Looking for creditor by id ${creditor_id}: found at index ${creditorIndex}`);
+            }
+
+            // Method 2: Find by document_id or source_document
+            if (creditorIndex === -1 && document_id) {
+                for (let i = 0; i < creditors.length; i++) {
+                    if (creditors[i].document_id === document_id ||
+                        (document && creditors[i].source_document === document.name)) {
+                        creditorIndex = i;
+                        console.log(`   Found creditor by document match at index ${creditorIndex}`);
+                        break;
+                    }
                 }
             }
 
@@ -519,9 +535,9 @@ Diese E-Mail wurde automatisch generiert.
                         review_action: 'corrected'
                     });
 
-                    console.log(`✅ Updated existing creditor for document ${document_id}`);
-                } else {
-                    // Create new creditor from corrections
+                    console.log(`✅ Updated existing creditor (creditor_id: ${creditor_id}, document_id: ${document_id})`);
+                } else if (document) {
+                    // Create new creditor from corrections (we have a document)
                     const claimAmount = corrections.claim_amount ? parseFloat(corrections.claim_amount) : 0;
 
                     const newCreditor = {
@@ -545,26 +561,35 @@ Diese E-Mail wurde automatisch generiert.
 
                     creditors.push(newCreditor);
                     console.log(`✅ Created new creditor for document ${document_id}`);
+                } else {
+                    // No existing creditor and no document - cannot correct
+                    console.log(`⚠️ Cannot correct: creditor not found (creditor_id: ${creditor_id}) and no document available`);
+                    return res.status(404).json({
+                        error: 'Creditor not found for correction',
+                        creditor_id: creditor_id,
+                        document_id: document_id
+                    });
                 }
             } else if (action === 'skip') {
                 // Remove creditor from list when skipped (document is not a creditor document)
                 if (creditorIndex >= 0 && creditorIndex < creditors.length) {
                     // Remove the creditor completely from the list
-                    creditors.splice(creditorIndex, 1);
-                    console.log(`❌ Removed creditor from list for document ${document_id} - marked as non-creditor document`);
+                    const removedCreditor = creditors.splice(creditorIndex, 1)[0];
+                    console.log(`❌ Removed creditor "${removedCreditor.sender_name}" from list - marked as non-creditor`);
                 } else {
-                    console.log(`⏭️ No creditor found to remove for document ${document_id} - document correctly identified as non-creditor`);
+                    console.log(`⏭️ No creditor found to remove (creditor_id: ${creditor_id}, document_id: ${document_id})`);
                 }
 
-                // Also mark the document as not a creditor document
-                document.is_creditor_document = false;
-                document.document_status = 'not_a_creditor'; // CRITICAL: Change document_status to prevent re-generation
-                document.manually_reviewed = true;
-                document.reviewed_by = req.agentId;
-                document.reviewed_at = new Date();
-                document.review_action = 'skipped_not_creditor';
-
-                console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
+                // Also mark the document as not a creditor document (if we have one)
+                if (document) {
+                    document.is_creditor_document = false;
+                    document.document_status = 'not_a_creditor'; // CRITICAL: Change document_status to prevent re-generation
+                    document.manually_reviewed = true;
+                    document.reviewed_by = req.agentId;
+                    document.reviewed_at = new Date();
+                    document.review_action = 'skipped_not_creditor';
+                    console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
+                }
             } else if (action === 'confirm') {
                 // Confirm AI extraction is correct
                 if (creditorIndex >= 0 && creditorIndex < creditors.length) {
@@ -578,9 +603,9 @@ Diese E-Mail wurde automatisch generiert.
                         confirmed_at: new Date(), // Add confirmation timestamp
                         review_action: 'confirmed'
                     });
-                    console.log(`✅ Confirmed existing creditor for document ${document_id}`);
-                } else {
-                    // No existing creditor found - create one from document AI data
+                    console.log(`✅ Confirmed existing creditor (index ${creditorIndex}) - creditor_id: ${creditor_id}, document_id: ${document_id}`);
+                } else if (document) {
+                    // No existing creditor found but we have a document - create one from document AI data
                     const creditorData = document.extracted_data?.creditor_data;
                     if (creditorData) {
                         const newCreditor = {
@@ -610,6 +635,14 @@ Diese E-Mail wurde automatisch generiert.
                     } else {
                         console.log(`⚠️ No AI creditor data found for document ${document_id} - cannot confirm`);
                     }
+                } else {
+                    // No creditor found and no document - cannot confirm
+                    console.log(`⚠️ Cannot confirm: creditor not found (creditor_id: ${creditor_id}) and no document available`);
+                    return res.status(404).json({
+                        error: 'Creditor not found',
+                        creditor_id: creditor_id,
+                        document_id: document_id
+                    });
                 }
             }
 
@@ -632,11 +665,13 @@ Diese E-Mail wurde automatisch generiert.
             console.log(`🔄 Updating client ${clientId} with corrected data...`);
             client.updated_at = new Date();
 
-            // Mark document as reviewed
-            console.log(`📝 Marking document ${document_id} as reviewed...`);
-            document.manually_reviewed = true;
-            document.reviewed_at = new Date();
-            document.reviewed_by = req.agentId;
+            // Mark document as reviewed (if we have one)
+            if (document) {
+                console.log(`📝 Marking document ${document_id} as reviewed...`);
+                document.manually_reviewed = true;
+                document.reviewed_at = new Date();
+                document.reviewed_by = req.agentId;
+            }
 
             console.log(`💾 Saving client to database...`);
             await client.save();

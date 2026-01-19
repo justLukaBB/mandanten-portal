@@ -211,16 +211,13 @@ const ReviewDashboard: React.FC = () => {
         creditorData?.creditor.document_id ||
         creditorData?.documents[0]?.id;
 
-      if (!docId) {
-        throw new Error('No document ID found for this creditor');
-      }
-
-      console.log(`Confirming creditor ${creditorId} with document ${docId}`);
+      console.log(`Confirming creditor ${creditorId} with document ${docId || 'none'}`);
 
       const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
         method: 'POST',
         body: JSON.stringify({
-          document_id: docId,
+          document_id: docId || null,
+          creditor_id: creditorId,  // Always send creditor_id as fallback
           corrections: {},
           action: 'confirm'
         })
@@ -263,16 +260,13 @@ const ReviewDashboard: React.FC = () => {
         creditorData?.creditor.document_id ||
         creditorData?.documents[0]?.id;
 
-      if (!docId) {
-        throw new Error('No document ID found for this creditor');
-      }
-
-      console.log(`Correcting creditor ${creditorId} with document ${docId}`, corrections);
+      console.log(`Correcting creditor ${creditorId} with document ${docId || 'none'}`, corrections);
 
       const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
         method: 'POST',
         body: JSON.stringify({
-          document_id: docId,
+          document_id: docId || null,
+          creditor_id: creditorId,  // Always send creditor_id as fallback
           corrections: corrections,
           action: 'correct'
         })
@@ -315,16 +309,13 @@ const ReviewDashboard: React.FC = () => {
         creditorData?.creditor.document_id ||
         creditorData?.documents[0]?.id;
 
-      if (!docId) {
-        throw new Error('No document ID found for this creditor');
-      }
-
-      console.log(`Skipping creditor ${creditorId} with document ${docId}, reason: ${reason}`);
+      console.log(`Skipping creditor ${creditorId} with document ${docId || 'none'}, reason: ${reason}`);
 
       const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
         method: 'POST',
         body: JSON.stringify({
-          document_id: docId,
+          document_id: docId || null,
+          creditor_id: creditorId,  // Always send creditor_id as fallback
           corrections: { skip_reason: reason },
           action: 'skip'
         })
