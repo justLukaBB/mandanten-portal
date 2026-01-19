@@ -1197,6 +1197,9 @@ Diese E-Mail wurde automatisch generiert.
 
             // Update client status
             client.current_status = "awaiting_client_confirmation";
+            client.admin_approved = true;
+            client.admin_approved_at = new Date();
+            client.admin_approved_by = agent_email || "agent";
             client.updated_at = new Date();
 
             // Add status history
@@ -1209,10 +1212,47 @@ Diese E-Mail wurde automatisch generiert.
                     agent_email: agent_email,
                     agent_action: "Gläubigerliste zur Bestätigung macro",
                     creditors_count: client.final_creditor_list?.length || 0,
+                    admin_approved: true,
                 },
             });
 
             await client.save();
+
+            // SEND EMAIL TO CLIENT with creditor list for confirmation
+            let clientEmailSent = false;
+            const creditors = client.final_creditor_list || [];
+
+            if (this.zendeskService.isConfigured() && zendesk_ticket_id && creditors.length > 0) {
+                try {
+                    console.log(`📧 Sending creditor confirmation email to client ${client.email}`);
+
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                    const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+                    const emailContent = this.generateCreditorConfirmationEmailContent(
+                        client,
+                        creditors,
+                        portalUrl,
+                        totalDebt
+                    );
+
+                    // Send as PUBLIC comment (goes to client as email)
+                    const emailResult = await this.zendeskService.addPublicComment(zendesk_ticket_id, {
+                        content: emailContent.plainText,
+                        htmlContent: emailContent.html,
+                        tags: ["creditor-confirmation-email-sent"],
+                    });
+
+                    if (emailResult?.success) {
+                        clientEmailSent = true;
+                        console.log(`✅ Creditor confirmation email sent to ${client.email}`);
+                    } else {
+                        console.error(`❌ Failed to send creditor confirmation email: ${emailResult?.error}`);
+                    }
+                } catch (emailError) {
+                    console.error(`❌ Error sending creditor confirmation email:`, emailError.message);
+                }
+            }
 
             // Add Zendesk comment with agent review link
             if (this.zendeskService.isConfigured() && zendesk_ticket_id) {
@@ -1268,20 +1308,23 @@ ${creditorsList}
             }
 
             console.log(
-                `✅ Creditor confirmation request processed for ${client.aktenzeichen}`
+                `✅ Creditor confirmation request processed for ${client.aktenzeichen}. Email sent: ${clientEmailSent}`
             );
 
             res.json({
                 success: true,
                 message: "Creditor confirmation request processed",
                 client_status: "awaiting_client_confirmation",
+                admin_approved: true,
+                client_email_sent: clientEmailSent,
                 portal_url: `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"
                     }/portal?token=${client.portal_token}`,
                 agent_review_url: `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"
                     }/agent/review/${client.id}`,
                 creditors_count: client.final_creditor_list?.length || 0,
-                next_step:
-                    "Client will receive confirmation email with portal link. Agent can also review/modify creditors via agent_review_url.",
+                next_step: clientEmailSent
+                    ? "Email mit Gläubigerliste wurde an den Mandanten gesendet. Mandant kann im Portal bestätigen."
+                    : "Keine Gläubiger gefunden oder Email konnte nicht gesendet werden.",
             });
         } catch (error) {
             console.error(
