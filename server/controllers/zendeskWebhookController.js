@@ -449,13 +449,39 @@ class ZendeskWebhookController {
             const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
             const creditors = client.final_creditor_list || [];
 
-            // Check which creditors need manual review (confidence < 80%)
-            const needsReview = creditors.filter(
-                (c) => (c.ai_confidence || c.confidence || 0) < 0.8
-            );
-            const confidenceOk = creditors.filter(
-                (c) => (c.ai_confidence || c.confidence || 0) >= 0.8
-            );
+            // Helper to check if creditor needs review (from creditor flag OR linked document)
+            // Match same logic as AdminCreditorDataTable.tsx
+            const creditorNeedsManualReview = (creditor) => {
+                // Check creditor's own flag
+                if (creditor.needs_manual_review === true) return true;
+
+                // Check linked document's flags
+                const linkedDocs = documents.filter(doc =>
+                    creditor.document_id === doc.id ||
+                    creditor.source_document === doc.name ||
+                    (creditor.source_documents && creditor.source_documents.some(srcDoc =>
+                        srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
+                    ))
+                );
+
+                return linkedDocs.some(doc =>
+                    doc.manual_review_required === true ||
+                    doc.validation?.requires_manual_review === true ||
+                    doc.extracted_data?.manual_review_required === true
+                );
+            };
+
+            // Check which creditors need manual review (using needs_manual_review flag, NOT confidence)
+            const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
+            const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
+
+            console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
+            console.log(`   Total creditors: ${creditors.length}`);
+            console.log(`   Creditors needing manual review: ${needsReview.length}`);
+            needsReview.forEach(c => {
+                console.log(`      - ${c.sender_name} (creditor flag: ${c.needs_manual_review}, doc: ${c.document_id || c.source_document})`);
+            });
+            console.log(`   Creditors OK (no review needed): ${confidenceOk.length}`);
 
             // Determine next action
             // Simplified logic for this port, assuming manual review if any needs review
@@ -478,7 +504,7 @@ class ZendeskWebhookController {
                 client.current_status = "creditor_review";
                 client.payment_ticket_type = "manual_review";
             } else {
-                // AUTO-APPROVED: All creditors have >= 80% confidence
+                // AUTO-APPROVED: No creditors have needs_manual_review=true
                 // Skip agent review and go directly to client confirmation
                 client.current_status = "awaiting_client_confirmation";
                 client.payment_ticket_type = "auto_approved";
@@ -491,16 +517,13 @@ class ZendeskWebhookController {
                     status: "awaiting_client_confirmation",
                     changed_by: "system",
                     metadata: {
-                        reason: "Auto-approved: All creditors have confidence >= 80%",
+                        reason: "Auto-approved: No creditors require manual review",
                         creditors_count: creditors.length,
-                        avg_confidence: creditors.length > 0
-                            ? Math.round((creditors.reduce((sum, c) => sum + (c.ai_confidence || c.confidence || 0), 0) / creditors.length) * 100)
-                            : 0,
                         auto_approved: true,
                     },
                 });
 
-                console.log(`🤖 AUTO-APPROVED: ${client.aktenzeichen} - All ${creditors.length} creditors have >= 80% confidence`);
+                console.log(`🤖 AUTO-APPROVED: ${client.aktenzeichen} - All ${creditors.length} creditors have needs_manual_review=false`);
             }
             client.payment_processed_at = new Date();
 
@@ -665,13 +688,15 @@ class ZendeskWebhookController {
         );
 
         // Helper to check if creditor needs review (from creditor flag OR linked document)
-        // Match same logic as AdminCreditorDataTable.tsx line 264
+        // Match same logic as AdminCreditorDataTable.tsx
         const creditorNeedsReview = (creditor) => {
             if (creditor.needs_manual_review === true) return true;
             const linkedDocs = documents.filter(doc =>
                 creditor.document_id === doc.id ||
                 creditor.source_document === doc.name ||
-                (creditor.source_documents && creditor.source_documents.includes(doc.name))
+                (creditor.source_documents && creditor.source_documents.some(srcDoc =>
+                    srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
+                ))
             );
             return linkedDocs.some(doc =>
                 doc.manual_review_required === true ||
@@ -1022,7 +1047,7 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
 
             // Helper to check if creditor needs review (from creditor flag OR linked document)
-            // Match same logic as AdminCreditorDataTable.tsx line 264
+            // Match same logic as AdminCreditorDataTable.tsx
             const creditorNeedsManualReview = (creditor) => {
                 // Check creditor's own flag
                 if (creditor.needs_manual_review === true) return true;
@@ -1031,7 +1056,9 @@ Diese E-Mail wurde automatisch generiert.
                 const linkedDocs = documents.filter(doc =>
                     creditor.document_id === doc.id ||
                     creditor.source_document === doc.name ||
-                    (creditor.source_documents && creditor.source_documents.includes(doc.name))
+                    (creditor.source_documents && creditor.source_documents.some(srcDoc =>
+                        srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
+                    ))
                 );
 
                 return linkedDocs.some(doc =>

@@ -16,12 +16,16 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir, zen
     /**
      * Helper function to get all documents linked to a creditor
      * Uses multiple linking strategies for reliability
+     * Note: source_documents may have timestamp prefixes (e.g., "1768854930943-Screenshot.jpg")
+     * while doc.name may not, so we use flexible matching
      */
     const getDocumentsForCreditor = (creditor, allDocuments) => {
         return allDocuments.filter(doc =>
             creditor.document_id === doc.id ||
             creditor.source_document === doc.name ||
-            (creditor.source_documents && creditor.source_documents.includes(doc.name))
+            (creditor.source_documents && creditor.source_documents.some(srcDoc =>
+                srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
+            ))
         );
     };
 
@@ -733,16 +737,18 @@ Diese E-Mail wurde automatisch generiert.
             const documents = client.documents || [];
 
             // Helper to check if creditor needs review (from creditor flag OR linked document)
-            // Match same logic as AdminCreditorDataTable.tsx line 264
+            // Match same logic as AdminCreditorDataTable.tsx
             const creditorNeedsManualReview = (creditor) => {
                 // Check creditor's own flag
                 if (creditor.needs_manual_review === true) return true;
 
-                // Check linked document's flags
+                // Check linked document's flags (flexible matching for timestamp prefixes)
                 const linkedDocs = documents.filter(doc =>
                     creditor.document_id === doc.id ||
                     creditor.source_document === doc.name ||
-                    (creditor.source_documents && creditor.source_documents.includes(doc.name))
+                    (creditor.source_documents && creditor.source_documents.some(srcDoc =>
+                        srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
+                    ))
                 );
 
                 return linkedDocs.some(doc =>
