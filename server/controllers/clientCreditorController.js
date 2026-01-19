@@ -137,6 +137,16 @@ class ClientCreditorController {
             // Process confirmation
             console.log(`✅ Processing client creditor confirmation for ${client.aktenzeichen}...`);
 
+            // Ensure all creditors have an ID (fix for legacy data)
+            if (client.final_creditor_list && client.final_creditor_list.length > 0) {
+                client.final_creditor_list.forEach((creditor, index) => {
+                    if (!creditor.id) {
+                        creditor.id = uuidv4();
+                        console.log(`⚠️ Generated missing ID for creditor at index ${index}: ${creditor.sender_name}`);
+                    }
+                });
+            }
+
             client.client_confirmed_creditors = true;
             client.client_confirmed_at = new Date();
             client.current_status = 'creditor_contact_initiated';
