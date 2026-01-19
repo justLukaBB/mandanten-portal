@@ -708,24 +708,59 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Verify all documents have been reviewed
+            // Verify all LOW CONFIDENCE creditors have been reviewed
+            // High confidence creditors are auto-confirmed at completion
+            const creditors = client.final_creditor_list || [];
             const documents = client.documents || [];
-            const documentsToReview = documents.filter(doc =>
-                doc.is_creditor_document === true &&
-                !doc.manually_reviewed
-            );
 
-            if (documentsToReview.length > 0) {
-                console.log(`⚠️ Cannot complete review: ${documentsToReview.length} documents still need review`);
+            // Check if there are any creditors that NEED manual review and haven't been reviewed
+            const unreviewed_low_confidence = creditors.filter(c => {
+                const needsReview = (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+                const wasReviewed = c.manually_reviewed === true || c.status === 'confirmed';
+                return needsReview && !wasReviewed;
+            });
+
+            if (unreviewed_low_confidence.length > 0) {
+                console.log(`⚠️ Cannot complete review: ${unreviewed_low_confidence.length} low-confidence creditors still need review`);
+                console.log(`   Unreviewed creditors:`, unreviewed_low_confidence.map(c => `${c.sender_name} (${Math.round((c.confidence || 0) * 100)}%)`));
                 return res.status(400).json({
                     error: 'Review incomplete',
-                    documents_remaining: documentsToReview.length
+                    creditors_remaining: unreviewed_low_confidence.length,
+                    creditor_names: unreviewed_low_confidence.map(c => c.sender_name)
                 });
             }
 
-            // Get creditors for email
-            const creditors = client.final_creditor_list || [];
+            // Auto-confirm all high confidence creditors that haven't been manually reviewed
+            let autoConfirmedCount = 0;
+            creditors.forEach(c => {
+                if (!c.manually_reviewed && (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) {
+                    c.manually_reviewed = true;
+                    c.status = 'confirmed';
+                    c.confirmed_at = new Date();
+                    c.review_action = 'auto_confirmed_high_confidence';
+                    autoConfirmedCount++;
+                }
+            });
+
+            if (autoConfirmedCount > 0) {
+                console.log(`✅ Auto-confirmed ${autoConfirmedCount} high-confidence creditors`);
+            }
+
+            // Also mark all creditor documents as reviewed
+            documents.forEach(doc => {
+                if (doc.is_creditor_document === true && !doc.manually_reviewed) {
+                    doc.manually_reviewed = true;
+                    doc.reviewed_at = new Date();
+                    doc.reviewed_by = agentId;
+                    doc.review_action = 'auto_reviewed_at_completion';
+                }
+            });
+
+            // Calculate total debt for email
             const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+            // Update final_creditor_list with any auto-confirmations
+            client.final_creditor_list = creditors;
 
             // Update client status - AUTO APPROVE and set to awaiting_client_confirmation
             client.current_status = 'awaiting_client_confirmation';
