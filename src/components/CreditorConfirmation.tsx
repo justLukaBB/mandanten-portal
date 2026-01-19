@@ -182,8 +182,47 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
   }
 
   // Don't show anything if already confirmed - other components handle the confirmed state display
-  if (confirmationData.client_confirmed) {
+  // BUT: Keep showing the completion modal if it's open, so user sees confirmation feedback
+  if (confirmationData.client_confirmed && !showCompletionModal) {
     return null;
+  }
+
+  // If confirmed but modal is showing, only render the modal
+  if (confirmationData.client_confirmed && showCompletionModal) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+        <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full text-center">
+          <svg
+            className="w-12 h-12 text-green-500 mx-auto mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12l2 2l4-4m6 2a9 9 0 11-18 0a9 9 0 0118 0z"
+            />
+          </svg>
+
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Gläubiger erfolgreich bestätigt!
+          </h2>
+
+          <button
+            onClick={() => {
+              setShowCompletionModal(false);
+              // Force page reload to show updated state
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition"
+          >
+            Okay
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
