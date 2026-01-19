@@ -1091,7 +1091,11 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                         name: `${client.firstName} ${client.lastName}`,
                         aktenzeichen: client.aktenzeichen,
                         current_status: client.current_status,
-                        workflow_status: client.workflow_status
+                        workflow_status: client.workflow_status,
+                        client_confirmed_creditors: client.client_confirmed_creditors || false,
+                        client_confirmed_at: client.client_confirmed_at || null,
+                        admin_approved: client.admin_approved || false,
+                        first_payment_received: client.first_payment_received || false
                     },
                     creditors: creditors.map(creditor => ({
                         id: creditor.id,
