@@ -181,20 +181,9 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
     return null;
   }
 
+  // Don't show anything if already confirmed - other components handle the confirmed state display
   if (confirmationData.client_confirmed) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="text-center">
-          <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Gläubigerliste bereits bestätigt
-          </h3>
-          <p className="text-gray-600">
-            Sie haben Ihre Gläubigerliste bereits bestätigt. Vielen Dank!
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
