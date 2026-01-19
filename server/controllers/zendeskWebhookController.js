@@ -373,29 +373,47 @@ class ZendeskWebhookController {
                 req.body
             );
 
-            const {
-                user_id, // Zendesk user ID
-                email,
-                external_id, // This is the aktenzeichen
-                name,
-                agent_email,
-            } = req.body;
+            // Handle both Zendesk webhook format and direct format
+            let email, aktenzeichen, name, agent_email, user_id;
 
-            if (!external_id && !email) {
+            if (req.body.ticket && req.body.ticket.requester) {
+                // Zendesk webhook format
+                const requester = req.body.ticket.requester;
+                email = requester.email;
+                aktenzeichen = requester.aktenzeichen || requester.external_id;
+                name = requester.name;
+                user_id = requester.id;
+                agent_email = req.body.agent_email;
+            } else {
+                // Direct format (legacy)
+                email = req.body.email;
+                aktenzeichen = req.body.external_id || req.body.aktenzeichen;
+                name = req.body.name;
+                user_id = req.body.user_id;
+                agent_email = req.body.agent_email;
+            }
+
+            if (!aktenzeichen && !email) {
                 return res.status(400).json({
-                    error: "Missing required field: external_id (aktenzeichen) or email",
+                    error: "Missing required field: aktenzeichen or email",
+                    received: {
+                        aktenzeichen,
+                        email,
+                        has_ticket: !!req.body.ticket,
+                        has_requester: !!(req.body.ticket && req.body.ticket.requester)
+                    }
                 });
             }
 
-            // Find client by aktenzeichen (external_id) or email
+            // Find client by aktenzeichen or email
             const client = await Client.findOne({
-                $or: [{ aktenzeichen: external_id }, { email: email }],
+                $or: [{ aktenzeichen: aktenzeichen }, { email: email }],
             });
 
             if (!client) {
                 return res.status(404).json({
                     error: "Client not found",
-                    external_id: external_id,
+                    aktenzeichen: aktenzeichen,
                     email: email,
                 });
             }
