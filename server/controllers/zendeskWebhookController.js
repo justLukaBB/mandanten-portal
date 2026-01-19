@@ -665,6 +665,7 @@ class ZendeskWebhookController {
         );
 
         // Helper to check if creditor needs review (from creditor flag OR linked document)
+        // Match same logic as AdminCreditorDataTable.tsx line 264
         const creditorNeedsReview = (creditor) => {
             if (creditor.needs_manual_review === true) return true;
             const linkedDocs = documents.filter(doc =>
@@ -673,6 +674,7 @@ class ZendeskWebhookController {
                 (creditor.source_documents && creditor.source_documents.includes(doc.name))
             );
             return linkedDocs.some(doc =>
+                doc.manual_review_required === true ||
                 doc.validation?.requires_manual_review === true ||
                 doc.extracted_data?.manual_review_required === true
             );
@@ -1020,6 +1022,7 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
 
             // Helper to check if creditor needs review (from creditor flag OR linked document)
+            // Match same logic as AdminCreditorDataTable.tsx line 264
             const creditorNeedsManualReview = (creditor) => {
                 // Check creditor's own flag
                 if (creditor.needs_manual_review === true) return true;
@@ -1032,6 +1035,7 @@ Diese E-Mail wurde automatisch generiert.
                 );
 
                 return linkedDocs.some(doc =>
+                    doc.manual_review_required === true ||
                     doc.validation?.requires_manual_review === true ||
                     doc.extracted_data?.manual_review_required === true
                 );
