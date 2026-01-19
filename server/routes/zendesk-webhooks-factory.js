@@ -44,12 +44,12 @@ module.exports = function createZendeskWebhooksRouter({
         (req, res) => zendeskWebhookController.handleUserPaymentConfirmed(req, res)
     );
 
-    // 3. Payment Confirmed (Primary/Legacy)
+    // 3. Payment Confirmed (Primary/Legacy) - uses same handler as user-payment-confirmed
     router.post(
         "/payment-confirmed",
         rateLimits.general,
         parseZendeskPayload,
-        (req, res) => zendeskWebhookController.handlePaymentConfirmed(req, res)
+        (req, res) => zendeskWebhookController.handleUserPaymentConfirmed(req, res)
     );
 
     // 4. Start Manual Review
