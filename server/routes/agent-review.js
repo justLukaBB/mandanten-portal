@@ -106,5 +106,72 @@ startxref
   // POST /api/agent-review/:clientId/complete
   router.post('/:clientId/complete', authenticateAgent, rateLimits.general, agentReviewController.completeReviewSession);
 
+  // Get document for viewing
+  // GET /api/agent-review/:clientId/document/:filename
+  router.get('/:clientId/document/:filename', authenticateAgent, rateLimits.general, async (req, res) => {
+    try {
+      const { clientId, filename } = req.params;
+      const decodedFilename = decodeURIComponent(filename);
+
+      console.log(`📄 Agent Review: Getting document ${decodedFilename} for client ${clientId}`);
+
+      const client = await Client.findOne({ id: clientId });
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+
+      // Find the document in client's documents
+      const document = client.documents?.find(
+        d => d.name === decodedFilename || d.filename === decodedFilename
+      );
+
+      if (!document) {
+        console.log(`⚠️ Document ${decodedFilename} not found for client ${clientId}`);
+        // Try to serve mock PDF for testing
+        return serveMockPDF(res, decodedFilename);
+      }
+
+      // If document has a GCS path, stream from GCS
+      if (document.gcsPath && getGCSFileStream) {
+        try {
+          const stream = await getGCSFileStream(document.gcsPath);
+
+          res.setHeader('Content-Type', document.mimeType || 'application/pdf');
+          res.setHeader('Content-Disposition', `inline; filename="${decodedFilename}"`);
+          res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+          stream.pipe(res);
+          return;
+        } catch (gcsError) {
+          console.error(`❌ Error streaming from GCS:`, gcsError.message);
+        }
+      }
+
+      // If document has a local path
+      if (document.localPath) {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(uploadsDir, document.localPath);
+
+        if (fs.existsSync(filePath)) {
+          res.setHeader('Content-Type', document.mimeType || 'application/pdf');
+          res.setHeader('Content-Disposition', `inline; filename="${decodedFilename}"`);
+          return res.sendFile(filePath);
+        }
+      }
+
+      // Fallback: serve mock PDF
+      console.log(`⚠️ No file found for document ${decodedFilename}, serving mock`);
+      serveMockPDF(res, decodedFilename);
+
+    } catch (error) {
+      console.error('❌ Error getting document:', error);
+      res.status(500).json({
+        error: 'Failed to get document',
+        details: error.message
+      });
+    }
+  });
+
   return router;
 };

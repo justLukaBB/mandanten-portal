@@ -14,6 +14,18 @@ const creditorDeduplication = require('../utils/creditorDeduplication');
 const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir, zendeskService }) => {
 
     /**
+     * Helper function to get all documents linked to a creditor
+     * Uses multiple linking strategies for reliability
+     */
+    const getDocumentsForCreditor = (creditor, allDocuments) => {
+        return allDocuments.filter(doc =>
+            creditor.document_id === doc.id ||
+            creditor.source_document === doc.name ||
+            (creditor.source_documents && creditor.source_documents.includes(doc.name))
+        );
+    };
+
+    /**
      * Generate creditor confirmation email content
      */
     const generateCreditorConfirmationEmailContent = (client, creditors, portalUrl, totalDebt) => {
@@ -345,6 +357,24 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
+            // Build creditors with their associated documents for the new UI
+            const creditorsWithDocuments = creditors.map(creditor => {
+                const creditorDocs = getDocumentsForCreditor(creditor, documents);
+                return {
+                    creditor: creditor,
+                    documents: creditorDocs,
+                    needs_manual_review: creditor.needs_manual_review ||
+                        (creditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD,
+                    review_reasons: creditor.review_reasons || []
+                };
+            });
+
+            // Separate creditors needing review from verified ones
+            const creditorsNeedingReview = creditorsWithDocuments.filter(c => c.needs_manual_review);
+            const verifiedCreditorsWithDocs = creditorsWithDocuments.filter(c => !c.needs_manual_review);
+
+            console.log(`📊 Creditors grouped: ${creditorsNeedingReview.length} need review, ${verifiedCreditorsWithDocs.length} verified`);
+
             res.json({
                 success: true,
                 client: {
@@ -366,14 +396,18 @@ Diese E-Mail wurde automatisch generiert.
                     need_review: creditorsToReview,
                     verified: creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD),
                     total_count: creditors.length,
-                    review_count: creditorsToReview.length
+                    review_count: creditorsToReview.length,
+                    // NEW: Creditors with their associated documents for the agent review UI
+                    with_documents: creditorsWithDocuments,
+                    needing_review_with_docs: creditorsNeedingReview,
+                    verified_with_docs: verifiedCreditorsWithDocs
                 },
                 review_session: {
                     status: client.current_status,
                     progress: {
-                        total_items: documentsToReview.length,
+                        total_items: creditorsNeedingReview.length,
                         completed_items: 0, // Will be calculated based on corrections
-                        remaining_items: documentsToReview.length
+                        remaining_items: creditorsNeedingReview.length
                     }
                 }
             });
