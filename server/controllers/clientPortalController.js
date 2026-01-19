@@ -729,8 +729,10 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                             console.log(`🔔 Webhook URL: ${webhookUrl}`);
 
                             // Call FastAPI to process the document
+                            const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || null;
                             const fastApiResult = await createProcessingJob({
                                 clientId,
+                                clientName,
                                 files: [{
                                     filename: cleanFilename || file.originalname,
                                     gcs_path: gcsUrl, // Can be null

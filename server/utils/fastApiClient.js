@@ -56,12 +56,13 @@ async function fetchWithTimeout(url, options = {}, timeout = FASTAPI_TIMEOUT) {
  * @param {string} [params.apiKey] - Optional Gemini API key
  * @returns {Promise<Object>} - Job creation response with job_id
  */
-async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null }) {
+async function createProcessingJob({ clientId, clientName, files, webhookUrl, apiKey = null }) {
   console.log(`\n🚀 ================================`);
   console.log(`🚀 CALLING FASTAPI PROCESSING`);
   console.log(`🚀 ================================`);
   console.log(`🔗 FastAPI URL: ${FASTAPI_URL}`);
   console.log(`👤 Client ID: ${clientId}`);
+  console.log(`👤 Client Name: ${clientName || 'N/A'}`);
   console.log(`📄 Files: ${files.length}`);
   console.log(`🔔 Webhook URL: ${webhookUrl}`);
   console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
@@ -78,6 +79,7 @@ async function createProcessingJob({ clientId, files, webhookUrl, apiKey = null 
 
     const requestBody = {
       client_id: clientId,
+      client_name: clientName || null,
       files: await Promise.all(files.map(async (f) => {
         let gcsPath = f.gcs_path;
         // Only attempt to get signed URL if no local path is provided and no gcs path exists
