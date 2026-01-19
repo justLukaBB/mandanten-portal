@@ -49,7 +49,7 @@ module.exports = function createZendeskWebhooksRouter({
         "/payment-confirmed",
         rateLimits.general,
         parseZendeskPayload,
-        (req, res) => zendeskWebhookController.handlePaymentConfirmed(req, res)
+        (req, res) => zendeskWebhookController.handleUserPaymentConfirmed(req, res)
     );
 
     // 4. Start Manual Review
