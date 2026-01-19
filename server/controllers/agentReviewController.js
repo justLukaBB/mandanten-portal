@@ -358,13 +358,14 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // Build creditors with their associated documents for the new UI
+            // ONLY use the stored needs_manual_review flag from the creditor (set during document processing)
             const creditorsWithDocuments = creditors.map(creditor => {
                 const creditorDocs = getDocumentsForCreditor(creditor, documents);
                 return {
                     creditor: creditor,
                     documents: creditorDocs,
-                    needs_manual_review: creditor.needs_manual_review ||
-                        (creditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD,
+                    // Use ONLY the stored flag - do not calculate based on confidence
+                    needs_manual_review: creditor.needs_manual_review === true,
                     review_reasons: creditor.review_reasons || []
                 };
             });
@@ -708,42 +709,41 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Verify all LOW CONFIDENCE creditors have been reviewed
-            // High confidence creditors are auto-confirmed at completion
+            // Check creditors that have needs_manual_review=true (from the table) and haven't been reviewed yet
             const creditors = client.final_creditor_list || [];
             const documents = client.documents || [];
 
-            // Check if there are any creditors that NEED manual review and haven't been reviewed
-            const unreviewed_low_confidence = creditors.filter(c => {
-                const needsReview = (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+            // Only check creditors where needs_manual_review FLAG is explicitly true
+            const unreviewed_manual_review = creditors.filter(c => {
+                const needsReview = c.needs_manual_review === true;
                 const wasReviewed = c.manually_reviewed === true || c.status === 'confirmed';
                 return needsReview && !wasReviewed;
             });
 
-            if (unreviewed_low_confidence.length > 0) {
-                console.log(`⚠️ Cannot complete review: ${unreviewed_low_confidence.length} low-confidence creditors still need review`);
-                console.log(`   Unreviewed creditors:`, unreviewed_low_confidence.map(c => `${c.sender_name} (${Math.round((c.confidence || 0) * 100)}%)`));
+            if (unreviewed_manual_review.length > 0) {
+                console.log(`⚠️ Cannot complete review: ${unreviewed_manual_review.length} creditors with needs_manual_review=true still need review`);
+                console.log(`   Unreviewed creditors:`, unreviewed_manual_review.map(c => c.sender_name));
                 return res.status(400).json({
                     error: 'Review incomplete',
-                    creditors_remaining: unreviewed_low_confidence.length,
-                    creditor_names: unreviewed_low_confidence.map(c => c.sender_name)
+                    creditors_remaining: unreviewed_manual_review.length,
+                    creditor_names: unreviewed_manual_review.map(c => c.sender_name)
                 });
             }
 
-            // Auto-confirm all high confidence creditors that haven't been manually reviewed
+            // Auto-confirm all creditors that don't need manual review
             let autoConfirmedCount = 0;
             creditors.forEach(c => {
-                if (!c.manually_reviewed && (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) {
+                if (!c.manually_reviewed && c.needs_manual_review !== true) {
                     c.manually_reviewed = true;
                     c.status = 'confirmed';
                     c.confirmed_at = new Date();
-                    c.review_action = 'auto_confirmed_high_confidence';
+                    c.review_action = 'auto_confirmed_no_manual_review_needed';
                     autoConfirmedCount++;
                 }
             });
 
             if (autoConfirmedCount > 0) {
-                console.log(`✅ Auto-confirmed ${autoConfirmedCount} high-confidence creditors`);
+                console.log(`✅ Auto-confirmed ${autoConfirmedCount} creditors (needs_manual_review=false)`);
             }
 
             // Also mark all creditor documents as reviewed
