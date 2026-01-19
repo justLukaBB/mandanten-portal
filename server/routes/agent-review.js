@@ -116,14 +116,32 @@ startxref
       console.log(`📄 Agent Review: Getting document ${decodedFilename} for client ${clientId}`);
 
       const client = await Client.findOne({ id: clientId });
+
+      // Log all document names for debugging
+      if (client?.documents) {
+        console.log(`📄 Client has ${client.documents.length} documents:`);
+        client.documents.forEach((d, i) => {
+          console.log(`   ${i+1}. name="${d.name}" filename="${d.filename}" gcsPath="${d.gcsPath}"`);
+        });
+      }
       if (!client) {
         return res.status(404).json({ error: 'Client not found' });
       }
 
       // Find the document in client's documents
-      const document = client.documents?.find(
-        d => d.name === decodedFilename || d.filename === decodedFilename
-      );
+      // Use flexible matching to handle timestamp prefixes (e.g., "1768855786677-Screenshot.jpg" vs "Screenshot.jpg")
+      const document = client.documents?.find(d => {
+        const docName = d.name || '';
+        const docFilename = d.filename || '';
+        return (
+          docName === decodedFilename ||
+          docFilename === decodedFilename ||
+          docName.endsWith(decodedFilename) ||
+          decodedFilename.endsWith(docName) ||
+          docFilename.endsWith(decodedFilename) ||
+          decodedFilename.endsWith(docFilename)
+        );
+      });
 
       if (!document) {
         console.log(`⚠️ Document ${decodedFilename} not found for client ${clientId}`);
