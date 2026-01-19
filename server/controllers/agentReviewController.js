@@ -358,15 +358,32 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // Build creditors with their associated documents for the new UI
-            // ONLY use the stored needs_manual_review flag from the creditor (set during document processing)
+            // Check needs_manual_review from: 1) creditor flag, 2) linked document's validation flag
             const creditorsWithDocuments = creditors.map(creditor => {
                 const creditorDocs = getDocumentsForCreditor(creditor, documents);
+
+                // Check if creditor or ANY linked document needs manual review
+                const creditorNeedsReview = creditor.needs_manual_review === true;
+                const documentNeedsReview = creditorDocs.some(doc =>
+                    doc.validation?.requires_manual_review === true ||
+                    doc.extracted_data?.manual_review_required === true
+                );
+
+                // Collect review reasons from creditor and documents
+                const allReviewReasons = [
+                    ...(creditor.review_reasons || []),
+                    ...creditorDocs.flatMap(doc => doc.validation?.review_reasons || [])
+                ];
+
+                const needsManualReview = creditorNeedsReview || documentNeedsReview;
+
+                console.log(`   Creditor ${creditor.sender_name}: creditorFlag=${creditorNeedsReview}, docFlag=${documentNeedsReview}, final=${needsManualReview}`);
+
                 return {
                     creditor: creditor,
                     documents: creditorDocs,
-                    // Use ONLY the stored flag - do not calculate based on confidence
-                    needs_manual_review: creditor.needs_manual_review === true,
-                    review_reasons: creditor.review_reasons || []
+                    needs_manual_review: needsManualReview,
+                    review_reasons: [...new Set(allReviewReasons)] // Remove duplicates
                 };
             });
 
@@ -709,19 +726,37 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Check creditors that have needs_manual_review=true (from the table) and haven't been reviewed yet
+            // Check creditors that need manual review and haven't been reviewed yet
             const creditors = client.final_creditor_list || [];
             const documents = client.documents || [];
 
-            // Only check creditors where needs_manual_review FLAG is explicitly true
+            // Helper to check if creditor needs review (from creditor flag OR linked document)
+            const creditorNeedsManualReview = (creditor) => {
+                // Check creditor's own flag
+                if (creditor.needs_manual_review === true) return true;
+
+                // Check linked document's flags
+                const linkedDocs = documents.filter(doc =>
+                    creditor.document_id === doc.id ||
+                    creditor.source_document === doc.name ||
+                    (creditor.source_documents && creditor.source_documents.includes(doc.name))
+                );
+
+                return linkedDocs.some(doc =>
+                    doc.validation?.requires_manual_review === true ||
+                    doc.extracted_data?.manual_review_required === true
+                );
+            };
+
+            // Find unreviewed creditors that need manual review
             const unreviewed_manual_review = creditors.filter(c => {
-                const needsReview = c.needs_manual_review === true;
+                const needsReview = creditorNeedsManualReview(c);
                 const wasReviewed = c.manually_reviewed === true || c.status === 'confirmed';
                 return needsReview && !wasReviewed;
             });
 
             if (unreviewed_manual_review.length > 0) {
-                console.log(`⚠️ Cannot complete review: ${unreviewed_manual_review.length} creditors with needs_manual_review=true still need review`);
+                console.log(`⚠️ Cannot complete review: ${unreviewed_manual_review.length} creditors need manual review`);
                 console.log(`   Unreviewed creditors:`, unreviewed_manual_review.map(c => c.sender_name));
                 return res.status(400).json({
                     error: 'Review incomplete',
@@ -733,7 +768,7 @@ Diese E-Mail wurde automatisch generiert.
             // Auto-confirm all creditors that don't need manual review
             let autoConfirmedCount = 0;
             creditors.forEach(c => {
-                if (!c.manually_reviewed && c.needs_manual_review !== true) {
+                if (!c.manually_reviewed && !creditorNeedsManualReview(c)) {
                     c.manually_reviewed = true;
                     c.status = 'confirmed';
                     c.confirmed_at = new Date();

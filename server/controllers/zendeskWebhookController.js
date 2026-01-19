@@ -664,9 +664,23 @@ class ZendeskWebhookController {
             0
         );
 
-        // Separate creditors by needs_manual_review FLAG (NOT confidence!)
-        const verifiedOk = creditors.filter(c => c.needs_manual_review !== true);
-        const needsReviewList = creditors.filter(c => c.needs_manual_review === true);
+        // Helper to check if creditor needs review (from creditor flag OR linked document)
+        const creditorNeedsReview = (creditor) => {
+            if (creditor.needs_manual_review === true) return true;
+            const linkedDocs = documents.filter(doc =>
+                creditor.document_id === doc.id ||
+                creditor.source_document === doc.name ||
+                (creditor.source_documents && creditor.source_documents.includes(doc.name))
+            );
+            return linkedDocs.some(doc =>
+                doc.validation?.requires_manual_review === true ||
+                doc.extracted_data?.manual_review_required === true
+            );
+        };
+
+        // Separate creditors by needs_manual_review (from creditor OR document)
+        const verifiedOk = creditors.filter(c => !creditorNeedsReview(c));
+        const needsReviewList = creditors.filter(c => creditorNeedsReview(c));
 
         // Generate creditor lists
         const verifiedCreditors = verifiedOk
@@ -1005,14 +1019,34 @@ Diese E-Mail wurde automatisch generiert.
             // All documents processed - analyze creditors
             const creditors = client.final_creditor_list || [];
 
-            // Check if ANY creditor has needs_manual_review=true (from the stored flag)
-            // This is set during document processing based on AI analysis
-            const creditorsNeedingManualReview = creditors.filter(c => c.needs_manual_review === true);
+            // Helper to check if creditor needs review (from creditor flag OR linked document)
+            const creditorNeedsManualReview = (creditor) => {
+                // Check creditor's own flag
+                if (creditor.needs_manual_review === true) return true;
+
+                // Check linked document's flags
+                const linkedDocs = documents.filter(doc =>
+                    creditor.document_id === doc.id ||
+                    creditor.source_document === doc.name ||
+                    (creditor.source_documents && creditor.source_documents.includes(doc.name))
+                );
+
+                return linkedDocs.some(doc =>
+                    doc.validation?.requires_manual_review === true ||
+                    doc.extracted_data?.manual_review_required === true
+                );
+            };
+
+            // Check if ANY creditor needs manual review (from creditor flag OR linked document)
+            const creditorsNeedingManualReview = creditors.filter(c => creditorNeedsManualReview(c));
             const manualReviewRequired = creditorsNeedingManualReview.length > 0;
 
             console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
             console.log(`   Creditors needing manual review: ${creditorsNeedingManualReview.length}`);
+            creditorsNeedingManualReview.forEach(c => {
+                console.log(`      - ${c.sender_name} (creditor flag: ${c.needs_manual_review}, doc linked: ${c.document_id || c.source_document})`);
+            });
             console.log(`   Manual review required: ${manualReviewRequired}`);
 
             // Simple implementation of state detection
