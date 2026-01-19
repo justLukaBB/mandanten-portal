@@ -415,7 +415,7 @@ export const PersonalPortal = ({
         {/* <ClientDocumentsViewer client={client} /> */}
 
         {/* Creditor upload component - conditional display based on workflow status and creditor confirmation */}
-        {client?.workflow_status !== 'completed' && !client?.client_confirmed_creditors && !creditorConfirmationData?.client_confirmed ? (
+        {!client?.client_confirmed_creditors && !creditorConfirmationData?.client_confirmed ? (
           <div className="relative">
             <CreditorUploadComponent
               client={client}
