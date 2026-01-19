@@ -54,12 +54,22 @@ interface Document {
   processed_at?: string;
 }
 
+interface Creditor {
+  id: string;
+  document_id?: string;
+  source_document?: string;
+  source_documents?: string[];
+  needs_manual_review?: boolean;
+  sender_name?: string;
+}
+
 interface ClientData {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   documents: Document[];
+  creditors?: Creditor[];
 }
 
 interface AdminCreditorTableRow {
@@ -147,11 +157,19 @@ const AdminCreditorDataTable: React.FC = () => {
         );
 
         allDocs.forEach(doc => {
-          const creditor = doc.extracted_data?.creditor_data;
+          const creditorData = doc.extracted_data?.creditor_data;
           const validation = doc.validation;
 
+          // Find the linked creditor from client.creditors array
+          // This is needed to check needs_manual_review flag which is on the creditor object
+          const linkedCreditor = client.creditors?.find(c =>
+            c.document_id === doc.id ||
+            c.source_document === doc.name ||
+            (c.source_documents && c.source_documents.includes(doc.name))
+          );
+
           // Debug logging for empty creditor data
-          if (!creditor && doc.processing_status === 'completed') {
+          if (!creditorData && doc.processing_status === 'completed') {
             console.warn(`Document ${doc.name} completed but no creditor data:`, {
               docId: doc.id,
               processing_status: doc.processing_status,
@@ -223,12 +241,12 @@ const AdminCreditorDataTable: React.FC = () => {
           let displayReference = 'Wird verarbeitet...';
 
           if (doc.processing_status === 'completed') {
-            displayCreditorName = creditor?.sender_name || 'Nicht gefunden';
+            displayCreditorName = creditorData?.sender_name || 'Nicht gefunden';
             // Prefer enriched 'email' field over 'sender_email'
-            displayEmail = creditor?.email || creditor?.sender_email || 'Nicht gefunden';
+            displayEmail = creditorData?.email || creditorData?.sender_email || 'Nicht gefunden';
             // Prefer enriched 'address' field over 'sender_address' (avoids Postfach)
-            displayAddress = creditor?.address || creditor?.sender_address || 'Nicht gefunden';
-            displayReference = creditor?.reference_number || 'Nicht gefunden';
+            displayAddress = creditorData?.address || creditorData?.sender_address || 'Nicht gefunden';
+            displayReference = creditorData?.reference_number || 'Nicht gefunden';
           } else if (doc.processing_status === 'failed') {
             displayCreditorName = 'Verarbeitungsfehler';
             displayEmail = 'Verarbeitungsfehler';
@@ -248,9 +266,9 @@ const AdminCreditorDataTable: React.FC = () => {
             email: displayEmail,
             address: displayAddress,
             referenceNumber: displayReference,
-            claimAmount: creditor?.claim_amount || null,
-            isRepresentative: creditor?.is_representative || false,
-            actualCreditor: creditor?.actual_creditor || '',
+            claimAmount: creditorData?.claim_amount || null,
+            isRepresentative: creditorData?.is_representative || false,
+            actualCreditor: creditorData?.actual_creditor || '',
             confidence: validation?.claude_confidence || doc.confidence || 0,
             dataCompleteness: validation?.data_completeness || 0,
             status: rowStatus,
@@ -261,7 +279,9 @@ const AdminCreditorDataTable: React.FC = () => {
             aiWorkflowStatus: doc.extracted_data?.workflow_status,
             aiStatusReason: doc.extracted_data?.status_reason,
             originalDocumentStatus: doc.document_status,
-            manualReviewRequired: doc.manual_review_required || validation?.requires_manual_review || false
+            // Check manual review from: 1) linked creditor flag, 2) document flag, 3) validation flag
+            // This matches the logic in agentReviewController.js for consistency
+            manualReviewRequired: linkedCreditor?.needs_manual_review || doc.manual_review_required || validation?.requires_manual_review || false
           });
         });
       });
