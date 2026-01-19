@@ -1014,23 +1014,23 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // All documents processed - analyze and create review ticket
+            // All documents processed - analyze creditors
             const creditors = client.final_creditor_list || [];
-            // Check if documents need manual review based on Claude AI confidence
-            // const lowConfidenceDocuments = documents.filter(
-            //   (d) => d.extracted_data?.confidence && d.extracted_data.confidence < 0.8
-            // );
-            const manualReviewRequired = documents.some(
-                (d) =>
-                    d.extracted_data?.manual_review_required === true ||
-                    (d.extracted_data?.confidence && d.extracted_data.confidence < 0.8)
-            );
 
-            // Simple implementation of state detection (adapted from original)
+            // Check if ANY creditor has needs_manual_review=true (from the stored flag)
+            // This is set during document processing based on AI analysis
+            const creditorsNeedingManualReview = creditors.filter(c => c.needs_manual_review === true);
+            const manualReviewRequired = creditorsNeedingManualReview.length > 0;
+
+            console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
+            console.log(`   Total creditors: ${creditors.length}`);
+            console.log(`   Creditors needing manual review: ${creditorsNeedingManualReview.length}`);
+            console.log(`   Manual review required: ${manualReviewRequired}`);
+
+            // Simple implementation of state detection
             const state = {
                 hasCreditors: creditors.length > 0,
                 needsManualReview: manualReviewRequired,
-                // lowConfidenceCount: lowConfidenceDocuments.length,
             };
 
             let ticketType, ticketContent, tags;
@@ -1041,6 +1041,7 @@ Diese E-Mail wurde automatisch generiert.
                 tags = ["processing-complete", "no-creditors", "manual-check-needed"];
                 client.payment_ticket_type = "no_creditors_found";
             } else if (state.needsManualReview) {
+                // Some creditors need manual review - create ticket for agent
                 ticketType = "manual_review";
                 ticketContent = this.generateCreditorReviewTicketContent(
                     client,
@@ -1051,15 +1052,15 @@ Diese E-Mail wurde automatisch generiert.
                 tags = ["processing-complete", "manual-review-needed", "creditors-found"];
                 client.payment_ticket_type = "manual_review";
             } else {
+                // ALL creditors have needs_manual_review=false -> AUTO APPROVE
+                // No agent review needed - send directly to client
                 ticketType = "auto_approved";
-                ticketContent = this.generateCreditorReviewTicketContent(
-                    client,
-                    documents,
-                    creditors,
-                    false
-                );
-                tags = ["processing-complete", "auto-approved", "ready-for-confirmation"];
+                ticketContent = null; // Will be handled differently below
+                tags = ["processing-complete", "auto-approved", "sent-to-client"];
                 client.payment_ticket_type = "auto_approved";
+
+                console.log(`✅ AUTO-APPROVE: All ${creditors.length} creditors have needs_manual_review=false`);
+                console.log(`   Skipping agent review, sending directly to client...`);
             }
 
             // Mark all documents processed timestamp
@@ -1086,101 +1087,227 @@ Diese E-Mail wurde automatisch generiert.
                 `✅ Processing complete webhook saved client ${client.aktenzeichen}`
             );
 
-            // CREATE NEW SEPARATE TICKET FOR CREDITOR REVIEW (like existing flow)
+            // Handle based on ticket type
             let zendeskTicket = null;
             let ticketCreationError = null;
+            let clientEmailSent = false;
 
-            if (this.zendeskService.isConfigured()) {
-                try {
-                    console.log(
-                        `🎫 PAYMENT-FIRST FLOW: Creating NEW separate Zendesk ticket for creditor review...`
-                    );
+            if (ticketType === "auto_approved") {
+                // ============================================
+                // AUTO-APPROVE FLOW: Skip agent review, send directly to client
+                // ============================================
+                console.log(`🚀 AUTO-APPROVE FLOW: Sending creditors directly to client ${client.email}`);
 
-                    zendeskTicket = await this.zendeskService.createTicket({
-                        subject: this.generateTicketSubject(client, ticketType),
-                        content: ticketContent,
-                        requesterEmail: client.email,
-                        tags: tags,
-                        priority: ticketType === "manual_review" ? "normal" : "low",
-                        type: "task",
-                    });
+                // Auto-confirm all creditors
+                creditors.forEach(c => {
+                    c.manually_reviewed = true;
+                    c.status = 'confirmed';
+                    c.confirmed_at = new Date();
+                    c.review_action = 'auto_confirmed_no_manual_review_needed';
+                });
+                client.final_creditor_list = creditors;
 
-                    if (zendeskTicket.success) {
-                        console.log(
-                            `✅ PAYMENT-FIRST FLOW: NEW ticket created successfully: ${zendeskTicket.ticket_id}`
-                        );
+                // Set client status to awaiting_client_confirmation
+                client.current_status = 'awaiting_client_confirmation';
+                client.admin_approved = true;
+                client.admin_approved_at = new Date();
+                client.admin_approved_by = 'system_auto_approve';
 
-                        // Store the created ticket ID for reference
-                        client.zendesk_tickets = client.zendesk_tickets || [];
-                        client.zendesk_tickets.push({
-                            ticket_id: zendeskTicket.ticket_id,
-                            ticket_type: "creditor_review",
-                            ticket_scenario: ticketType,
-                            status: "active",
-                            created_at: new Date(),
-                        });
-
-                        // Add to status history
-                        client.status_history.push({
-                            id: uuidv4(),
-                            status: "creditor_review_ticket_created",
-                            changed_by: "system",
-                            metadata: {
-                                zendesk_ticket_id: zendeskTicket.ticket_id,
-                                ticket_scenario: ticketType,
-                                ticket_subject: this.generateTicketSubject(client, ticketType),
-                                payment_first_flow: true,
-                            },
-                        });
-
-                        await client.save({ validateModifiedOnly: true });
-
-                    } else {
-                        ticketCreationError = zendeskTicket.error;
-                        console.error(
-                            "❌ PAYMENT-FIRST FLOW: Failed to create new ticket:",
-                            zendeskTicket.error
-                        );
+                // Mark all documents as reviewed
+                documents.forEach(doc => {
+                    if (doc.is_creditor_document && !doc.manually_reviewed) {
+                        doc.manually_reviewed = true;
+                        doc.reviewed_at = new Date();
+                        doc.reviewed_by = 'system_auto_approve';
+                        doc.review_action = 'auto_reviewed_no_manual_review_needed';
                     }
-                } catch (error) {
-                    ticketCreationError = error.message;
-                    console.error(
-                        "❌ PAYMENT-FIRST FLOW: Exception creating new ticket:",
-                        error
-                    );
-                }
-            } else {
-                console.log(
-                    "⚠️ PAYMENT-FIRST FLOW: Zendesk service not configured - skipping new ticket creation"
-                );
-                ticketCreationError = "Zendesk API not configured";
-            }
+                });
 
-            res.json({
-                success: true,
-                message: "Processing complete - NEW creditor review ticket created",
-                scenario: ticketType,
-                client_status: client.current_status,
-                zendesk_ticket: zendeskTicket
-                    ? {
-                        created: zendeskTicket.success,
-                        ticket_id: zendeskTicket.ticket_id,
-                        scenario: ticketType,
-                        error: ticketCreationError,
-                    }
-                    : {
-                        created: false,
-                        error: ticketCreationError,
+                // Add status history
+                client.status_history.push({
+                    id: uuidv4(),
+                    status: "auto_approved_sent_to_client",
+                    changed_by: "system",
+                    metadata: {
+                        creditors_count: creditors.length,
+                        total_debt: creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0),
+                        auto_approved: true,
+                        reason: "All creditors have needs_manual_review=false",
                     },
-                review_dashboard_url:
-                    ticketType === "manual_review"
-                        ? `${process.env.FRONTEND_URL ||
-                        "https://mandanten-portal.onrender.com"
-                        }/agent/review/${client.id}`
-                        : null,
-                documents_processed: documents.length,
-                creditors_found: creditors.length,
-            });
+                });
+
+                await client.save({ validateModifiedOnly: true });
+
+                // Send email to client with creditor list
+                if (this.zendeskService.isConfigured() && creditors.length > 0) {
+                    try {
+                        const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+                        const emailContent = this.generateCreditorConfirmationEmailContent(
+                            client,
+                            creditors,
+                            portalUrl,
+                            totalDebt
+                        );
+
+                        // Create a ticket to send the email to client
+                        const emailTicket = await this.zendeskService.createTicket({
+                            subject: `Ihre Gläubigerliste zur Bestätigung (${client.aktenzeichen})`,
+                            content: emailContent.plainText,
+                            requesterEmail: client.email,
+                            tags: ["auto-approved", "creditor-list-sent", "awaiting-client-confirmation"],
+                            priority: "normal",
+                            type: "task",
+                        });
+
+                        if (emailTicket.success) {
+                            // Add public comment to actually send the email
+                            await this.zendeskService.addPublicComment(emailTicket.ticket_id, {
+                                content: emailContent.plainText,
+                                htmlContent: emailContent.html,
+                                tags: ["creditor-confirmation-email-sent"],
+                            });
+
+                            clientEmailSent = true;
+                            zendeskTicket = emailTicket;
+
+                            console.log(`✅ AUTO-APPROVE: Email sent to client ${client.email} via ticket ${emailTicket.ticket_id}`);
+
+                            // Store ticket reference
+                            client.zendesk_review_ticket_id = emailTicket.ticket_id;
+                            client.zendesk_tickets = client.zendesk_tickets || [];
+                            client.zendesk_tickets.push({
+                                ticket_id: emailTicket.ticket_id,
+                                ticket_type: "auto_approved_client_notification",
+                                ticket_scenario: "auto_approved",
+                                status: "active",
+                                created_at: new Date(),
+                            });
+
+                            await client.save({ validateModifiedOnly: true });
+                        }
+                    } catch (emailError) {
+                        console.error(`❌ AUTO-APPROVE: Failed to send email to client:`, emailError.message);
+                        ticketCreationError = emailError.message;
+                    }
+                }
+
+                res.json({
+                    success: true,
+                    message: "AUTO-APPROVED: Creditor list sent directly to client",
+                    scenario: ticketType,
+                    client_status: client.current_status,
+                    auto_approved: true,
+                    client_email_sent: clientEmailSent,
+                    creditors_confirmed: creditors.length,
+                    zendesk_ticket: zendeskTicket ? {
+                        created: true,
+                        ticket_id: zendeskTicket.ticket_id,
+                        purpose: "client_notification",
+                    } : null,
+                    documents_processed: documents.length,
+                    creditors_found: creditors.length,
+                });
+
+            } else {
+                // ============================================
+                // MANUAL REVIEW FLOW: Create ticket for agent
+                // ============================================
+                if (this.zendeskService.isConfigured()) {
+                    try {
+                        console.log(
+                            `🎫 MANUAL REVIEW FLOW: Creating Zendesk ticket for agent review...`
+                        );
+
+                        zendeskTicket = await this.zendeskService.createTicket({
+                            subject: this.generateTicketSubject(client, ticketType),
+                            content: ticketContent,
+                            requesterEmail: client.email,
+                            tags: tags,
+                            priority: "normal",
+                            type: "task",
+                        });
+
+                        if (zendeskTicket.success) {
+                            console.log(
+                                `✅ MANUAL REVIEW: Ticket created successfully: ${zendeskTicket.ticket_id}`
+                            );
+
+                            // Store the created ticket ID for reference
+                            client.zendesk_tickets = client.zendesk_tickets || [];
+                            client.zendesk_tickets.push({
+                                ticket_id: zendeskTicket.ticket_id,
+                                ticket_type: "creditor_review",
+                                ticket_scenario: ticketType,
+                                status: "active",
+                                created_at: new Date(),
+                            });
+
+                            // Add to status history
+                            client.status_history.push({
+                                id: uuidv4(),
+                                status: "creditor_review_ticket_created",
+                                changed_by: "system",
+                                metadata: {
+                                    zendesk_ticket_id: zendeskTicket.ticket_id,
+                                    ticket_scenario: ticketType,
+                                    ticket_subject: this.generateTicketSubject(client, ticketType),
+                                    payment_first_flow: true,
+                                },
+                            });
+
+                            await client.save({ validateModifiedOnly: true });
+
+                        } else {
+                            ticketCreationError = zendeskTicket.error;
+                            console.error(
+                                "❌ MANUAL REVIEW: Failed to create ticket:",
+                                zendeskTicket.error
+                            );
+                        }
+                    } catch (error) {
+                        ticketCreationError = error.message;
+                        console.error(
+                            "❌ MANUAL REVIEW: Exception creating ticket:",
+                            error
+                        );
+                    }
+                } else {
+                    console.log(
+                        "⚠️ MANUAL REVIEW: Zendesk service not configured - skipping ticket creation"
+                    );
+                    ticketCreationError = "Zendesk API not configured";
+                }
+
+                res.json({
+                    success: true,
+                    message: ticketType === "no_creditors_found"
+                        ? "Processing complete - No creditors found, manual check needed"
+                        : "Processing complete - Agent review ticket created",
+                    scenario: ticketType,
+                    client_status: client.current_status,
+                    zendesk_ticket: zendeskTicket
+                        ? {
+                            created: zendeskTicket.success,
+                            ticket_id: zendeskTicket.ticket_id,
+                            scenario: ticketType,
+                            error: ticketCreationError,
+                        }
+                        : {
+                            created: false,
+                            error: ticketCreationError,
+                        },
+                    review_dashboard_url:
+                        ticketType === "manual_review"
+                            ? `${process.env.FRONTEND_URL ||
+                            "https://mandanten-portal.onrender.com"
+                            }/agent/review/${client.id}`
+                            : null,
+                    documents_processed: documents.length,
+                    creditors_found: creditors.length,
+                });
+            }
         } catch (error) {
             console.error("❌ Error in processing-complete webhook:", error);
             res.status(500).json({
