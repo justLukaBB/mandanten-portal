@@ -326,22 +326,22 @@ class DelayedProcessingService {
   }
 
   /**
-   * Check for clients awaiting confirmation for 3+ minutes and auto-confirm them
-   * (Testing mode - normally 7 days)
+   * Check for clients awaiting confirmation for 7+ days and auto-confirm them
+   * (Production mode)
    */
   async checkAndAutoConfirmCreditors() {
     try {
-      console.log('🔍 Checking for clients awaiting confirmation for 3+ minutes (TEST MODE)...');
+      console.log('🔍 Checking for clients awaiting confirmation for 7+ days...');
 
-      const threeMinutesAgo = new Date();
-      threeMinutesAgo.setMinutes(threeMinutesAgo.getMinutes() - 3);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      // Find clients who have been awaiting confirmation for 3+ minutes (TEST MODE)
+      // Find clients who have been awaiting confirmation for 7+ days
       const pendingClients = await Client.find({
         current_status: 'awaiting_client_confirmation',
         admin_approved: true,
         client_confirmed_creditors: { $ne: true },
-        admin_approved_at: { $lte: threeMinutesAgo }
+        admin_approved_at: { $lte: sevenDaysAgo }
       });
 
       console.log(`📋 Found ${pendingClients.length} clients ready for auto-confirmation`);
@@ -352,33 +352,32 @@ class DelayedProcessingService {
 
       for (const client of pendingClients) {
         try {
-          const minutesSinceApproval = Math.floor((new Date() - new Date(client.admin_approved_at)) / (1000 * 60));
-          
+          const daysSinceApproval = Math.floor((new Date() - new Date(client.admin_approved_at)) / (1000 * 60 * 60 * 24));
+
           // Check if client has new unreviewed documents that would block auto-confirmation
           if (this.hasUnreviewedDocumentsBlockingAutoConfirmation(client)) {
             console.log(`⏸️ Skipping auto-confirmation for ${client.aktenzeichen} - has unreviewed documents requiring agent review`);
             skippedCount++;
             continue;
           }
-          
-          console.log(`⏰ Auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - ${minutesSinceApproval} minutes since approval`);
-          
+
+          console.log(`⏰ Auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - ${daysSinceApproval} days since approval`);
+
           // Auto-confirm the creditors
           client.client_confirmed_creditors = true;
           client.client_confirmed_at = new Date();
           client.current_status = 'creditor_contact_initiated';
-          
+
           // Add to status history
           client.status_history.push({
             id: uuidv4(),
             status: 'creditors_auto_confirmed',
             changed_by: 'system',
             metadata: {
-              reason: '3-minute auto-confirmation - no client response (TEST MODE)',
+              reason: '7-day auto-confirmation - no client response',
               admin_approved_at: client.admin_approved_at,
-              minutes_elapsed: minutesSinceApproval,
-              auto_confirmed_at: new Date(),
-              test_mode: true
+              days_elapsed: daysSinceApproval,
+              auto_confirmed_at: new Date()
             }
           });
 
@@ -387,9 +386,8 @@ class DelayedProcessingService {
             status: 'creditor_contact_initiated',
             changed_by: 'system',
             metadata: {
-              reason: 'Auto-triggered after 3-minute creditor confirmation (TEST MODE)',
-              creditor_count: (client.final_creditor_list || []).length,
-              test_mode: true
+              reason: 'Auto-triggered after 7-day creditor confirmation',
+              creditor_count: (client.final_creditor_list || []).length
             }
           });
 

@@ -125,8 +125,8 @@ class Scheduler {
         console.log('  • Document reminders: every hour');
         console.log('  • Delayed processing webhooks: every 30 minutes');
         console.log('  • Login reminders: every 6 hours (7-day cycle)');
-        console.log('  • 3-minute reviews: every hour (TEST MODE)');
-        console.log('  • Auto-confirmation: every 7 hours (PRODUCTION MODE)');
+        console.log('  • 7-day reviews: every hour');
+        console.log('  • Auto-confirmation: every 7 hours (7-day threshold)');
     }
 }
 
