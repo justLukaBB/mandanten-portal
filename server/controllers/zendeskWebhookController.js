@@ -659,38 +659,27 @@ class ZendeskWebhookController {
         const completedDocs = documents.filter(
             (d) => d.processing_status === "completed"
         );
-        // const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
         const totalDebt = creditors.reduce(
             (sum, c) => sum + (c.claim_amount || 0),
             0
         );
 
-        // Separate creditors by confidence level (use AI confidence from Claude)
-        const confidenceOk = creditors.filter(
-            (c) => (c.ai_confidence || c.confidence || 0) >= 0.8
-        );
-        const needsReview = creditors.filter(
-            (c) => (c.ai_confidence || c.confidence || 0) < 0.8
-        );
+        // Separate creditors by needs_manual_review FLAG (NOT confidence!)
+        const verifiedOk = creditors.filter(c => c.needs_manual_review !== true);
+        const needsReviewList = creditors.filter(c => c.needs_manual_review === true);
 
         // Generate creditor lists
-        const verifiedCreditors = confidenceOk
+        const verifiedCreditors = verifiedOk
             .map(
                 (c) =>
-                    `✅ ${c.sender_name || "Unbekannt"} - ${c.claim_amount || "N/A"
-                    }€ (Confidence: ${Math.round(
-                        (c.ai_confidence || c.confidence || 0) * 100
-                    )}%)`
+                    `✅ ${c.sender_name || "Unbekannt"} - ${c.claim_amount || "N/A"}€`
             )
             .join("\n");
 
-        const reviewCreditors = needsReview
+        const reviewCreditors = needsReviewList
             .map(
                 (c) =>
-                    `⚠️ ${c.sender_name || "Unbekannt"} - ${c.claim_amount || "N/A"
-                    }€ (Confidence: ${Math.round(
-                        (c.ai_confidence || c.confidence || 0) * 100
-                    )}%) → PRÜFUNG NÖTIG`
+                    `⚠️ ${c.sender_name || "Unbekannt"} - ${c.claim_amount || "N/A"}€ → PRÜFUNG NÖTIG`
             )
             .join("\n");
 
@@ -698,38 +687,37 @@ class ZendeskWebhookController {
             }/agent/review/${client.id}`;
 
         return `🤖 GLÄUBIGER-ANALYSE FÜR: ${client.firstName} ${client.lastName}
-  
+
   📊 AI-VERARBEITUNG ABGESCHLOSSEN:
   • Dokumente verarbeitet: ${completedDocs.length}/${documents.length}
   • Gläubiger erkannt: ${creditors.length}
-  • Manuelle Prüfung erforderlich: ${needsReview.length} ${needsManualReview ? "⚠️" : "✅"
-            }
-  
+  • Manuelle Prüfung erforderlich: ${needsReviewList.length} ${needsManualReview ? "⚠️" : "✅"}
+
   📋 ERKANNTE GLÄUBIGER:
   ${verifiedCreditors || "Keine verifizierten Gläubiger"}
-  
+
   ${reviewCreditors
                 ? `🔍 MANUELLE PRÜFUNG ERFORDERLICH:
   ${reviewCreditors}`
                 : ""
             }
-  
+
   💰 GESCHÄTZTE GESAMTSCHULD: ${totalDebt.toFixed(2)}€
-  
+
   ${needsManualReview
                 ? `🔧 AGENT-AKTIONEN:
   [BUTTON: Manuelle Prüfung starten] → ${reviewUrl}
-  
+
   ⚠️ AGENT MUSS GLÄUBIGER BESTÄTIGEN:
   🔗 Agent-Dashboard: ${reviewUrl}
-  
+
   Nach Agent-Bestätigung wird automatisch E-Mail an Mandant versendet.`
                 : `✅ ALLE GLÄUBIGER VERIFIZIERT - AGENT-BESTÄTIGUNG ERFORDERLICH:
   🔗 Agent-Dashboard: ${reviewUrl}
-  
+
   Nach Agent-Bestätigung wird automatisch E-Mail an Mandant versendet.`
             }
-  
+
   🔗 Mandant Portal: ${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"
             }/login?token=${client.portal_token}
   📁 Aktenzeichen: ${client.aktenzeichen}`;
