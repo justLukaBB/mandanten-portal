@@ -2,15 +2,18 @@ const express = require('express');
 const { authenticateAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const createAgentReviewController = require('../controllers/agentReviewController');
+const ZendeskService = require('../services/zendeskService');
 
 module.exports = ({ Client, getGCSFileStream, uploadsDir }) => {
   const router = express.Router();
+  const zendeskService = new ZendeskService();
 
   // Create controller with dependencies
   const agentReviewController = createAgentReviewController({
     Client,
     getGCSFileStream,
-    uploadsDir
+    uploadsDir,
+    zendeskService
   });
 
   // Helper function to serve mock PDF for test scenarios

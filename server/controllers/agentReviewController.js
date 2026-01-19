@@ -9,8 +9,148 @@ const creditorDeduplication = require('../utils/creditorDeduplication');
  * @param {Object} dependencies.Client - Client model
  * @param {Function} dependencies.getGCSFileStream - Function to get GCS file stream
  * @param {String} dependencies.uploadsDir - Uploads directory path
+ * @param {Object} dependencies.zendeskService - Zendesk service instance
  */
-const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) => {
+const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir, zendeskService }) => {
+
+    /**
+     * Generate creditor confirmation email content
+     */
+    const generateCreditorConfirmationEmailContent = (client, creditors, portalUrl, totalDebt) => {
+        const { firstName, lastName, aktenzeichen } = client;
+
+        const creditorListPlain = creditors
+            .map((c, i) => `${i + 1}. ${c.sender_name || "Unbekannt"} - €${(c.claim_amount || 0).toLocaleString("de-DE")}`)
+            .join("\n");
+
+        const creditorListHtml = creditors
+            .map((c, i) => `
+                <tr>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef;">${i + 1}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef; font-weight: 500;">${c.sender_name || "Unbekannt"}</td>
+                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef; text-align: right; font-weight: 600; color: #dc3545;">€${(c.claim_amount || 0).toLocaleString("de-DE")}</td>
+                </tr>
+            `)
+            .join("");
+
+        const plainText = `
+📋 Ihre Gläubigerliste zur Überprüfung
+
+Sehr geehrte/r ${firstName} ${lastName},
+
+wir haben Ihre hochgeladenen Dokumente geprüft und folgende Gläubiger identifiziert:
+
+${creditorListPlain}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Gesamtschulden: €${totalDebt.toLocaleString("de-DE")}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 Was Sie jetzt tun sollten:
+
+1. Überprüfen Sie die Liste auf Vollständigkeit und Richtigkeit
+2. Falls Gläubiger fehlen, laden Sie weitere Dokumente hoch
+3. Bestätigen Sie die Gläubigerliste in Ihrem Portal
+
+👉 Jetzt im Portal überprüfen:
+${portalUrl}
+
+Wichtig:
+• Sie können jederzeit weitere Dokumente hochladen
+• Erst nach Ihrer Bestätigung werden wir die Gläubiger kontaktieren
+• Bei Fragen stehen wir Ihnen gerne zur Verfügung
+
+Mit freundlichen Grüßen
+Ihr Team von Rechtsanwalt Thomas Scuric
+
+📁 Aktenzeichen: ${aktenzeichen}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Diese E-Mail wurde automatisch generiert.
+        `.trim();
+
+        const html = `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ihre Gläubigerliste zur Überprüfung</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; color: #2c3e50; background: #f8f9fa; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px;">
+        <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 30px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600;">📋 Ihre Gläubigerliste</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9; font-size: 16px;">wurde geprüft und ist bereit</p>
+        </div>
+        <div style="padding: 30px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">
+                Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,
+            </p>
+            <p style="font-size: 15px; color: #5a6c7d; margin-bottom: 25px;">
+                wir haben Ihre hochgeladenen Dokumente geprüft und folgende Gläubiger identifiziert:
+            </p>
+            <div style="background: #f8f9fa; border-radius: 8px; overflow: hidden; margin-bottom: 25px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #e9ecef;">
+                            <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">#</th>
+                            <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Gläubiger</th>
+                            <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Betrag</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${creditorListHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #1e3c72; color: white;">
+                            <td colspan="2" style="padding: 15px; font-weight: 600;">Gesamtschulden</td>
+                            <td style="padding: 15px; text-align: right; font-weight: 700; font-size: 18px;">€${totalDebt.toLocaleString("de-DE")}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">🔍 Was Sie jetzt tun sollten:</h3>
+                <ol style="margin: 0; padding-left: 20px; color: #856404;">
+                    <li>Überprüfen Sie die Liste auf Vollständigkeit</li>
+                    <li>Falls Gläubiger fehlen, laden Sie weitere Dokumente hoch</li>
+                    <li>Bestätigen Sie die Gläubigerliste</li>
+                </ol>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${portalUrl}" style="display: inline-block; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; text-decoration: none; padding: 15px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);">
+                    👉 Jetzt im Portal überprüfen
+                </a>
+            </div>
+            <div style="background: #e7f5ff; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <p style="margin: 0; color: #0c63e4; font-size: 14px;">
+                    <strong>💡 Wichtig:</strong><br>
+                    • Sie können jederzeit weitere Dokumente hochladen<br>
+                    • Erst nach Ihrer Bestätigung werden wir die Gläubiger kontaktieren<br>
+                    • Bei Fragen stehen wir Ihnen gerne zur Verfügung
+                </p>
+            </div>
+            <p style="font-size: 15px; color: #5a6c7d;">
+                Mit freundlichen Grüßen<br>
+                <strong>Ihr Team von Rechtsanwalt Thomas Scuric</strong>
+            </p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e9ecef;">
+            <p style="margin: 0; color: #6c757d; font-size: 13px;">
+                📁 Aktenzeichen: <strong>${aktenzeichen}</strong>
+            </p>
+            <p style="margin: 10px 0 0 0; color: #adb5bd; font-size: 12px;">
+                Diese E-Mail wurde automatisch generiert.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+        `.trim();
+
+        return { plainText, html };
+    };
+
     return {
 
     /**
@@ -511,10 +651,17 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) =
     /**
      * Complete the review session
      * POST /api/agent-review/:clientId/complete
+     *
+     * After agent completes review:
+     * 1. Set admin_approved = true
+     * 2. Set status to awaiting_client_confirmation
+     * 3. Send email to client with creditor list
+     * 4. Creditors become visible in client portal
      */
     completeReviewSession: async (req, res) => {
         try {
             const { clientId } = req.params;
+            const agentId = req.agentId || req.agentUsername || 'agent';
 
             console.log(`🏁 Agent Review: Completing review session for client ${clientId}`);
 
@@ -542,25 +689,120 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) =
                 });
             }
 
-            // Update client status
-            client.current_status = 'manual_review_complete';
-            client.workflow_status = 'admin_review'; // Or appropriate next step
-            // client.admin_approved = true; // Optional: auto-approve?
+            // Get creditors for email
+            const creditors = client.final_creditor_list || [];
+            const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+            // Update client status - AUTO APPROVE and set to awaiting_client_confirmation
+            client.current_status = 'awaiting_client_confirmation';
+            client.admin_approved = true;
+            client.admin_approved_at = new Date();
+            client.admin_approved_by = agentId;
             client.updated_at = new Date();
 
-            // Log the review completion
-            console.log(`✅ Review complete for ${client.aktenzeichen}. Status updated to manual_review_complete`);
+            // Add status history
+            client.status_history = client.status_history || [];
+            client.status_history.push({
+                id: uuidv4(),
+                status: 'awaiting_client_confirmation',
+                changed_by: 'agent',
+                metadata: {
+                    agent_id: agentId,
+                    agent_action: 'Review completed - auto approved',
+                    creditors_count: creditors.length,
+                    total_debt: totalDebt,
+                    admin_approved: true,
+                }
+            });
 
             await client.save();
 
+            console.log(`✅ Review complete for ${client.aktenzeichen}. Status: awaiting_client_confirmation, admin_approved: true`);
+
+            // SEND EMAIL TO CLIENT with creditor list
+            let clientEmailSent = false;
+            const zendesk_ticket_id = client.zendesk_review_ticket_id || client.zendesk_ticket_id;
+
+            if (zendeskService && zendeskService.isConfigured() && creditors.length > 0) {
+                try {
+                    console.log(`📧 Sending creditor confirmation email to client ${client.email}`);
+
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+
+                    const emailContent = generateCreditorConfirmationEmailContent(
+                        client,
+                        creditors,
+                        portalUrl,
+                        totalDebt
+                    );
+
+                    // If we have a ticket, add public comment (sends email)
+                    if (zendesk_ticket_id) {
+                        const emailResult = await zendeskService.addPublicComment(zendesk_ticket_id, {
+                            content: emailContent.plainText,
+                            htmlContent: emailContent.html,
+                            tags: ["creditor-confirmation-email-sent", "agent-review-completed"],
+                        });
+
+                        if (emailResult?.success) {
+                            clientEmailSent = true;
+                            console.log(`✅ Creditor confirmation email sent to ${client.email} via Zendesk ticket ${zendesk_ticket_id}`);
+                        } else {
+                            console.error(`❌ Failed to send email via Zendesk: ${emailResult?.error}`);
+                        }
+                    } else {
+                        // No ticket - create new ticket and send email
+                        console.log(`📧 No existing ticket found, creating new ticket for email...`);
+
+                        const ticketResult = await zendeskService.createTicket({
+                            subject: `Gläubigerliste zur Bestätigung: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+                            content: emailContent.plainText,
+                            requesterEmail: client.email,
+                            tags: ["creditor-confirmation", "agent-review-completed"],
+                            priority: "normal",
+                            type: "task",
+                        });
+
+                        if (ticketResult?.success || ticketResult?.ticket_id) {
+                            // Add public comment to send email
+                            const emailResult = await zendeskService.addPublicComment(ticketResult.ticket_id, {
+                                content: emailContent.plainText,
+                                htmlContent: emailContent.html,
+                                tags: ["creditor-confirmation-email-sent"],
+                            });
+
+                            if (emailResult?.success) {
+                                clientEmailSent = true;
+                                client.zendesk_review_ticket_id = ticketResult.ticket_id;
+                                await client.save();
+                                console.log(`✅ New ticket created and email sent: ${ticketResult.ticket_id}`);
+                            }
+                        }
+                    }
+                } catch (emailError) {
+                    console.error(`❌ Error sending creditor confirmation email:`, emailError.message);
+                }
+            } else {
+                console.log(`⚠️ Zendesk not configured or no creditors - skipping email`);
+            }
+
+            const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+
             res.json({
                 success: true,
-                message: 'Review session completed successfully',
+                message: 'Review session completed - Client notified',
                 client: {
                     id: client.id,
                     current_status: client.current_status,
-                    workflow_status: client.workflow_status
-                }
+                    admin_approved: client.admin_approved
+                },
+                creditors_count: creditors.length,
+                total_debt: totalDebt,
+                client_email_sent: clientEmailSent,
+                portal_url: portalUrl,
+                next_step: clientEmailSent
+                    ? 'Email mit Gläubigerliste wurde an den Mandanten gesendet. Mandant kann im Portal bestätigen.'
+                    : 'Gläubiger sind im Portal sichtbar. Email konnte nicht gesendet werden.'
             });
 
         } catch (error) {
