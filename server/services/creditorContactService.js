@@ -288,22 +288,38 @@ class CreditorContactService {
 
             // Debug each creditor's filtering criteria
             allCreditors.forEach((creditor, index) => {
+                const emailToUse = creditor.is_representative
+                    ? (creditor.email_glaeubiger_vertreter || creditor.sender_email)
+                    : (creditor.email_glaeubiger || creditor.sender_email);
+
                 console.log(`🔍 Creditor ${index + 1}:`, {
                     name: creditor.sender_name,
-                    email: creditor.sender_email,
+                    is_representative: creditor.is_representative,
+                    representative_email: creditor.email_glaeubiger_vertreter,
+                    creditor_email: creditor.email_glaeubiger,
+                    sender_email: creditor.sender_email,
+                    email_to_use: emailToUse,
                     status: creditor.status,
                     hasName: !!creditor.sender_name,
-                    hasEmail: !!creditor.sender_email,
+                    hasEmail: !!emailToUse,
                     isConfirmed: creditor.status === 'confirmed',
-                    willBeIncluded: creditor.status === 'confirmed' && !!creditor.sender_name && !!creditor.sender_email
+                    willBeIncluded: creditor.status === 'confirmed' && !!creditor.sender_name && !!emailToUse
                 });
             });
 
-            const confirmedCreditors = allCreditors.filter(creditor =>
-                creditor.status === 'confirmed' &&
-                creditor.sender_name &&
-                creditor.sender_email
-            );
+            // Filter confirmed creditors that have either direct creditor email OR representative email
+            const confirmedCreditors = allCreditors.filter(creditor => {
+                if (creditor.status !== 'confirmed' || !creditor.sender_name) {
+                    return false;
+                }
+
+                // Check if we have an email to use (either representative or direct creditor)
+                const hasEmail = creditor.is_representative
+                    ? !!(creditor.email_glaeubiger_vertreter || creditor.sender_email)
+                    : !!(creditor.email_glaeubiger || creditor.sender_email);
+
+                return hasEmail;
+            });
 
             console.log(`📋 Found ${confirmedCreditors.length} confirmed creditors in final_creditor_list for client ${clientReference}`);
 
@@ -345,20 +361,41 @@ class CreditorContactService {
                 creditor.sender_name
             );
 
-            const creditorContactRecords = allConfirmedCreditors.map(creditor => ({
-                id: uuidv4(),
-                client_reference: clientReference,
-                creditor_name: creditor.sender_name,
-                creditor_email: creditor.sender_email,
-                creditor_address: creditor.sender_address || '',
-                reference_number: creditor.reference_number || 'NO_REF',
-                original_claim_amount: creditor.claim_amount || 0,
-                document_ids: creditor.document_id ? [creditor.document_id] : [],
-                is_representative: creditor.is_representative || false,
-                actual_creditor: creditor.actual_creditor || creditor.sender_name,
-                sender_name: creditor.sender_name, // Keep original sender name for contact record
-                needs_manual_contact: !creditor.sender_email // Flag for manual processing
-            }));
+            const creditorContactRecords = allConfirmedCreditors.map(creditor => {
+                // IMPORTANT: If is_representative is true, use representative's email, otherwise use creditor's email
+                let emailToUse = null;
+                let nameToUse = creditor.sender_name;
+                let addressToUse = creditor.sender_address || '';
+
+                if (creditor.is_representative) {
+                    // Representative case: Use representative's email and name from sender fields
+                    emailToUse = creditor.email_glaeubiger_vertreter || creditor.sender_email;
+                    nameToUse = creditor.glaeubigervertreter_name || creditor.sender_name;
+                    addressToUse = creditor.glaeubigervertreter_adresse || creditor.sender_address || '';
+
+                    console.log(`📧 Representative detected: ${nameToUse} representing ${creditor.actual_creditor || creditor.glaeubiger_name}`);
+                    console.log(`   Using email: ${emailToUse}`);
+                } else {
+                    // Direct creditor case: Use creditor's email
+                    emailToUse = creditor.email_glaeubiger || creditor.sender_email;
+                    console.log(`📧 Direct creditor: ${nameToUse}, email: ${emailToUse}`);
+                }
+
+                return {
+                    id: uuidv4(),
+                    client_reference: clientReference,
+                    creditor_name: nameToUse,
+                    creditor_email: emailToUse,
+                    creditor_address: addressToUse,
+                    reference_number: creditor.reference_number || 'NO_REF',
+                    original_claim_amount: creditor.claim_amount || 0,
+                    document_ids: creditor.document_id ? [creditor.document_id] : [],
+                    is_representative: creditor.is_representative || false,
+                    actual_creditor: creditor.actual_creditor || creditor.glaeubiger_name || creditor.sender_name,
+                    sender_name: creditor.sender_name, // Keep original sender name for contact record
+                    needs_manual_contact: !emailToUse // Flag for manual processing
+                };
+            });
 
             return creditorContactRecords;
 
