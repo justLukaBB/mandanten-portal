@@ -100,7 +100,7 @@ async function runAIRededup(clientId, getClientFunction) {
           'Content-Type': 'application/json',
           'X-API-Key': FASTAPI_API_KEY
         },
-        timeout: 120000 // 2 minutes timeout
+        timeout: 300000 // 5 minutes timeout (increased from 2 minutes)
       }
     );
 

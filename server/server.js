@@ -140,7 +140,7 @@ const secondRoundApiRoutes = require('./routes/second-round-api');
 const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
-const adminCreditorDatabaseRoutes = require('./routes/admin-creditor-database');
+const createAdminCreditorDatabaseRouter = require('./routes/admin-creditor-database');
 const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
 const testRoutes = require('./routes/test-routes');
 
@@ -291,7 +291,11 @@ app.use('/api/admin', createAdminAuthRouter()); // Login
 app.use('/api/admin', adminImpersonationRoutes);
 app.use('/api/auth', authImpersonationRoutes);
 app.use('/api/admin', adminUserDeletionRoutes);
-app.use('/api/admin/creditor-database', adminCreditorDatabaseRoutes);
+app.use('/api/admin/creditor-database', createAdminCreditorDatabaseRouter({
+  Client,
+  documentProcessor,
+  safeClientUpdate: clientService.safeClientUpdate.bind(clientService)
+}));
 app.use('/api/test', testRoutes);
 
 // 10.6 Admin Dashboard & Management

@@ -642,7 +642,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                             'Content-Type': 'application/json',
                             'X-API-Key': process.env.FASTAPI_API_KEY || ''
                         },
-                        timeout: 120000 // 2 minutes
+                        timeout: 300000 // 5 minutes timeout (increased from 2 minutes)
                     }
                 );
 
