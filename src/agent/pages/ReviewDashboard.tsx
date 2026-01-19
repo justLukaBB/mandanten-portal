@@ -357,35 +357,10 @@ const ReviewDashboard: React.FC = () => {
     if (!reviewData) return;
 
     setSaving(true);
+    setError(null);
     try {
-      // First, auto-confirm all remaining high-confidence creditors
-      const verifiedCreditors = reviewData.creditors.verified_with_docs || [];
-      for (const creditorData of verifiedCreditors) {
-        const creditor = creditorData.creditor;
-        if (!reviewedCreditorIds.has(creditor.id) && !creditor.manually_reviewed) {
-          // Find document ID using reliable linking
-          const docId = creditor.document_id ||
-            creditorData.documents[0]?.id;
-
-          if (docId) {
-            try {
-              await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/correct`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  document_id: docId,
-                  corrections: {},
-                  action: 'confirm'
-                })
-              });
-              console.log(`Auto-confirmed creditor ${creditor.sender_name}`);
-            } catch (err) {
-              console.warn(`Could not auto-confirm creditor ${creditor.sender_name}:`, err);
-            }
-          }
-        }
-      }
-
-      // Now complete the entire session
+      // Call complete endpoint - backend handles auto-confirmation of all creditors
+      // that don't need manual review
       const response = await fetchWithAuth(`${API_BASE_URL}/api/agent-review/${clientId}/complete`, {
         method: 'POST',
         body: JSON.stringify({
@@ -393,11 +368,17 @@ const ReviewDashboard: React.FC = () => {
         })
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to complete session');
+        // Show specific error message
+        const errorMsg = result.error || 'Failed to complete session';
+        const details = result.creditor_names
+          ? `\nGläubiger: ${result.creditor_names.join(', ')}`
+          : '';
+        throw new Error(errorMsg + details);
       }
 
-      const result = await response.json();
       console.log('Review session completed:', result);
 
       // Show completion modal
