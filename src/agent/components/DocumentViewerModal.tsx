@@ -206,7 +206,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                   {document.extracted_data.creditor_data.sender_name}
                 </span>
               )}
-              {document.extracted_data.creditor_data.claim_amount !== undefined && (
+              {document.extracted_data.creditor_data.claim_amount != null && (
                 <span>
                   <span className="font-medium">Betrag:</span>{' '}
                   €{document.extracted_data.creditor_data.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}

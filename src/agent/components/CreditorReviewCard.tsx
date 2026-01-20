@@ -162,7 +162,7 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
                 {creditor.sender_name || 'Unbekannter Gläubiger'}
               </h3>
               <div className="flex items-center space-x-3 text-sm text-gray-500">
-                {creditor.claim_amount !== undefined && (
+                {creditor.claim_amount != null && (
                   <span className="font-medium text-gray-700">
                     €{creditor.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}
                   </span>
