@@ -364,11 +364,12 @@ Diese E-Mail wurde automatisch generiert.
                     doc.extracted_data?.manual_review_required === true
                 );
 
-                // NEW: Check if email OR address is missing for creditor documents
-                const hasCreditorDocs = creditorDocs.some(doc => doc.is_creditor_document === true);
+                // Check if email OR address is missing for ANY creditor (not just creditor documents)
                 const creditorEmail = creditor.email || creditor.sender_email;
                 const creditorAddress = creditor.address || creditor.sender_address;
-                const missingContactInfo = hasCreditorDocs && (isMissingValue(creditorEmail) || isMissingValue(creditorAddress));
+                const missingEmail = isMissingValue(creditorEmail);
+                const missingAddress = isMissingValue(creditorAddress);
+                const missingContactInfo = missingEmail || missingAddress;
 
                 const needsManualReview = documentNeedsReview || missingContactInfo;
 
@@ -377,8 +378,8 @@ Diese E-Mail wurde automatisch generiert.
                     ...creditorDocs.flatMap(doc => doc.validation?.review_reasons || [])
                 ];
                 if (missingContactInfo) {
-                    if (isMissingValue(creditorEmail)) allReviewReasons.push('E-Mail-Adresse fehlt');
-                    if (isMissingValue(creditorAddress)) allReviewReasons.push('Postadresse fehlt');
+                    if (missingEmail) allReviewReasons.push('E-Mail-Adresse fehlt');
+                    if (missingAddress) allReviewReasons.push('Postadresse fehlt');
                 }
 
                 console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (docFlag=${documentNeedsReview}, missingContact=${missingContactInfo})`);
@@ -798,11 +799,12 @@ Diese E-Mail wurde automatisch generiert.
                     doc.extracted_data?.manual_review_required === true
                 );
 
-                // NEW: Check if email OR address is missing
-                const hasCreditorDocs = linkedDocs.some(doc => doc.is_creditor_document === true);
+                // Check if email OR address is missing for ANY creditor (not just creditor documents)
                 const creditorEmail = creditor.email || creditor.sender_email;
                 const creditorAddress = creditor.address || creditor.sender_address;
-                const missingContactInfo = hasCreditorDocs && (isMissingValue(creditorEmail) || isMissingValue(creditorAddress));
+                const missingEmail = isMissingValue(creditorEmail);
+                const missingAddress = isMissingValue(creditorAddress);
+                const missingContactInfo = missingEmail || missingAddress;
 
                 return documentNeedsReview || missingContactInfo;
             };
