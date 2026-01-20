@@ -101,6 +101,12 @@ const userDeletionSchema = new mongoose.Schema({
     timestamp: Date
   }],
 
+  deletion_info: [{
+    step: String,
+    message: String,
+    timestamp: Date
+  }],
+
   // Time taken to delete
   deletion_duration_ms: {
     type: Number,
@@ -114,21 +120,21 @@ userDeletionSchema.index({ admin_id: 1, deletion_timestamp: -1 });
 userDeletionSchema.index({ deleted_user_email: 1 });
 
 // Static method to log deletion
-userDeletionSchema.statics.logDeletion = async function(deletionData) {
+userDeletionSchema.statics.logDeletion = async function (deletionData) {
   const log = new this(deletionData);
   await log.save();
   return log;
 };
 
 // Static method to get deletion history for an admin
-userDeletionSchema.statics.getAdminDeletionHistory = async function(adminId, limit = 20) {
+userDeletionSchema.statics.getAdminDeletionHistory = async function (adminId, limit = 20) {
   return this.find({ admin_id: adminId })
     .sort({ deletion_timestamp: -1 })
     .limit(limit);
 };
 
 // Static method to get all deletions
-userDeletionSchema.statics.getAllDeletions = async function(page = 1, limit = 50) {
+userDeletionSchema.statics.getAllDeletions = async function (page = 1, limit = 50) {
   const skip = (page - 1) * limit;
   const [deletions, total] = await Promise.all([
     this.find()
@@ -147,14 +153,14 @@ userDeletionSchema.statics.getAllDeletions = async function(page = 1, limit = 50
 };
 
 // Method to mark deletion as completed
-userDeletionSchema.methods.markCompleted = async function(duration_ms) {
+userDeletionSchema.methods.markCompleted = async function (duration_ms) {
   this.deletion_status = 'completed';
   this.deletion_duration_ms = duration_ms;
   await this.save();
 };
 
 // Method to mark deletion as failed
-userDeletionSchema.methods.markFailed = async function(error) {
+userDeletionSchema.methods.markFailed = async function (error) {
   this.deletion_status = 'failed';
   this.deletion_errors.push({
     step: 'final',
@@ -165,10 +171,23 @@ userDeletionSchema.methods.markFailed = async function(error) {
 };
 
 // Method to add error
-userDeletionSchema.methods.addError = async function(step, error) {
+userDeletionSchema.methods.addError = async function (step, error) {
   this.deletion_errors.push({
     step,
     error_message: error.message || error.toString(),
+    timestamp: new Date()
+  });
+  await this.save();
+};
+
+// Method to add info log
+userDeletionSchema.methods.addInfo = async function (step, message) {
+  if (!this.deletion_info) {
+    this.deletion_info = [];
+  }
+  this.deletion_info.push({
+    step,
+    message: message,
     timestamp: new Date()
   });
   await this.save();

@@ -6,6 +6,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 const Client = require('../models/Client');
 const UserDeletion = require('../models/UserDeletion');
 const ImpersonationToken = require('../models/ImpersonationToken');
+const ZendeskUserDeletionService = require('../services/zendeskUserDeletionService');
 
 /**
  * DELETE /api/admin/users/:userId
@@ -34,8 +35,15 @@ router.delete('/users/:userId', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Find the user - try by id first, then by aktenzeichen
-    let client = await Client.findOne({ id: userId });
+    // Find the user - support both MongoDB ObjectId and Aktenzeichen
+    let client = null;
+
+    // Check if valid ObjectId (24 hex chars)
+    if (userId.match(/^[0-9a-fA-F]{24}$/)) {
+      client = await Client.findById(userId);
+    }
+
+    // Fallback: Try by aktenzeichen if not found by ID
     if (!client) {
       client = await Client.findOne({ aktenzeichen: userId });
     }
@@ -91,6 +99,7 @@ router.delete('/users/:userId', authenticateAdmin, async (req, res) => {
         documents: 0,
         creditors: 0,
         impersonation_tokens: 0,
+        zendesk_user: 0,
         files: 0
       }
     };
@@ -139,8 +148,52 @@ router.delete('/users/:userId', authenticateAdmin, async (req, res) => {
       deletionSummary.deleted_items.creditors = client.final_creditor_list.length;
     }
 
-    // Step 4: Delete the user account (with all embedded data)
-    console.log(`👤 Step 3: Deleting user account...`);
+    // Step 4: Delete from Zendesk (New Step)
+    console.log(`🗑️ Step 4: Deleting from Zendesk...`);
+    if (client.zendesk_user_id) {
+      try {
+        const zendeskResult = await ZendeskUserDeletionService.deleteUser(client.zendesk_user_id);
+        if (zendeskResult.success) {
+          deletionSummary.deleted_items.zendesk_user = 1;
+
+          if (zendeskResult.actionTaken === 'suspended') {
+            console.log(`  ✓ Zendesk user SUSPENDED (fallback): ${client.zendesk_user_id}`);
+            await deletionLog.addInfo('zendesk_deletion', 'User suspended (record invalid for deletion)');
+          } else {
+            const ticketsClosed = zendeskResult.ticketsClosed || 0;
+            const isPermanent = zendeskResult.permanentlyDeleted;
+            const actionText = isPermanent ? 'PERMANENTLY deleted' : 'deleted';
+
+            console.log(`  ✓ Zendesk user ${actionText}: ${client.zendesk_user_id}. ${ticketsClosed > 0 ? `(Closed ${ticketsClosed} tickets)` : ''}`);
+
+            if (ticketsClosed > 0) {
+              await deletionLog.addInfo('zendesk_ticket_closure', `Auto-closed ${ticketsClosed} tickets.`);
+            }
+
+            if (isPermanent) {
+              await deletionLog.addInfo('zendesk_permanent_deletion', 'User was immediately wiped from Zendesk (skipped 30-day trash).');
+            }
+          }
+
+        } else {
+          // Format the error message for logging
+          const errorMsg = typeof zendeskResult.error === 'object'
+            ? JSON.stringify(zendeskResult.error)
+            : zendeskResult.error;
+
+          console.warn(`  ⚠️ Zendesk deletion failed: ${errorMsg}`);
+          await deletionLog.addError('zendesk_deletion', errorMsg);
+        }
+      } catch (error) {
+        console.error(`❌ Error in Zendesk deletion step:`, error);
+        await deletionLog.addError('zendesk_deletion_exception', error);
+      }
+    } else {
+      console.log(`  ℹ️ No Zendesk User ID found for this client. Skipping Zendesk deletion.`);
+    }
+
+    // Step 5: Delete the user account (with all embedded data)
+    console.log(`👤 Step 5: Deleting user account...`);
     try {
       await Client.deleteOne({ _id: client._id });
       console.log(`  ✓ User account deleted`);
