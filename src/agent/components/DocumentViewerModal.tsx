@@ -21,7 +21,7 @@ interface DocumentViewerModalProps {
 }
 
 const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
-  document,
+  document: docData,
   clientId,
   isOpen,
   onClose
@@ -32,7 +32,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !document) {
+    if (!isOpen || !docData) {
       setDocumentUrl(null);
       setError(null);
       return;
@@ -44,7 +44,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
       try {
         const token = localStorage.getItem('agent_token');
-        const fileName = encodeURIComponent(document.filename || document.name);
+        const fileName = encodeURIComponent(docData.filename || docData.name);
         const url = `${API_BASE_URL}/api/agent-review/${clientId}/document/${fileName}`;
 
         const response = await fetch(url, {
@@ -76,7 +76,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         URL.revokeObjectURL(documentUrl);
       }
     };
-  }, [isOpen, document, clientId]);
+  }, [isOpen, docData, clientId]);
 
   // Handle escape key
   useEffect(() => {
@@ -93,16 +93,16 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     if (isOpen) {
       window.addEventListener('keydown', handleEscape);
       // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
+      window.document.body.style.overflow = 'hidden';
     }
 
     return () => {
       window.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
+      window.document.body.style.overflow = 'unset';
     };
   }, [isOpen, isFullscreen, onClose]);
 
-  if (!isOpen || !document) return null;
+  if (!isOpen || !docData) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -122,15 +122,15 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center space-x-3">
             <h3 className="text-lg font-medium text-gray-900 truncate max-w-md">
-              {document.filename || document.name}
+              {docData.filename || docData.name}
             </h3>
-            {document.extracted_data?.confidence != null && (
+            {docData.extracted_data?.confidence != null && (
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                (document.extracted_data.confidence || 0) >= 0.8
+                (docData.extracted_data.confidence || 0) >= 0.8
                   ? 'bg-green-100 text-green-700'
                   : 'bg-yellow-100 text-yellow-700'
               }`}>
-                {Math.round((document.extracted_data.confidence || 0) * 100)}% Confidence
+                {Math.round((docData.extracted_data.confidence || 0) * 100)}% Confidence
               </span>
             )}
           </div>
@@ -190,32 +190,32 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <iframe
               src={documentUrl}
               className="w-full h-full border-0"
-              title={document.filename || document.name}
+              title={docData.filename || docData.name}
             />
           )}
         </div>
 
         {/* Footer with extracted data */}
-        {document.extracted_data?.creditor_data && (
+        {docData.extracted_data?.creditor_data && (
           <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center space-x-6 text-sm">
               <span className="text-gray-500">AI-Extraktion:</span>
-              {document.extracted_data.creditor_data.sender_name && (
+              {docData.extracted_data.creditor_data.sender_name && (
                 <span>
                   <span className="font-medium">Gläubiger:</span>{' '}
-                  {document.extracted_data.creditor_data.sender_name}
+                  {docData.extracted_data.creditor_data.sender_name}
                 </span>
               )}
-              {document.extracted_data.creditor_data.claim_amount != null && (
+              {docData.extracted_data.creditor_data.claim_amount != null && (
                 <span>
                   <span className="font-medium">Betrag:</span>{' '}
-                  €{document.extracted_data.creditor_data.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}
+                  €{docData.extracted_data.creditor_data.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}
                 </span>
               )}
-              {document.extracted_data.creditor_data.reference_number && (
+              {docData.extracted_data.creditor_data.reference_number && (
                 <span>
                   <span className="font-medium">Az:</span>{' '}
-                  {document.extracted_data.creditor_data.reference_number}
+                  {docData.extracted_data.creditor_data.reference_number}
                 </span>
               )}
             </div>
