@@ -593,18 +593,59 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) =
                 });
             }
 
-            // Verify all documents have been reviewed
+            // Verify all documents that NEED review have been reviewed
+            // Use same logic as getClientReviewData to determine which docs need review
             const documents = client.documents || [];
-            const documentsToReview = documents.filter(doc =>
-                doc.is_creditor_document === true &&
-                !doc.manually_reviewed
-            );
+            const documentsToReview = documents.filter(doc => {
+                // Only creditor documents can need review
+                if (doc.is_creditor_document !== true) return false;
+                // Already reviewed = skip
+                if (doc.manually_reviewed === true) return false;
+
+                // Check if manual review is required based on confidence or flags
+                const documentConfidence = doc.extracted_data?.confidence || 0;
+                const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
+                    doc.validation?.requires_manual_review === true;
+                const needsReviewDueToConfidence = documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+
+                // Document needs review if: manual review is required OR confidence is low
+                return manualReviewRequired || needsReviewDueToConfidence;
+            });
 
             if (documentsToReview.length > 0) {
-                console.log(`⚠️ Cannot complete review: ${documentsToReview.length} documents still need review`);
+                console.log(`⚠️ Cannot complete review: ${documentsToReview.length} documents still need manual review`);
+                console.log(`📄 Documents needing review:`, documentsToReview.map(d => ({
+                    id: d.id,
+                    name: d.name,
+                    confidence: d.extracted_data?.confidence,
+                    manual_review_required: d.extracted_data?.manual_review_required,
+                    validation_requires_review: d.validation?.requires_manual_review
+                })));
                 return res.status(400).json({
                     error: 'Review incomplete',
                     documents_remaining: documentsToReview.length
+                });
+            }
+
+            // Also check if any creditors need review (missing email/address)
+            const creditors = client.final_creditor_list || [];
+            const creditorsNeedingReview = creditors.filter(c => {
+                const lowConfidence = (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+                const contactCheck = checkCreditorContactInfo(c);
+                return lowConfidence || contactCheck.needsReview;
+            });
+
+            if (creditorsNeedingReview.length > 0) {
+                console.log(`⚠️ Cannot complete review: ${creditorsNeedingReview.length} creditors still need review`);
+                console.log(`👥 Creditors needing review:`, creditorsNeedingReview.map(c => ({
+                    id: c.id,
+                    name: c.sender_name,
+                    confidence: c.confidence,
+                    review_reasons: c.review_reasons
+                })));
+                return res.status(400).json({
+                    error: 'Review incomplete - creditors need review',
+                    creditors_remaining: creditorsNeedingReview.length
                 });
             }
 
