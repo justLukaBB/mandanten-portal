@@ -124,7 +124,7 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <h3 className="text-lg font-medium text-gray-900 truncate max-w-md">
               {document.filename || document.name}
             </h3>
-            {document.extracted_data?.confidence !== undefined && (
+            {document.extracted_data?.confidence != null && (
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 (document.extracted_data.confidence || 0) >= 0.8
                   ? 'bg-green-100 text-green-700'

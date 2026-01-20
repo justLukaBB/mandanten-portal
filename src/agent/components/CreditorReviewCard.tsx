@@ -74,7 +74,7 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
   disabled = false,
   isExpanded: initialExpanded = false
 }) => {
-  const { creditor, documents, needs_manual_review, review_reasons } = creditorData;
+  const { creditor, documents = [], needs_manual_review, review_reasons = [] } = creditorData;
   const [expanded, setExpanded] = useState(initialExpanded || needs_manual_review);
   const [showCorrectionForm, setShowCorrectionForm] = useState(false);
   const [showSkipForm, setShowSkipForm] = useState(false);
@@ -227,7 +227,7 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
                         <p className="text-sm font-medium text-gray-900">
                           {doc.filename || doc.name}
                         </p>
-                        {doc.extracted_data?.confidence !== undefined && (
+                        {doc.extracted_data?.confidence != null && (
                           <p className="text-xs text-gray-500">
                             Dokument-Confidence: {Math.round((doc.extracted_data.confidence || 0) * 100)}%
                           </p>
