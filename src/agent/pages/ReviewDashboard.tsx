@@ -107,7 +107,7 @@ const ReviewDashboard: React.FC = () => {
   // Track reviewed creditors locally
   const [reviewedCreditorIds, setReviewedCreditorIds] = useState<Set<string>>(new Set());
 
-  // Check authentication
+  // Check authentication and load data
   useEffect(() => {
     const token = localStorage.getItem('agent_token');
     const agentData = localStorage.getItem('agent_data');
@@ -116,14 +116,12 @@ const ReviewDashboard: React.FC = () => {
       navigate(`/agent/login?clientId=${clientId}`);
       return;
     }
-  }, [clientId, navigate]);
 
-  // Load review data
-  useEffect(() => {
+    // Only load data if authenticated
     if (clientId) {
       loadReviewData();
     }
-  }, [clientId]);
+  }, [clientId, navigate]);
 
   // Authentication helper
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -416,7 +414,21 @@ const ReviewDashboard: React.FC = () => {
   }
 
   if (!reviewData) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <ExclamationTriangleIcon className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <p className="text-gray-600">Keine Daten verfügbar</p>
+          <button
+            onClick={loadReviewData}
+            className="mt-4 px-4 py-2 text-white rounded-md hover:opacity-90"
+            style={{ backgroundColor: '#9f1a1d' }}
+          >
+            Erneut laden
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Get creditors grouped by review status
