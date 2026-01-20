@@ -342,25 +342,46 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // Build creditors with their associated documents for the new UI
-            // Check needs_manual_review from linked document's validation flags ONLY
-            // This matches the logic in AdminCreditorDataTable.tsx (doc.manual_review_required || validation?.requires_manual_review)
+            // Helper to check if a value is missing/empty
+            const isMissingValue = (val) => {
+                if (val === undefined || val === null) return true;
+                if (typeof val === 'string') {
+                    const trimmed = val.trim().toLowerCase();
+                    if (!trimmed || trimmed === 'nicht gefunden' || trimmed === 'n/a' || trimmed === 'na') return true;
+                }
+                return false;
+            };
+
+            // Check needs_manual_review from linked document's validation flags
+            // AND also check if email or address is missing (matches AdminCreditorDataTable.tsx logic)
             const creditorsWithDocuments = creditors.map(creditor => {
                 const creditorDocs = getDocumentsForCreditor(creditor, documents);
 
-                // Check if ANY linked document needs manual review
-                // Uses same logic as AdminCreditorDataTable.tsx - only document-level flags
-                const needsManualReview = creditorDocs.some(doc =>
+                // Check if ANY linked document needs manual review (document-level flags)
+                const documentNeedsReview = creditorDocs.some(doc =>
                     doc.manual_review_required === true ||
                     doc.validation?.requires_manual_review === true ||
                     doc.extracted_data?.manual_review_required === true
                 );
 
-                // Collect review reasons from documents only (not creditor flag)
+                // NEW: Check if email OR address is missing for creditor documents
+                const hasCreditorDocs = creditorDocs.some(doc => doc.is_creditor_document === true);
+                const creditorEmail = creditor.email || creditor.sender_email;
+                const creditorAddress = creditor.address || creditor.sender_address;
+                const missingContactInfo = hasCreditorDocs && (isMissingValue(creditorEmail) || isMissingValue(creditorAddress));
+
+                const needsManualReview = documentNeedsReview || missingContactInfo;
+
+                // Collect review reasons from documents + add reason for missing contact info
                 const allReviewReasons = [
                     ...creditorDocs.flatMap(doc => doc.validation?.review_reasons || [])
                 ];
+                if (missingContactInfo) {
+                    if (isMissingValue(creditorEmail)) allReviewReasons.push('E-Mail-Adresse fehlt');
+                    if (isMissingValue(creditorAddress)) allReviewReasons.push('Postadresse fehlt');
+                }
 
-                console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (from ${creditorDocs.length} docs)`);
+                console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (docFlag=${documentNeedsReview}, missingContact=${missingContactInfo})`);
 
                 return {
                     creditor: creditor,
@@ -749,8 +770,18 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
             const documents = client.documents || [];
 
-            // Helper to check if creditor needs review (from linked document flags ONLY)
-            // Match same logic as AdminCreditorDataTable.tsx - only document-level flags
+            // Helper to check if a value is missing/empty
+            const isMissingValue = (val) => {
+                if (val === undefined || val === null) return true;
+                if (typeof val === 'string') {
+                    const trimmed = val.trim().toLowerCase();
+                    if (!trimmed || trimmed === 'nicht gefunden' || trimmed === 'n/a' || trimmed === 'na') return true;
+                }
+                return false;
+            };
+
+            // Helper to check if creditor needs review (document flags OR missing contact info)
+            // Match same logic as AdminCreditorDataTable.tsx
             const creditorNeedsManualReview = (creditor) => {
                 // Check linked document's flags (flexible matching for timestamp prefixes)
                 const linkedDocs = documents.filter(doc =>
@@ -761,11 +792,19 @@ Diese E-Mail wurde automatisch generiert.
                     ))
                 );
 
-                return linkedDocs.some(doc =>
+                const documentNeedsReview = linkedDocs.some(doc =>
                     doc.manual_review_required === true ||
                     doc.validation?.requires_manual_review === true ||
                     doc.extracted_data?.manual_review_required === true
                 );
+
+                // NEW: Check if email OR address is missing
+                const hasCreditorDocs = linkedDocs.some(doc => doc.is_creditor_document === true);
+                const creditorEmail = creditor.email || creditor.sender_email;
+                const creditorAddress = creditor.address || creditor.sender_address;
+                const missingContactInfo = hasCreditorDocs && (isMissingValue(creditorEmail) || isMissingValue(creditorAddress));
+
+                return documentNeedsReview || missingContactInfo;
             };
 
             // Find unreviewed creditors that need manual review

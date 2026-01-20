@@ -261,7 +261,12 @@ const AdminCreditorDataTable: React.FC = () => {
             aiWorkflowStatus: doc.extracted_data?.workflow_status,
             aiStatusReason: doc.extracted_data?.status_reason,
             originalDocumentStatus: doc.document_status,
-            manualReviewRequired: doc.manual_review_required || validation?.requires_manual_review || false
+            // Manual review required if: document flag set OR email/address missing (for creditor docs)
+            manualReviewRequired: doc.manual_review_required || validation?.requires_manual_review ||
+              (doc.is_creditor_document === true && (
+                !displayEmail || displayEmail === 'Nicht gefunden' ||
+                !displayAddress || displayAddress === 'Nicht gefunden'
+              )) || false
           });
         });
       });
