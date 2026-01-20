@@ -35,49 +35,54 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir, zen
     const generateCreditorConfirmationEmailContent = (client, creditors, portalUrl, totalDebt) => {
         const { firstName, lastName, aktenzeichen } = client;
 
+        // Plain text creditor list with reference numbers
         const creditorListPlain = creditors
-            .map((c, i) => `${i + 1}. ${c.sender_name || "Unbekannt"} - €${(c.claim_amount || 0).toLocaleString("de-DE")}`)
-            .join("\n");
+            .map((c, i) => {
+                const refNum = c.reference_number && c.reference_number !== "N/A" ? `\n   Referenz: ${c.reference_number}` : "";
+                return `${i + 1}. ${c.sender_name || "Unbekannt"}\n   Forderung: €${(c.claim_amount || 0).toLocaleString("de-DE")}${refNum}`;
+            })
+            .join("\n\n");
 
+        // HTML creditor list rows with reference numbers
         const creditorListHtml = creditors
-            .map((c, i) => `
+            .map((c, i) => {
+                const refNum = c.reference_number && c.reference_number !== "N/A"
+                    ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Referenz: ${c.reference_number}</div>`
+                    : "";
+                return `
                 <tr>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef;">${i + 1}</td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef; font-weight: 500;">${c.sender_name || "Unbekannt"}</td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #e9ecef; text-align: right; font-weight: 600; color: #dc3545;">€${(c.claim_amount || 0).toLocaleString("de-DE")}</td>
-                </tr>
-            `)
+                    <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827; vertical-align: top;">${i + 1}.</td>
+                    <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
+                        <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${c.sender_name || "Unbekannt"}</div>
+                        <div style="font-size: 14px; color: #16a34a; font-weight: 500;">Forderung: €${(c.claim_amount || 0).toLocaleString("de-DE")}</div>
+                        ${refNum}
+                    </td>
+                </tr>`;
+            })
             .join("");
 
         const plainText = `
-📋 Ihre Gläubigerliste zur Überprüfung
-
 Sehr geehrte/r ${firstName} ${lastName},
 
-wir haben Ihre hochgeladenen Dokumente geprüft und folgende Gläubiger identifiziert:
+wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
 
+📋 GLÄUBIGERLISTE:
 ${creditorListPlain}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Gesamtschulden: €${totalDebt.toLocaleString("de-DE")}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔍 Was Sie jetzt tun sollten:
+👉 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
-1. Überprüfen Sie die Liste auf Vollständigkeit und Richtigkeit
-2. Falls Gläubiger fehlen, laden Sie weitere Dokumente hoch
-3. Bestätigen Sie die Gläubigerliste in Ihrem Portal
+⚠️ WICHTIG - 7-TAGE-FRIST:
+Sollten Sie innerhalb von 7 Tagen keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
 
-👉 Jetzt im Portal überprüfen:
+Den Zugang zum Portal finden Sie hier:
 ${portalUrl}
 
-Wichtig:
-• Sie können jederzeit weitere Dokumente hochladen
-• Erst nach Ihrer Bestätigung werden wir die Gläubiger kontaktieren
-• Bei Fragen stehen wir Ihnen gerne zur Verfügung
+Bei Fragen stehe ich Ihnen selbstverständlich gerne zur Verfügung.
 
 Mit freundlichen Grüßen
-Ihr Team von Rechtsanwalt Thomas Scuric
+Rechtsanwalt Thomas Scuric
 
 📁 Aktenzeichen: ${aktenzeichen}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -92,72 +97,155 @@ Diese E-Mail wurde automatisch generiert.
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ihre Gläubigerliste zur Überprüfung</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; color: #2c3e50; background: #f8f9fa; margin: 0; padding: 0;">
-    <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px;">
-        <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 30px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 600;">📋 Ihre Gläubigerliste</h1>
-            <p style="margin: 10px 0 0 0; opacity: 0.9; font-size: 16px;">wurde geprüft und ist bereit</p>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+
+        <!-- Header with Logo -->
+        <div style="padding: 16px 20px; border-bottom: 1px solid #e5e7eb;">
+            <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Scuric Logo" style="height: 40px; display: block;">
         </div>
-        <div style="padding: 30px;">
-            <p style="font-size: 16px; margin-bottom: 20px;">
-                Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,
+
+        <!-- Main Content -->
+        <div style="padding: 24px 20px;">
+
+            <!-- Title Section -->
+            <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="font-size: 28px; font-weight: 600; color: #111827; margin: 0 0 12px 0;">📋 Ihre Gläubigerliste</h1>
+                <p style="font-size: 16px; color: #6b7280; margin: 0;">Bitte überprüfen und bestätigen</p>
+            </div>
+
+            <!-- Greeting -->
+            <p style="font-size: 15px; color: #374151; line-height: 1.6; margin: 0 0 20px 0;">
+                Sehr geehrte/r <strong>${firstName} ${lastName}</strong>,<br><br>
+                wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus folgende Gläubiger für Sie erfasst:
             </p>
-            <p style="font-size: 15px; color: #5a6c7d; margin-bottom: 25px;">
-                wir haben Ihre hochgeladenen Dokumente geprüft und folgende Gläubiger identifiziert:
-            </p>
-            <div style="background: #f8f9fa; border-radius: 8px; overflow: hidden; margin-bottom: 25px;">
+
+            <!-- Creditor List -->
+            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; margin: 20px 0; overflow: hidden;">
+                <div style="padding: 16px; background-color: #111827; color: #ffffff; font-weight: 600; font-size: 16px;">
+                    📋 Gläubigerliste
+                </div>
                 <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: #e9ecef;">
-                            <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">#</th>
-                            <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #495057;">Gläubiger</th>
-                            <th style="padding: 12px 15px; text-align: right; font-weight: 600; color: #495057;">Betrag</th>
-                        </tr>
-                    </thead>
                     <tbody>
                         ${creditorListHtml}
                     </tbody>
-                    <tfoot>
-                        <tr style="background: #1e3c72; color: white;">
-                            <td colspan="2" style="padding: 15px; font-weight: 600;">Gesamtschulden</td>
-                            <td style="padding: 15px; text-align: right; font-weight: 700; font-size: 18px;">€${totalDebt.toLocaleString("de-DE")}</td>
-                        </tr>
-                    </tfoot>
                 </table>
+                <!-- Total Row -->
+                <div style="padding: 16px; background-color: #111827; color: #ffffff; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 600; font-size: 16px;">Gesamtschulden</div>
+                    <div style="font-weight: 700; font-size: 20px; color: #10b981;">€${totalDebt.toLocaleString("de-DE")}</div>
+                </div>
             </div>
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">🔍 Was Sie jetzt tun sollten:</h3>
-                <ol style="margin: 0; padding-left: 20px; color: #856404;">
-                    <li>Überprüfen Sie die Liste auf Vollständigkeit</li>
-                    <li>Falls Gläubiger fehlen, laden Sie weitere Dokumente hoch</li>
-                    <li>Bestätigen Sie die Gläubigerliste</li>
-                </ol>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="${portalUrl}" style="display: inline-block; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; text-decoration: none; padding: 15px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);">
-                    👉 Jetzt im Portal überprüfen
-                </a>
-            </div>
-            <div style="background: #e7f5ff; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-                <p style="margin: 0; color: #0c63e4; font-size: 14px;">
-                    <strong>💡 Wichtig:</strong><br>
-                    • Sie können jederzeit weitere Dokumente hochladen<br>
-                    • Erst nach Ihrer Bestätigung werden wir die Gläubiger kontaktieren<br>
-                    • Bei Fragen stehen wir Ihnen gerne zur Verfügung
+
+            <!-- Instructions -->
+            <h2 style="font-size: 18px; font-weight: 600; color: #111827; margin: 24px 0 16px 0;">Was Sie jetzt tun sollten</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">1</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">
+                                    Loggen Sie sich in Ihr Mandantenportal ein
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">2</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">
+                                    Prüfen Sie die Gläubigerliste sorgfältig auf Vollständigkeit
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">
+                        <table style="width: 100%; background-color: #f9fafb; border-radius: 8px;">
+                            <tr>
+                                <td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;">
+                                    <div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">3</div>
+                                </td>
+                                <td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">
+                                    Bestätigen Sie über den Button, dass die Liste vollständig ist
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- 7-Day Warning -->
+            <div style="background-color: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #78350f;">
+                <div style="font-weight: 600; color: #92400e; margin-bottom: 8px;">⚠️ WICHTIG - 7-Tage-Frist:</div>
+                <p style="margin: 0; line-height: 1.6;">
+                    Sollten Sie innerhalb von <strong>7 Tagen</strong> keine Bestätigung abgeben, gehen wir davon aus, dass die Gläubigerliste vollständig ist. In diesem Fall werden wir die genannten Gläubiger anschreiben und die aktuellen Forderungshöhen erfragen.
                 </p>
             </div>
-            <p style="font-size: 15px; color: #5a6c7d;">
-                Mit freundlichen Grüßen<br>
-                <strong>Ihr Team von Rechtsanwalt Thomas Scuric</strong>
-            </p>
-        </div>
-        <div style="background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e9ecef;">
-            <p style="margin: 0; color: #6c757d; font-size: 13px;">
-                📁 Aktenzeichen: <strong>${aktenzeichen}</strong>
-            </p>
-            <p style="margin: 10px 0 0 0; color: #adb5bd; font-size: 12px;">
-                Diese E-Mail wurde automatisch generiert.
-            </p>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="${portalUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                    Jetzt im Portal bestätigen
+                </a>
+            </div>
+
+            <!-- Help Note -->
+            <div style="background-color: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 14px; color: #1e40af;">
+                <strong>Hinweis:</strong> Sie können jederzeit weitere Dokumente im Portal hochladen. Bei Fragen stehe ich Ihnen selbstverständlich gerne zur Verfügung.
+            </div>
+
+            <!-- Signature -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #1a1a1a;">
+                <p style="margin: 0 0 12px;">
+                    <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwalt" style="display: block; max-width: 300px; height: auto;">
+                </p>
+                <p style="margin: 0 0 4px; color: #961919; font-weight: bold;">Rechtsanwaltskanzlei Thomas Scuric</p>
+                <p style="margin: 0 0 8px; color: #1f497d;">
+                    Bongardstraße 33<br>
+                    44787 Bochum
+                </p>
+                <p style="margin: 0 0 12px; color: #1f497d;">
+                    Fon: 0234 913 681 0<br>
+                    Fax: 0234 913 681 29<br>
+                    E-Mail: <a href="mailto:kontakt@schuldnerberatung-anwalt.de" style="color: #0563c1; text-decoration: none;">kontakt@schuldnerberatung-anwalt.de</a>
+                </p>
+                <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #a6a6a6;">
+                    Der Inhalt dieser E-Mail ist vertraulich und ausschließlich für den bezeichneten Adressaten bestimmt. Wenn Sie nicht der vorgesehene Adressat dieser E-Mail oder dessen Vertreter sein sollten, so beachten Sie bitte, daß jede Form der Kenntnisnahme, Veröffentlichung, Vervielfältigung oder Weitergabe des Inhalts dieser E-Mail unzulässig ist. Wir bitten Sie, sich in diesem Fall mit dem Absender der E-Mail in Verbindung zu setzen. Aussagen gegenüber dem Adressaten unterliegen den Regelungen des zugrundeliegenden Auftrags, insbesondere den Allgemeinen Auftragsbedingungen. Wir möchten Sie außerdem darauf hinweisen, daß die Kommunikation per E-Mail über das Internet unsicher ist, da für unberechtigte Dritte grundsätzlich die Möglichkeit der Kenntnisnahme und Manipulation besteht.<br><br>
+                    Wir weisen Sie auf unsere aktuelle <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #a0191d; text-decoration: underline;" target="_blank">Datenschutzerklärung</a> hin.
+                </p>
+            </div>
+
+            <!-- Media Section -->
+            <div style="text-align: center; margin-top: 48px; padding-top: 32px; border-top: 1px solid #e5e7eb;">
+                <p style="font-size: 13px; color: #6b7280; font-weight: 500; margin: 0 0 20px 0;">Bekannt aus:</p>
+                <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" alt="Bekannt aus verschiedenen Medien" style="max-width: 100%; height: auto; max-height: 48px; opacity: 0.6;">
+            </div>
+
+            <!-- Footer Links -->
+            <div style="text-align: center; margin-top: 32px; padding-top: 24px;">
+                <div style="margin-bottom: 12px;">
+                    <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Impressum</a>
+                    <span style="color: #9ca3af; margin: 0 12px;">•</span>
+                    <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Datenschutz</a>
+                </div>
+                <p style="font-size: 12px; color: #9ca3af; margin: 0;">© 2025 Scuric. Alle Rechte vorbehalten.</p>
+            </div>
+
+            <!-- Auto-generated Notice -->
+            <div style="font-size: 11px; color: #9ca3af; margin-top: 24px; padding: 12px; background-color: #f9fafb; border-radius: 6px;">
+                📎 Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht direkt auf diese Nachricht.<br>
+                📁 Aktenzeichen: <strong style="color: #6b7280;">${aktenzeichen}</strong>
+            </div>
         </div>
     </div>
 </body>
