@@ -171,8 +171,11 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
       extractedCreditors.push({
         id: doc.id || uuidv4(),
         sender_name: cd.sender_name,
-        sender_address: cd.sender_address,
-        sender_email: cd.sender_email,
+        sender_address: cd.sender_address || cd.address, // Support both field names
+        sender_email: cd.sender_email || cd.email,       // Support both field names
+        // Also copy the alternate field names for compatibility
+        email: cd.email || cd.sender_email,
+        address: cd.address || cd.sender_address,
         reference_number: cd.reference_number,
         claim_amount: cd.claim_amount || 0,
         is_representative: cd.is_representative || false,
@@ -184,6 +187,9 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
         created_at: doc.uploadedAt || new Date().toISOString(),
         confirmed_at: new Date().toISOString(),
         extraction_method: 'document_upload',
+        // Copy DB match info if present
+        creditor_database_id: cd.creditor_database_id,
+        creditor_database_match: cd.creditor_database_match,
       });
     }
   });
@@ -198,7 +204,14 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
  * @param {string} strategy
  */
 function mergeCreditorLists(existingCreditors = [], newCreditors = [], strategy = 'highest_amount') {
-  const allCreditors = [...existingCreditors, ...newCreditors];
+  // IMPORTANT: Give each new creditor a fresh unique ID before merging
+  // This prevents ID collisions when new creditors are added via late uploads
+  const newWithUniqueIds = newCreditors.map(c => ({
+    ...c,
+    id: uuidv4() // Always generate a new unique ID for incoming creditors
+  }));
+
+  const allCreditors = [...existingCreditors, ...newWithUniqueIds];
   return deduplicateCreditors(allCreditors, strategy);
 }
 

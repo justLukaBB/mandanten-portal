@@ -3,6 +3,43 @@ const { v4: uuidv4 } = require('uuid');
 const creditorDeduplication = require('../utils/creditorDeduplication');
 
 /**
+ * Helper function to check if a value is missing/empty
+ * @param {any} value - Value to check
+ * @returns {boolean} - true if value is missing/empty
+ */
+const isMissingValue = (value) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string' && value.trim() === '') return true;
+    return false;
+};
+
+/**
+ * Check if a creditor needs manual review based on missing contact info
+ * @param {Object} creditor - Creditor object
+ * @returns {Object} - { needsReview: boolean, reasons: string[] }
+ */
+const checkCreditorContactInfo = (creditor) => {
+    const reasons = [];
+
+    // Check email (either email or sender_email field)
+    const creditorEmail = creditor.email || creditor.sender_email;
+    if (isMissingValue(creditorEmail)) {
+        reasons.push('E-Mail-Adresse fehlt');
+    }
+
+    // Check address (either address or sender_address field)
+    const creditorAddress = creditor.address || creditor.sender_address;
+    if (isMissingValue(creditorAddress)) {
+        reasons.push('Postadresse fehlt');
+    }
+
+    return {
+        needsReview: reasons.length > 0,
+        reasons
+    };
+};
+
+/**
  * Agent Review Controller Factory
  * Handles business logic for the Agent Review Dashboard
  * @param {Object} dependencies - Dependencies injected from route
@@ -171,8 +208,37 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir }) =
             });
 
             // Get creditors that need review
-            const creditorsToReview = creditors.filter(c => (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
-            const verifiedCreditors = creditors.filter(c => (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
+            // A creditor needs review if:
+            // 1. Low confidence (< threshold) OR
+            // 2. Missing email address OR
+            // 3. Missing postal address
+            const creditorsToReview = creditors.filter(c => {
+                const lowConfidence = (c.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+                const contactCheck = checkCreditorContactInfo(c);
+
+                // Add review reasons to creditor object for display in UI
+                if (contactCheck.needsReview) {
+                    c.review_reasons = c.review_reasons || [];
+                    contactCheck.reasons.forEach(reason => {
+                        if (!c.review_reasons.includes(reason)) {
+                            c.review_reasons.push(reason);
+                        }
+                    });
+                }
+                if (lowConfidence && !c.review_reasons?.includes('Niedrige KI-Konfidenz')) {
+                    c.review_reasons = c.review_reasons || [];
+                    c.review_reasons.push('Niedrige KI-Konfidenz');
+                }
+
+                return lowConfidence || contactCheck.needsReview;
+            });
+
+            // Verified creditors have high confidence AND complete contact info
+            const verifiedCreditors = creditors.filter(c => {
+                const highConfidence = (c.confidence || 0) >= config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD;
+                const contactCheck = checkCreditorContactInfo(c);
+                return highConfidence && !contactCheck.needsReview;
+            });
 
             console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs, ${creditorsToReview.length} creditors need review`);
             console.log(`📊 Creditor details:`, {
