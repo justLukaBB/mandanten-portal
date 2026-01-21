@@ -28,6 +28,8 @@ const AdminLogin: React.FC<AdminLoginProps> = () => {
         password: credentials.password
       });
 
+      console.log(response)
+
       if (response.data.success) {
         console.log('🔑 AdminLogin: Login successful, storing tokens...');
 
