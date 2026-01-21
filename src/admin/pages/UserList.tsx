@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  UsersIcon, 
+import {
+  UsersIcon,
   FunnelIcon,
   CalendarIcon,
   MagnifyingGlassIcon,
@@ -8,10 +8,11 @@ import {
   ArrowLeftIcon,
   BoltIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import UserDetailView from '../components/UserDetailView';
-import { useGetClientsQuery, useTriggerImmediateReviewMutation } from '../../store/features/adminApi';
+import { useGetClientsQuery, useTriggerImmediateReviewMutation, useDeleteUserMutation } from '../../store/features/adminApi';
 
 interface User {
   id: string;
@@ -47,12 +48,12 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
-  const [dateRange, setDateRange] = useState<{start: string, end: string}>({
+  const [dateRange, setDateRange] = useState<{ start: string, end: string }>({
     start: '',
     end: ''
   });
@@ -108,7 +109,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
     }
 
     setTriggeringId(userId);
-    
+
     try {
       const result = await triggerImmediateReview(userId).unwrap();
 
@@ -125,9 +126,32 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
     }
   };
 
+  // User Deletion
+  const [deleteUser] = useDeleteUserMutation();
+
+  const handleDelete = async (userId: string, userName: string) => {
+    // eslint-disable-next-line no-restricted-globals
+    if (!confirm(`Sind Sie sicher, dass Sie den Nutzer ${userName} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+      return;
+    }
+
+    try {
+      const result = await deleteUser(userId).unwrap();
+      if (result.success) {
+        alert(`Nutzer ${userName} erfolgreich gelöscht.`);
+        // refetch is automatic via invalidatesTags
+      } else {
+        alert(`Fehler beim Löschen: ${result.message || 'Unbekannter Fehler'}`);
+      }
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      alert(`Fehler beim Löschen des Nutzers: ${error?.data?.error || error.message || 'Unknown error'}`);
+    }
+  };
+
   const shouldShowImmediateReviewButton = (user: User): boolean => {
     return !!(
-      user.first_payment_received && 
+      user.first_payment_received &&
       user.documents_count > 0 && // Note: documents_count is now a number from API
       // user.all_documents_processed_at && // Re-enable if available in mapped data, currently it might be undefined in sparse object?
       // Check interface: all_documents_processed_at is optional string.
@@ -188,7 +212,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">👥 Alle Nutzer</h1>
             <p className="text-gray-600 mt-1">
-              Vollständige Benutzerliste 
+              Vollständige Benutzerliste
               {!isLoading && ` (${totalUsers} Nutzer)`}
             </p>
           </div>
@@ -197,7 +221,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
           <span>Letztes Update:</span>
           <span>{new Date().toLocaleTimeString('de-DE')}</span>
           <button onClick={() => refetch()} className="ml-2 text-blue-600 hover:underline">
-             Reload
+            Reload
           </button>
         </div>
       </div>
@@ -205,7 +229,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
       {/* Stats Summary */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center">
-          <UsersIcon className="h-8 w-8 mr-3" style={{color: '#9f1a1d'}} />
+          <UsersIcon className="h-8 w-8 mr-3" style={{ color: '#9f1a1d' }} />
           <div>
             <p className="text-sm font-medium text-gray-600">Gesamt-Nutzer</p>
             <p className="text-3xl font-bold text-gray-900">{totalUsers}</p>
@@ -234,7 +258,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
               ))}
             </select>
           </div>
-          
+
           {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -249,7 +273,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          
+
           {/* Date Range */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -260,13 +284,13 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
               <input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
               <input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
@@ -278,178 +302,185 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900">
-            Nutzer-Liste 
+            Nutzer-Liste
           </h3>
           {totalUsers > 0 && (
             <span className="text-sm text-gray-500">
-                Zeige {start} - {end} von {totalUsers}
+              Zeige {start} - {end} von {totalUsers}
             </span>
           )}
         </div>
-        
+
         {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{borderBottomColor: '#9f1a1d'}}></div>
-            </div>
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{ borderBottomColor: '#9f1a1d' }}></div>
+          </div>
         ) : (
-            <>
+          <>
             <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
-                <tr>
+                  <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nutzer
+                      Nutzer
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dokumente
+                      Dokumente
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Gläubiger
+                      Gläubiger
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Erstellt
+                      Erstellt
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Letzte Aktivität
+                      Letzte Aktivität
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Aktionen
+                      Aktionen
                     </th>
-                </tr>
+                  </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
+                  {users.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                        <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900">
                             {user.firstName} {user.lastName}
+                          </div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="text-xs text-gray-400">{user.aktenzeichen}</div>
                         </div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                        <div className="text-xs text-gray-400">{user.aktenzeichen}</div>
-                        </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(user.current_status)}`}>
-                        {getStatusLabel(user.current_status)}
+                          {getStatusLabel(user.current_status)}
                         </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {user.documents_count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {user.creditors_count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(user.created_at).toLocaleDateString('de-DE')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.last_login 
-                        ? new Date(user.last_login).toLocaleDateString('de-DE')
-                        : 'Nie angemeldet'
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.last_login
+                          ? new Date(user.last_login).toLocaleDateString('de-DE')
+                          : 'Nie angemeldet'
                         }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                        <button
+                          <button
                             onClick={() => setSelectedUserId(user.aktenzeichen)}
                             className="inline-flex items-center hover:opacity-80"
-                            style={{color: '#9f1a1d'}}
-                        >
+                            style={{ color: '#9f1a1d' }}
+                          >
                             <EyeIcon className="w-4 h-4 mr-1" />
                             Details
-                        </button>
-                        
-                        {shouldShowImmediateReviewButton(user) && (
+                          </button>
+
+                          {shouldShowImmediateReviewButton(user) && (
                             <button
-                            onClick={() => handleTriggerReview(user.id)}
-                            disabled={triggeringId === user.id || isTriggering}
-                            className={`inline-flex items-center px-2 py-1 text-xs rounded ${
-                                triggeringId === user.id
+                              onClick={() => handleTriggerReview(user.id)}
+                              disabled={triggeringId === user.id || isTriggering}
+                              className={`inline-flex items-center px-2 py-1 text-xs rounded ${triggeringId === user.id
                                 ? 'bg-gray-100 text-gray-400'
                                 : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                            }`}
-                            title="Sofort Gläubiger-Prüfung starten"
+                                }`}
+                              title="Sofort Gläubiger-Prüfung starten"
                             >
-                            <BoltIcon className="w-3 h-3 mr-1" />
-                            {triggeringId === user.id ? 'Lädt...' : 'Sofort prüfen'}
+                              <BoltIcon className="w-3 h-3 mr-1" />
+                              {triggeringId === user.id ? 'Lädt...' : 'Sofort prüfen'}
                             </button>
-                        )}
+                          )}
+
+                          <button
+                            onClick={() => handleDelete(user.id, `${user.firstName} ${user.lastName}`)}
+                            className="inline-flex items-center text-gray-400 hover:text-red-600 transition-colors ml-2"
+                            title="Nutzer löschen"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
                         </div>
-                    </td>
+                      </td>
                     </tr>
-                ))}
+                  ))}
                 </tbody>
-            </table>
+              </table>
             </div>
-            
+
             {users.length === 0 && (
-            <div className="text-center py-8">
+              <div className="text-center py-8">
                 <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">Keine Nutzer gefunden.</p>
-            </div>
+              </div>
             )}
-            
+
             {/* Pagination Controls */}
             {totalUsers > 0 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                    <div className="flex-1 flex justify-between sm:hidden">
-                        <button
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            Zurück
-                        </button>
-                        <button
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            Weiter
-                        </button>
-                    </div>
-                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-sm text-gray-700">
-                                Seite <span className="font-medium">{page}</span> von <span className="font-medium">{totalPages}</span>
-                            </p>
-                        </div>
-                        <div>
-                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    <span className="sr-only">Zurück</span>
-                                    <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
-                                </button>
-                                {/* Simple Page Numbers - can be advanced later */}
-                                {[...Array(Math.min(5, totalPages))].map((_, idx) => {
-                                    // Logic to show a window of pages around current page could go here
-                                    // For now, simpler logic: show first few or simple logic
-                                    // Let's just show previous, current, next ?
-                                    // Or simplified: Just Prev/Next buttons for now to save complexity in this step
-                                    return null; 
-                                })}
-                                <button
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    <span className="sr-only">Weiter</span>
-                                    <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
-                                </button>
-                            </nav>
-                        </div>
-                    </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Weiter
+                  </button>
                 </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Seite <span className="font-medium">{page}</span> von <span className="font-medium">{totalPages}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <span className="sr-only">Zurück</span>
+                        <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                      {/* Simple Page Numbers - can be advanced later */}
+                      {[...Array(Math.min(5, totalPages))].map((_, idx) => {
+                        // Logic to show a window of pages around current page could go here
+                        // For now, simpler logic: show first few or simple logic
+                        // Let's just show previous, current, next ?
+                        // Or simplified: Just Prev/Next buttons for now to save complexity in this step
+                        return null;
+                      })}
+                      <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <span className="sr-only">Weiter</span>
+                        <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
             )}
-            </>
+          </>
         )}
       </div>
 

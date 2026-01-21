@@ -154,25 +154,18 @@ router.delete('/users/:userId', authenticateAdmin, async (req, res) => {
       try {
         const zendeskResult = await ZendeskUserDeletionService.deleteUser(client.zendesk_user_id);
         if (zendeskResult.success) {
-          deletionSummary.deleted_items.zendesk_user = 1;
+          // Update logging for "Tickets Deleted, User Retained" strategy
+          const ticketsDeleted = zendeskResult.ticketsDeleted || 0;
 
-          if (zendeskResult.actionTaken === 'suspended') {
-            console.log(`  ✓ Zendesk user SUSPENDED (fallback): ${client.zendesk_user_id}`);
-            await deletionLog.addInfo('zendesk_deletion', 'User suspended (record invalid for deletion)');
+          if (ticketsDeleted > 0) {
+            deletionSummary.deleted_items.zendesk_tickets = ticketsDeleted;
+            console.log(`  ✓ Zendesk tickets cleaned up: ${ticketsDeleted} tickets deleted.`);
+            console.log(`  ℹ️ Zendesk User Account RETAINED (as requested).`);
+
+            await deletionLog.addInfo('zendesk_cleanup', `Deleted ${ticketsDeleted} tickets. User account retained.`);
           } else {
-            const ticketsClosed = zendeskResult.ticketsClosed || 0;
-            const isPermanent = zendeskResult.permanentlyDeleted;
-            const actionText = isPermanent ? 'PERMANENTLY deleted' : 'deleted';
-
-            console.log(`  ✓ Zendesk user ${actionText}: ${client.zendesk_user_id}. ${ticketsClosed > 0 ? `(Closed ${ticketsClosed} tickets)` : ''}`);
-
-            if (ticketsClosed > 0) {
-              await deletionLog.addInfo('zendesk_ticket_closure', `Auto-closed ${ticketsClosed} tickets.`);
-            }
-
-            if (isPermanent) {
-              await deletionLog.addInfo('zendesk_permanent_deletion', 'User was immediately wiped from Zendesk (skipped 30-day trash).');
-            }
+            console.log(`  ℹ️ Zendesk cleanup: No tickets found. User retained.`);
+            await deletionLog.addInfo('zendesk_cleanup', `No tickets found. User account retained.`);
           }
 
         } else {

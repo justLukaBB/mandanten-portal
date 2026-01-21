@@ -105,10 +105,10 @@ export const adminApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['User'],
         }),
-        skipSevenDayDelay: builder.mutation<{ success: boolean }, string>({
-            query: (clientId) => ({
-                url: `/api/admin/clients/${clientId}/skip-seven-day-delay`,
-                method: 'POST',
+        deleteUser: builder.mutation<{ success: boolean; message?: string }, string>({
+            query: (userId) => ({
+                url: `/api/admin/users/${userId}`,
+                method: 'DELETE',
             }),
             invalidatesTags: ['User'],
         }),
@@ -152,5 +152,6 @@ export const {
     useGetNullplanResponsesQuery,
     useTriggerImmediateReviewMutation,
     useSkipSevenDayDelayMutation,
-    useGetDashboardStatsQuery
+    useGetDashboardStatsQuery,
+    useDeleteUserMutation
 } = adminApiExtended;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  UsersIcon, 
-  DocumentTextIcon, 
+import {
+  UsersIcon,
+  DocumentTextIcon,
   ChartBarIcon,
   FunnelIcon,
   CalendarIcon,
@@ -10,11 +10,12 @@ import {
   ClockIcon,
   ArrowUturnLeftIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
 import UserDetailView from '../components/UserDetailView';
-import { useGetClientsQuery, useGetDashboardStatsQuery, AdminUser } from '../../store/features/adminApi';
+import { useGetClientsQuery, useGetDashboardStatsQuery, useDeleteUserMutation, AdminUser } from '../../store/features/adminApi';
 
 interface AnalyticsDashboardProps {
   onNavigateToUserList?: () => void;
@@ -25,12 +26,12 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
-  const [dateRange, setDateRange] = useState<{start: string, end: string}>({
+  const [dateRange, setDateRange] = useState<{ start: string, end: string }>({
     start: '',
     end: ''
   });
@@ -56,7 +57,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
     dateFrom: dateRange.start,
     dateTo: dateRange.end
   });
-  
+
   // Fetch List (Paginated)
   const { data: usersData, isLoading: usersLoading, isFetching: usersFetching, refetch: refetchUsers } = useGetClientsQuery({
     page,
@@ -66,6 +67,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
     dateFrom: dateRange.start,
     dateTo: dateRange.end
   });
+
+  const [deleteUser] = useDeleteUserMutation();
 
   const users = usersData?.clients || [];
   const totalUsersInList = usersData?.pagination?.total || 0;
@@ -89,7 +92,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
 
     try {
       const response = await api.post(`/api/admin/clients/${userId}/reset-payment`);
-      
+
       if (response.data.success) {
         alert(`✅ Zahlungsstatus für ${aktenzeichen} erfolgreich zurückgesetzt!`);
         refetchUsers();
@@ -105,13 +108,31 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
 
   const getStatusBadgeColor = (status: string, needsAttention?: boolean) => {
     if (needsAttention) return 'bg-red-100 text-red-800 border border-red-300';
-    
+
     // Simplified mapping for brevity, extend as needed
     if (status.includes('payment') || status === 'waiting_for_payment') return 'bg-orange-100 text-orange-800';
     if (status === 'completed' || status === 'payment_confirmed') return 'bg-green-100 text-green-800';
     if (status === 'processing') return 'bg-blue-100 text-blue-800';
-    
+
     return 'bg-gray-100 text-gray-800';
+  };
+
+  const handleDelete = async (userId: string, userName: string) => {
+    if (!window.confirm(`⚠️ WARNUNG: Sind Sie sicher, dass Sie den Nutzer "${userName}" löschen möchten?\n\nDiese Aktion löscht alle zugehörigen Daten endgültig und kann nicht rückgängig gemacht werden.`)) {
+      return;
+    }
+
+    try {
+      await deleteUser(userId).unwrap();
+      alert(`✅ Nutzer ${userName} erfolgreich gelöscht.`);
+      // Refresh lists
+      refetchUsers();
+      refetchStats();
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      const msg = error?.data?.message || 'Fehler beim Löschen';
+      alert(`❌ ${msg}`);
+    }
   };
 
   const handleRefresh = () => {
@@ -123,7 +144,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   if (statsLoading && !statsData) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{borderBottomColor: '#9f1a1d'}}></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800" style={{ borderBottomColor: '#9f1a1d' }}></div>
       </div>
     );
   }
@@ -140,7 +161,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
           <button
             onClick={handleRefresh}
             className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border hover:bg-red-50 transition-colors"
-            style={{color: '#9f1a1d', borderColor: '#9f1a1d'}}
+            style={{ color: '#9f1a1d', borderColor: '#9f1a1d' }}
             title="Daten aktualisieren"
           >
             <svg className={`w-4 h-4 mr-1 ${usersFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,14 +170,14 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             Refresh
           </button>
           <div className="text-sm text-gray-500">
-             <span>Gesamt: {statsData?.total_users || 0} Nutzer</span>
+            <span>Gesamt: {statsData?.total_users || 0} Nutzer</span>
           </div>
         </div>
       </div>
 
       {/* Enhanced Stats with Payment Data (From new API) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div 
+        <div
           className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow duration-200"
           onClick={onNavigateToUserList}
         >
@@ -168,7 +189,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <svg className="h-6 w-6 mr-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +201,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <ClockIcon className="h-6 w-6 mr-3 text-blue-400" />
@@ -190,7 +211,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <svg className="h-6 w-6 mr-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,7 +224,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
           </div>
         </div>
       </div>
-      
+
       {/* Secondary Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -215,7 +236,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <ChartBarIcon className="h-5 w-5 mr-2 text-gray-400" />
@@ -225,7 +246,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <svg className="h-5 w-5 mr-2 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,7 +258,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <UsersIcon className="h-5 w-5 mr-2 text-gray-400" />
@@ -270,7 +291,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
               ))}
             </select>
           </div>
-          
+
           {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -285,7 +306,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          
+
           {/* Date Range */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -296,13 +317,13 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
               <input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
               <input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
@@ -317,10 +338,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             Nutzer-Liste ({totalUsersInList} gefunden)
           </h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           {usersLoading && !usersData ? (
-             // Only show 'Loading...' text if initial load, otherwise show stale table with spinner on button
+            // Only show 'Loading...' text if initial load, otherwise show stale table with spinner on button
             <div className="p-8 text-center text-gray-500">Lade Daten...</div>
           ) : (
             <table className="min-w-full divide-y divide-gray-200">
@@ -365,13 +386,20 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
                         </button>
                         {user.first_payment_received && (
                           <button
-                           onClick={() => resetPaymentStatus(user.id, user.aktenzeichen)}
-                           className="text-orange-600 hover:text-orange-900"
-                           title="Reset Status"
+                            onClick={() => resetPaymentStatus(user.id, user.aktenzeichen)}
+                            className="text-orange-600 hover:text-orange-900"
+                            title="Reset Status"
                           >
-                           <ArrowUturnLeftIcon className="w-4 h-4" />
+                            <ArrowUturnLeftIcon className="w-4 h-4" />
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDelete(user.id, `${user.firstName} ${user.lastName}`)}
+                          className="text-gray-400 hover:text-red-900"
+                          title="Nutzer löschen"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -380,54 +408,54 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
             </table>
           )}
         </div>
-        
+
         {/* Pagination Controls */}
         {totalUsersInList > 0 && (
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        Zurück
-                    </button>
-                    <button
-                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        Weiter
-                    </button>
-                </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                        <p className="text-sm text-gray-700">
-                            Seite <span className="font-medium">{page}</span> von <span className="font-medium">{totalPages}</span>
-                        </p>
-                    </div>
-                    <div>
-                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                            <button
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                <span className="sr-only">Zurück</span>
-                                <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                            <button
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                <span className="sr-only">Weiter</span>
-                                <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                        </nav>
-                    </div>
-                </div>
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Zurück
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Weiter
+              </button>
             </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Seite <span className="font-medium">{page}</span> von <span className="font-medium">{totalPages}</span>
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="sr-only">Zurück</span>
+                    <ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${page === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="sr-only">Weiter</span>
+                    <ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

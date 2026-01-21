@@ -146,9 +146,31 @@ class ZendeskUserDeletionService {
      * @param {string} zendeskUserId - The Zendesk User ID
      * @returns {Promise<{success: boolean, message?: string, error?: string}>}
      */
+    async deleteTickets(ticketIds) {
+        try {
+            if (!ticketIds || ticketIds.length === 0) return { success: true, count: 0 };
+
+            const idsString = ticketIds.join(',');
+            console.log(`🗑️ Zendesk: Deleting ${ticketIds.length} tickets...`);
+
+            // Soft delete tickets (moves to Deleted Tickets view)
+            await this.api.delete(`/tickets/destroy_many.json?ids=${idsString}`);
+
+            console.log(`✅ Zendesk: Successfully deleted ${ticketIds.length} tickets.`);
+            return { success: true, count: ticketIds.length };
+        } catch (error) {
+            console.error(`❌ Zendesk: Failed to delete tickets:`, error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Standard implementation: Cleanup tickets but KEEP User
+     * Refactored as per request: "Close and Delete tickets, but keep user active in Zendesk"
+     */
     async deleteUser(zendeskUserId) {
         if (!this.domain || !this.email || !this.token) {
-            console.warn('⚠️ Zendesk User Deletion skipped: Credentials missing');
+            console.warn('⚠️ Zendesk Cleanup skipped: Credentials missing');
             return { success: false, error: 'Zendesk credentials missing' };
         }
 
@@ -157,45 +179,39 @@ class ZendeskUserDeletionService {
         }
 
         try {
-            // STEP 1: Close any open tickets first
-            const closeResult = await this.closeUserTickets(zendeskUserId);
-            let ticketsClosed = closeResult.closedCount || 0;
+            // STEP 1: Find and Close/Delete tickets
+            // We reuse closeUserTickets logic but we will also DELETE them as requested
 
-            if (!closeResult.success) {
-                console.warn(`⚠️ Failed to close tickets. Proceeding to delete attempt anyway, but might fail.`);
-            }
+            // 1a. Check for tickets
+            const response = await this.api.get(`/users/${zendeskUserId}/tickets/requested.json`);
+            const tickets = response.data.tickets || [];
 
-            // STEP 2: Attempt Soft Deletion (Standard Delete)
-            console.log(`🗑️ Zendesk: Soft-deleting user ${zendeskUserId} (Tickets closed: ${ticketsClosed})...`);
+            if (tickets.length > 0) {
+                const ticketIds = tickets.map(t => t.id);
 
-            // Call Zendesk API to soft delete user
-            const softDeleteResponse = await this.api.delete(`/users/${zendeskUserId}.json`);
+                // 1. Close Open Tickets first (Safety)
+                const openTickets = tickets.filter(t => t.status !== 'closed');
+                if (openTickets.length > 0) {
+                    await this.closeUserTickets(zendeskUserId); // Reuse existing close logic
+                }
 
-            console.log(`✅ Zendesk: User ${zendeskUserId} soft-deleted. Now attempting PERMANENT deletion...`);
-
-            // STEP 3: Attempt Permanent Deletion (Immediately purge from 'deleted_users')
-            try {
-                const permDeleteResponse = await this.api.delete(`/deleted_users/${zendeskUserId}.json`);
-                console.log(`🔥 Zendesk: User ${zendeskUserId} PERMANENTLY deleted.`);
+                // 2. DELETE All User Tickets (Requested: "Close and Delete")
+                const deleteResult = await this.deleteTickets(ticketIds);
 
                 return {
                     success: true,
-                    message: 'User permanently deleted from Zendesk',
-                    ticketsClosed: ticketsClosed,
-                    permanentlyDeleted: true,
-                    data: permDeleteResponse.data
-                };
-            } catch (permError) {
-                console.warn(`⚠️ Zendesk: Soft delete succeeded, but permanent delete failed: ${permError.message}`);
-                // Use soft-delete response if permanent fails, user is still effectively deleted (just in trash)
-                return {
-                    success: true,
-                    message: 'User soft-deleted from Zendesk (Permanent delete skipped/failed)',
-                    ticketsClosed: ticketsClosed,
-                    permanentlyDeleted: false,
-                    data: softDeleteResponse.data
+                    message: 'Zendesk tickets deleted. User account retained.',
+                    ticketsDeleted: deleteResult.count || 0,
+                    userRetained: true
                 };
             }
+
+            return {
+                success: true,
+                message: 'No tickets found to delete. User account retained.',
+                ticketsDeleted: 0,
+                userRetained: true
+            };
 
         } catch (error) {
             // Handle 404 (User already deleted or not found) as a "success" type case
