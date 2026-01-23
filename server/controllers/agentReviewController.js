@@ -265,16 +265,36 @@ Diese E-Mail wurde automatisch generiert.
         try {
             console.log(`🔍 Agent Review: Getting available clients for agent ${req.agentUsername}`);
 
-            // Find clients with documents that need manual review
+            // Find clients that still need action:
+            //  - creditors flagged for manual review OR
+            //  - session in creditor_review (not yet completed via summary button)
+       
+
+            const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+            const perPage = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+
             const clients = await Client.find({
-                // Only clients who have received payment (ready for review)
-                first_payment_received: true,
-                // Include clients that need creditor review or exclude completed ones
-                $or: [
-                    { current_status: 'creditor_review' },
-                    { current_status: { $nin: ['manual_review_complete', 'creditor_contact_initiated', 'completed', 'awaiting_client_confirmation'] } }
-                ]
-            }).sort({ payment_processed_at: -1 }).limit(20);
+              $or: [
+                {
+                  final_creditor_list: {
+                    $elemMatch: { needs_manual_review: true }
+                  }
+                },
+                { current_status: 'creditor_review' },
+                {
+                  $and: [
+                    { current_status: 'awaiting_client_confirmation' },
+                    {
+                      final_creditor_list: {
+                        $elemMatch: { needs_manual_review: true }
+                      }
+                    }
+                  ]
+                }
+              ]
+            });
+
+           
 
             const availableClients = [];
 
@@ -282,27 +302,35 @@ Diese E-Mail wurde automatisch generiert.
                 const documents = client.documents || [];
                 const creditors = client.final_creditor_list || [];
 
+                    // if(client.id==="MAND_2026_3191"){
+                    //     console.log(client.documents.map(d=>d.filename))
+                    //     console.log(client.final_creditor_list.map(c=>c.source_documents))
+                    // }
+
                 // Find documents that need review
                 const documentsToReview = documents.filter(doc => {
                     const relatedCreditor = creditors.find(c =>
-                        c.document_id === doc.id ||
-                        c.source_document === doc.name
+                        (
+                            c?.source_document_id === doc.id ||
+                            (Array.isArray(c?.source_documents) &&
+                                (
+                                    (doc.filename && c.source_documents.includes(doc.filename)) ||
+                                    (doc.name && c.source_documents.includes(doc.name))
+                                )
+                            )
+                        ) &&
+                        (c?.needs_manual_review === true || c?.needs_manual_review === 'true')
                     );
 
-                    const manualReviewRequired = doc.extracted_data?.manual_review_required === true ||
-                        doc.validation?.requires_manual_review === true;
-
-                    return (
-                        doc.is_creditor_document === true &&
-                        !doc.manually_reviewed &&
-                        (manualReviewRequired ||
-                            !relatedCreditor ||
-                            (relatedCreditor.confidence || 0) < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD)
-                    );
+                    return relatedCreditor && doc.is_creditor_document === true;
                 });
 
-                // Only include clients with documents that actually need review
-                if (documentsToReview.length > 0) {
+                // console.log('documentsToReview', documentsToReview);
+
+                // Only include clients that still need action:
+                // either docs still need manual review OR the review session is not completed (awaiting button click)
+                const reviewPending = documentsToReview.length > 0 || client.current_status === 'creditor_review';
+                if (reviewPending) {
                     // Calculate priority based on various factors
                     let priority = 'medium';
                     const daysSincePayment = (Date.now() - new Date(client.payment_processed_at).getTime()) / (1000 * 60 * 60 * 24);
@@ -342,12 +370,23 @@ Diese E-Mail wurde automatisch generiert.
                 return b.days_since_payment - a.days_since_payment;
             });
 
+            // Paginate results
+            const total = availableClients.length;
+            const pages = Math.max(Math.ceil(total / perPage), 1);
+            const safePage = Math.min(page, pages);
+            const start = (safePage - 1) * perPage;
+            const end = start + perPage;
+            const pagedClients = availableClients.slice(start, end);
+
             console.log(`📊 Found ${availableClients.length} clients needing review for agent ${req.agentUsername}`);
 
             res.json({
                 success: true,
-                clients: availableClients,
-                total: availableClients.length,
+                clients: pagedClients,
+                total,
+                page: safePage,
+                per_page: perPage,
+                pages,
                 confidence_threshold: config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD
             });
 
@@ -392,8 +431,44 @@ Diese E-Mail wurde automatisch generiert.
                 const isCreditorDocument = doc.is_creditor_document === true;
                 const alreadyReviewed = doc.manually_reviewed === true;
 
-                const needsReview = !alreadyReviewed && (manualReviewRequired ||
-                    (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD));
+                const docId = doc.id;
+                const docName = doc.name || '';
+                const docFilename = doc.filename || '';
+
+                // Link to creditor to respect final_creditor_list flags (match by id, name, filename, suffix)
+                const relatedCreditor = creditors.find(c => {
+                    if (!c) return false;
+                    if (c.primary_document_id && c.primary_document_id === docId) return true;
+                    if (c.document_id && c.document_id === docId) return true;
+                    if (c.source_document_id && c.source_document_id === docId) return true;
+                    if (c.source_document && (c.source_document === docName || c.source_document === docFilename || docName.endsWith(c.source_document) || c.source_document.endsWith(docName))) return true;
+                    if (Array.isArray(c.source_documents)) {
+                        if (c.source_documents.some(s =>
+                            s === docId ||
+                            s === docName ||
+                            s === docFilename ||
+                            docName.endsWith(s) ||
+                            s.endsWith(docName) ||
+                            docFilename.endsWith(s) ||
+                            s.endsWith(docFilename)
+                        )) return true;
+                    }
+                    if (Array.isArray(c.document_links)) {
+                        if (c.document_links.some(l =>
+                            (l.id && l.id === docId) ||
+                            (l.name && (l.name === docName || l.name === docFilename || docName.endsWith(l.name) || l.name.endsWith(docName))) ||
+                            (l.filename && (l.filename === docFilename || l.filename === docName || docFilename.endsWith(l.filename) || l.filename.endsWith(docFilename)))
+                        )) return true;
+                    }
+                    return false;
+                });
+                const creditorNeedsManual = relatedCreditor &&
+                    (relatedCreditor.needs_manual_review === true || relatedCreditor.needs_manual_review === 'true');
+
+                const needsReview = creditorNeedsManual || (
+                    !alreadyReviewed && (manualReviewRequired ||
+                        (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD))
+                );
 
                 // Debug logging for each document
                 console.log(`📄 Document ${doc.name || doc.id}:`, {
@@ -404,20 +479,26 @@ Diese E-Mail wurde automatisch generiert.
                     extracted_data_requires_review: doc.extracted_data?.manual_review_required,
                     review_reasons: doc.validation?.review_reasons || [],
                     manually_reviewed: alreadyReviewed,
+                    linked_creditor_manual: creditorNeedsManual,
+                    matched_creditor_id: relatedCreditor?.id,
                     needsReview: needsReview
                 });
 
                 // Include if:
-                // 1. Not already manually reviewed AND
-                // 2. Either manual review is explicitly required (from validation OR extracted_data) OR
+                // 1. Linked creditor still needs manual review OR
+                // 2. Not already manually reviewed AND
+                //    Either manual review is explicitly required (from validation OR extracted_data) OR
                 //    (it's a creditor document AND document confidence is low)
                 return needsReview;
             });
 
-            // Note: creditorsToReview/verifiedCreditors will be set AFTER creditorsWithDocuments is built
-            // (see below) - we use doc-based flags, not confidence threshold
+            // Determine if we're in summary phase (all docs reviewed but session not completed)
+            const hasCreditorManualFlags = creditors.some(c => c.needs_manual_review === true || c.needs_manual_review === 'true');
+            const summaryPhase = documentsToReview.length === 0 &&
+                !hasCreditorManualFlags &&
+                (client.current_status === 'creditor_review' || client.current_status === 'awaiting_client_confirmation');
 
-            console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs need review`);
+            console.log(`📊 Review data for ${client.aktenzeichen}: ${documentsToReview.length} docs need review; phase=${summaryPhase ? 'summary' : 'manual'}`);
 
             // Log document structure for debugging
             if (documentsToReview.length > 0) {
@@ -514,6 +595,10 @@ Diese E-Mail wurde automatisch generiert.
                     needing_review_with_docs: creditorsNeedingReview,
                     verified_with_docs: verifiedCreditorsWithDocs
                 },
+                review_state: {
+                    phase: summaryPhase ? 'summary' : 'manual'
+                },
+                review_diffs: Array.isArray(client.review_diffs) ? client.review_diffs : [],
                 review_session: {
                     status: client.current_status,
                     progress: {
@@ -599,9 +684,65 @@ Diese E-Mail wurde automatisch generiert.
                 }
             }
 
+            // Helper to build diff entry
+            const buildDiff = (docObj, origCred, updatedCred, origFallback) => {
+                const pickFields = (c) => {
+                    const res = {};
+                    if (!c) return res;
+                    const setIf = (key, val) => {
+                        if (val !== undefined && val !== null && val !== '') {
+                            res[key] = val;
+                        }
+                    };
+                    setIf('sender_name', c.sender_name || c.glaeubiger_name);
+                    setIf('sender_email', c.sender_email || c.email_glaeubiger);
+                    setIf('sender_address', c.sender_address || c.glaeubiger_adresse);
+                    setIf('reference_number', c.reference_number);
+                    const amt = c.claim_amount ?? (c.claim_amount_raw ? parseFloat(c.claim_amount_raw) : undefined);
+                    if (amt !== undefined && !isNaN(amt)) setIf('claim_amount', amt);
+                    setIf('dokumenttyp', c.dokumenttyp);
+                    return res;
+                };
+
+                const originalPicked = pickFields(origCred);
+                const original = Object.keys(originalPicked).length ? originalPicked : pickFields(origFallback);
+                const updated = pickFields(updatedCred);
+
+                return {
+                    docId: docObj?.id || docObj?.document_id || docObj?.documentId || docObj?.name,
+                    name: docObj?.name || docObj?.filename || docObj?.id,
+                    original,
+                    updated,
+                    reviewed_at: new Date()
+                };
+            };
+
             // Find related creditor - try multiple methods
             let creditorIndex = -1;
             const creditors = client.final_creditor_list || [];
+
+            const docId = document?.id || document_id || null;
+            const docName = document ? (document.name || '') : '';
+            const docFilename = document ? (document.filename || '') : '';
+
+            const matchesDocLinks = (c) => {
+                if (!docId && !docName && !docFilename) return false;
+                if (c.primary_document_id && docId && c.primary_document_id === docId) return true;
+                if (c.document_id && docId && c.document_id === docId) return true;
+                if (c.source_document_id && docId && c.source_document_id === docId) return true;
+                if (c.source_document && docName && (c.source_document === docName || docName.endsWith(c.source_document) || c.source_document.endsWith(docName))) return true;
+                if (Array.isArray(c.source_documents)) {
+                    if (c.source_documents.some(s => s === docId || s === docName || s === docFilename || docName.endsWith(s) || (s && s.endsWith(docName)))) return true;
+                }
+                if (Array.isArray(c.document_links)) {
+                    if (c.document_links.some(l =>
+                        (l.id && docId && l.id === docId) ||
+                        (l.name && docName && (l.name === docName || docName.endsWith(l.name) || l.name.endsWith(docName))) ||
+                        (l.filename && docFilename && l.filename === docFilename)
+                    )) return true;
+                }
+                return false;
+            };
 
             // Method 1: Find by creditor_id directly
             if (creditor_id) {
@@ -612,8 +753,7 @@ Diese E-Mail wurde automatisch generiert.
             // Method 2: Find by document_id or source_document
             if (creditorIndex === -1 && document_id) {
                 for (let i = 0; i < creditors.length; i++) {
-                    if (creditors[i].document_id === document_id ||
-                        (document && creditors[i].source_document === document.name)) {
+                    if (matchesDocLinks(creditors[i])) {
                         creditorIndex = i;
                         console.log(`   Found creditor by document match at index ${creditorIndex}`);
                         break;
@@ -625,43 +765,138 @@ Diese E-Mail wurde automatisch generiert.
                 // Apply corrections
                 if (creditorIndex >= 0 && creditorIndex < creditors.length) {
                     // Update existing creditor - safe access
-                    const originalData = { ...creditors[creditorIndex] };
+                    const existing = creditors[creditorIndex];
+                    const originalData = { ...existing };
 
-                    // Preserve the original creditor object and only update specific fields
-                    Object.assign(creditors[creditorIndex], {
-                        sender_name: corrections.sender_name || creditors[creditorIndex].sender_name || 'Unbekannt',
-                        sender_email: corrections.sender_email || creditors[creditorIndex].sender_email || '',
-                        sender_address: corrections.sender_address || creditors[creditorIndex].sender_address || '',
-                        reference_number: corrections.reference_number || creditors[creditorIndex].reference_number || '',
-                        claim_amount: corrections.claim_amount ? parseFloat(corrections.claim_amount) : (creditors[creditorIndex].claim_amount || 0),
+                    // Helper to prefer provided non-empty values, else keep existing
+                    const pick = (incoming, current) => {
+                        if (incoming === undefined || incoming === null) return current;
+                        if (typeof incoming === 'string' && incoming.trim() === '') return current;
+                        return incoming;
+                    };
+
+                    const parsedCorrectionAmount = (corrections.claim_amount !== undefined)
+                        ? parseFloat(corrections.claim_amount)
+                        : undefined;
+
+                    const updated = {
+                        ...existing,
+                        dokumenttyp: existing.dokumenttyp || document?.extracted_data?.classification?.document_type || existing.dokumenttyp,
+                        // English fields
+                        sender_name: pick(corrections.sender_name, existing.sender_name),
+                        sender_email: pick(corrections.sender_email, existing.sender_email),
+                        sender_address: pick(corrections.sender_address, existing.sender_address),
+                        reference_number: pick(corrections.reference_number, existing.reference_number),
+                        claim_amount: (parsedCorrectionAmount !== undefined && !isNaN(parsedCorrectionAmount))
+                            ? parsedCorrectionAmount
+                            : existing.claim_amount,
+                        claim_amount_raw: pick(corrections.claim_amount_raw, existing.claim_amount_raw),
+
+                        // German fields (mirror from English inputs)
+                        glaeubiger_name: pick(corrections.sender_name, existing.glaeubiger_name ?? existing.sender_name),
+                        glaeubiger_adresse: pick(corrections.sender_address, existing.glaeubiger_adresse ?? existing.sender_address),
+                        email_glaeubiger: pick(corrections.sender_email, existing.email_glaeubiger ?? existing.sender_email),
+
+                        // Preserve representative fields unless explicitly provided
+                        glaeubigervertreter_name: pick(corrections.glaeubigervertreter_name, existing.glaeubigervertreter_name),
+                        glaeubigervertreter_adresse: pick(corrections.glaeubigervertreter_adresse, existing.glaeubigervertreter_adresse),
+                        email_glaeubiger_vertreter: pick(corrections.email_glaeubiger_vertreter, existing.email_glaeubiger_vertreter),
+
+                        primary_document_id: existing.primary_document_id || docId || existing.document_id,
+                        document_links: (() => {
+                            const links = Array.isArray(existing.document_links) ? [...existing.document_links] : [];
+                            const addLink = (l) => {
+                                if (!l) return;
+                                const key = `${l.id || ''}|${l.name || ''}|${l.filename || ''}`;
+                                if (!links.some(x => `${x.id || ''}|${x.name || ''}|${x.filename || ''}` === key)) {
+                                    links.push(l);
+                                }
+                            };
+                            addLink({ id: docId, name: docName || existing.source_document, filename: docFilename });
+                            return links;
+                        })(),
+
+                        // Preserve source_documents; only add docId if none exist
+                        source_document_id: existing.source_document_id || docId || existing.document_id,
+                        source_documents: (() => {
+                            const arr = Array.isArray(existing.source_documents) ? [...existing.source_documents] : [];
+                            if (arr.length === 0 && docId) arr.push(docId);
+                            return arr;
+                        })(),
+
                         confidence: 1.0, // Manual correction = 100% confidence
                         status: 'confirmed', // Change status from pending to confirmed
                         manually_reviewed: true,
+                        needs_manual_review: false,
+                        review_reasons: Array.isArray(corrections.review_reasons)
+                            ? corrections.review_reasons
+                            : [],
                         reviewed_by: req.agentId,
                         reviewed_at: new Date(),
                         confirmed_at: new Date(), // Add confirmation timestamp
                         original_ai_data: originalData,
-                        correction_notes: corrections.notes || '',
+                        correction_notes: pick(corrections.notes, existing.correction_notes),
                         review_action: 'corrected'
-                    });
+                    };
+
+                    creditors[creditorIndex] = updated;
+
+                    // Store diff
+                    client.review_diffs = client.review_diffs || [];
+                    const newDiff = buildDiff(
+                        document || { id: docId, name: docName, filename: docFilename },
+                        originalData,
+                        updated,
+                        document?.extracted_data?.creditor_data
+                    );
+                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
+                    else client.review_diffs.push(newDiff);
 
                     console.log(`✅ Updated existing creditor (creditor_id: ${creditor_id}, document_id: ${document_id})`);
                 } else if (document) {
                     // Create new creditor from corrections (we have a document)
-                    const claimAmount = corrections.claim_amount ? parseFloat(corrections.claim_amount) : 0;
+                    const parsedCorrectionAmount = (corrections.claim_amount !== undefined)
+                        ? parseFloat(corrections.claim_amount)
+                        : undefined;
+                    const claimAmount = (parsedCorrectionAmount !== undefined && !isNaN(parsedCorrectionAmount))
+                        ? parsedCorrectionAmount
+                        : (document.extracted_data?.creditor_data?.claim_amount || 0);
 
                     const newCreditor = {
                         id: uuidv4(),
                         document_id: document_id,
+                        primary_document_id: document_id,
                         source_document: document.name,
+                        source_document_id: document_id,
+                        source_documents: (() => {
+                            const vals = [document.name, document.filename, document_id].filter(Boolean);
+                            // Prefer name if available, else filename, else id
+                            return vals.length ? [vals[0]] : [];
+                        })(),
                         sender_name: corrections.sender_name || 'Unbekannt',
                         sender_email: corrections.sender_email || '',
                         sender_address: corrections.sender_address || '',
                         reference_number: corrections.reference_number || '',
                         claim_amount: isNaN(claimAmount) ? 0 : claimAmount,
+                        claim_amount_raw: corrections.claim_amount_raw,
+                        glaeubiger_name: corrections.sender_name || corrections.glaeubiger_name,
+                        glaeubiger_adresse: corrections.sender_address || corrections.glaeubiger_adresse,
+                        glaeubigervertreter_name: corrections.glaeubigervertreter_name,
+                        glaeubigervertreter_adresse: corrections.glaeubigervertreter_adresse,
+                        email_glaeubiger: corrections.sender_email || corrections.email_glaeubiger,
+                        email_glaeubiger_vertreter: corrections.email_glaeubiger_vertreter,
+                        dokumenttyp: document?.extracted_data?.classification?.document_type || document?.type || corrections.dokumenttyp,
+                        document_links: [
+                            { id: document_id, name: document.name, filename: document.filename }
+                        ],
                         confidence: 1.0, // Manual entry = 100% confidence
                         status: 'confirmed', // New creditors from manual review are confirmed
                         manually_reviewed: true,
+                        needs_manual_review: false,
+                        review_reasons: Array.isArray(corrections.review_reasons)
+                            ? corrections.review_reasons
+                            : [],
                         reviewed_by: req.agentId,
                         reviewed_at: new Date(),
                         confirmed_at: new Date(), // Add confirmation timestamp
@@ -670,6 +905,18 @@ Diese E-Mail wurde automatisch generiert.
                     };
 
                     creditors.push(newCreditor);
+
+                    // Store diff for newly created creditor
+                    client.review_diffs = client.review_diffs || [];
+                    const newDiff = buildDiff(
+                        document,
+                        document?.extracted_data?.creditor_data || null,
+                        newCreditor,
+                        document?.extracted_data?.creditor_data
+                    );
+                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
+                    else client.review_diffs.push(newDiff);
                     console.log(`✅ Created new creditor for document ${document_id}`);
                 } else {
                     // No existing creditor and no document - cannot correct
@@ -704,15 +951,29 @@ Diese E-Mail wurde automatisch generiert.
                 // Confirm AI extraction is correct
                 if (creditorIndex >= 0 && creditorIndex < creditors.length) {
                     // Update existing creditor
+                    const originalData = { ...creditors[creditorIndex] };
                     Object.assign(creditors[creditorIndex], {
                         confidence: 1.0, // Confirmed = 100% confidence
                         status: 'confirmed', // Change status from pending to confirmed
                         manually_reviewed: true,
+                        needs_manual_review: false,
+                        review_reasons: Array.isArray(creditorData?.review_reasons) ? creditorData.review_reasons : [],
                         reviewed_by: req.agentId,
                         reviewed_at: new Date(),
                         confirmed_at: new Date(), // Add confirmation timestamp
                         review_action: 'confirmed'
                     });
+                    // Store diff for confirm (may be identical)
+                    client.review_diffs = client.review_diffs || [];
+                    const newDiff = buildDiff(
+                        document || { id: docId, name: docName, filename: docFilename },
+                        originalData,
+                        creditors[creditorIndex],
+                        document?.extracted_data?.creditor_data
+                    );
+                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
+                    else client.review_diffs.push(newDiff);
                     console.log(`✅ Confirmed existing creditor (index ${creditorIndex}) - creditor_id: ${creditor_id}, document_id: ${document_id}`);
                 } else if (document) {
                     // No existing creditor found but we have a document - create one from document AI data
@@ -733,6 +994,12 @@ Diese E-Mail wurde automatisch generiert.
                             confidence: 1.0, // Confirmed = 100% confidence
                             status: 'confirmed',
                             manually_reviewed: true,
+                            needs_manual_review: false,
+                        review_reasons: Array.isArray(corrections.review_reasons)
+                            ? corrections.review_reasons
+                            : Array.isArray(existing.review_reasons)
+                                ? existing.review_reasons
+                                : [],
                             reviewed_by: req.agentId,
                             reviewed_at: new Date(),
                             confirmed_at: new Date(),
@@ -769,6 +1036,19 @@ Diese E-Mail wurde automatisch generiert.
             } else {
                 // Update the client with corrected data (no deduplication needed)
                 client.final_creditor_list = creditors;
+            }
+
+            // Ensure every creditor has an id and finalize review flags
+            if (Array.isArray(client.final_creditor_list)) {
+                client.final_creditor_list = client.final_creditor_list.map(c => {
+                    const safeId = c.id || uuidv4();
+                    return {
+                        ...c,
+                        id: safeId,
+                        needs_manual_review: c.manually_reviewed ? false : c.needs_manual_review,
+                        review_reasons: Array.isArray(c.review_reasons) ? c.review_reasons : []
+                    };
+                });
             }
 
             // Update the client with corrected data
@@ -952,6 +1232,7 @@ Diese E-Mail wurde automatisch generiert.
             client.admin_approved_at = new Date();
             client.admin_approved_by = agentId;
             client.updated_at = new Date();
+            client.review_diffs = []; // clear diffs after completion
 
             // Add status history
             client.status_history = client.status_history || [];
@@ -1011,6 +1292,7 @@ Diese E-Mail wurde automatisch generiert.
                             subject: `Gläubigerliste zur Bestätigung: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
                             content: emailContent.plainText,
                             requesterEmail: client.email,
+                            requesterName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.email,
                             tags: ["creditor-confirmation", "agent-review-completed"],
                             priority: "normal",
                             type: "task",

@@ -23,12 +23,13 @@ const createWebhookController = require('../controllers/webhookController');
  * Webhook Routes Factory
  * @param {Object} dependencies - dependencies injected from server.js
  */
-module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook }) => {
+module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO }) => {
   const controller = createWebhookController({
     Client,
     safeClientUpdate,
     getClient,
-    triggerProcessingCompleteWebhook
+    triggerProcessingCompleteWebhook,
+    getIO,
   });
 
   /**

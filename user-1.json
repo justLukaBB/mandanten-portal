@@ -1,0 +1,549 @@
+{
+
+
+			"_id": "6973ae0ff44cf2de1267a98e",
+			"id": "MAND_2026_3191",
+			"aktenzeichen": "MAND_2026_3191",
+			"firstName": "harad",
+			"lastName": "paul",
+			"email": "harad92775@ixunbo.com",
+			"portal_link_sent": true,
+			"portal_link_sent_at": "2026-01-23T17:21:19.688Z",
+			"isPasswordSet": false,
+			"welcome_email_sent": false,
+			"phase": 1,
+			"current_status": "awaiting_client_confirmation",
+			"workflow_status": "portal_access_sent",
+			"status_history": [
+				{
+					"id": "ba0cb52f-7dd6-435b-bfaf-45e312518de3",
+					"status": "created",
+					"changed_by": "system",
+					"created_at": "2026-01-23T17:21:19.688Z"
+				},
+				{
+					"id": "4fd25aa9-96be-43ee-988d-e3d23d146ab8",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "agent",
+					"metadata": {
+						"agent_id": "7831aee5-5c24-496c-a4af-389108dbf7be",
+						"agent_action": "Review completed - auto approved",
+						"creditors_count": 1,
+						"total_debt": 2400,
+						"admin_approved": true
+					},
+					"created_at": "2026-01-23T17:35:16.583Z"
+				},
+				{
+					"id": "ce655530-e678-4d92-9222-5d1d2b45ae8a",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"ef4f8e4a-e8f7-40b9-b538-42ee441e8efb"
+						]
+					},
+					"created_at": "2026-01-23T17:46:30.420Z"
+				},
+				{
+					"id": "19ce740a-19f6-44c4-9e53-931a7839bedb",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"48bb2a78-afe8-4d3f-8d62-f76449a26f1e"
+						]
+					},
+					"created_at": "2026-01-23T17:50:55.769Z"
+				},
+				{
+					"id": "ab671698-6444-44ea-a485-cad32203679e",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"24039fc5-d608-4a31-a617-32f51acaa5d3"
+						]
+					},
+					"created_at": "2026-01-23T17:50:56.832Z"
+				},
+				{
+					"id": "0f77a183-d523-41b6-b52f-a6df2e84a3bf",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"297a4e71-a41b-44ec-a69d-f13e9367ee92"
+						]
+					},
+					"created_at": "2026-01-23T17:50:56.962Z"
+				},
+				{
+					"id": "748aa411-244a-40cd-92d3-728c7737d951",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"a2e4cf74-78e1-4ea8-914c-a209a1a7cbfd"
+						]
+					},
+					"created_at": "2026-01-23T19:02:31.069Z"
+				},
+				{
+					"id": "53e230e1-8efe-4154-a872-10b2c7985146",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"f2810a3a-6c46-4d9f-b11e-134a1744e381"
+						]
+					},
+					"created_at": "2026-01-23T19:02:31.430Z"
+				},
+				{
+					"id": "feaff58c-b1fe-4486-af47-14c7993f5576",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"a177c6a2-34a6-4429-a214-56664dda819d"
+						]
+					},
+					"created_at": "2026-01-23T19:02:31.837Z"
+				},
+				{
+					"id": "e93307df-526a-4f32-be18-f20b888305a5",
+					"status": "awaiting_client_confirmation",
+					"changed_by": "system",
+					"metadata": {
+						"reason": "Late uploads auto-added (User Request)",
+						"added_creditors_count": 1,
+						"document_ids": [
+							"00db4ac4-78c3-4291-9507-ea336e22535b"
+						]
+					},
+					"created_at": "2026-01-23T19:02:31.962Z"
+				}
+			],
+			"documents": [
+				{
+					"id": "a177c6a2-34a6-4429-a214-56664dda819d",
+					"name": "Screenshot_20251201_063243_Adobe Acrobat.jpg",
+					"filename": "1769194673815-Screenshot_20251201_063243_Adobe_Acrobat.jpg",
+					"type": "image/jpeg",
+					"size": 348315,
+					"uploadedAt": "2026-01-23T18:57:58.728Z",
+					"url": "https://storage.googleapis.com/automation_scuric/1769194673815-Screenshot_20251201_063243_Adobe_Acrobat.jpg?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcs-uploader%40automationscuric.iam.gserviceaccount.com%2F20260123%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260123T185758Z&X-Goog-Expires=86400&X-Goog-SignedHeaders=host&X-Goog-Signature=9b4a49cdfe9dc754c0af941ddd31f869ee2b8852e3c3d620e1facfaf9ab4fa17d56c5d420a518bf2c7161ef543933c242291aadf5bd4b5d3cae43267d6beaa670b3cb24cd2e88963c2714dc100f54952f8240defe42dfb2c861da8c9f8d1b6c5d70db226a5e7ed799999e1c798f13c72b6acdf04f23107a776eda80e2e1f390422627a98f4be677f1644999a999175cd6f7769c9d054bce530d3cf313489f78ec8efad03e4a3901052c781b36627a78f9542e57792e7a018f5985b12203347cba63ffe4dacf00adb99591f8d74b7fe668581cb2498923b3d0a5919e5a31ca8d6913725dd7c49e4a606a8b69cf79256953a6cf030d893500988e25b79da6bf4d2",
+					"hidden_from_portal": false,
+					"processing_status": "completed",
+					"document_status": "creditor_confirmed",
+					"status_reason": "Late upload - Auto-added to list",
+					"is_duplicate": false,
+					"is_creditor_document": true,
+					"confidence": 0.9,
+					"classification_success": true,
+					"manual_review_required": true,
+					"extracted_data": {
+						"creditor_data": {
+							"sender_name": "Legalhero GmbH",
+							"sender_email": "lh-service@legalhero.de",
+							"sender_address": "Am Karlsbad 16, 10785 Berlin",
+							"reference_number": "EL-90784",
+							"claim_amount": 1608.88,
+							"is_representative": true,
+							"actual_creditor": "N/A"
+						},
+						"confidence": 0.9,
+						"reasoning": "Data completeness: 62%, Confidence: 90%",
+						"workflow_status": "needs_review",
+						"is_creditor_document": true,
+						"manual_review_required": true,
+						"document_id": "a177c6a2-34a6-4429-a214-56664dda819d",
+						"original_name": "1769194673815-Screenshot_20251201_063243_Adobe_Acrobat.jpg",
+						"processing_status": "completed",
+						"timestamp": "2026-01-23T18:59:43.215616",
+						"processing_method": "gemini_ai",
+						"token_usage": null
+					},
+					"validation": {
+						"is_valid": true,
+						"warnings": [
+							"Creditor name missing"
+						],
+						"review_reasons": [
+							"Creditor name missing (RED)",
+							"Creditor name verification failed"
+						],
+						"confidence": 0.9,
+						"claude_confidence": null,
+						"data_completeness": 0.625,
+						"requires_manual_review": true
+					},
+					"summary": "Creditor: Legalhero GmbH, Ref: EL-90784",
+					"processing_error": null,
+					"processing_time_ms": 48152,
+					"manually_reviewed": true
+				},
+				{
+					"id": "00db4ac4-78c3-4291-9507-ea336e22535b",
+					"name": "Screenshot_20251201_062049_Gmail.jpg",
+					"filename": "1769194673802-Screenshot_20251201_062049_Gmail.jpg",
+					"type": "image/jpeg",
+					"size": 464666,
+					"uploadedAt": "2026-01-23T18:57:58.959Z",
+					"url": "https://storage.googleapis.com/automation_scuric/1769194673802-Screenshot_20251201_062049_Gmail.jpg?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcs-uploader%40automationscuric.iam.gserviceaccount.com%2F20260123%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260123T185758Z&X-Goog-Expires=86400&X-Goog-SignedHeaders=host&X-Goog-Signature=4c9281fc448def980a54a435505e9ae0ac75ff320a7f7db9d967f410f4eb384a02bb540325d43ac99a9d30d7379b7ce499a17487286e845f0b12c3592ea1788c6463c5213aca8c4b2a509bb1a2e4159b3a9ed98f8bcb6b4cf139f9b9e71329bbd01a7e66429a3ed53ffd7d01d613dfff8db034fb5fea715592a52f6df027dcd223fcc28b90ed3508176f7a2bd9c4478336c35958842fca3a8200a7779f4a36f939fcd9b12901a18525f52f30c0d7f397505068443f6238e56a63084cfb93b1b66e559dfb31f3e8d00ad74ced0b1c3f0bb390d243a736afad909be83217c58df1f480e33fa73ef92c9a3da4e277a694b16df797b4ef837f4fe2fda4a0dd754eea",
+					"hidden_from_portal": false,
+					"processing_status": "completed",
+					"document_status": "creditor_confirmed",
+					"status_reason": "Late upload - Auto-added to list",
+					"is_duplicate": false,
+					"is_creditor_document": true,
+					"confidence": 0.9,
+					"classification_success": true,
+					"manual_review_required": true,
+					"extracted_data": {
+						"creditor_data": {
+							"sender_name": "Cristian Volo",
+							"sender_email": "N/A",
+							"sender_address": "N/A",
+							"reference_number": "N/A",
+							"claim_amount": 2400,
+							"is_representative": false,
+							"actual_creditor": null
+						},
+						"confidence": 0.9,
+						"reasoning": "Data completeness: 25%, Confidence: 90%",
+						"workflow_status": "needs_review",
+						"is_creditor_document": true,
+						"manual_review_required": true,
+						"document_id": "00db4ac4-78c3-4291-9507-ea336e22535b",
+						"original_name": "1769194673802-Screenshot_20251201_062049_Gmail.jpg",
+						"processing_status": "completed",
+						"timestamp": "2026-01-23T19:00:29.847994",
+						"processing_method": "gemini_ai",
+						"token_usage": null
+					},
+					"validation": {
+						"is_valid": true,
+						"warnings": [
+							"Reference number missing"
+						],
+						"review_reasons": [
+							"Reference number missing (RED)",
+							"Reference number verification failed"
+						],
+						"confidence": 0.9,
+						"claude_confidence": null,
+						"data_completeness": 0.25,
+						"requires_manual_review": true
+					},
+					"summary": "Creditor: Cristian Volo, Ref: N/A",
+					"processing_error": null,
+					"processing_time_ms": 42813,
+					"manually_reviewed": true
+				},
+				{
+					"id": "f2810a3a-6c46-4d9f-b11e-134a1744e381",
+					"name": "Screenshot_20251201_061738_Adobe Acrobat.jpg",
+					"filename": "1769194673822-Screenshot_20251201_061738_Adobe_Acrobat.jpg",
+					"type": "image/jpeg",
+					"size": 459146,
+					"uploadedAt": "2026-01-23T18:57:59.028Z",
+					"url": "https://storage.googleapis.com/automation_scuric/1769194673822-Screenshot_20251201_061738_Adobe_Acrobat.jpg?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcs-uploader%40automationscuric.iam.gserviceaccount.com%2F20260123%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260123T185759Z&X-Goog-Expires=86400&X-Goog-SignedHeaders=host&X-Goog-Signature=290475b4a4d487fb9dcbb220338de00ee2356bb0f257eece109b6b256efff3142214d6af87755f663090bedfcc60030ff9e746abb1a4feb74bb6e5770f1dbd240c59ede3eda0074fb0ce4b66b9bfbbbfa50a9de8553c31afb7f51a0ff7706ec4b61672997801fc15bd22c4d3fb905d21382ffb498ec6bb2f6bfe25d2822f943a2d600d9b84f83c10656d9d7f6dc2e5e78d864156c389f480c41f6af3841a7977e2257bd5836015c514ba95c8542c65c7b0060534273ef5c7669cc6ab40cc4868c28f2891267329dc030daba30b8e18a2961b8e4f0957b85b39014fc2339c3bf9d4cf26c4ca3030fd69b3a9185ea1b1312cc8bc5434dfcfa03212b66cca14de56",
+					"hidden_from_portal": false,
+					"processing_status": "completed",
+					"document_status": "creditor_confirmed",
+					"status_reason": "Late upload - Auto-added to list",
+					"is_duplicate": true,
+					"is_creditor_document": true,
+					"confidence": 0.9,
+					"classification_success": true,
+					"manual_review_required": false,
+					"extracted_data": {
+						"creditor_data": {
+							"sender_name": "Sparkasse Heidelberg",
+							"sender_email": "info@sparkasse-heidelberg.de",
+							"sender_address": "Kurfürstenanlage 10-12, 69115 Heidelberg",
+							"reference_number": "533/2023/1525881035",
+							"claim_amount": null,
+							"is_representative": false,
+							"actual_creditor": null
+						},
+						"confidence": 0.9,
+						"reasoning": "Data completeness: 38%, Confidence: 90%",
+						"workflow_status": "completed",
+						"is_creditor_document": true,
+						"manual_review_required": false,
+						"document_id": "f2810a3a-6c46-4d9f-b11e-134a1744e381",
+						"original_name": "1769194673822-Screenshot_20251201_061738_Adobe_Acrobat.jpg",
+						"processing_status": "completed",
+						"timestamp": "2026-01-23T18:58:51.570973",
+						"processing_method": "gemini_ai",
+						"token_usage": null
+					},
+					"validation": {
+						"is_valid": true,
+						"warnings": [],
+						"review_reasons": [],
+						"confidence": 0.9,
+						"claude_confidence": null,
+						"data_completeness": 0.375,
+						"requires_manual_review": false
+					},
+					"summary": "Creditor: Sparkasse Heidelberg, Ref: 533/2023/1525881035",
+					"processing_error": null,
+					"processing_time_ms": 46544,
+					"duplicate_reason": "Duplikat gefunden - Referenznummer \"533/2023/1525881035\" bereits vorhanden in \"Screenshot_20251201_065436_Samsung Notes.jpg\"",
+					"manually_reviewed": true
+				},
+				{
+					"id": "74543448-cc07-4c72-be55-75b00e917361",
+					"name": "Screenshot_20251201_065448_Samsung Notes.jpg",
+					"filename": "1769194673828-Screenshot_20251201_065448_Samsung_Notes.jpg",
+					"type": "image/jpeg",
+					"size": 573317,
+					"uploadedAt": "2026-01-23T18:57:59.182Z",
+					"url": "https://storage.googleapis.com/automation_scuric/1769194673828-Screenshot_20251201_065448_Samsung_Notes.jpg?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcs-uploader%40automationscuric.iam.gserviceaccount.com%2F20260123%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260123T185759Z&X-Goog-Expires=86400&X-Goog-SignedHeaders=host&X-Goog-Signature=28dfffb061af955df8627be5641b874d0cb23771b8f7e6305b5e312ed2316b9140e565ba377ee1eebcd2cedc5b81d2b6868bf0fdf5f6fc23c6ebca21956048cefe6dfdd9020a77510d4ffb6fe8bd5fa5baf7d7dea484498f4d56dd81f4f30af4975a36f58e06d242c029b25102ec7a1189896ba1f38b1b168040da59303e4d00beab167b2372c0e1442bcd66c900960e954e4a89a00646c28be241c332f11f664c0eacf2c6c8cbe0e2db7d0464a26ea932e104fec9742880b132465c54c63af52d27e6daf640faa021ccb1e47a0ea5b8e760c5e6fe0207d24d3a418ef250b15526ce6b2f87f16523c7bc112c14d3218c3df3d191ff90850066d7a419b922f04f",
+					"hidden_from_portal": false,
+					"processing_status": "completed",
+					"document_status": "non_creditor_confirmed",
+					"status_reason": "KI: Kein Gläubigerdokument (Sonstiges)",
+					"is_duplicate": false,
+					"is_creditor_document": false,
+					"confidence": 0.9,
+					"classification_success": true,
+					"manual_review_required": false,
+					"extracted_data": {
+						"creditor_data": {
+							"sender_name": "N/A",
+							"sender_email": "N/A",
+							"sender_address": "N/A",
+							"reference_number": "N/A",
+							"claim_amount": null,
+							"is_representative": false,
+							"actual_creditor": null
+						},
+						"confidence": 0.3,
+						"reasoning": "",
+						"workflow_status": "pending",
+						"is_creditor_document": false,
+						"manual_review_required": false,
+						"document_id": null,
+						"original_name": null,
+						"processing_status": "completed",
+						"timestamp": "2026-01-23T19:01:29.542373",
+						"processing_method": "gemini_ai",
+						"token_usage": null
+					},
+					"validation": null,
+					"summary": "Non-creditor document: No creditor information found",
+					"processing_error": null,
+					"processing_time_ms": 56315,
+					"manually_reviewed": false
+				},
+				{
+					"id": "a2e4cf74-78e1-4ea8-914c-a209a1a7cbfd",
+					"name": "Screenshot_20251201_065436_Samsung Notes.jpg",
+					"filename": "1769194673753-Screenshot_20251201_065436_Samsung_Notes.jpg",
+					"type": "image/jpeg",
+					"size": 660999,
+					"uploadedAt": "2026-01-23T18:57:59.240Z",
+					"url": "https://storage.googleapis.com/automation_scuric/1769194673753-Screenshot_20251201_065436_Samsung_Notes.jpg?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcs-uploader%40automationscuric.iam.gserviceaccount.com%2F20260123%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260123T185759Z&X-Goog-Expires=86400&X-Goog-SignedHeaders=host&X-Goog-Signature=2af4712a528fb05ca296452ab95772a6561c37e9140ec8b45d3d475df796815fc34fb1860bc3ad9efbd1eb97f2c75dd77e61bffeaecb1fb3611af6a27d0a7a20556ff74e712e073b84dbdb3f23fbbbd201d1d0f511d82dfa5cbff5ebae4d612d2be173c73602b44fb5c3bb795ce6a2008d3c1f83bce831915b967e76aeb6a77dda0f8921b17270b3fb1aa26529478980f48e003efaf5619ac35853797d314a36836e01e00d1074260fcdf6864000fd90fe2ed37ed6acca905945310c96b728809265d56744f739f402005874de0b69776632d41d046aa597abb773193b6fef5fec3d69cda2c35041551462b62e8680c25979b31e939f7d56a7e698f7212e4f71",
+					"hidden_from_portal": false,
+					"processing_status": "completed",
+					"document_status": "creditor_confirmed",
+					"status_reason": "Late upload - Auto-added to list",
+					"is_duplicate": false,
+					"is_creditor_document": true,
+					"confidence": 0.9,
+					"classification_success": true,
+					"manual_review_required": false,
+					"extracted_data": {
+						"creditor_data": {
+							"sender_name": "Sparkasse Heidelberg",
+							"sender_email": "info@sparkasse-heidelberg.de",
+							"sender_address": "Kurfürstenanlage 10-12, 69115 Heidelberg",
+							"reference_number": "533/2023/1525881035",
+							"claim_amount": null,
+							"is_representative": false,
+							"actual_creditor": null
+						},
+						"confidence": 0.9,
+						"reasoning": "Data completeness: 38%, Confidence: 90%",
+						"workflow_status": "completed",
+						"is_creditor_document": true,
+						"manual_review_required": false,
+						"document_id": "a2e4cf74-78e1-4ea8-914c-a209a1a7cbfd",
+						"original_name": "1769194673753-Screenshot_20251201_065436_Samsung_Notes.jpg",
+						"processing_status": "completed",
+						"timestamp": "2026-01-23T19:02:25.925178",
+						"processing_method": "gemini_ai",
+						"token_usage": null
+					},
+					"validation": {
+						"is_valid": true,
+						"warnings": [],
+						"review_reasons": [],
+						"confidence": 0.9,
+						"claude_confidence": null,
+						"data_completeness": 0.375,
+						"requires_manual_review": false
+					},
+					"summary": "Creditor: Sparkasse Heidelberg, Ref: 533/2023/1525881035",
+					"processing_error": null,
+					"processing_time_ms": 56345,
+					"manually_reviewed": true
+				}
+			],
+			"final_creditor_list": [
+				{
+					"id": "03c0bd9c-5eed-4efc-864d-8c84e52fcffa",
+					"sender_name": "Sparkasse Heidelberg",
+					"sender_address": "Kurfürstenanlage 10-12, 69115 Heidelberg",
+					"sender_email": "info@sparkasse-heidelberg.de",
+					"reference_number": "533/2023/1525881035",
+					"claim_amount": null,
+					"claim_amount_raw": "N/A",
+					"is_representative": false,
+					"actual_creditor": "N/A",
+					"dokumenttyp": "Sonstiges",
+					"glaeubiger_name": "Sparkasse Heidelberg",
+					"glaeubiger_adresse": "Kurfürstenanlage 10-12, 69115 Heidelberg",
+					"glaeubigervertreter_name": "N/A",
+					"glaeubigervertreter_adresse": "N/A",
+					"forderungbetrag": "N/A",
+					"email_glaeubiger": "info@sparkasse-heidelberg.de",
+					"email_glaeubiger_vertreter": "N/A",
+					"source_documents": [
+						"1769194673753-Screenshot_20251201_065436_Samsung_Notes.jpg"
+					],
+					"merged_from": 1,
+					"needs_manual_review": false,
+					"review_reasons": [],
+					"status": "confirmed",
+					"created_at": "2026-01-23T19:02:31.068Z",
+					"manually_reviewed": false,
+					"contact_status": "no_response",
+					"amount_source": "original_document",
+					"settlement_response_status": "pending",
+					"nullplan_response_status": "pending"
+				},
+				{
+					"id": "9ff5e588-1149-49dc-a743-fa473b9d6ff4",
+					"sender_name": "Legalhero GmbH",
+					"sender_address": "Am Karlsbad 16, 10785 Berlin",
+					"sender_email": "lh-service@legalhero.de",
+					"reference_number": "EL-90784",
+					"claim_amount": 1608.88,
+					"claim_amount_raw": "1.608,88 €",
+					"is_representative": true,
+					"actual_creditor": "N/A",
+					"dokumenttyp": "Forderungsschreiben",
+					"glaeubiger_name": "N/A",
+					"glaeubiger_adresse": "N/A",
+					"glaeubigervertreter_name": "Legalhero GmbH",
+					"glaeubigervertreter_adresse": "Am Karlsbad 16, 10785 Berlin",
+					"forderungbetrag": "1.608,88 €",
+					"email_glaeubiger": "N/A",
+					"email_glaeubiger_vertreter": "lh-service@legalhero.de",
+					"source_documents": [
+						"1769194673815-Screenshot_20251201_063243_Adobe_Acrobat.jpg"
+					],
+					"merged_from": 1,
+					"needs_manual_review": true,
+					"review_reasons": [
+						"Gläubiger Name fehlt (RED)",
+						"Gläubiger Name Verification fehlgeschlagen"
+					],
+					"status": "confirmed",
+					"created_at": "2026-01-23T19:02:31.792Z",
+					"manually_reviewed": false,
+					"contact_status": "no_response",
+					"amount_source": "original_document",
+					"settlement_response_status": "pending",
+					"nullplan_response_status": "pending"
+				},
+				{
+					"id": "f62c9e74-38df-4772-b563-7affee6086b2",
+					"sender_name": "Cristian Volo",
+					"sender_address": "N/A",
+					"sender_email": "N/A",
+					"reference_number": "N/A",
+					"claim_amount": 2400,
+					"claim_amount_raw": "2.400,00 €",
+					"is_representative": false,
+					"actual_creditor": "N/A",
+					"dokumenttyp": "Mahnung",
+					"glaeubiger_name": "Cristian Volo",
+					"glaeubiger_adresse": "N/A",
+					"glaeubigervertreter_name": "N/A",
+					"glaeubigervertreter_adresse": "N/A",
+					"forderungbetrag": "2.400,00 €",
+					"email_glaeubiger": "N/A",
+					"email_glaeubiger_vertreter": "N/A",
+					"source_documents": [
+						"1769194673802-Screenshot_20251201_062049_Gmail.jpg"
+					],
+					"merged_from": 1,
+					"needs_manual_review": true,
+					"review_reasons": [
+						"Aktenzeichen fehlt (RED)",
+						"Aktenzeichen Verification fehlgeschlagen"
+					],
+					"status": "confirmed",
+					"created_at": "2026-01-23T19:02:31.940Z",
+					"manually_reviewed": false,
+					"contact_status": "no_response",
+					"amount_source": "original_document",
+					"settlement_response_status": "pending",
+					"nullplan_response_status": "pending"
+				}
+			],
+			"document_reminder_count": 0,
+			"login_reminder_sent": false,
+			"login_document_reminder_sent": false,
+			"processing_complete_webhook_scheduled": false,
+			"processing_complete_webhook_triggered": false,
+			"seven_day_review_scheduled": false,
+			"seven_day_review_triggered": false,
+			"document_reminder_sent_via_side_conversation": false,
+			"first_payment_received": false,
+			"admin_approved": true,
+			"client_confirmed_creditors": false,
+			"additional_documents_uploaded_after_review": false,
+			"review_iteration_count": 0,
+			"creditor_contact_started": false,
+			"financial_data": {
+				"number_of_children": 0,
+				"client_form_filled": false
+			},
+			"debt_settlement_plan": {
+				"plan_status": "generated",
+				"creditors": []
+			},
+			"review_diffs": [],
+			"created_at": "2026-01-23T17:21:19.688Z",
+			"updated_at": "2026-01-23T18:57:06.055Z",
+			"zendesk_tickets": [],
+			"deduplication_history": [],
+			"creditor_calculation_table": [],
+			"__v": 3,
+			"last_login": "2026-01-23T17:21:55.426Z",
+			"session_token": "e5132d11-c7ba-4764-ba39-554a283b4fd9",
+			"admin_approved_at": "2026-01-23T17:35:16.581Z",
+			"admin_approved_by": "7831aee5-5c24-496c-a4af-389108dbf7be"
+		}

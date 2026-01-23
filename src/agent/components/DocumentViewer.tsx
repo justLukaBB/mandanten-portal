@@ -18,6 +18,7 @@ interface DocumentViewerProps {
     filename?: string;
     type?: string;
     size?: number;
+    url?: string;
   };
   className?: string;
 }
@@ -31,6 +32,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+
+  console.log('document url', document.url);
 
   useEffect(() => {
     if (clientId && document?.id) {
@@ -46,6 +49,30 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     try {
       setLoading(true);
       setError(null);
+
+      // If the document already carries a direct URL (e.g., pre-signed), try it first.
+      // If it is expired/invalid (403/ExpiredToken), fall back to the authenticated proxy endpoint.
+      if (document.url) {
+        try {
+          const directResp = await fetch(document.url);
+          if (directResp.ok) {
+            const directBlob = await directResp.blob();
+            if (!document.type && directBlob.type) {
+              document.type = directBlob.type;
+            }
+            const directUrl = URL.createObjectURL(directBlob);
+            setDocumentUrl(directUrl);
+            setLoading(false);
+            return;
+          }
+          console.warn('[DocumentViewer] Direct URL failed, falling back to proxy', {
+            status: directResp.status,
+            statusText: directResp.statusText
+          });
+        } catch (directErr) {
+          console.warn('[DocumentViewer] Direct URL error, falling back to proxy', directErr);
+        }
+      }
 
       const token = localStorage.getItem('agent_token');
 

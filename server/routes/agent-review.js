@@ -108,10 +108,10 @@ startxref
 
   // Get document for viewing
   // GET /api/agent-review/:clientId/document/:filename
-  router.get('/:clientId/document/:filename', authenticateAgent, rateLimits.general, async (req, res) => {
+  router.get('/:clientId/document/:fileIdOrName', authenticateAgent, rateLimits.general, async (req, res) => {
     try {
-      const { clientId, filename } = req.params;
-      const decodedFilename = decodeURIComponent(filename);
+      const { clientId, fileIdOrName } = req.params;
+      const decodedFilename = decodeURIComponent(fileIdOrName);
 
       console.log(`📄 Agent Review: Getting document ${decodedFilename} for client ${clientId}`);
 
@@ -129,8 +129,9 @@ startxref
       }
 
       // Find the document in client's documents
-      // Use flexible matching to handle timestamp prefixes (e.g., "1768855786677-Screenshot.jpg" vs "Screenshot.jpg")
+      // Support lookup by id, filename, name, or suffix match (timestamp prefixes)
       const document = client.documents?.find(d => {
+        if (d.id === decodedFilename) return true;
         const docName = d.name || '';
         const docFilename = d.filename || '';
         return (
@@ -149,13 +150,47 @@ startxref
         return serveMockPDF(res, decodedFilename);
       }
 
-      // If document has a GCS path, stream from GCS
-      if (document.gcsPath && getGCSFileStream) {
-        try {
-          const stream = await getGCSFileStream(document.gcsPath);
+      const contentType = document.mimeType || document.type || 'application/pdf';
+      const dispositionName = document.filename || document.name || decodedFilename;
 
-          res.setHeader('Content-Type', document.mimeType || 'application/pdf');
-          res.setHeader('Content-Disposition', `inline; filename="${decodedFilename}"`);
+      const normalizeGcsKey = (key) => {
+        if (!key) return key;
+        try {
+          // If key is a full URL (signed or public), extract the object name
+          if (key.startsWith('http')) {
+            const u = new URL(key);
+            const pathname = u.pathname; // e.g. /automation_scuric/123-file.pdf
+            const parts = pathname.split('/').filter(Boolean);
+            // last segment is the object name (may include folders)
+            const objName = parts.slice(1).join('/') || parts[0];
+            return decodeURIComponent(objName);
+          }
+          return key;
+        } catch (e) {
+          console.warn('normalizeGcsKey failed, using raw key', { key, err: e?.message });
+          return key;
+        }
+      };
+
+      const resolveGcsKey = () => {
+        // Prefer explicit gcs path fields, then url (signed), then filename
+        const raw =
+          document.gcsPath ||
+          document.gcs_path ||
+          document.url ||
+          document.filename ||
+          decodedFilename;
+        return normalizeGcsKey(raw);
+      };
+
+      // If document has a GCS path, stream from GCS
+      const gcsKey = resolveGcsKey();
+      if (gcsKey && getGCSFileStream) {
+        try {
+          const stream = await getGCSFileStream(gcsKey);
+
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `inline; filename="${dispositionName}"`);
           res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
           stream.pipe(res);

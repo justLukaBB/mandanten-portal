@@ -23,7 +23,7 @@ class ZendeskService {
   }
 
   // Create a new ticket in Zendesk
-  async createTicket({ subject, content, requesterEmail, tags = [], priority = 'normal', type = 'task' }) {
+  async createTicket({ subject, content, requesterEmail, requesterName = null, tags = [], priority = 'normal', type = 'task' }) {
     try {
       console.log('🎫 Creating Zendesk ticket:', { subject, requesterEmail, tags });
 
@@ -35,7 +35,8 @@ class ZendeskService {
             public: false // Internal note
           },
           requester: {
-            email: requesterEmail
+            email: requesterEmail,
+            name: requesterName || requesterEmail
           },
           tags: tags,
           priority: priority,

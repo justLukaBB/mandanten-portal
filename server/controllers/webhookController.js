@@ -6,6 +6,48 @@ const { findCreditorByName } = require('../utils/creditorLookup');
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
     parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
 
+// Helper: ensure creditor carries stable document links
+const ensureCreditorLinks = (cred) => {
+    if (!cred) return cred;
+
+    const links = Array.isArray(cred.document_links) ? [...cred.document_links] : [];
+    const addLink = (id, name, filename) => {
+        if (!id && !name && !filename) return;
+        const exists = links.some(l =>
+            (l.id && id && l.id === id) ||
+            (l.name && name && l.name === name) ||
+            (l.filename && filename && l.filename === filename)
+        );
+        if (!exists) links.push({ id, name, filename });
+    };
+
+    // Primary / legacy ids
+    const primaryId = cred.primary_document_id || cred.document_id;
+    if (primaryId) {
+        cred.primary_document_id = primaryId;
+        addLink(primaryId, cred.source_document, cred.filename);
+    }
+
+    // Legacy source_document / source_documents
+    if (Array.isArray(cred.source_documents)) {
+        cred.source_documents.forEach(s => addLink(null, s, null));
+    } else if (cred.source_document) {
+        addLink(null, cred.source_document, null);
+    }
+
+    cred.document_links = links;
+
+    // Best-effort: set source_document_id from first linked id if missing
+    if (!cred.source_document_id) {
+        const firstLinkWithId = links.find(l => l.id);
+        if (firstLinkWithId?.id) {
+            cred.source_document_id = firstLinkWithId.id;
+        }
+    }
+
+    return cred;
+};
+
 // Helper: Enrich creditor contact info
 async function enrichCreditorContactFromDb(docResult, cache) {
     if (!docResult?.is_creditor_document) return;
@@ -178,7 +220,7 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
     }
 }
 
-const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook }) => {
+const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO }) => {
     return {
         handleAiProcessing: async (req, res) => {
             const startTime = Date.now();
@@ -370,6 +412,14 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                     creditor_index: docResult.creditor_index,
                                     creditor_count: docResult.creditor_count,
                                     hidden_from_portal: true,
+                                    primary_document_id: docResult.id,
+                                    document_links: [
+                                        {
+                                            id: docResult.id,
+                                            name: displayName,
+                                            filename: sourceDoc.filename
+                                        }
+                                    ],
                                     processing_status: docResult.processing_status,
                                     document_status: docResult.document_status,
                                     status_reason: docResult.status_reason,
@@ -396,6 +446,17 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             if (idx !== -1) {
                                 const existingDoc = clientDoc.documents[idx];
                                 const existingObj = existingDoc.toObject ? existingDoc.toObject() : existingDoc;
+
+                                // Ensure links are retained/augmented
+                                const mergedLinks = new Map();
+                                const addLink = (l) => {
+                                    if (!l) return;
+                                    const key = `${l.id || ''}|${l.name || ''}|${l.filename || ''}`;
+                                    mergedLinks.set(key, l);
+                                };
+                                (existingObj.document_links || []).forEach(addLink);
+                                addLink({ id: docResult.id, name: existingDoc.name, filename: existingDoc.filename });
+
                                 clientDoc.documents[idx] = {
                                     ...existingObj,
                                     id: existingDoc.id,
@@ -405,6 +466,8 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                     size: existingDoc.size,
                                     url: existingDoc.url,
                                     uploadedAt: existingDoc.uploadedAt,
+                                    primary_document_id: existingDoc.primary_document_id || existingDoc.id,
+                                    document_links: Array.from(mergedLinks.values()),
                                     processing_status: docResult.processing_status,
                                     document_status: docResult.document_status,
                                     status_reason: docResult.status_reason,
@@ -498,7 +561,10 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             console.log(`[webhook] Enriching ${deduplicated_creditors.length} creditors from local DB...`);
                             const credCache = new Map();
                             await Promise.all(
-                                deduplicated_creditors.map(c => enrichDedupedCreditorFromDb(c, credCache))
+                                deduplicated_creditors.map(c => {
+                                    ensureCreditorLinks(c);
+                                    return enrichDedupedCreditorFromDb(c, credCache);
+                                })
                             );
                             console.log(`[webhook] ✅ Enrichment complete. Cache hits: ${credCache.size}`);
                         } catch (enrichError) {
@@ -554,7 +620,10 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                     console.log(`[webhook] Enriching ${newCreditors.length} late upload creditors from local DB...`);
                                     const credCache = new Map();
                                     await Promise.all(
-                                        newCreditors.map(c => enrichDedupedCreditorFromDb(c, credCache))
+                                            newCreditors.map(c => {
+                                                ensureCreditorLinks(c);
+                                                return enrichDedupedCreditorFromDb(c, credCache);
+                                            })
                                     );
                                     console.log(`[webhook] ✅ Late upload enrichment complete`);
                                 } catch (enrichError) {
@@ -643,6 +712,22 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
 
                     return clientDoc;
                 });
+
+                // Emit socket update to admins (if socket server available)
+                try {
+                    const io = getIO ? getIO() : null;
+                    if (io) {
+                        const updatedClient = await getClient(client_id);
+                        io.to(`client:${client_id}`).emit('client_updated', {
+                            client_id,
+                            documents: updatedClient?.documents || [],
+                            final_creditor_list: updatedClient?.final_creditor_list || [],
+                            deduplication_stats: updatedClient?.deduplication_stats || {},
+                        });
+                    }
+                } catch (emitErr) {
+                    console.error('[webhook] ⚠️ Socket emit failed', emitErr);
+                }
 
                 // Zendesk logic
                 if (documentsNeedingReview.length > 0) {

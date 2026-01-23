@@ -26,6 +26,7 @@ router.get('/test-client', async (req, res) => {
         aktenzeichen: client.aktenzeichen,
         final_creditor_list: client.final_creditor_list || [],
         deduplication_stats: client.deduplication_stats || null,
+        client:client,
       },
     });
   } catch (err) {

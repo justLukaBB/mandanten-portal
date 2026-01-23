@@ -442,6 +442,9 @@ const clientSchema = new mongoose.Schema({
   // New calculated settlement plan (from German garnishment calculator)
   calculated_settlement_plan: mongoose.Schema.Types.Mixed,
 
+  // Agent review diffs (persisted so summary view survives refresh/reopen)
+  review_diffs: [mongoose.Schema.Types.Mixed],
+
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }

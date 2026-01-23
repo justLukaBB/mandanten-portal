@@ -257,7 +257,8 @@ app.use('/api/webhooks', createWebhooksRouter({
   Client,
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
   getClient: clientService.getClient.bind(clientService),
-  triggerProcessingCompleteWebhook
+  triggerProcessingCompleteWebhook,
+  getIO
 }));
 
 app.use('/api/zendesk-webhooks', createZendeskWebhooksRouter({
