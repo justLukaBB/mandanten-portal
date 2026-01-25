@@ -727,20 +727,46 @@ Diese E-Mail wurde automatisch generiert.
 
             const matchesDocLinks = (c) => {
                 if (!docId && !docName && !docFilename) return false;
-                if (c.primary_document_id && docId && c.primary_document_id === docId) return true;
-                if (c.document_id && docId && c.document_id === docId) return true;
-                if (c.source_document_id && docId && c.source_document_id === docId) return true;
-                if (c.source_document && docName && (c.source_document === docName || docName.endsWith(c.source_document) || c.source_document.endsWith(docName))) return true;
-                if (Array.isArray(c.source_documents)) {
-                    if (c.source_documents.some(s => s === docId || s === docName || s === docFilename || docName.endsWith(s) || (s && s.endsWith(docName)))) return true;
+                
+                // Direct ID matches (most reliable)
+                if (docId) {
+                    if (c.primary_document_id === docId) return true;
+                    if (c.document_id === docId) return true;
+                    if (c.source_document_id === docId) return true;
                 }
-                if (Array.isArray(c.document_links)) {
-                    if (c.document_links.some(l =>
-                        (l.id && docId && l.id === docId) ||
-                        (l.name && docName && (l.name === docName || docName.endsWith(l.name) || l.name.endsWith(docName))) ||
-                        (l.filename && docFilename && l.filename === docFilename)
-                    )) return true;
+                
+                // Name/filename matches (flexible matching for timestamp prefixes)
+                if (docName || docFilename) {
+                    // Check source_document field
+                    if (c.source_document) {
+                        const srcDoc = c.source_document;
+                        if (docName && (srcDoc === docName || docName.endsWith(srcDoc) || srcDoc.endsWith(docName))) return true;
+                        if (docFilename && (srcDoc === docFilename || docFilename.endsWith(srcDoc) || srcDoc.endsWith(docFilename))) return true;
+                    }
+                    
+                    // Check source_documents array
+                    if (Array.isArray(c.source_documents)) {
+                        if (c.source_documents.some(s => {
+                            if (!s) return false;
+                            if (docId && s === docId) return true;
+                            if (docName && (s === docName || docName.endsWith(s) || s.endsWith(docName))) return true;
+                            if (docFilename && (s === docFilename || docFilename.endsWith(s) || s.endsWith(docFilename))) return true;
+                            return false;
+                        })) return true;
+                    }
+                    
+                    // Check document_links array
+                    if (Array.isArray(c.document_links)) {
+                        if (c.document_links.some(l => {
+                            if (!l) return false;
+                            if (docId && l.id === docId) return true;
+                            if (docName && l.name && (l.name === docName || docName.endsWith(l.name) || l.name.endsWith(docName))) return true;
+                            if (docFilename && l.filename && (l.filename === docFilename || docFilename.endsWith(l.filename) || l.filename.endsWith(docFilename))) return true;
+                            return false;
+                        })) return true;
+                    }
                 }
+                
                 return false;
             };
 
@@ -750,14 +776,29 @@ Diese E-Mail wurde automatisch generiert.
                 console.log(`   Looking for creditor by id ${creditor_id}: found at index ${creditorIndex}`);
             }
 
-            // Method 2: Find by document_id or source_document
+            // Method 2: Find by document_id or source_document (IMPORTANT: This must run even if creditor_id was provided but not found)
             if (creditorIndex === -1 && document_id) {
+                console.log(`   Creditor not found by ID, trying document matching for document_id: ${document_id}`);
                 for (let i = 0; i < creditors.length; i++) {
                     if (matchesDocLinks(creditors[i])) {
                         creditorIndex = i;
-                        console.log(`   Found creditor by document match at index ${creditorIndex}`);
+                        console.log(`   ✅ Found creditor "${creditors[i].sender_name}" by document match at index ${creditorIndex}`);
                         break;
                     }
+                }
+                if (creditorIndex === -1) {
+                    console.log(`   ⚠️ No creditor found by document matching for document_id: ${document_id}`);
+                    // Log all creditors for debugging
+                    console.log(`   Available creditors:`, creditors.map((c, idx) => ({
+                        index: idx,
+                        id: c.id,
+                        name: c.sender_name,
+                        document_id: c.document_id,
+                        source_document_id: c.source_document_id,
+                        primary_document_id: c.primary_document_id,
+                        source_document: c.source_document,
+                        source_documents: c.source_documents
+                    })));
                 }
             }
 
@@ -767,6 +808,8 @@ Diese E-Mail wurde automatisch generiert.
                     // Update existing creditor - safe access
                     const existing = creditors[creditorIndex];
                     const originalData = { ...existing };
+
+                    console.log(`✅ Updating existing creditor "${existing.sender_name}" (index: ${creditorIndex}, id: ${existing.id})`);
 
                     // Helper to prefer provided non-empty values, else keep existing
                     const pick = (incoming, current) => {
@@ -821,6 +864,10 @@ Diese E-Mail wurde automatisch generiert.
                         source_documents: (() => {
                             const arr = Array.isArray(existing.source_documents) ? [...existing.source_documents] : [];
                             if (arr.length === 0 && docId) arr.push(docId);
+                            // Also ensure docId is in the array if not already present
+                            if (docId && !arr.includes(docId) && !arr.some(s => s === docName || s === docFilename)) {
+                                arr.push(docId);
+                            }
                             return arr;
                         })(),
 
@@ -853,8 +900,13 @@ Diese E-Mail wurde automatisch generiert.
                     if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
                     else client.review_diffs.push(newDiff);
 
-                    console.log(`✅ Updated existing creditor (creditor_id: ${creditor_id}, document_id: ${document_id})`);
+                    console.log(`✅ Successfully updated existing creditor "${updated.sender_name}" (creditor_id: ${creditor_id || existing.id}, document_id: ${document_id})`);
                 } else if (document) {
+                    // CRITICAL: Only create new creditor if we truly can't find an existing one
+                    // This should be rare - most documents should already have associated creditors
+                    console.log(`⚠️ WARNING: Creating NEW creditor for document ${document_id} - no existing creditor found!`);
+                    console.log(`   This may indicate a data integrity issue. Document: ${document.name || document_id}`);
+                    console.log(`   Attempted to find creditor by: creditor_id=${creditor_id}, document_id=${document_id}`);
                     // Create new creditor from corrections (we have a document)
                     const parsedCorrectionAmount = (corrections.claim_amount !== undefined)
                         ? parseFloat(corrections.claim_amount)
@@ -904,7 +956,47 @@ Diese E-Mail wurde automatisch generiert.
                         correction_notes: corrections.notes || ''
                     };
 
-                    creditors.push(newCreditor);
+                    // Before creating, do one final check to see if a similar creditor already exists
+                    // (maybe with slightly different linking that we missed)
+                    const similarCreditor = creditors.find(c => {
+                        // Check if creditor has same name and similar amount (within 10%)
+                        const nameMatch = c.sender_name && corrections.sender_name && 
+                                         c.sender_name.toLowerCase().trim() === corrections.sender_name.toLowerCase().trim();
+                        const amountMatch = c.claim_amount && corrections.claim_amount &&
+                                          Math.abs(c.claim_amount - corrections.claim_amount) / Math.max(c.claim_amount, corrections.claim_amount) < 0.1;
+                        return nameMatch && amountMatch;
+                    });
+
+                    if (similarCreditor) {
+                        console.log(`⚠️ Found similar existing creditor "${similarCreditor.sender_name}" - updating instead of creating duplicate`);
+                        const similarIndex = creditors.findIndex(c => c.id === similarCreditor.id);
+                        if (similarIndex >= 0) {
+                            // Update the similar creditor instead
+                            const existing = creditors[similarIndex];
+                            Object.assign(creditors[similarIndex], {
+                                ...newCreditor,
+                                id: existing.id, // Keep existing ID
+                                document_id: existing.document_id || newCreditor.document_id,
+                                source_document_id: existing.source_document_id || newCreditor.source_document_id,
+                                primary_document_id: existing.primary_document_id || newCreditor.primary_document_id,
+                                source_documents: Array.isArray(existing.source_documents) 
+                                    ? [...new Set([...existing.source_documents, ...newCreditor.source_documents])]
+                                    : newCreditor.source_documents,
+                                document_links: Array.isArray(existing.document_links)
+                                    ? [...existing.document_links, ...newCreditor.document_links].filter((link, idx, arr) => 
+                                        arr.findIndex(l => l.id === link.id && l.name === link.name) === idx
+                                      )
+                                    : newCreditor.document_links
+                            });
+                            console.log(`✅ Updated similar creditor instead of creating duplicate`);
+                        } else {
+                            creditors.push(newCreditor);
+                            console.log(`✅ Created new creditor for document ${document_id}`);
+                        }
+                    } else {
+                        creditors.push(newCreditor);
+                        console.log(`✅ Created new creditor for document ${document_id}`);
+                    }
 
                     // Store diff for newly created creditor
                     client.review_diffs = client.review_diffs || [];
@@ -917,7 +1009,6 @@ Diese E-Mail wurde automatisch generiert.
                     const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
                     if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
                     else client.review_diffs.push(newDiff);
-                    console.log(`✅ Created new creditor for document ${document_id}`);
                 } else {
                     // No existing creditor and no document - cannot correct
                     console.log(`⚠️ Cannot correct: creditor not found (creditor_id: ${creditor_id}) and no document available`);
