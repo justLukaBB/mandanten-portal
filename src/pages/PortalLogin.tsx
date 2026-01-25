@@ -4,18 +4,20 @@ import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
-type LoginStep = 'aktenzeichen' | 'verification';
+type LoginStep = 'credentials' | 'verification';
 
 const PortalLogin: React.FC = () => {
   const navigate = useNavigate();
 
   // Step management
-  const [step, setStep] = useState<LoginStep>('aktenzeichen');
+  const [step, setStep] = useState<LoginStep>('credentials');
 
   // Form state
+  const [email, setEmail] = useState('');
   const [aktenzeichen, setAktenzeichen] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [maskedEmail, setMaskedEmail] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   // UI state
   const [error, setError] = useState('');
@@ -35,6 +37,24 @@ const PortalLogin: React.FC = () => {
       }
     };
   }, []);
+
+  // Load saved email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('savedEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Save email when remember me is checked
+  useEffect(() => {
+    if (rememberMe && email) {
+      localStorage.setItem('savedEmail', email);
+    } else if (!rememberMe) {
+      localStorage.removeItem('savedEmail');
+    }
+  }, [rememberMe, email]);
 
   // Auto-focus code input when entering verification step
   useEffect(() => {
@@ -64,10 +84,15 @@ const PortalLogin: React.FC = () => {
     }, 1000);
   };
 
-  // Handle requesting verification code
-  const handleRequestCode = async (e?: React.FormEvent) => {
+  // Handle login (request verification code)
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
+    }
+
+    if (!email.trim()) {
+      setError('Bitte geben Sie Ihre E-Mail-Adresse ein.');
+      return;
     }
 
     if (!aktenzeichen.trim()) {
@@ -79,10 +104,11 @@ const PortalLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      console.log('🔄 Requesting verification code for:', aktenzeichen);
+      console.log('🔄 Requesting verification code for:', aktenzeichen, email);
 
       const response = await axios.post(`${API_BASE_URL}/api/portal/request-verification-code`, {
-        aktenzeichen: aktenzeichen.trim()
+        aktenzeichen: aktenzeichen.trim(),
+        email: email.trim().toLowerCase()
       });
 
       if (response.data.success) {
@@ -185,12 +211,12 @@ const PortalLogin: React.FC = () => {
     if (resendCooldown > 0) {
       return;
     }
-    handleRequestCode();
+    handleLogin();
   };
 
-  // Handle going back to aktenzeichen step
+  // Handle going back to credentials step
   const handleBack = () => {
-    setStep('aktenzeichen');
+    setStep('credentials');
     setVerificationCode('');
     setError('');
     setAttemptsRemaining(null);
@@ -232,21 +258,40 @@ const PortalLogin: React.FC = () => {
               Willkommen im Mandanten Portal
             </h1>
             <p className="text-base text-gray-600">
-              {step === 'aktenzeichen'
-                ? 'Geben Sie Ihr Aktenzeichen ein, um einen Anmeldecode zu erhalten'
+              {step === 'credentials'
+                ? 'Melden Sie sich an, um fortzufahren'
                 : 'Geben Sie den Code ein, den wir an Ihre E-Mail gesendet haben'}
             </p>
           </div>
 
-          {/* Step 1: Aktenzeichen Input */}
-          {step === 'aktenzeichen' && (
-            <form onSubmit={handleRequestCode} className="space-y-5">
+          {/* Step 1: Email + Aktenzeichen Input */}
+          {step === 'credentials' && (
+            <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-4">
+                <div className="relative">
+                  <input
+                    type="email"
+                    id="email"
+                    placeholder="E-Mail-Adresse"
+                    autoComplete="email"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError('');
+                    }}
+                    className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+                  />
+                </div>
+
                 <div className="relative">
                   <input
                     type="text"
                     id="aktenzeichen"
-                    placeholder="Aktenzeichen (z.B. ABC-2024-001)"
+                    placeholder="Aktenzeichen"
                     autoComplete="off"
                     autoCapitalize="characters"
                     autoCorrect="off"
@@ -262,6 +307,19 @@ const PortalLogin: React.FC = () => {
                 </div>
               </div>
 
+              <div className="flex items-center pt-1">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="remember"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 text-gray-800 bg-gray-50 border border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
+                  />
+                  <span className="text-gray-700 font-medium text-sm">E-Mail merken</span>
+                </label>
+              </div>
+
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                   {error}
@@ -271,9 +329,9 @@ const PortalLogin: React.FC = () => {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={loading || !aktenzeichen.trim()}
+                  disabled={loading || !email.trim() || !aktenzeichen.trim()}
                   className={`w-full h-12 ${
-                    aktenzeichen.trim()
+                    email.trim() && aktenzeichen.trim()
                       ? 'bg-green-600 hover:bg-green-700'
                       : 'bg-gray-900 hover:bg-black'
                   } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
@@ -281,10 +339,10 @@ const PortalLogin: React.FC = () => {
                   {loading ? (
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Code wird gesendet...
+                      Wird geladen...
                     </div>
                   ) : (
-                    'Code anfordern'
+                    'Anmelden'
                   )}
                 </button>
               </div>

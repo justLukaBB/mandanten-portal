@@ -318,11 +318,11 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
         /**
          * Request a verification code for login
          * POST /api/portal/request-verification-code
-         * Body: { aktenzeichen }
+         * Body: { aktenzeichen, email }
          */
         handleRequestVerificationCode: async (req, res) => {
             try {
-                const { aktenzeichen } = req.body;
+                const { aktenzeichen, email } = req.body;
 
                 if (!aktenzeichen || aktenzeichen.trim() === '') {
                     return res.status(400).json({
@@ -330,8 +330,15 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     });
                 }
 
+                if (!email || email.trim() === '') {
+                    return res.status(400).json({
+                        error: 'E-Mail-Adresse ist erforderlich'
+                    });
+                }
+
                 const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase();
-                console.log(`🔐 Verification code requested for: ${normalizedAktenzeichen}`);
+                const normalizedEmail = email.toString().trim().toLowerCase();
+                console.log(`🔐 Verification code requested for: ${normalizedAktenzeichen} / ${normalizedEmail}`);
 
                 // Find client by aktenzeichen
                 let foundClient = null;
@@ -341,22 +348,22 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     console.error('Error searching client:', error);
                 }
 
-                // SECURITY: Always return success response to prevent enumeration attacks
-                // Even if client not found, pretend we sent the email
+                // SECURITY: Always return generic error to prevent enumeration attacks
+                // Don't reveal if aktenzeichen exists or if email matches
+                const genericError = 'Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail und Ihr Aktenzeichen.';
+
                 if (!foundClient) {
-                    console.log(`⚠️ No client found for aktenzeichen: ${normalizedAktenzeichen} (returning generic success)`);
-                    return res.json({
-                        success: true,
-                        message: 'Wenn dieses Aktenzeichen existiert, wurde ein Code an die hinterlegte E-Mail-Adresse gesendet.',
-                        masked_email: 'v***@***.de',
-                        expires_in_seconds: 300
+                    console.log(`⚠️ No client found for aktenzeichen: ${normalizedAktenzeichen}`);
+                    return res.status(401).json({
+                        error: genericError
                     });
                 }
 
-                if (!foundClient.email) {
-                    console.log(`⚠️ Client found but no email: ${normalizedAktenzeichen}`);
-                    return res.status(400).json({
-                        error: 'Keine E-Mail-Adresse für dieses Aktenzeichen hinterlegt. Bitte kontaktieren Sie uns.'
+                // Check if email matches
+                if (!foundClient.email || foundClient.email.toLowerCase() !== normalizedEmail) {
+                    console.log(`⚠️ Email mismatch for ${normalizedAktenzeichen}: provided=${normalizedEmail}, stored=${foundClient.email}`);
+                    return res.status(401).json({
+                        error: genericError
                     });
                 }
 
