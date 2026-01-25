@@ -102,12 +102,31 @@ class FirstRoundDocumentGenerator {
       // Read the template file
       const templateContent = await fs.readFile(this.templatePath);
       const zip = new PizZip(templateContent);
+
+      // Normalize quote variants ONLY inside <w:t> text elements (not in XML attributes!)
+      // This handles mixed German quotes „..." and ASCII quotes "..."
+      const documentXmlFile = zip.files["word/document.xml"];
+      if (documentXmlFile) {
+        let documentXml = documentXmlFile.asText();
+        // Only replace quotes inside <w:t>...</w:t> text content
+        documentXml = documentXml.replace(/<w:t([^>]*)>([^<]*)<\/w:t>/g, (match, attrs, text) => {
+          // Normalize quotes in the text content only
+          const normalizedText = text
+            .replace(/\u201E/g, '{')   // „ German opening quote → {
+            .replace(/\u201C/g, '}')   // " German closing quote → }
+            .replace(/\u201D/g, '}')   // " Right double quotation mark → }
+            .replace(/"([^"{}]+)"/g, '{$1}');  // ASCII "..." → {...}
+          return `<w:t${attrs}>${normalizedText}</w:t>`;
+        });
+        zip.file("word/document.xml", documentXml);
+      }
+
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
         delimiters: {
-          start: '"',
-          end: '"',
+          start: '{',
+          end: '}',
         },
       });
 
@@ -1303,15 +1322,14 @@ class FirstRoundDocumentGenerator {
 
     return {
       // Creditor information
-      // "Adresse des Creditors": this.formatCreditorAddress(creditor),
-      "Adresse des Creditors": `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
+      "Adresse D C": `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
 
       Creditor:
         creditor.actual_creditor ||
         creditor.sender_name ||
         "Unbekannter Gläubiger",
 
-      "Aktenzeichen des Credtiors":
+      "Aktenzeichen D C":
         creditor.reference_number ||
         creditor.creditor_reference ||
         creditor.reference ||
@@ -1326,6 +1344,7 @@ class FirstRoundDocumentGenerator {
       "Aktenzeichen des Mandanten": clientData.reference,
 
       // Dates
+      "heutiges D": formatGermanDate(today),
       "heutiges Datum": formatGermanDate(today),
       "Datum in 14 Tagen": formatGermanDate(responseDate),
     };
