@@ -69,8 +69,9 @@ class FirstRoundDocumentGenerator {
     const originalLength = documentXml.length;
 
     // Debug: Log all quoted text patterns found in XML to understand structure
-    const allQuotedMatches = documentXml.match(/<w:t[^>]*>"[^<]*<\/w:t>/g) || [];
-    const splitQuotedMatches = documentXml.match(/"[^<]*<\/w:t><\/w:r>[\s\S]{0,200}<w:r[^>]*><w:t[^>]*>[^<]*"/g) || [];
+    // Support both German typographic quotes „..." and ASCII quotes "..."
+    const allQuotedMatches = documentXml.match(/<w:t[^>]*>[„"][^<]*<\/w:t>/g) || [];
+    const splitQuotedMatches = documentXml.match(/[„"][^<]*<\/w:t><\/w:r>[\s\S]{0,200}<w:r[^>]*><w:t[^>]*>[^<]*["]/g) || [];
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:64',message:'debug quoted patterns',data:{allQuotedCount:allQuotedMatches.length,splitQuotedCount:splitQuotedMatches.length,allQuotedSamples:allQuotedMatches.slice(0,5),splitQuotedSamples:splitQuotedMatches.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
@@ -80,26 +81,29 @@ class FirstRoundDocumentGenerator {
 
     // NEW APPROACH: Extract all text runs and find variables, then reconstruct
     // This is more reliable than complex regex patterns
+    // Using German typographic quotes: „ (U+201E) opens, " (U+201C) closes
     knownVariables.forEach(variable => {
       const escapedVar = this.escapeRegex(variable);
       const words = variable.split(/\s+/);
-      const quotedVariable = `"${variable}"`;
-      
-      // Check if already consolidated
-      if (documentXml.includes(`<w:t[^>]*>${quotedVariable}</w:t>`)) {
+      const quotedVariable = `„${variable}"`;
+
+      // Check if already consolidated (using regex test instead of includes with regex syntax)
+      const consolidatedPattern = new RegExp(`<w:t[^>]*>${this.escapeRegex(quotedVariable)}</w:t>`);
+      if (consolidatedPattern.test(documentXml)) {
         console.log(`   ✅ Variable "${variable}" is already consolidated`);
         return;
       }
-      
-      // SIMPLIFIED APPROACH: Find pattern "FirstWord...LastWord" and replace entire XML section
+
+      // SIMPLIFIED APPROACH: Find pattern „FirstWord...LastWord" and replace entire XML section
       if (words.length > 1) {
-        // Multi-word variable: <w:t>"FirstWord</w:t>...ANY_XML...<w:t>LastWord"</w:t>
+        // Multi-word variable: <w:t>„FirstWord</w:t>...ANY_XML...<w:t>LastWord"</w:t>
         const firstWord = words[0];
         const lastWord = words[words.length - 1];
-        
-        // Pattern: <w:t>"FirstWord...LastWord"</w:t> (allowing any XML between)
+
+        // Pattern: <w:t>„FirstWord...LastWord"</w:t> (allowing any XML between)
+        // Support both German „..." and ASCII "..." quotes
         const searchPattern = new RegExp(
-          `(<w:t[^>]*>)"${this.escapeRegex(firstWord)}([\\s\\S]*?)${this.escapeRegex(lastWord)}"([^<]*</w:t>)`,
+          `(<w:t[^>]*>)[„"]${this.escapeRegex(firstWord)}([\\s\\S]*?)${this.escapeRegex(lastWord)}[""]([^<]*</w:t>)`,
           'g'
         );
         
@@ -135,8 +139,9 @@ class FirstRoundDocumentGenerator {
             fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:110',message:'simplified pattern match',data:{variable,fullMatch:m.fullMatch.substring(0,400),matchesCount:matches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run11',hypothesisId:'A'})}).catch(()=>{});
             // #endregion
             console.log(`      ✅ Consolidating "${variable}" using simplified pattern (${matches.length} match(es))...`);
-            documentXml = documentXml.substring(0, m.index) + 
-                         `${m.openingTag}"${variable}"${m.closingPart}` + 
+            // Use German typographic quotes for replacement
+            documentXml = documentXml.substring(0, m.index) +
+                         `${m.openingTag}„${variable}"${m.closingPart}` +
                          documentXml.substring(m.index + m.fullMatch.length);
             fixCount++;
           }
@@ -144,12 +149,13 @@ class FirstRoundDocumentGenerator {
           console.log(`   ⚠️ Could not consolidate "${variable}" - simplified pattern not found`);
         }
       } else {
-        // Single-word variable: <w:t>"Variable"</w:t> or <w:t>"Var</w:t>...<w:t>iable"</w:t>
+        // Single-word variable: <w:t>„Variable"</w:t> or <w:t>„Var</w:t>...<w:t>iable"</w:t>
+        // Support both German „..." and ASCII "..." quotes
         const singlePattern = new RegExp(
-          `(<w:t[^>]*>)"([^<]*</w:t>[\\s\\S]*?<w:t[^>]*>)${escapedVar}"([^<]*</w:t>)`,
+          `(<w:t[^>]*>)[„"]([^<]*</w:t>[\\s\\S]*?<w:t[^>]*>)${escapedVar}[""]([^<]*</w:t>)`,
           'g'
         );
-        
+
         const singleMatches = [];
         let singleMatch;
         while ((singleMatch = singlePattern.exec(documentXml)) !== null) {
@@ -160,13 +166,14 @@ class FirstRoundDocumentGenerator {
             index: singleMatch.index
           });
         }
-        
+
         if (singleMatches.length > 0) {
           for (let i = singleMatches.length - 1; i >= 0; i--) {
             const m = singleMatches[i];
             console.log(`      ✅ Consolidating single-word "${variable}"...`);
-            documentXml = documentXml.substring(0, m.index) + 
-                         `${m.openingTag}"${variable}"${m.closingPart}` + 
+            // Use German typographic quotes for replacement
+            documentXml = documentXml.substring(0, m.index) +
+                         `${m.openingTag}„${variable}"${m.closingPart}` +
                          documentXml.substring(m.index + m.fullMatch.length);
             fixCount++;
           }
@@ -342,11 +349,12 @@ class FirstRoundDocumentGenerator {
       zip.file('word/document.xml', documentXml);
 
       // Now create Docxtemplater with normalized XML
+      // German typographic quotes: „ (U+201E) opens, " (U+201C) closes
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
         delimiters: {
-          start: '"',
+          start: '„',
           end: '"',
         },
       });
@@ -371,9 +379,9 @@ class FirstRoundDocumentGenerator {
 
       // Render the document with the data
       try {
-        // Get document XML before rendering to check for variables
+        // Get document XML before rendering to check for variables (German typographic quotes)
         const xmlBefore = doc.getZip().files['word/document.xml'].asText();
-        const variableMatches = xmlBefore.match(/"[^"]{3,40}"/g);
+        const variableMatches = xmlBefore.match(/„[^"]{3,40}"/g);
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:283',message:'before render',data:{variablesFound:variableMatches?.slice(0,10)||[],templateDataKeys:Object.keys(templateData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
@@ -384,10 +392,10 @@ class FirstRoundDocumentGenerator {
         doc.render(templateData);
         console.log('✅ Document rendered successfully');
         
-        // Check if variables were replaced
+        // Check if variables were replaced (using German typographic quotes)
         const xmlAfter = doc.getZip().files['word/document.xml'].asText();
         const stillPresent = Object.keys(templateData).filter(key => {
-          const searchKey = `"${key}"`;
+          const searchKey = `„${key}"`;
           return xmlAfter.includes(searchKey);
         });
         // #region agent log
