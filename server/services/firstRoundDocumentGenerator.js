@@ -256,61 +256,57 @@ class FirstRoundDocumentGenerator {
     console.log('   🔄 Starting direct variable replacement...');
     let replacementCount = 0;
 
-    // Process each variable
-    for (const [varName, value] of Object.entries(templateData)) {
-      if (value === undefined || value === null) continue;
+    // Sort variables by length (longest first) to avoid partial replacements
+    const sortedVars = Object.entries(templateData)
+      .filter(([k, v]) => v !== undefined && v !== null)
+      .sort((a, b) => b[0].length - a[0].length);
 
+    for (const [varName, value] of sortedVars) {
       // Convert value to string and escape XML special characters
       const safeValue = String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/\n/g, '</w:t><w:br/><w:t>'); // Handle newlines
+        .replace(/\n/g, '</w:t></w:r><w:r><w:t>'); // Handle newlines
 
-      const words = varName.split(/\s+/);
-      const firstWord = words[0];
-      const lastWord = words[words.length - 1];
+      // Build a pattern that matches the variable even when split across <w:t> tags
+      // E.g., "Name" could be: <w:t>"Name</w:t><w:t>"</w:t> or <w:t>"</w:t><w:t>Name"</w:t>
+      // Strategy: Match from opening quote through variable text to closing quote,
+      // allowing any XML tags in between
 
-      // Pattern to find the variable (possibly split across tags)
-      // Matches: "FirstWord...LastWord" where ... can include XML tags
-      // The variable text may be split: <w:t>"First</w:t>...<w:t>Last"</w:t>
-      const pattern = new RegExp(
-        `(<w:r[^>]*>(?:<w:rPr>[^<]*(?:<[^>]+>[^<]*)*</w:rPr>)?<w:t[^>]*>)"` +
-        this.escapeRegex(firstWord) +
-        `([\\s\\S]*?)` +
-        this.escapeRegex(lastWord) +
-        `"(</w:t></w:r>)`,
-        'g'
-      );
+      // Create character-by-character pattern that allows XML tags between chars
+      const varChars = `"${varName}"`;
+      let patternParts = [];
+      for (let i = 0; i < varChars.length; i++) {
+        const char = varChars[i];
+        // Escape special regex chars
+        const escapedChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (i === 0) {
+          patternParts.push(escapedChar);
+        } else {
+          // Allow XML tags and whitespace between characters
+          patternParts.push(`(?:</w:t></w:r>.*?<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>)?<w:t[^>]*>|\\s*)${escapedChar}`);
+        }
+      }
 
-      // Try to find and replace
+      const flexPattern = new RegExp(patternParts.join(''), 'gs');
+
       const beforeLength = documentXml.length;
-      documentXml = documentXml.replace(pattern, (match, prefix, middle, suffix) => {
-        // Check if all words of the variable are present in the match
-        let hasAllWords = true;
-        for (const word of words) {
-          if (!match.includes(word)) {
-            hasAllWords = false;
-            break;
-          }
-        }
+      let matchCount = 0;
 
-        if (hasAllWords) {
-          console.log(`      ✅ Replaced "${varName}" with value`);
-          replacementCount++;
-          // Replace with a simple structure containing the value
-          return `<w:r><w:t>${safeValue}</w:t></w:r>`;
-        }
-        return match;
+      documentXml = documentXml.replace(flexPattern, (match) => {
+        matchCount++;
+        console.log(`      ✅ Replaced "${varName}" (match ${matchCount})`);
+        replacementCount++;
+        return safeValue;
       });
 
-      // If pattern didn't match, try simpler direct replacement for consolidated variables
+      // Fallback: simple direct replacement if pattern didn't work
       if (documentXml.length === beforeLength) {
         const simplePattern = `"${varName}"`;
         if (documentXml.includes(simplePattern)) {
           documentXml = documentXml.split(simplePattern).join(safeValue);
-          console.log(`      ✅ Replaced "${varName}" (simple pattern)`);
+          console.log(`      ✅ Replaced "${varName}" (simple)`);
           replacementCount++;
         }
       }
