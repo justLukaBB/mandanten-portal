@@ -463,12 +463,17 @@ Diese E-Mail wurde automatisch generiert.
                     return false;
                 });
                 const creditorNeedsManual = relatedCreditor &&
+                    !relatedCreditor.manually_reviewed && // ✅ Only if creditor not already reviewed
                     (relatedCreditor.needs_manual_review === true || relatedCreditor.needs_manual_review === 'true');
 
-                const needsReview = creditorNeedsManual || (
-                    !alreadyReviewed && (manualReviewRequired ||
-                        (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD))
-                );
+                // ✅ CRITICAL FIX: If document already reviewed, NEVER show it
+                if (alreadyReviewed) {
+                    return false;
+                }
+
+                // Only check other conditions if document hasn't been reviewed yet
+                const needsReview = creditorNeedsManual || manualReviewRequired ||
+                    (isCreditorDocument && documentConfidence < config.MANUAL_REVIEW_CONFIDENCE_THRESHOLD);
 
                 // Debug logging for each document
                 console.log(`📄 Document ${doc.name || doc.id}:`, {
@@ -1036,6 +1041,16 @@ Diese E-Mail wurde automatisch generiert.
                     document.reviewed_by = req.agentId;
                     document.reviewed_at = new Date();
                     document.review_action = 'skipped_not_creditor';
+                    
+                    // ✅ CRITICAL FIX: Clear document-level manual review flags to prevent loop
+                    if (document.validation) {
+                        document.validation.requires_manual_review = false;
+                    }
+                    if (document.extracted_data) {
+                        document.extracted_data.manual_review_required = false;
+                    }
+                    document.manual_review_required = false;
+                    
                     console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
                 }
             } else if (action === 'confirm') {
@@ -1152,6 +1167,15 @@ Diese E-Mail wurde automatisch generiert.
                 document.manually_reviewed = true;
                 document.reviewed_at = new Date();
                 document.reviewed_by = req.agentId;
+                
+                // ✅ CRITICAL FIX: Clear document-level manual review flags to prevent loop
+                if (document.validation) {
+                    document.validation.requires_manual_review = false;
+                }
+                if (document.extracted_data) {
+                    document.extracted_data.manual_review_required = false;
+                }
+                document.manual_review_required = false;
             }
 
             console.log(`💾 Saving client to database...`);
@@ -1308,6 +1332,15 @@ Diese E-Mail wurde automatisch generiert.
                     doc.reviewed_at = new Date();
                     doc.reviewed_by = agentId;
                     doc.review_action = 'auto_reviewed_at_completion';
+                    
+                    // ✅ CRITICAL FIX: Clear document-level manual review flags to prevent loop
+                    if (doc.validation) {
+                        doc.validation.requires_manual_review = false;
+                    }
+                    if (doc.extracted_data) {
+                        doc.extracted_data.manual_review_required = false;
+                    }
+                    doc.manual_review_required = false;
                 }
             });
 
