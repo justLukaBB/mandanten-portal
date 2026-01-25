@@ -843,115 +843,85 @@ class FirstRoundDocumentGenerator {
         // Get the salutation XML
         let salutationXml = salutationPara.fullMatch;
 
-        // Ensure salutation has proper spacing and left alignment (not indented like sidebar)
-        // First, check if it has pPr
-        let salutationPPr = salutationXml.match(
-          /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
-        );
-        if (salutationPPr) {
-          const pPrContent = salutationPPr[1];
-          let updatedPPrContent = pPrContent;
+        // Create a clean pPr for salutation with NO spacing and NO indentation
+        // Remove all existing pPr and create a minimal one
+        salutationXml = salutationXml.replace(/<w:pPr[^>]*>[\s\S]*?<\/w:pPr>/, '');
+        
+        // Create new pPr with no spacing, no indentation, left-aligned
+        salutationXml = salutationXml.replace(/<w:p([^>]*)>/, '<w:p$1><w:pPr><w:spacing w:after="0" w:before="0"/><w:jc w:val="left"/></w:pPr>');
+        
+        // Remove any indentation attributes that might still be in the paragraph tag
+        salutationXml = salutationXml.replace(/w:rsidR="[^"]*"/g, '');
+        salutationXml = salutationXml.replace(/w:rsidRDefault="[^"]*"/g, '');
+        
+        // Ensure no left indentation
+        salutationXml = salutationXml.replace(/<w:ind[^>]*>/g, '');
+        salutationXml = salutationXml.replace(/w:left="\d+"/g, '');
 
-          // Remove left indentation to ensure it's left-aligned (not in sidebar)
-          updatedPPrContent = updatedPPrContent.replace(
-            /<w:ind[^>]*w:left="\d+"[^>]*\/?>/g,
-            ""
-          );
-          updatedPPrContent = updatedPPrContent.replace(/w:left="\d+"/g, "");
-
-          // Remove ANY w:after spacing from salutation (should be 0 for no extra spacing)
-          updatedPPrContent = updatedPPrContent.replace(
-            /\s*w:after="\d+"/g,
-            ""
-          );
-
-          // Check if spacing tag exists and remove it if it's now empty
-          const spacingTagMatch = updatedPPrContent.match(
-            /<w:spacing([^>]*?)(\/?)>/
-          );
-          if (spacingTagMatch) {
-            let spacingAttrs = spacingTagMatch[1].trim();
-            // Remove w:after if it still exists
-            spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
-            // If spacing tag is now empty or only has whitespace, remove it entirely
-            if (!spacingAttrs.trim() || spacingAttrs.trim() === "") {
-              // Remove the entire spacing tag
-              updatedPPrContent = updatedPPrContent.replace(
-                /<w:spacing[^>]*?\/?>/,
-                ""
-              );
-            } else {
-              // Keep the spacing tag but without w:after
-              updatedPPrContent = updatedPPrContent.replace(
-                /<w:spacing[^>]*?\/?>/,
-                `<w:spacing ${spacingAttrs.trim()}>`
-              );
-            }
-          }
-          // Do NOT add any spacing tag - we want NO spacing after salutation
-
-          // Ensure left alignment (remove any right alignment)
-          updatedPPrContent = updatedPPrContent.replace(
-            /<w:jc[^>]*w:val="right"[^>]*\/?>/g,
-            ""
-          );
-          updatedPPrContent = updatedPPrContent.replace(
-            /w:jc[^>]*w:val="right"/g,
-            ""
-          );
-
-          // Replace the pPr in salutation
-          salutationXml = salutationXml.replace(
-            salutationPPr[0],
-            `<w:pPr>${updatedPPrContent}</w:pPr>`
-          );
-        } else {
-          // No pPr exists, add one WITHOUT spacing (we want no extra spacing after salutation)
-          salutationXml = salutationXml.replace(
-            /<w:p>/,
-            '<w:p><w:pPr></w:pPr>'
-          );
-        }
-
-
-        // Also reduce w:before spacing on body paragraph if it exists (before moving salutation)
+        // Also ensure body paragraph has NO w:before spacing
         const bodyParaXml = bodyPara.fullMatch;
         let updatedBodyParaXml = bodyParaXml;
-        const bodyPPrMatch = bodyParaXml.match(
-          /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
-        );
-
+        
+        // Remove or set w:before to 0 in body paragraph
+        const bodyPPrMatch = bodyParaXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
         if (bodyPPrMatch) {
-          const bodyPPrContent = bodyPPrMatch[1];
-          const bodyBeforeMatch = bodyPPrContent.match(/w:before="(\d+)"/);
-          if (bodyBeforeMatch) {
-            const beforeValue = parseInt(bodyBeforeMatch[1]);
-            console.log(
-              `   ⚠️ Body paragraph has w:before="${beforeValue}" twips`
-            );
-            if (beforeValue > 100) {
-              console.log(
-                `   🔧 Reducing w:before spacing on body paragraph (${beforeValue} twips -> 0)`
-              );
-              updatedBodyParaXml = updatedBodyParaXml.replace(
-                /w:before="\d+"/,
-                'w:before="0"'
-              );
+          let bodyPPrContent = bodyPPrMatch[1];
+          
+          // Remove or set w:before to 0
+          bodyPPrContent = bodyPPrContent.replace(/w:before="\d+"/g, 'w:before="0"');
+          
+          // Ensure spacing tag exists with w:before="0"
+          const spacingMatch = bodyPPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
+          if (spacingMatch) {
+            let spacingTag = spacingMatch[0];
+            spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
+            if (!/w:before=/.test(spacingTag)) {
+              const isSelfClosing = spacingMatch[2] === '/';
+              if (isSelfClosing) {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
+              } else {
+                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
+              }
             }
+            bodyPPrContent = bodyPPrContent.replace(spacingMatch[0], spacingTag);
+          } else {
+            // Add spacing tag with w:before="0"
+            bodyPPrContent = '<w:spacing w:before="0"/>' + bodyPPrContent;
+          }
+          
+          updatedBodyParaXml = bodyParaXml.replace(bodyPPrMatch[0], `<w:pPr>${bodyPPrContent}</w:pPr>`);
+        } else {
+          // No pPr, add one with w:before="0"
+          updatedBodyParaXml = bodyParaXml.replace(/<w:p([^>]*)>/, '<w:p$1><w:pPr><w:spacing w:before="0"/></w:pPr>');
+        }
+
+        // Remove empty paragraphs between salutation and body
+        for (let j = salutationParagraphIndex + 1; j < bodyParagraphIndex; j++) {
+          const emptyPara = paragraphs[j];
+          const emptyText = emptyPara.content.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+          const emptyTextContent = emptyText 
+            ? emptyText.map(m => {
+                const match = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+                return match ? match[1] : "";
+              }).join("")
+            : "";
+          
+          if (!emptyTextContent.trim() || emptyTextContent.trim().length < 3) {
+            console.log(`   🗑️ Removing empty paragraph at index ${j}`);
+            documentXml = documentXml.replace(emptyPara.fullMatch, "");
           }
         }
 
         // Remove the old salutation paragraph from its current position
         documentXml = documentXml.replace(salutationPara.fullMatch, "");
 
-        // Insert the new salutation paragraph before the body paragraph (use updated body XML if it was modified)
-        const bodyParaToUse =
-          updatedBodyParaXml !== bodyParaXml ? updatedBodyParaXml : bodyParaXml;
+        // Insert the new salutation paragraph directly before the body paragraph
         documentXml = documentXml.replace(
           bodyParaXml,
-          salutationXml + bodyParaToUse
+          salutationXml + updatedBodyParaXml
         );
 
+        console.log('   ✅ Moved salutation directly before body text and set all spacing to 0');
         spacingFixed = true;
       } else {
         // Fallback: just fix spacing issues without moving
