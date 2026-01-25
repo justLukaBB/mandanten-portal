@@ -246,17 +246,7 @@ export const PersonalPortal = ({
     setPasswordSuccess(false);
   };
 
-  // Force password change on first login (if backend indicates no password yet)
-  // Skip password requirement during admin impersonation
-  useEffect(() => {
-    if (client && client.isPasswordSet === false && !isImpersonating) {
-      setForcePasswordChange(true);
-      setShowPasswordModal(true);
-      setPasswordForm({ fileNumber: client?.aktenzeichen || '', newPassword: '', confirmPassword: '' });
-    } else {
-      setForcePasswordChange(false);
-    }
-  }, [client, isImpersonating]);
+  // Password change no longer required - using email verification flow
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -341,18 +331,6 @@ export const PersonalPortal = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('Kennwort ändern clicked');
-                      openPasswordModal();
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Kennwort ändern
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log('Abmelden clicked');
                       handleLogout();
                     }}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

@@ -136,12 +136,15 @@ const PortalLogin: React.FC = () => {
   };
 
   // Handle verifying the code
-  const handleVerifyCode = async (e?: React.FormEvent) => {
+  const handleVerifyCode = async (e?: React.FormEvent, codeOverride?: string) => {
     if (e) {
       e.preventDefault();
     }
 
-    if (!verificationCode.trim() || verificationCode.length !== 6) {
+    // Use override code (from auto-submit) or current state
+    const codeToVerify = codeOverride || verificationCode;
+
+    if (!codeToVerify.trim() || codeToVerify.length !== 6) {
       setError('Bitte geben Sie den 6-stelligen Code ein.');
       return;
     }
@@ -154,7 +157,7 @@ const PortalLogin: React.FC = () => {
 
       const response = await axios.post(`${API_BASE_URL}/api/portal/verify-code`, {
         aktenzeichen: aktenzeichen.trim(),
-        code: verificationCode.trim()
+        code: codeToVerify.trim()
       });
 
       if (response.data.success) {
@@ -231,7 +234,7 @@ const PortalLogin: React.FC = () => {
     // Auto-submit when 6 digits entered
     if (value.length === 6) {
       setTimeout(() => {
-        handleVerifyCode();
+        handleVerifyCode(undefined, value);
       }, 100);
     }
   };
