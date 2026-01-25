@@ -10,310 +10,8 @@ const { formatAddress } = require("../utils/addressFormatter");
  */
 class FirstRoundDocumentGenerator {
   constructor() {
-    this.templatePath = path.join(__dirname, "../templates/1.Schreiben-Aktuell.docx");
+    this.templatePath = path.join(__dirname, "../templates/1.Schreiben.docx");
     this.outputDir = path.join(__dirname, "../generated_documents/first_round");
-  }
-
-  /**
-   * Escape special regex characters in a string
-   */
-  escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  /**
-   * Normalize template variables that are split across multiple XML elements
-   * Word sometimes splits variables like "Name" across multiple <w:t> tags
-   * This method consolidates them so Docxtemplater can find them
-   */
-  normalizeTemplateVariables(documentXml) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:29',message:'normalizeTemplateVariables entry',data:{xmlLength:documentXml.length,xmlSample:documentXml.substring(0,500),hasQuotEntities:documentXml.includes('&quot;')},timestamp:Date.now(),sessionId:'debug-session',runId:'run9',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    console.log('   🔧 Starting template variable normalization...');
-
-    // STEP 1: Normalize ALL quote variants to ASCII double quotes for Docxtemplater
-    // German typographic: „ (U+201E opening), " (U+201C closing)
-    // Other variants: " (U+201D), &quot; entity
-    // Target: " (U+0022 ASCII)
-    const originalXml = documentXml;
-    documentXml = documentXml
-      .replace(/„/g, '"')   // German opening quote → ASCII
-      .replace(/"/g, '"')   // German closing quote → ASCII
-      .replace(/"/g, '"')   // Another closing variant → ASCII
-      .replace(/&quot;/g, '"'); // HTML entity → ASCII
-
-    if (documentXml !== originalXml) {
-      console.log('   🔧 Normalized all quote variants to ASCII double quotes');
-    }
-    
-    // STEP 2: Use a simpler, more direct approach
-    // Instead of complex regex patterns, find variable text and replace the entire XML section
-    // This approach is more robust and handles any XML structure
-
-    // Known template variables from prepareTemplateData
-    const knownVariables = [
-      'Adresse des Creditors',
-      'Adresse des Creditor',
-      'Creditor',
-      'Creditors',
-      'Aktenzeichen des Credtiors',
-      'Aktenzeichen des Creditors',
-      'Name',
-      'Geburtstag',
-      'Adresse',
-      'Aktenzeichen des Mandanten',
-      'heutiges Datum',
-      'Datum in 14 Tagen'
-    ];
-
-    let fixCount = 0;
-    const originalLength = documentXml.length;
-
-    // Debug: Log all quoted text patterns found in XML to understand structure
-    // All quotes are now normalized to ASCII " at this point
-    const allQuotedMatches = documentXml.match(/<w:t[^>]*>"[^<]*<\/w:t>/g) || [];
-    const splitQuotedMatches = documentXml.match(/"[^<]*<\/w:t><\/w:r>[\s\S]{0,200}<w:r[^>]*><w:t[^>]*>[^<]*"/g) || [];
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:64',message:'debug quoted patterns',data:{allQuotedCount:allQuotedMatches.length,splitQuotedCount:splitQuotedMatches.length,allQuotedSamples:allQuotedMatches.slice(0,5),splitQuotedSamples:splitQuotedMatches.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    if (allQuotedMatches.length > 0 || splitQuotedMatches.length > 0) {
-      console.log(`   🔍 Found ${allQuotedMatches.length} simple quoted patterns and ${splitQuotedMatches.length} split quoted patterns`);
-    }
-
-    // NEW APPROACH: Extract all text runs and find variables, then reconstruct
-    // This is more reliable than complex regex patterns
-    // All quotes normalized to ASCII " at this point
-    knownVariables.forEach(variable => {
-      const escapedVar = this.escapeRegex(variable);
-      const words = variable.split(/\s+/);
-      const quotedVariable = `"${variable}"`;
-
-      // Check if already consolidated (using regex test instead of includes with regex syntax)
-      const consolidatedPattern = new RegExp(`<w:t[^>]*>${this.escapeRegex(quotedVariable)}</w:t>`);
-      if (consolidatedPattern.test(documentXml)) {
-        console.log(`   ✅ Variable "${variable}" is already consolidated`);
-        return;
-      }
-
-      // SIMPLIFIED APPROACH: Find pattern "FirstWord...LastWord" and replace entire XML section
-      if (words.length > 1) {
-        // Multi-word variable: <w:t>"FirstWord</w:t>...ANY_XML...<w:t>LastWord"</w:t>
-        const firstWord = words[0];
-        const lastWord = words[words.length - 1];
-
-        // Pattern: <w:t>"FirstWord...LastWord"</w:t> (allowing any XML between)
-        const searchPattern = new RegExp(
-          `(<w:t[^>]*>)"${this.escapeRegex(firstWord)}([\\s\\S]*?)${this.escapeRegex(lastWord)}"([^<]*</w:t>)`,
-          'g'
-        );
-        
-        const matches = [];
-        let match;
-        while ((match = searchPattern.exec(documentXml)) !== null) {
-          const fullMatch = match[0];
-          
-          // Verify all words are present in the match
-          let hasAllWords = true;
-          for (const word of words) {
-            if (!fullMatch.includes(word)) {
-              hasAllWords = false;
-              break;
-            }
-          }
-          
-          if (hasAllWords) {
-            matches.push({
-              fullMatch: fullMatch,
-              openingTag: match[1],
-              closingPart: match[3],
-              index: match.index
-            });
-          }
-        }
-        
-        // Replace matches in reverse order to avoid index shifting
-        if (matches.length > 0) {
-          for (let i = matches.length - 1; i >= 0; i--) {
-            const m = matches[i];
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:110',message:'simplified pattern match',data:{variable,fullMatch:m.fullMatch.substring(0,400),matchesCount:matches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run11',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
-            console.log(`      ✅ Consolidating "${variable}" using simplified pattern (${matches.length} match(es))...`);
-            // Use ASCII quotes for replacement (all quotes normalized at start)
-            documentXml = documentXml.substring(0, m.index) +
-                         `${m.openingTag}"${variable}"${m.closingPart}` +
-                         documentXml.substring(m.index + m.fullMatch.length);
-            fixCount++;
-          }
-        } else {
-          console.log(`   ⚠️ Could not consolidate "${variable}" - simplified pattern not found`);
-        }
-      } else {
-        // Single-word variable: <w:t>"Variable"</w:t> or <w:t>"Var</w:t>...<w:t>iable"</w:t>
-        const singlePattern = new RegExp(
-          `(<w:t[^>]*>)"([^<]*</w:t>[\\s\\S]*?<w:t[^>]*>)${escapedVar}"([^<]*</w:t>)`,
-          'g'
-        );
-
-        const singleMatches = [];
-        let singleMatch;
-        while ((singleMatch = singlePattern.exec(documentXml)) !== null) {
-          singleMatches.push({
-            fullMatch: singleMatch[0],
-            openingTag: singleMatch[1],
-            closingPart: singleMatch[3],
-            index: singleMatch.index
-          });
-        }
-
-        if (singleMatches.length > 0) {
-          for (let i = singleMatches.length - 1; i >= 0; i--) {
-            const m = singleMatches[i];
-            console.log(`      ✅ Consolidating single-word "${variable}"...`);
-            // Use ASCII quotes for replacement
-            documentXml = documentXml.substring(0, m.index) +
-                         `${m.openingTag}"${variable}"${m.closingPart}` +
-                         documentXml.substring(m.index + m.fullMatch.length);
-            fixCount++;
-          }
-        }
-      }
-    });
-
-    // Additional pattern to handle any quoted text that looks like a variable
-    // This catches variables we might not know about
-    const generalPattern = /(<w:t[^>]*>)"([^<]*<\/w:t><\/w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>)([A-Z\u00c4\u00d6\u00dc][a-z\u00e4\u00f6\u00fc\u00df]+(?:\s+[a-z\u00e4\u00f6\u00fc\u00dfA-Z\u00c4\u00d6\u00dc]+)*?)([^<]*<\/w:t><\/w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>)"([^<]*<\/w:t>)/g;
-
-    documentXml = documentXml.replace(generalPattern, (match, p1, p2, varName, p4, p5) => {
-      // Check if this looks like a template variable (starts with capital letter, reasonable length)
-      if (varName.length > 0 && varName.length < 50 && /^[A-Z\u00c4\u00d6\u00dc]/.test(varName)) {
-        console.log(`      🔍 Found potential split variable "${varName}" - consolidating...`);
-        fixCount++;
-        return `${p1}"${varName}"${p5}`;
-      }
-      return match; // No change if it doesn't look like a variable
-    });
-
-    // Final check: Verify variables are now in consolidated form
-    const consolidatedVars = [];
-    const unconsolidatedVars = [];
-    knownVariables.forEach(variable => {
-      const quotedVar = `"${variable}"`;
-      // Check if variable exists in consolidated form (within a single <w:t> tag)
-      const consolidatedPattern = new RegExp(`<w:t[^>]*>${this.escapeRegex(quotedVar)}</w:t>`, 'g');
-      const consolidatedMatches = documentXml.match(consolidatedPattern);
-      
-      // Check if variable might still be split
-      const words = variable.split(/\s+/);
-      if (words.length > 1) {
-        // Look for first word and last word in separate tags
-        const splitPattern = new RegExp(
-          `<w:t[^>]*>[^<]*${this.escapeRegex(words[0])}[^<]*</w:t>[\\s\\S]{0,500}?<w:t[^>]*>[^<]*${this.escapeRegex(words[words.length - 1])}[^<]*</w:t>`,
-          'g'
-        );
-        const splitMatches = documentXml.match(splitPattern);
-        if (splitMatches && splitMatches.length > 0 && (!consolidatedMatches || consolidatedMatches.length === 0)) {
-          unconsolidatedVars.push(variable);
-        }
-      }
-      
-      if (consolidatedMatches && consolidatedMatches.length > 0) {
-        consolidatedVars.push(variable);
-      }
-    });
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:280',message:'normalizeTemplateVariables exit',data:{fixCount,originalLength,afterLength:documentXml.length,consolidatedVars,unconsolidatedVars},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-    
-    if (fixCount > 0) {
-      console.log(`   ✅ Normalized ${fixCount} split template variable(s)`);
-      if (consolidatedVars.length > 0) {
-        console.log(`   ✅ Verified ${consolidatedVars.length} variables are now consolidated`);
-      }
-      if (unconsolidatedVars.length > 0) {
-        console.log(`   ⚠️ ${unconsolidatedVars.length} variables may still be split: ${unconsolidatedVars.join(', ')}`);
-      }
-    } else if (originalLength !== documentXml.length) {
-      console.log(`   ✅ Normalized template variables (XML length: ${originalLength} → ${documentXml.length})`);
-    } else {
-      console.log('   ℹ️ No split template variables found');
-      if (unconsolidatedVars.length > 0) {
-        console.log(`   ⚠️ Warning: ${unconsolidatedVars.length} variables may be split but not matched: ${unconsolidatedVars.join(', ')}`);
-      }
-    }
-
-    return documentXml;
-  }
-
-  /**
-   * Direct variable replacement in XML
-   * This bypasses Docxtemplater and replaces variables directly in the XML,
-   * even when they are split across multiple <w:t> tags
-   */
-  directVariableReplacement(documentXml, templateData) {
-    console.log('   🔄 Starting direct variable replacement...');
-    let replacementCount = 0;
-
-    // Sort variables by length (longest first) to avoid partial replacements
-    const sortedVars = Object.entries(templateData)
-      .filter(([k, v]) => v !== undefined && v !== null)
-      .sort((a, b) => b[0].length - a[0].length);
-
-    for (const [varName, value] of sortedVars) {
-      // Convert value to string and escape XML special characters
-      const safeValue = String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\n/g, '</w:t></w:r><w:r><w:t>'); // Handle newlines
-
-      // Build a pattern that matches the variable even when split across <w:t> tags
-      // E.g., "Name" could be: <w:t>"Name</w:t><w:t>"</w:t> or <w:t>"</w:t><w:t>Name"</w:t>
-      // Strategy: Match from opening quote through variable text to closing quote,
-      // allowing any XML tags in between
-
-      // Create character-by-character pattern that allows XML tags between chars
-      const varChars = `"${varName}"`;
-      let patternParts = [];
-      for (let i = 0; i < varChars.length; i++) {
-        const char = varChars[i];
-        // Escape special regex chars
-        const escapedChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (i === 0) {
-          patternParts.push(escapedChar);
-        } else {
-          // Allow XML tags and whitespace between characters
-          patternParts.push(`(?:</w:t></w:r>.*?<w:r[^>]*>(?:<w:rPr>.*?</w:rPr>)?<w:t[^>]*>|\\s*)${escapedChar}`);
-        }
-      }
-
-      const flexPattern = new RegExp(patternParts.join(''), 'gs');
-
-      const beforeLength = documentXml.length;
-      let matchCount = 0;
-
-      documentXml = documentXml.replace(flexPattern, (match) => {
-        matchCount++;
-        console.log(`      ✅ Replaced "${varName}" (match ${matchCount})`);
-        replacementCount++;
-        return safeValue;
-      });
-
-      // Fallback: simple direct replacement if pattern didn't work
-      if (documentXml.length === beforeLength) {
-        const simplePattern = `"${varName}"`;
-        if (documentXml.includes(simplePattern)) {
-          documentXml = documentXml.split(simplePattern).join(safeValue);
-          console.log(`      ✅ Replaced "${varName}" (simple)`);
-          replacementCount++;
-        }
-      }
-    }
-
-    console.log(`   ✅ Direct replacement completed: ${replacementCount} variables replaced`);
-    return documentXml;
   }
 
   /**
@@ -404,40 +102,20 @@ class FirstRoundDocumentGenerator {
       // Read the template file
       const templateContent = await fs.readFile(this.templatePath);
       const zip = new PizZip(templateContent);
-
-      // Get document XML
-      let documentXml = zip.file('word/document.xml').asText();
-
-      // NORMALIZE: Consolidate split template variables
-      documentXml = this.normalizeTemplateVariables(documentXml);
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        delimiters: {
+          start: '"',
+          end: '"',
+        },
+      });
 
       // Prepare the data for replacement
       const templateData = this.prepareTemplateData(clientData, creditor);
 
-      // Debug: Log template data
-      console.log('🔍 Template Data for creditor:', creditor.sender_name || creditor.creditor_name);
-      console.log('   Template variables:', Object.keys(templateData));
-
-      // DIRECT REPLACEMENT: Replace variables directly in XML (bypasses Docxtemplater issues)
-      // This works even when variables are split across multiple <w:t> tags
-      documentXml = this.directVariableReplacement(documentXml, templateData);
-
-      // Update the zip with the processed XML
-      zip.file('word/document.xml', documentXml);
-
-      // Verify replacements
-      const stillPresent = Object.keys(templateData).filter(key => {
-        const searchKey = `"${key}"`;
-        return documentXml.includes(searchKey);
-      });
-      if (stillPresent.length > 0) {
-        console.warn('⚠️ Variables not replaced:', stillPresent);
-      } else {
-        console.log('✅ All variables were replaced');
-      }
-
-      // Create document from the processed zip (no Docxtemplater rendering needed)
-      const doc = { getZip: () => zip };
+      // Render the document with the data
+      doc.render(templateData);
 
       // Fix German hyphenation issues in the rendered document
       this.fixDocumentHyphenation(doc);
@@ -873,85 +551,115 @@ class FirstRoundDocumentGenerator {
         // Get the salutation XML
         let salutationXml = salutationPara.fullMatch;
 
-        // Create a clean pPr for salutation with NO spacing and NO indentation
-        // Remove all existing pPr and create a minimal one
-        salutationXml = salutationXml.replace(/<w:pPr[^>]*>[\s\S]*?<\/w:pPr>/, '');
-        
-        // Create new pPr with no spacing, no indentation, left-aligned
-        salutationXml = salutationXml.replace(/<w:p([^>]*)>/, '<w:p$1><w:pPr><w:spacing w:after="0" w:before="0"/><w:jc w:val="left"/></w:pPr>');
-        
-        // Remove any indentation attributes that might still be in the paragraph tag
-        salutationXml = salutationXml.replace(/w:rsidR="[^"]*"/g, '');
-        salutationXml = salutationXml.replace(/w:rsidRDefault="[^"]*"/g, '');
-        
-        // Ensure no left indentation
-        salutationXml = salutationXml.replace(/<w:ind[^>]*>/g, '');
-        salutationXml = salutationXml.replace(/w:left="\d+"/g, '');
+        // Ensure salutation has proper spacing and left alignment (not indented like sidebar)
+        // First, check if it has pPr
+        let salutationPPr = salutationXml.match(
+          /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
+        );
+        if (salutationPPr) {
+          const pPrContent = salutationPPr[1];
+          let updatedPPrContent = pPrContent;
 
-        // Also ensure body paragraph has NO w:before spacing
-        const bodyParaXml = bodyPara.fullMatch;
-        let updatedBodyParaXml = bodyParaXml;
-        
-        // Remove or set w:before to 0 in body paragraph
-        const bodyPPrMatch = bodyParaXml.match(/<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/);
-        if (bodyPPrMatch) {
-          let bodyPPrContent = bodyPPrMatch[1];
-          
-          // Remove or set w:before to 0
-          bodyPPrContent = bodyPPrContent.replace(/w:before="\d+"/g, 'w:before="0"');
-          
-          // Ensure spacing tag exists with w:before="0"
-          const spacingMatch = bodyPPrContent.match(/<w:spacing([^>]*?)(\/?)>/);
-          if (spacingMatch) {
-            let spacingTag = spacingMatch[0];
-            spacingTag = spacingTag.replace(/w:before="\d+"/g, 'w:before="0"');
-            if (!/w:before=/.test(spacingTag)) {
-              const isSelfClosing = spacingMatch[2] === '/';
-              if (isSelfClosing) {
-                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)\/>/, '<w:spacing w:before="0"$1/>');
-              } else {
-                spacingTag = spacingTag.replace(/<w:spacing([^>]*?)>/, '<w:spacing w:before="0"$1>');
-              }
+          // Remove left indentation to ensure it's left-aligned (not in sidebar)
+          updatedPPrContent = updatedPPrContent.replace(
+            /<w:ind[^>]*w:left="\d+"[^>]*\/?>/g,
+            ""
+          );
+          updatedPPrContent = updatedPPrContent.replace(/w:left="\d+"/g, "");
+
+          // Remove ANY w:after spacing from salutation (should be 0 for no extra spacing)
+          updatedPPrContent = updatedPPrContent.replace(
+            /\s*w:after="\d+"/g,
+            ""
+          );
+
+          // Check if spacing tag exists and remove it if it's now empty
+          const spacingTagMatch = updatedPPrContent.match(
+            /<w:spacing([^>]*?)(\/?)>/
+          );
+          if (spacingTagMatch) {
+            let spacingAttrs = spacingTagMatch[1].trim();
+            // Remove w:after if it still exists
+            spacingAttrs = spacingAttrs.replace(/\s*w:after="\d+"/g, "");
+            // If spacing tag is now empty or only has whitespace, remove it entirely
+            if (!spacingAttrs.trim() || spacingAttrs.trim() === "") {
+              // Remove the entire spacing tag
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                ""
+              );
+            } else {
+              // Keep the spacing tag but without w:after
+              updatedPPrContent = updatedPPrContent.replace(
+                /<w:spacing[^>]*?\/?>/,
+                `<w:spacing ${spacingAttrs.trim()}>`
+              );
             }
-            bodyPPrContent = bodyPPrContent.replace(spacingMatch[0], spacingTag);
-          } else {
-            // Add spacing tag with w:before="0"
-            bodyPPrContent = '<w:spacing w:before="0"/>' + bodyPPrContent;
           }
-          
-          updatedBodyParaXml = bodyParaXml.replace(bodyPPrMatch[0], `<w:pPr>${bodyPPrContent}</w:pPr>`);
+          // Do NOT add any spacing tag - we want NO spacing after salutation
+
+          // Ensure left alignment (remove any right alignment)
+          updatedPPrContent = updatedPPrContent.replace(
+            /<w:jc[^>]*w:val="right"[^>]*\/?>/g,
+            ""
+          );
+          updatedPPrContent = updatedPPrContent.replace(
+            /w:jc[^>]*w:val="right"/g,
+            ""
+          );
+
+          // Replace the pPr in salutation
+          salutationXml = salutationXml.replace(
+            salutationPPr[0],
+            `<w:pPr>${updatedPPrContent}</w:pPr>`
+          );
         } else {
-          // No pPr, add one with w:before="0"
-          updatedBodyParaXml = bodyParaXml.replace(/<w:p([^>]*)>/, '<w:p$1><w:pPr><w:spacing w:before="0"/></w:pPr>');
+          // No pPr exists, add one WITHOUT spacing (we want no extra spacing after salutation)
+          salutationXml = salutationXml.replace(
+            /<w:p>/,
+            '<w:p><w:pPr></w:pPr>'
+          );
         }
 
-        // Remove empty paragraphs between salutation and body
-        for (let j = salutationParagraphIndex + 1; j < bodyParagraphIndex; j++) {
-          const emptyPara = paragraphs[j];
-          const emptyText = emptyPara.content.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
-          const emptyTextContent = emptyText 
-            ? emptyText.map(m => {
-                const match = m.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
-                return match ? match[1] : "";
-              }).join("")
-            : "";
-          
-          if (!emptyTextContent.trim() || emptyTextContent.trim().length < 3) {
-            console.log(`   🗑️ Removing empty paragraph at index ${j}`);
-            documentXml = documentXml.replace(emptyPara.fullMatch, "");
+
+        // Also reduce w:before spacing on body paragraph if it exists (before moving salutation)
+        const bodyParaXml = bodyPara.fullMatch;
+        let updatedBodyParaXml = bodyParaXml;
+        const bodyPPrMatch = bodyParaXml.match(
+          /<w:pPr[^>]*>([\s\S]*?)<\/w:pPr>/
+        );
+
+        if (bodyPPrMatch) {
+          const bodyPPrContent = bodyPPrMatch[1];
+          const bodyBeforeMatch = bodyPPrContent.match(/w:before="(\d+)"/);
+          if (bodyBeforeMatch) {
+            const beforeValue = parseInt(bodyBeforeMatch[1]);
+            console.log(
+              `   ⚠️ Body paragraph has w:before="${beforeValue}" twips`
+            );
+            if (beforeValue > 100) {
+              console.log(
+                `   🔧 Reducing w:before spacing on body paragraph (${beforeValue} twips -> 0)`
+              );
+              updatedBodyParaXml = updatedBodyParaXml.replace(
+                /w:before="\d+"/,
+                'w:before="0"'
+              );
+            }
           }
         }
 
         // Remove the old salutation paragraph from its current position
         documentXml = documentXml.replace(salutationPara.fullMatch, "");
 
-        // Insert the new salutation paragraph directly before the body paragraph
+        // Insert the new salutation paragraph before the body paragraph (use updated body XML if it was modified)
+        const bodyParaToUse =
+          updatedBodyParaXml !== bodyParaXml ? updatedBodyParaXml : bodyParaXml;
         documentXml = documentXml.replace(
           bodyParaXml,
-          salutationXml + updatedBodyParaXml
+          salutationXml + bodyParaToUse
         );
 
-        console.log('   ✅ Moved salutation directly before body text and set all spacing to 0');
         spacingFixed = true;
       } else {
         // Fallback: just fix spacing issues without moving
@@ -1593,34 +1301,33 @@ class FirstRoundDocumentGenerator {
       });
     };
 
-    const creditorAddress = `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`;
-    const creditorName = creditor.actual_creditor || creditor.sender_name || "Unbekannter Gläubiger";
-    const creditorReference = creditor.reference_number || creditor.creditor_reference || creditor.reference || creditor.aktenzeichen || "Nicht verfügbar";
-    const clientName = clientData.name;
-    const clientBirthdate = clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar";
-    const clientAddress = this.formatClientAddress(clientData);
-    const clientReference = clientData.reference;
-    const todayDate = formatGermanDate(today);
-    const responseDateFormatted = formatGermanDate(responseDate);
-
     return {
-      // Creditor information - support both "Creditors" and "Creditor" variants
-      "Adresse des Creditors": creditorAddress, // Template has "Creditors" with "s"
-      "Adresse des Creditor": creditorAddress, // Fallback without "s"
-      Creditor: creditorName,
-      Creditors: creditorName, // Variant with "s" in template
-      "Aktenzeichen des Credtiors": creditorReference,
-      "Aktenzeichen des Creditors": creditorReference, // Variant with "s"
+      // Creditor information
+      // "Adresse des Creditors": this.formatCreditorAddress(creditor),
+      "Adresse des Creditors": `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
+
+      Creditor:
+        creditor.actual_creditor ||
+        creditor.sender_name ||
+        "Unbekannter Gläubiger",
+
+      "Aktenzeichen des Credtiors":
+        creditor.reference_number ||
+        creditor.creditor_reference ||
+        creditor.reference ||
+        creditor.aktenzeichen ||
+        "Nicht verfügbar",
 
       // Client information
-      Name: clientName,
-      Geburtstag: clientBirthdate,
-      Adresse: clientAddress,
-      "Aktenzeichen des Mandanten": clientReference,
+      Name: clientData.name,
+      Geburtstag:
+        clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar",
+      Adresse: this.formatClientAddress(clientData),
+      "Aktenzeichen des Mandanten": clientData.reference,
 
       // Dates
-      "heutiges Datum": todayDate,
-      "Datum in 14 Tagen": responseDateFormatted,
+      "heutiges Datum": formatGermanDate(today),
+      "Datum in 14 Tagen": formatGermanDate(responseDate),
     };
   }
 
