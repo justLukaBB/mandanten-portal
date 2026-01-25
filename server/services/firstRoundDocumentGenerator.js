@@ -114,8 +114,32 @@ class FirstRoundDocumentGenerator {
       // Prepare the data for replacement
       const templateData = this.prepareTemplateData(clientData, creditor);
 
+      // Debug: Log template data
+      console.log('🔍 Template Data for creditor:', creditor.sender_name || creditor.creditor_name);
+      console.log('   Template variables:', Object.keys(templateData));
+      console.log('   Values:', {
+        'Adresse des Creditors': templateData['Adresse des Creditors']?.substring(0, 50),
+        'Creditor': templateData['Creditor'],
+        'Aktenzeichen des Credtiors': templateData['Aktenzeichen des Credtiors'],
+        'Name': templateData['Name'],
+        'Geburtstag': templateData['Geburtstag'],
+        'Adresse': templateData['Adresse']?.substring(0, 50),
+        'Aktenzeichen des Mandanten': templateData['Aktenzeichen des Mandanten'],
+        'heutiges Datum': templateData['heutiges Datum'],
+        'Datum in 14 Tagen': templateData['Datum in 14 Tagen']
+      });
+
       // Render the document with the data
-      doc.render(templateData);
+      try {
+        doc.render(templateData);
+        console.log('✅ Document rendered successfully');
+      } catch (renderError) {
+        console.error('❌ Error rendering document:', renderError.message);
+        if (renderError.properties) {
+          console.error('   Missing variables:', renderError.properties);
+        }
+        throw renderError;
+      }
 
       // Fix German hyphenation issues in the rendered document
       this.fixDocumentHyphenation(doc);
