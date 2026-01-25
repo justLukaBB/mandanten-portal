@@ -44,7 +44,7 @@ const PortalLogin: React.FC = () => {
   }, [step]);
 
   // Start cooldown timer
-  const startResendCooldown = (seconds: number = 60) => {
+  const startResendCooldown = (seconds = 60) => {
     setResendCooldown(seconds);
 
     if (cooldownIntervalRef.current) {
@@ -66,7 +66,9 @@ const PortalLogin: React.FC = () => {
 
   // Handle requesting verification code
   const handleRequestCode = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
 
     if (!aktenzeichen.trim()) {
       setError('Bitte geben Sie Ihr Aktenzeichen ein.');
@@ -109,7 +111,9 @@ const PortalLogin: React.FC = () => {
 
   // Handle verifying the code
   const handleVerifyCode = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
 
     if (!verificationCode.trim() || verificationCode.length !== 6) {
       setError('Bitte geben Sie den 6-stelligen Code ein.');
@@ -178,7 +182,9 @@ const PortalLogin: React.FC = () => {
 
   // Handle resending code
   const handleResendCode = () => {
-    if (resendCooldown > 0) return;
+    if (resendCooldown > 0) {
+      return;
+    }
     handleRequestCode();
   };
 
