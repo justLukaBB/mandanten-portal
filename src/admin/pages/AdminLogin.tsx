@@ -3,12 +3,7 @@ import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline
 import api from '../../config/api';
 import { useNavigate } from 'react-router-dom';
 
-interface AdminLoginProps {
-  // onLogin: () => void;
-  // Empty interface for future props
-}
-
-const AdminLogin: React.FC<AdminLoginProps> = () => {
+const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({
     email: '',
