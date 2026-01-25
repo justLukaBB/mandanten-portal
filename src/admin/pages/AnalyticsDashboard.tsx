@@ -104,12 +104,20 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigateToUse
   };
 
   const getStatusBadgeColor = (status: string, needsAttention?: boolean) => {
-    if (needsAttention) return 'bg-red-100 text-red-800 border border-red-300';
+    if (needsAttention) {
+      return 'bg-red-100 text-red-800 border border-red-300';
+    }
     
     // Simplified mapping for brevity, extend as needed
-    if (status.includes('payment') || status === 'waiting_for_payment') return 'bg-orange-100 text-orange-800';
-    if (status === 'completed' || status === 'payment_confirmed') return 'bg-green-100 text-green-800';
-    if (status === 'processing') return 'bg-blue-100 text-blue-800';
+    if (status.includes('payment') || status === 'waiting_for_payment') {
+      return 'bg-orange-100 text-orange-800';
+    }
+    if (status === 'completed' || status === 'payment_confirmed') {
+      return 'bg-green-100 text-green-800';
+    }
+    if (status === 'processing') {
+      return 'bg-blue-100 text-blue-800';
+    }
     
     return 'bg-gray-100 text-gray-800';
   };

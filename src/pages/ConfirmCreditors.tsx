@@ -84,7 +84,9 @@ const ConfirmCreditors: React.FC = () => {
   };
 
   const handleConfirm = async () => {
-    if (!clientId || !data || data.creditors.length === 0) return;
+    if (!clientId || !data || data.creditors.length === 0) {
+      return;
+    }
     
     setConfirming(true);
     

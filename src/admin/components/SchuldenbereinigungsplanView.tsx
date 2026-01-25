@@ -749,7 +749,7 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
                 <InformationCircleIcon className="w-12 h-12 text-blue-400 mx-auto mb-3" />
                 <p className="text-gray-600 mb-4">No creditor calculation table created yet.</p>
                 <p className="text-sm text-gray-500">
-                  Click the "Letzte Zahlung bestätigen" button in the client details header to create the creditor calculation table for the Schuldenbereinigungsplan.
+                  Click the &quot;Letzte Zahlung bestätigen&quot; button in the client details header to create the creditor calculation table for the Schuldenbereinigungsplan.
                 </p>
               </div>
             )}

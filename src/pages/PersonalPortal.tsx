@@ -446,7 +446,9 @@ export const PersonalPortal = ({
 
             <AddCreditorForm
               clientId={clientId!}
-              onClose={() => { }} // No longer needed for closing
+              onClose={() => {
+                // No longer needed for closing
+              }}
               customColors={customColors}
               onSuccess={() => {
                 // Refresh logic if needed

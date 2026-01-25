@@ -98,7 +98,9 @@ const CreditorDatabase: React.FC = () => {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     try {
       setImportLoading(true);
       setError(null);
@@ -116,7 +118,9 @@ const CreditorDatabase: React.FC = () => {
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Import fehlgeschlagen');
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       setImportLoading(false);
     }
   };
@@ -142,7 +146,9 @@ const CreditorDatabase: React.FC = () => {
   const handleEdit = (item: Creditor) => setEditing(item);
 
   const handleDelete = async (item: Creditor) => {
-    if (!window.confirm(`"${item.creditor_name}" löschen?`)) return;
+    if (!window.confirm(`"${item.creditor_name}" löschen?`)) {
+      return;
+    }
     try {
       await api.delete(`/api/admin/creditor-database/${item._id}`);
       await fetchList({ page });
@@ -152,7 +158,9 @@ const CreditorDatabase: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!editing) return;
+    if (!editing) {
+      return;
+    }
     try {
       const payload = { ...editing } as any;
       delete payload._id;
@@ -181,7 +189,9 @@ const CreditorDatabase: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!editing) return;
+    if (!editing) {
+      return;
+    }
     try {
       const payload = { ...editing } as any;
       delete payload._id;

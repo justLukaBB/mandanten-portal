@@ -19,7 +19,9 @@ const PortalLogin: React.FC = () => {
 
   // Check password status when email is entered
   const checkPasswordStatus = async (email: string) => {
-    if (!email || !email.includes('@')) return;
+    if (!email || !email.includes('@')) {
+      return;
+    }
     
     setCheckingPasswordStatus(true);
     try {

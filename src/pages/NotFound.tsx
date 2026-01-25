@@ -6,9 +6,15 @@ const NotFound: React.FC = () => {
   const role = localStorage.getItem("active_role");
 
   if (token && role) {
-    if (role === "admin") return <Navigate to="/admin" replace />;
-    if (role === "agent") return <Navigate to="/agent/dashboard" replace />;
-    if (role === "portal") return <Navigate to={`/`} replace />;
+    if (role === "admin") {
+      return <Navigate to="/admin" replace />;
+    }
+    if (role === "agent") {
+      return <Navigate to="/agent/dashboard" replace />;
+    }
+    if (role === "portal") {
+      return <Navigate to={`/`} replace />;
+    }
   }
 
   return (

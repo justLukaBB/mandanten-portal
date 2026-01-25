@@ -210,7 +210,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         creditors: payload?.final_creditor_list?.length,
       });
       setUser((prev) => {
-        if (!prev) return prev;
+        if (!prev) {
+          return prev;
+        }
         return {
           ...prev,
           documents: payload?.documents || prev.documents,
@@ -363,7 +365,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
 
   const downloadAllDocuments = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     try {
       setDownloadingAllDocuments(true);
@@ -413,14 +417,18 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const deleteDocument = async (documentId: string, documentName: string) => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     // Confirm deletion
     const confirmDelete = window.confirm(
       `Möchten Sie das Dokument "${documentName}" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`
     );
 
-    if (!confirmDelete) return;
+    if (!confirmDelete) {
+      return;
+    }
 
     try {
       console.log(`🗑️ Deleting document ${documentId} (${documentName})`);
@@ -456,7 +464,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const reprocessAllDocuments = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     try {
       setReprocessingDocuments(true);
@@ -500,7 +510,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const skipSevenDayDelay = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     // eslint-disable-next-line no-restricted-globals
     if (!confirm(`⚡ 7-Day Delay Skip\n\nDies überspringt die 7-Tage-Wartezeit für ${user.firstName} ${user.lastName} (${user.aktenzeichen}) und startet sofort die Gläubiger-Überprüfung.\n\n⚠️ Nur für Testing verwenden!\n\nFortfahren?`)) {
@@ -540,7 +552,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const handleImpersonation = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     // eslint-disable-next-line no-restricted-globals
     if (!confirm(`🔐 Login as User\n\nYou are about to log in as:\n${user.firstName} ${user.lastName} (${user.email})\n\nThis will open their portal in a new tab.\n\nContinue?`)) {
@@ -578,7 +592,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   };
 
   const handleDeleteUser = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     // Validate confirmation text
     const expectedText = user.email;
@@ -721,7 +737,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const fetchUserDetails = async (options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
     try {
-      if (!silent) setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
 
       // Fetch user data
@@ -766,7 +784,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       console.error('Error fetching user details:', error);
       setError('Failed to load user details');
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1257,11 +1277,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                                   {(() => {
                                     const name = doc.name;
                                     const lastDotIndex = name?.lastIndexOf('.');
-                                    if (lastDotIndex === -1 || name?.length <= 25) return name;
+                                    if (lastDotIndex === -1 || name?.length <= 25) {
+                                      return name;
+                                    }
                                     const extension = name?.slice(lastDotIndex);
                                     const baseName = name?.slice(0, lastDotIndex);
                                     const maxBaseLength = 25 - extension?.length - 3; // 3 for "..."
-                                    if (baseName?.length <= maxBaseLength) return name;
+                                    if (baseName?.length <= maxBaseLength) {
+                                      return name;
+                                    }
                                     return baseName?.slice(0, maxBaseLength) + '...' + extension;
                                   })()}
                                 </p>
@@ -1635,7 +1659,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                 {(!user?.final_creditor_list?.some(creditor => creditor.settlement_side_conversation_id || creditor.settlement_plan_sent_at)) && (
                   <div className="text-center py-8 text-gray-500">
                     <p>No settlement plans have been sent yet.</p>
-                    <p className="text-xs mt-1">Click the "Letzte Zahlung bestätigen" button to trigger settlement emails.</p>
+                    <p className="text-xs mt-1">Click the &quot;Letzte Zahlung bestätigen&quot; button to trigger settlement emails.</p>
                   </div>
                 )}
               </div>
@@ -2239,7 +2263,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       </li>
                       <li className="flex items-start">
                         <span className="mr-2">♻️</span>
-                        <span><strong>Document processing status</strong> (will be reset to 'pending')</span>
+                        <span><strong>Document processing status</strong> (will be reset to &apos;pending&apos;)</span>
                       </li>
                       <li className="flex items-start">
                         <span className="mr-2">♻️</span>
@@ -2278,7 +2302,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   {/* Confirmation Input */}
                   <div>
                     <label className="block text-sm font-bold text-gray-900 mb-2">
-                      To confirm, type "REPROCESS" in the box below:
+                      To confirm, type &quot;REPROCESS&quot; in the box below:
                     </label>
                     <input
                       type="text"
@@ -2399,7 +2423,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   {/* Confirmation Input */}
                   <div>
                     <label className="block text-sm font-bold text-gray-900 mb-2">
-                      To confirm deletion, type the user's email address exactly:
+                      To confirm deletion, type the user&apos;s email address exactly:
                       <span className="text-red-600 ml-2">{user.email}</span>
                     </label>
                     <input

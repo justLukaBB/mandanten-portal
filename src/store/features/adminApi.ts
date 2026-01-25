@@ -44,9 +44,15 @@ export const adminApi = baseApi.injectEndpoints({
                     status, // 'all' is default
                 });
 
-                if (search) params.append('search', search);
-                if (dateFrom) params.append('dateFrom', dateFrom);
-                if (dateTo) params.append('dateTo', dateTo);
+                if (search) {
+                  params.append('search', search);
+                }
+                if (dateFrom) {
+                  params.append('dateFrom', dateFrom);
+                }
+                if (dateTo) {
+                  params.append('dateTo', dateTo);
+                }
 
                 return {
                     url: `/api/admin/clients?${params.toString()}`,
@@ -131,12 +137,22 @@ export const adminApiExtended = adminApi.injectEndpoints({
     endpoints: (builder) => ({
         getDashboardStats: builder.query<DashboardStats, { search?: string; status?: string; dateFrom?: string; dateTo?: string } | void>({
             query: (params) => {
-                if (!params) return '/api/admin/dashboard-stats';
+                if (!params) {
+                  return '/api/admin/dashboard-stats';
+                }
                 const queryParams = new URLSearchParams();
-                if (params.search) queryParams.append('search', params.search);
-                if (params.status && params.status !== 'all') queryParams.append('status', params.status);
-                if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
-                if (params.dateTo) queryParams.append('dateTo', params.dateTo);
+                if (params.search) {
+                  queryParams.append('search', params.search);
+                }
+                if (params.status && params.status !== 'all') {
+                  queryParams.append('status', params.status);
+                }
+                if (params.dateFrom) {
+                  queryParams.append('dateFrom', params.dateFrom);
+                }
+                if (params.dateTo) {
+                  queryParams.append('dateTo', params.dateTo);
+                }
 
                 return `/api/admin/dashboard-stats?${queryParams.toString()}`;
             },

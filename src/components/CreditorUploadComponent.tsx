@@ -73,7 +73,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
     }
 
     // Check filename
-    if (!/^[a-zA-Z0-9\s\-_\.\(\)]+$/i.test(file.name)) {
+    if (!/^[a-zA-Z0-9\s\-_.()]+$/i.test(file.name)) {
       return `Ungültiger Dateiname: "${file.name}". Nur Buchstaben, Zahlen und einfache Sonderzeichen erlaubt.`;
     }
 
@@ -81,7 +81,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   };
 
   const handleFileSelect = (files: FileList | null) => {
-    if (!files) return;
+    if (!files) {
+      return;
+    }
 
     const validFiles: File[] = [];
     const errors: string[] = [];
@@ -250,7 +252,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   };
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) {
+      return '0 Bytes';
+    }
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -276,7 +280,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
       }
 
       // 🧩 Case 2: Existing document from backend
-      if (!client?.id || !fileOrDocument.id) throw new Error("Invalid document reference");
+      if (!client?.id || !fileOrDocument.id) {
+        throw new Error("Invalid document reference");
+      }
 
       const token = localStorage.getItem("token");
       const fileUrl = `${API_BASE_URL}/api/agent-review/${client.id}/document/${fileOrDocument.id}/file`;
@@ -285,7 +291,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) throw new Error("Failed to load file");
+      if (!res.ok) {
+        throw new Error("Failed to load file");
+      }
 
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);

@@ -110,9 +110,15 @@ const InsolvenzantragDownloadButton: React.FC<InsolvenzantragDownloadButtonProps
   };
 
   const getButtonText = () => {
-    if (isLoading) return 'Generiere...';
-    if (!prerequisites) return 'Prüfe...';
-    if (prerequisites.canGenerateInsolvenzantrag) return 'Insolvenzantrag herunterladen';
+    if (isLoading) {
+      return 'Generiere...';
+    }
+    if (!prerequisites) {
+      return 'Prüfe...';
+    }
+    if (prerequisites.canGenerateInsolvenzantrag) {
+      return 'Insolvenzantrag herunterladen';
+    }
     return 'Voraussetzungen nicht erfüllt';
   };
 

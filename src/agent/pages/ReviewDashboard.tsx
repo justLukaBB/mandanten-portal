@@ -810,7 +810,9 @@ const ReviewDashboard: React.FC = () => {
   const loadReviewData = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     try {
-      if (!silent) setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
 
       const token = localStorage.getItem('agent_token');
@@ -855,12 +857,16 @@ const ReviewDashboard: React.FC = () => {
       console.error('❌ Error loading review data:', error);
       setError(error.message || 'Failed to load review data');
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   const handleSaveCorrections = async (corrections: any, action: 'correct' | 'skip' | 'confirm') => {
-    if (!reviewData || !reviewData.documents.need_review[currentDocIndex]) return;
+    if (!reviewData || !reviewData.documents.need_review[currentDocIndex]) {
+      return;
+    }
 
     setSaving(true);
 
@@ -911,7 +917,9 @@ const ReviewDashboard: React.FC = () => {
   };
 
   const handleConfirmAll = async () => {
-    if (!reviewData) return;
+    if (!reviewData) {
+      return;
+    }
 
     setSaving(true);
 

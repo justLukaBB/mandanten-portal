@@ -106,7 +106,9 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
   };
 
   const handleSelectAll = () => {
-    if (!confirmationData) return;
+    if (!confirmationData) {
+      return;
+    }
 
     if (selectedCreditors.size === confirmationData.creditors.length) {
       setSelectedCreditors(new Set());

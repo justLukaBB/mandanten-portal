@@ -69,7 +69,9 @@ const HighConfidenceSummary: React.FC<HighConfidenceSummaryProps> = ({
   });
 
   const formatAmount = (value?: number) => {
-    if (typeof value === 'number' && isFinite(value)) return value.toFixed(2);
+    if (typeof value === 'number' && isFinite(value)) {
+      return value.toFixed(2);
+    }
     return '0.00';
   };
 
@@ -78,8 +80,12 @@ const HighConfidenceSummary: React.FC<HighConfidenceSummaryProps> = ({
   const renderFieldRow = (label: string, original?: any, updated?: any) => {
     const same = original === updated || (formatAmount(original) === formatAmount(updated) && typeof original === 'number' && typeof updated === 'number');
     const display = (val: any) => {
-      if (val === undefined || val === null || val === '') return '—';
-      if (typeof val === 'number') return formatAmount(val);
+      if (val === undefined || val === null || val === '') {
+        return '—';
+      }
+      if (typeof val === 'number') {
+        return formatAmount(val);
+      }
       return String(val);
     };
     return (

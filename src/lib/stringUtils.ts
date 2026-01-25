@@ -1,9 +1,13 @@
 export const truncateFilename = (
   filename: string,
-  maxLength: number = 10
+  maxLength = 10
 ): string => {
-  if (!filename) return '';
-  if (filename.length <= maxLength) return filename;
+  if (!filename) {
+    return '';
+  }
+  if (filename.length <= maxLength) {
+    return filename;
+  }
 
   const parts = filename.split('.');
   if (parts.length > 1) {

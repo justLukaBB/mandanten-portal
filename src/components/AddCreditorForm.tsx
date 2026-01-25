@@ -106,7 +106,9 @@ const AddCreditorForm: React.FC<AddCreditorFormProps> = ({
             toast.success('Gläubiger erfolgreich hinzugefügt');
             reset();
             setIsOpen(false); // Close the form after successful submission
-            if (onSuccess) onSuccess();
+            if (onSuccess) {
+              onSuccess();
+            }
         } catch (err) {
             console.error('Failed to add creditor:', err);
             toast.error('Fehler beim Hinzufügen des Gläubigers');

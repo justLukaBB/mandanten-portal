@@ -53,10 +53,18 @@ const ClientAddressForm: React.FC<ClientAddressFormProps> = ({
 
     const validateForm = (): AddressFormErrors => {
         const newErrors: AddressFormErrors = {};
-        if (!formData.street.trim()) newErrors.street = 'Straße ist erforderlich';
-        if (!formData.house_number.trim()) newErrors.house_number = 'Hausnummer ist erforderlich';
-        if (!formData.zip_code.trim()) newErrors.zip_code = 'PLZ ist erforderlich';
-        if (!formData.city.trim()) newErrors.city = 'Ort ist erforderlich';
+        if (!formData.street.trim()) {
+          newErrors.street = 'Straße ist erforderlich';
+        }
+        if (!formData.house_number.trim()) {
+          newErrors.house_number = 'Hausnummer ist erforderlich';
+        }
+        if (!formData.zip_code.trim()) {
+          newErrors.zip_code = 'PLZ ist erforderlich';
+        }
+        if (!formData.city.trim()) {
+          newErrors.city = 'Ort ist erforderlich';
+        }
         return newErrors;
     };
 

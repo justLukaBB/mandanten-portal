@@ -139,15 +139,23 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   // Enhanced type detection from multiple sources
   const detectFileType = () => {
     // Check document.type first
-    if (document.type?.includes('pdf')) return { isPDF: true, isImage: false };
-    if (document.type?.includes('image')) return { isPDF: false, isImage: true };
+    if (document.type?.includes('pdf')) {
+      return { isPDF: true, isImage: false };
+    }
+    if (document.type?.includes('image')) {
+      return { isPDF: false, isImage: true };
+    }
 
     // Check file extensions from document name
     const fileName = document.filename || document.name || '';
     const lowerName = fileName.toLowerCase();
 
-    if (lowerName.endsWith('.pdf')) return { isPDF: true, isImage: false };
-    if (/\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(lowerName)) return { isPDF: false, isImage: true };
+    if (lowerName.endsWith('.pdf')) {
+      return { isPDF: true, isImage: false };
+    }
+    if (/\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(lowerName)) {
+      return { isPDF: false, isImage: true };
+    }
 
     // Check blob content type if available
     if (documentUrl) {
