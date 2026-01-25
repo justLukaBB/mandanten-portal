@@ -299,10 +299,10 @@ const PortalLogin: React.FC = () => {
                     required
                     value={aktenzeichen}
                     onChange={(e) => {
-                      setAktenzeichen(e.target.value.toUpperCase());
+                      setAktenzeichen(e.target.value);
                       setError('');
                     }}
-                    className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200 uppercase"
+                    className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
                   />
                 </div>
               </div>

@@ -336,9 +336,10 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     });
                 }
 
-                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase();
+                // Normalize: trim, uppercase, replace / with _
+                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase().replace(/\//g, '_');
                 const normalizedEmail = email.toString().trim().toLowerCase();
-                console.log(`🔐 Verification code requested for: ${normalizedAktenzeichen} / ${normalizedEmail}`);
+                console.log(`🔐 Verification code requested for: ${normalizedAktenzeichen}`);
 
                 // Find client by aktenzeichen
                 let foundClient = null;
@@ -421,7 +422,8 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     });
                 }
 
-                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase();
+                // Normalize: trim, uppercase, replace / with _
+                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase().replace(/\//g, '_');
                 const normalizedCode = code.toString().trim();
 
                 console.log(`🔐 Verification attempt for: ${normalizedAktenzeichen}`);

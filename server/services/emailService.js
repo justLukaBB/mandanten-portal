@@ -94,9 +94,9 @@ class EmailService {
                 © ${new Date().getFullYear()} Scuric. Alle Rechte vorbehalten.
               </p>
               <p style="margin: 8px 0 0; font-size: 12px; color: #9ca3af; text-align: center;">
-                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280;">Impressum</a>
-                &nbsp;•&nbsp;
-                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280;">Datenschutz</a>
+                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
+                <span style="color: #9ca3af;"> • </span>
+                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
               </p>
             </td>
           </tr>
