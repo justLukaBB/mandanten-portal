@@ -15,6 +15,232 @@ class FirstRoundDocumentGenerator {
   }
 
   /**
+   * Escape special regex characters in a string
+   */
+  escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Normalize template variables that are split across multiple XML elements
+   * Word sometimes splits variables like "Name" across multiple <w:t> tags
+   * This method consolidates them so Docxtemplater can find them
+   */
+  normalizeTemplateVariables(documentXml) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:29',message:'normalizeTemplateVariables entry',data:{xmlLength:documentXml.length,xmlSample:documentXml.substring(0,500),hasQuotEntities:documentXml.includes('&quot;')},timestamp:Date.now(),sessionId:'debug-session',runId:'run9',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    console.log('   🔧 Starting template variable normalization...');
+
+    // STEP 1: Normalize HTML entities to literal quotes for pattern matching
+    // Word often uses &quot; instead of " in XML, but Docxtemplater expects "
+    const hasQuotEntities = documentXml.includes('&quot;');
+    if (hasQuotEntities) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:36',message:'normalizing quot entities',data:{beforeLength:documentXml.length,quotCount:(documentXml.match(/&quot;/g)||[]).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run9',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      // Replace &quot; with " - safe because we're only processing document.xml content
+      // and template variables are the only place using quotes in text content
+      documentXml = documentXml.replace(/&quot;/g, '"');
+      console.log('   🔧 Normalized &quot; entities to " for pattern matching');
+    }
+    
+    // STEP 2: Use a simpler, more direct approach
+    // Instead of complex regex patterns, find variable text and replace the entire XML section
+    // This approach is more robust and handles any XML structure
+
+    // Known template variables from prepareTemplateData
+    const knownVariables = [
+      'Adresse des Creditors',
+      'Adresse des Creditor',
+      'Creditor',
+      'Creditors',
+      'Aktenzeichen des Credtiors',
+      'Aktenzeichen des Creditors',
+      'Name',
+      'Geburtstag',
+      'Adresse',
+      'Aktenzeichen des Mandanten',
+      'heutiges Datum',
+      'Datum in 14 Tagen'
+    ];
+
+    let fixCount = 0;
+    const originalLength = documentXml.length;
+
+    // Debug: Log all quoted text patterns found in XML to understand structure
+    const allQuotedMatches = documentXml.match(/<w:t[^>]*>"[^<]*<\/w:t>/g) || [];
+    const splitQuotedMatches = documentXml.match(/"[^<]*<\/w:t><\/w:r>[\s\S]{0,200}<w:r[^>]*><w:t[^>]*>[^<]*"/g) || [];
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:64',message:'debug quoted patterns',data:{allQuotedCount:allQuotedMatches.length,splitQuotedCount:splitQuotedMatches.length,allQuotedSamples:allQuotedMatches.slice(0,5),splitQuotedSamples:splitQuotedMatches.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    if (allQuotedMatches.length > 0 || splitQuotedMatches.length > 0) {
+      console.log(`   🔍 Found ${allQuotedMatches.length} simple quoted patterns and ${splitQuotedMatches.length} split quoted patterns`);
+    }
+
+    // NEW APPROACH: Extract all text runs and find variables, then reconstruct
+    // This is more reliable than complex regex patterns
+    knownVariables.forEach(variable => {
+      const escapedVar = this.escapeRegex(variable);
+      const words = variable.split(/\s+/);
+      const quotedVariable = `"${variable}"`;
+      
+      // Check if already consolidated
+      if (documentXml.includes(`<w:t[^>]*>${quotedVariable}</w:t>`)) {
+        console.log(`   ✅ Variable "${variable}" is already consolidated`);
+        return;
+      }
+      
+      // SIMPLIFIED APPROACH: Find pattern "FirstWord...LastWord" and replace entire XML section
+      if (words.length > 1) {
+        // Multi-word variable: <w:t>"FirstWord</w:t>...ANY_XML...<w:t>LastWord"</w:t>
+        const firstWord = words[0];
+        const lastWord = words[words.length - 1];
+        
+        // Pattern: <w:t>"FirstWord...LastWord"</w:t> (allowing any XML between)
+        const searchPattern = new RegExp(
+          `(<w:t[^>]*>)"${this.escapeRegex(firstWord)}([\\s\\S]*?)${this.escapeRegex(lastWord)}"([^<]*</w:t>)`,
+          'g'
+        );
+        
+        const matches = [];
+        let match;
+        while ((match = searchPattern.exec(documentXml)) !== null) {
+          const fullMatch = match[0];
+          
+          // Verify all words are present in the match
+          let hasAllWords = true;
+          for (const word of words) {
+            if (!fullMatch.includes(word)) {
+              hasAllWords = false;
+              break;
+            }
+          }
+          
+          if (hasAllWords) {
+            matches.push({
+              fullMatch: fullMatch,
+              openingTag: match[1],
+              closingPart: match[3],
+              index: match.index
+            });
+          }
+        }
+        
+        // Replace matches in reverse order to avoid index shifting
+        if (matches.length > 0) {
+          for (let i = matches.length - 1; i >= 0; i--) {
+            const m = matches[i];
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:110',message:'simplified pattern match',data:{variable,fullMatch:m.fullMatch.substring(0,400),matchesCount:matches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run11',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            console.log(`      ✅ Consolidating "${variable}" using simplified pattern (${matches.length} match(es))...`);
+            documentXml = documentXml.substring(0, m.index) + 
+                         `${m.openingTag}"${variable}"${m.closingPart}` + 
+                         documentXml.substring(m.index + m.fullMatch.length);
+            fixCount++;
+          }
+        } else {
+          console.log(`   ⚠️ Could not consolidate "${variable}" - simplified pattern not found`);
+        }
+      } else {
+        // Single-word variable: <w:t>"Variable"</w:t> or <w:t>"Var</w:t>...<w:t>iable"</w:t>
+        const singlePattern = new RegExp(
+          `(<w:t[^>]*>)"([^<]*</w:t>[\\s\\S]*?<w:t[^>]*>)${escapedVar}"([^<]*</w:t>)`,
+          'g'
+        );
+        
+        const singleMatches = [];
+        let singleMatch;
+        while ((singleMatch = singlePattern.exec(documentXml)) !== null) {
+          singleMatches.push({
+            fullMatch: singleMatch[0],
+            openingTag: singleMatch[1],
+            closingPart: singleMatch[3],
+            index: singleMatch.index
+          });
+        }
+        
+        if (singleMatches.length > 0) {
+          for (let i = singleMatches.length - 1; i >= 0; i--) {
+            const m = singleMatches[i];
+            console.log(`      ✅ Consolidating single-word "${variable}"...`);
+            documentXml = documentXml.substring(0, m.index) + 
+                         `${m.openingTag}"${variable}"${m.closingPart}` + 
+                         documentXml.substring(m.index + m.fullMatch.length);
+            fixCount++;
+          }
+        }
+      }
+    });
+
+    // Additional pattern to handle any quoted text that looks like a variable
+    // This catches variables we might not know about
+    const generalPattern = /(<w:t[^>]*>)"([^<]*<\/w:t><\/w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>)([A-Z\u00c4\u00d6\u00dc][a-z\u00e4\u00f6\u00fc\u00df]+(?:\s+[a-z\u00e4\u00f6\u00fc\u00dfA-Z\u00c4\u00d6\u00dc]+)*?)([^<]*<\/w:t><\/w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>)"([^<]*<\/w:t>)/g;
+
+    documentXml = documentXml.replace(generalPattern, (match, p1, p2, varName, p4, p5) => {
+      // Check if this looks like a template variable (starts with capital letter, reasonable length)
+      if (varName.length > 0 && varName.length < 50 && /^[A-Z\u00c4\u00d6\u00dc]/.test(varName)) {
+        console.log(`      🔍 Found potential split variable "${varName}" - consolidating...`);
+        fixCount++;
+        return `${p1}"${varName}"${p5}`;
+      }
+      return match; // No change if it doesn't look like a variable
+    });
+
+    // Final check: Verify variables are now in consolidated form
+    const consolidatedVars = [];
+    const unconsolidatedVars = [];
+    knownVariables.forEach(variable => {
+      const quotedVar = `"${variable}"`;
+      // Check if variable exists in consolidated form (within a single <w:t> tag)
+      const consolidatedPattern = new RegExp(`<w:t[^>]*>${this.escapeRegex(quotedVar)}</w:t>`, 'g');
+      const consolidatedMatches = documentXml.match(consolidatedPattern);
+      
+      // Check if variable might still be split
+      const words = variable.split(/\s+/);
+      if (words.length > 1) {
+        // Look for first word and last word in separate tags
+        const splitPattern = new RegExp(
+          `<w:t[^>]*>[^<]*${this.escapeRegex(words[0])}[^<]*</w:t>[\\s\\S]{0,500}?<w:t[^>]*>[^<]*${this.escapeRegex(words[words.length - 1])}[^<]*</w:t>`,
+          'g'
+        );
+        const splitMatches = documentXml.match(splitPattern);
+        if (splitMatches && splitMatches.length > 0 && (!consolidatedMatches || consolidatedMatches.length === 0)) {
+          unconsolidatedVars.push(variable);
+        }
+      }
+      
+      if (consolidatedMatches && consolidatedMatches.length > 0) {
+        consolidatedVars.push(variable);
+      }
+    });
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:280',message:'normalizeTemplateVariables exit',data:{fixCount,originalLength,afterLength:documentXml.length,consolidatedVars,unconsolidatedVars},timestamp:Date.now(),sessionId:'debug-session',runId:'run5',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
+    if (fixCount > 0) {
+      console.log(`   ✅ Normalized ${fixCount} split template variable(s)`);
+      if (consolidatedVars.length > 0) {
+        console.log(`   ✅ Verified ${consolidatedVars.length} variables are now consolidated`);
+      }
+      if (unconsolidatedVars.length > 0) {
+        console.log(`   ⚠️ ${unconsolidatedVars.length} variables may still be split: ${unconsolidatedVars.join(', ')}`);
+      }
+    } else if (originalLength !== documentXml.length) {
+      console.log(`   ✅ Normalized template variables (XML length: ${originalLength} → ${documentXml.length})`);
+    } else {
+      console.log('   ℹ️ No split template variables found');
+      if (unconsolidatedVars.length > 0) {
+        console.log(`   ⚠️ Warning: ${unconsolidatedVars.length} variables may be split but not matched: ${unconsolidatedVars.join(', ')}`);
+      }
+    }
+
+    return documentXml;
+  }
+
+  /**
    * Generate DOCX files for all creditors
    */
   async generateCreditorDocuments(clientData, creditors, client) {
@@ -102,6 +328,20 @@ class FirstRoundDocumentGenerator {
       // Read the template file
       const templateContent = await fs.readFile(this.templatePath);
       const zip = new PizZip(templateContent);
+
+      // Get document XML
+      let documentXml = zip.file('word/document.xml').asText();
+
+      // NORMALIZE: Consolidate split template variables
+      documentXml = this.normalizeTemplateVariables(documentXml);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:247',message:'after normalization, before Docxtemplater',data:{xmlLength:documentXml.length,variablesInXml:documentXml.match(/"[^"]{3,40}"/g)?.slice(0,10)||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      // Update the zip with normalized XML
+      zip.file('word/document.xml', documentXml);
+
+      // Now create Docxtemplater with normalized XML
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
@@ -131,9 +371,37 @@ class FirstRoundDocumentGenerator {
 
       // Render the document with the data
       try {
+        // Get document XML before rendering to check for variables
+        const xmlBefore = doc.getZip().files['word/document.xml'].asText();
+        const variableMatches = xmlBefore.match(/"[^"]{3,40}"/g);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:283',message:'before render',data:{variablesFound:variableMatches?.slice(0,10)||[],templateDataKeys:Object.keys(templateData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        if (variableMatches) {
+          console.log('🔍 Found potential template variables in XML:', variableMatches.slice(0, 10));
+        }
+        
         doc.render(templateData);
         console.log('✅ Document rendered successfully');
+        
+        // Check if variables were replaced
+        const xmlAfter = doc.getZip().files['word/document.xml'].asText();
+        const stillPresent = Object.keys(templateData).filter(key => {
+          const searchKey = `"${key}"`;
+          return xmlAfter.includes(searchKey);
+        });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:294',message:'after render',data:{stillPresent,allReplaced:stillPresent.length===0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        if (stillPresent.length > 0) {
+          console.warn('⚠️ Variables not replaced:', stillPresent);
+        } else {
+          console.log('✅ All variables were replaced');
+        }
       } catch (renderError) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:303',message:'render error',data:{error:renderError.message,properties:renderError.properties,stack:renderError.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         console.error('❌ Error rendering document:', renderError.message);
         if (renderError.properties) {
           console.error('   Missing variables:', renderError.properties);
@@ -1325,33 +1593,34 @@ class FirstRoundDocumentGenerator {
       });
     };
 
+    const creditorAddress = `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`;
+    const creditorName = creditor.actual_creditor || creditor.sender_name || "Unbekannter Gläubiger";
+    const creditorReference = creditor.reference_number || creditor.creditor_reference || creditor.reference || creditor.aktenzeichen || "Nicht verfügbar";
+    const clientName = clientData.name;
+    const clientBirthdate = clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar";
+    const clientAddress = this.formatClientAddress(clientData);
+    const clientReference = clientData.reference;
+    const todayDate = formatGermanDate(today);
+    const responseDateFormatted = formatGermanDate(responseDate);
+
     return {
-      // Creditor information
-      // "Adresse des Creditors": this.formatCreditorAddress(creditor),
-      "Adresse des Creditors": `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
-
-      Creditor:
-        creditor.actual_creditor ||
-        creditor.sender_name ||
-        "Unbekannter Gläubiger",
-
-      "Aktenzeichen des Credtiors":
-        creditor.reference_number ||
-        creditor.creditor_reference ||
-        creditor.reference ||
-        creditor.aktenzeichen ||
-        "Nicht verfügbar",
+      // Creditor information - support both "Creditors" and "Creditor" variants
+      "Adresse des Creditors": creditorAddress, // Template has "Creditors" with "s"
+      "Adresse des Creditor": creditorAddress, // Fallback without "s"
+      Creditor: creditorName,
+      Creditors: creditorName, // Variant with "s" in template
+      "Aktenzeichen des Credtiors": creditorReference,
+      "Aktenzeichen des Creditors": creditorReference, // Variant with "s"
 
       // Client information
-      Name: clientData.name,
-      Geburtstag:
-        clientData.birthdate || clientData.dateOfBirth || "Nicht verfügbar",
-      Adresse: this.formatClientAddress(clientData),
-      "Aktenzeichen des Mandanten": clientData.reference,
+      Name: clientName,
+      Geburtstag: clientBirthdate,
+      Adresse: clientAddress,
+      "Aktenzeichen des Mandanten": clientReference,
 
       // Dates
-      "heutiges Datum": formatGermanDate(today),
-      "Datum in 14 Tagen": formatGermanDate(responseDate),
+      "heutiges Datum": todayDate,
+      "Datum in 14 Tagen": responseDateFormatted,
     };
   }
 
