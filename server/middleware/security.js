@@ -22,8 +22,60 @@ const rateLimits = {
   upload: createRateLimit(60 * 60 * 1000, 20, 'Too many uploads, please try again in 1 hour'),
 
   // Admin endpoints - high limit for dashboard
-  admin: createRateLimit(15 * 60 * 1000, 200, 'Too many admin requests, please try again later')
+  admin: createRateLimit(15 * 60 * 1000, 200, 'Too many admin requests, please try again later'),
+
+  // Verification code request - 3 requests per 15 minutes per aktenzeichen
+  verificationCodeRequest: createAktenzeichenRateLimit(15 * 60 * 1000, 3, 'Zu viele Code-Anfragen. Bitte warten Sie 15 Minuten.'),
+
+  // Verification code attempts - 10 attempts per 15 minutes per aktenzeichen
+  verificationAttempt: createAktenzeichenRateLimit(15 * 60 * 1000, 10, 'Zu viele Verifizierungsversuche. Bitte warten Sie 15 Minuten.')
 };
+
+// Aktenzeichen-based rate limiting (not IP-based)
+function createAktenzeichenRateLimit(windowMs, max, message) {
+  const requests = new Map(); // aktenzeichen -> { count, resetAt }
+
+  return (req, res, next) => {
+    const aktenzeichen = (req.body?.aktenzeichen || '').toString().toUpperCase().trim();
+
+    if (!aktenzeichen) {
+      return next(); // No aktenzeichen provided, skip rate limiting
+    }
+
+    const now = Date.now();
+    const entry = requests.get(aktenzeichen);
+
+    // Cleanup expired entries periodically
+    if (Math.random() < 0.01) { // 1% chance to cleanup on each request
+      for (const [key, value] of requests.entries()) {
+        if (now > value.resetAt) {
+          requests.delete(key);
+        }
+      }
+    }
+
+    if (!entry || now > entry.resetAt) {
+      // New window
+      requests.set(aktenzeichen, {
+        count: 1,
+        resetAt: now + windowMs
+      });
+      return next();
+    }
+
+    if (entry.count >= max) {
+      const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
+      res.set('Retry-After', retryAfterSeconds.toString());
+      return res.status(429).json({
+        error: message,
+        retry_after_seconds: retryAfterSeconds
+      });
+    }
+
+    entry.count++;
+    return next();
+  };
+}
 
 // Security headers middleware
 const securityHeaders = helmet({

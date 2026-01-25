@@ -19,7 +19,19 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
     // Public/Shared Routes (Make Password)
     router.post('/client/make-new-password', controller.handleMakeNewPassword);
 
-    // Portal Login (Public)
+    // Portal Login - Request Verification Code (Public)
+    router.post('/portal/request-verification-code',
+        rateLimits.verificationCodeRequest,
+        controller.handleRequestVerificationCode
+    );
+
+    // Portal Login - Verify Code (Public)
+    router.post('/portal/verify-code',
+        rateLimits.verificationAttempt,
+        controller.handleVerifyCode
+    );
+
+    // Portal Login (Legacy - kept for backward compatibility)
     router.post('/portal/login',
         rateLimits.auth,
         (req, res, next) => next(), // Pass through (controller handles validation)

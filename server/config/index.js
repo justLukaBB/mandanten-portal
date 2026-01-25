@@ -22,6 +22,9 @@ const config = {
   ZENDESK_SUBDOMAIN: process.env.ZENDESK_SUBDOMAIN,
   ZENDESK_EMAIL: process.env.ZENDESK_EMAIL,
   ZENDESK_TOKEN: process.env.ZENDESK_TOKEN,
+
+  // Email (Resend)
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
   
   // File Upload
   MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 10485760, // 10MB

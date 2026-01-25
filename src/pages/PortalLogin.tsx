@@ -1,91 +1,134 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
+type LoginStep = 'aktenzeichen' | 'verification';
+
 const PortalLogin: React.FC = () => {
   const navigate = useNavigate();
-  const [credentials, setCredentials] = useState({
-    email: '',
-    password: ''
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+
+  // Step management
+  const [step, setStep] = useState<LoginStep>('aktenzeichen');
+
+  // Form state
+  const [aktenzeichen, setAktenzeichen] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
+
+  // UI state
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isPasswordSet, setIsPasswordSet] = useState<boolean | null>(null);
-  const [checkingPasswordStatus, setCheckingPasswordStatus] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
 
-  // Check password status when email is entered
-  const checkPasswordStatus = async (email: string) => {
-    if (!email || !email.includes('@')) {
+  // Refs
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup cooldown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Auto-focus code input when entering verification step
+  useEffect(() => {
+    if (step === 'verification' && codeInputRef.current) {
+      codeInputRef.current.focus();
+    }
+  }, [step]);
+
+  // Start cooldown timer
+  const startResendCooldown = (seconds: number = 60) => {
+    setResendCooldown(seconds);
+
+    if (cooldownIntervalRef.current) {
+      clearInterval(cooldownIntervalRef.current);
+    }
+
+    cooldownIntervalRef.current = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) {
+          if (cooldownIntervalRef.current) {
+            clearInterval(cooldownIntervalRef.current);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Handle requesting verification code
+  const handleRequestCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!aktenzeichen.trim()) {
+      setError('Bitte geben Sie Ihr Aktenzeichen ein.');
       return;
     }
-    
-    setCheckingPasswordStatus(true);
-    try {
-      // Try to login with just email to check password status
-      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, {
-        email: email,
-        aktenzeichen: 'dummy_check' // This will fail but we can check the response
-      });
-      
-      // If we get here, it means login succeeded (unlikely with dummy aktenzeichen)
-      setIsPasswordSet(false);
-    } catch (error: any) {
-      // Check if the error indicates password is required
-      if (error.response?.data?.error?.includes('Passwort') || 
-          error.response?.data?.error?.includes('password')) {
-        setIsPasswordSet(true);
-      } else if (error.response?.data?.error?.includes('Aktenzeichen')) {
-        setIsPasswordSet(false);
-      } else {
-        // If it's a different error, we can't determine the status
-        setIsPasswordSet(null);
-      }
-    } finally {
-      setCheckingPasswordStatus(false);
-    }
-  };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCredentials(prev => ({ ...prev, [name]: value }));
-    
-    // Check password status when email changes
-    if (name === 'email') {
-      checkPasswordStatus(value);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Clear any previous errors but keep credentials
     setError('');
     setLoading(true);
 
     try {
-      console.log('🔄 Attempting login with credentials:', {
-        email: credentials.email,
-        hasPassword: !!credentials.password
+      console.log('🔄 Requesting verification code for:', aktenzeichen);
+
+      const response = await axios.post(`${API_BASE_URL}/api/portal/request-verification-code`, {
+        aktenzeichen: aktenzeichen.trim()
       });
 
-      // For now, we'll adapt the new design to work with existing aktenzeichen backend
-      // TODO: Update backend to support password-based login
-      // Replace "/" with "_" in password before sending to backend
-      const processedPassword = credentials.password.replace(/\//g, '_');
-      
-      const loginData = {
-        email: credentials.email,
-        aktenzeichen: processedPassword // Temporarily map password to aktenzeichen
-      };
+      if (response.data.success) {
+        console.log('✅ Verification code sent');
+        setMaskedEmail(response.data.masked_email || '***@***.de');
+        setStep('verification');
+        setVerificationCode('');
+        setAttemptsRemaining(null);
+        startResendCooldown(60);
+      } else {
+        setError(response.data.error || 'Fehler beim Senden des Codes.');
+      }
+    } catch (error: any) {
+      console.error('❌ Error requesting code:', error);
 
-      const response = await axios.post(`${API_BASE_URL}/api/portal/login`, loginData);
+      if (error.response?.status === 429) {
+        const retryAfter = error.response.data?.retry_after_seconds || 60;
+        setError(`Zu viele Anfragen. Bitte warten Sie ${Math.ceil(retryAfter / 60)} Minute(n).`);
+      } else {
+        setError(error.response?.data?.error || 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (response.data && response.data.success) {
-        console.log('✅ Login API call successful');
+  // Handle verifying the code
+  const handleVerifyCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!verificationCode.trim() || verificationCode.length !== 6) {
+      setError('Bitte geben Sie den 6-stelligen Code ein.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔄 Verifying code for:', aktenzeichen);
+
+      const response = await axios.post(`${API_BASE_URL}/api/portal/verify-code`, {
+        aktenzeichen: aktenzeichen.trim(),
+        code: verificationCode.trim()
+      });
+
+      if (response.data.success) {
+        console.log('✅ Verification successful');
 
         // Store all required data
         const sessionToken = response.data.session_token;
@@ -93,7 +136,7 @@ const PortalLogin: React.FC = () => {
         const clientId = response.data.client.id;
         const clientData = JSON.stringify(response.data.client);
 
-        // Store tokens synchronously
+        // Store tokens
         localStorage.clear();
         localStorage.setItem("active_role", "portal");
         localStorage.setItem('portal_session_token', sessionToken);
@@ -106,67 +149,69 @@ const PortalLogin: React.FC = () => {
         // Dispatch custom event to notify ProtectedRoute
         window.dispatchEvent(new CustomEvent('loginSuccess'));
 
-        // Navigate immediately without setTimeout
+        // Navigate to portal
         console.log('🚀 Navigating to portal...');
         navigate(`/portal/${clientId}`, { replace: true });
-
       } else {
-        console.error('❌ Login failed - invalid response structure:', response.data);
-        setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.');
+        setError(response.data.error || 'Verifizierung fehlgeschlagen.');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      console.error('❌ Error verifying code:', error);
 
-      // Handle different types of errors
-      if (error.response) {
-        // Server responded with error status
-        const serverMessage = error.response.data?.error || error.response.data?.message;
-        if (serverMessage) {
-          setError(serverMessage);
-        } else if (error.response.status === 401) {
-          setError('Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.');
-        } else if (error.response.status === 429) {
-          setError('Zu viele Login-Versuche. Bitte warten Sie einen Moment.');
-        } else {
-          setError(`Server-Fehler (${error.response.status}). Bitte versuchen Sie es später erneut.`);
+      if (error.response?.status === 401) {
+        const errorData = error.response.data;
+        setError(errorData.error || 'Ungültiger Code.');
+
+        if (errorData.attempts_remaining !== undefined) {
+          setAttemptsRemaining(errorData.attempts_remaining);
         }
-      } else if (error.request) {
-        // Network error
-        setError('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.');
+      } else if (error.response?.status === 429) {
+        const retryAfter = error.response.data?.retry_after_seconds || 60;
+        setError(`Zu viele Versuche. Bitte warten Sie ${Math.ceil(retryAfter / 60)} Minute(n).`);
       } else {
-        // Other error
-        setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+        setError(error.response?.data?.error || 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Load saved email on mount
-  useEffect(() => {
-    const savedEmail = localStorage.getItem('savedEmail');
-    if (savedEmail) {
-      setCredentials(prev => ({ ...prev, email: savedEmail }));
-      setRememberMe(true);
-    }
-  }, []);
+  // Handle resending code
+  const handleResendCode = () => {
+    if (resendCooldown > 0) return;
+    handleRequestCode();
+  };
 
-  // Save email when remember me is checked
-  useEffect(() => {
-    if (rememberMe && credentials.email) {
-      localStorage.setItem('savedEmail', credentials.email);
-    } else {
-      localStorage.removeItem('savedEmail');
+  // Handle going back to aktenzeichen step
+  const handleBack = () => {
+    setStep('aktenzeichen');
+    setVerificationCode('');
+    setError('');
+    setAttemptsRemaining(null);
+  };
+
+  // Handle code input change (only allow digits, auto-submit on 6 digits)
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setVerificationCode(value);
+    setError('');
+
+    // Auto-submit when 6 digits entered
+    if (value.length === 6) {
+      setTimeout(() => {
+        handleVerifyCode();
+      }, 100);
     }
-  }, [rememberMe, credentials.email]);
+  };
+
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-200 flex justify-start items-center">
         <div className="h-8 md:h-10">
-          <img 
-            src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" 
-            alt="Scuric Logo" 
+          <img
+            src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png"
+            alt="Scuric Logo"
             className="h-full object-contain"
           />
         </div>
@@ -181,115 +226,166 @@ const PortalLogin: React.FC = () => {
               Willkommen im Mandanten Portal
             </h1>
             <p className="text-base text-gray-600">
-              Melden Sie sich an, um fortzufahren
+              {step === 'aktenzeichen'
+                ? 'Geben Sie Ihr Aktenzeichen ein, um einen Anmeldecode zu erhalten'
+                : 'Geben Sie den Code ein, den wir an Ihre E-Mail gesendet haben'}
             </p>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-4">
-              <div className="relative">
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  placeholder="E-Mail-Adresse"
-                  autoComplete="email"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck="false"
-                  required
-                  value={credentials.email}
-                  onChange={handleInputChange}
-                  className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
-                />
+          {/* Step 1: Aktenzeichen Input */}
+          {step === 'aktenzeichen' && (
+            <form onSubmit={handleRequestCode} className="space-y-5">
+              <div className="space-y-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="aktenzeichen"
+                    placeholder="Aktenzeichen (z.B. ABC-2024-001)"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    required
+                    value={aktenzeichen}
+                    onChange={(e) => {
+                      setAktenzeichen(e.target.value.toUpperCase());
+                      setError('');
+                    }}
+                    className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200 uppercase"
+                  />
+                </div>
               </div>
 
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  name="password"
-                  placeholder="Passwort"
-                  autoComplete="current-password"
-                  required
-                  value={credentials.password}
-                  onChange={handleInputChange}
-                  className="w-full h-12 bg-gray-50 border border-gray-300 rounded-lg px-4 pr-12 text-base text-gray-900 placeholder-gray-500 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
-                />
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="pt-2">
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-100 transition-colors"
+                  type="submit"
+                  disabled={loading || !aktenzeichen.trim()}
+                  className={`w-full h-12 ${
+                    aktenzeichen.trim()
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-gray-900 hover:bg-black'
+                  } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
                 >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-400" />
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Code wird gesendet...
+                    </div>
                   ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-400" />
+                    'Code anfordern'
                   )}
                 </button>
               </div>
-            </div>
+            </form>
+          )}
 
-            <div className="flex items-center pt-1">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  id="remember"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-gray-800 bg-gray-50 border border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
-                />
-                <span className="text-gray-700 font-medium text-sm">Angemeldet bleiben</span>
-              </label>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
+          {/* Step 2: Verification Code Input */}
+          {step === 'verification' && (
+            <div className="space-y-5">
+              {/* Email Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                <EnvelopeIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-blue-800">
+                    Ein 6-stelliger Code wurde an <strong>{maskedEmail}</strong> gesendet.
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Der Code ist 5 Minuten gültig.
+                  </p>
+                </div>
               </div>
-            )}
 
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={loading || !credentials.email.trim() || !credentials.password.trim()}
-                className={`w-full h-12 ${
-                  credentials.email.trim() && credentials.password.trim() 
-                    ? 'bg-green-600 hover:bg-green-700' 
-                    : 'bg-gray-900 hover:bg-black'
-                } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Wird geladen...
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                {/* Code Input */}
+                <div className="relative">
+                  <input
+                    ref={codeInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    id="verificationCode"
+                    placeholder="000000"
+                    autoComplete="one-time-code"
+                    required
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={handleCodeChange}
+                    className="w-full h-14 bg-gray-50 border border-gray-300 rounded-lg px-4 text-2xl text-center font-mono tracking-[0.5em] text-gray-900 placeholder-gray-300 transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+                  />
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                    {attemptsRemaining !== null && attemptsRemaining > 0 && (
+                      <span className="block mt-1 text-xs">
+                        {attemptsRemaining} Versuch(e) verbleibend
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  'Anmelden'
                 )}
-              </button>
-            </div>
 
-            <div className="text-center pt-4">
-              <button 
-                type="button"
-                onClick={() => {
-                  alert('Passwort-Wiederherstellung wurde an Ihre E-Mail gesendet.');
-                }}
-                className="text-red-600 hover:text-red-700 font-medium text-sm transition-colors bg-transparent border-none cursor-pointer hover:underline"
-              >
-                Passwort vergessen?
-              </button>
+                <button
+                  type="submit"
+                  disabled={loading || verificationCode.length !== 6}
+                  className={`w-full h-12 ${
+                    verificationCode.length === 6
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-gray-900 hover:bg-black'
+                  } disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg transition-all duration-200 hover:shadow-md`}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Wird überprüft...
+                    </div>
+                  ) : (
+                    'Verifizieren'
+                  )}
+                </button>
+              </form>
+
+              {/* Resend & Back Buttons */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="flex items-center gap-1 text-gray-600 hover:text-gray-900 font-medium text-sm transition-colors"
+                >
+                  <ArrowLeftIcon className="h-4 w-4" />
+                  Zurück
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0 || loading}
+                  className={`text-sm font-medium transition-colors ${
+                    resendCooldown > 0 || loading
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-red-600 hover:text-red-700 hover:underline'
+                  }`}
+                >
+                  {resendCooldown > 0
+                    ? `Code erneut senden (${resendCooldown}s)`
+                    : 'Code erneut senden'}
+                </button>
+              </div>
             </div>
-          </form>
+          )}
 
           {/* Media Section */}
           <div className="text-center mt-16 pt-12 border-t border-gray-200">
             <p className="text-sm text-gray-500 mb-6 font-medium">Bekannt aus:</p>
             <div className="flex justify-center">
-              <img 
-                src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" 
+              <img
+                src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png"
                 alt="Bekannt aus verschiedenen Medien"
                 className="max-w-full h-auto max-h-12 object-contain opacity-60 hover:opacity-80 transition-opacity"
               />
@@ -299,18 +395,18 @@ const PortalLogin: React.FC = () => {
           {/* Footer */}
           <div className="text-center mt-12 pt-8">
             <div className="mb-4">
-              <a 
-                href="https://www.schuldnerberatung-anwalt.de/impressum/" 
-                target="_blank" 
+              <a
+                href="https://www.schuldnerberatung-anwalt.de/impressum/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-500 hover:text-red-600 text-sm transition-colors hover:underline"
               >
                 Impressum
               </a>
               <span className="text-gray-400 mx-3 text-sm">•</span>
-              <a 
-                href="https://www.schuldnerberatung-anwalt.de/datenschutz/" 
-                target="_blank" 
+              <a
+                href="https://www.schuldnerberatung-anwalt.de/datenschutz/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-500 hover:text-red-600 text-sm transition-colors hover:underline"
               >

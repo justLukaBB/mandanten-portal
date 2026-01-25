@@ -8,6 +8,8 @@ const DocumentGenerator = require('../services/documentGenerator');
 const CreditorContactService = require('../services/creditorContactService');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const verificationCodeService = require('../services/verificationCodeService');
+const emailService = require('../services/emailService');
 
 // Helper function definitions (moved from server.js)
 
@@ -313,6 +315,174 @@ async function processFinancialDataAndGenerateDocuments({ client, garnishmentRes
 
 const createClientPortalController = ({ Client, getClient, safeClientUpdate }) => {
     return {
+        /**
+         * Request a verification code for login
+         * POST /api/portal/request-verification-code
+         * Body: { aktenzeichen }
+         */
+        handleRequestVerificationCode: async (req, res) => {
+            try {
+                const { aktenzeichen } = req.body;
+
+                if (!aktenzeichen || aktenzeichen.trim() === '') {
+                    return res.status(400).json({
+                        error: 'Aktenzeichen ist erforderlich'
+                    });
+                }
+
+                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase();
+                console.log(`🔐 Verification code requested for: ${normalizedAktenzeichen}`);
+
+                // Find client by aktenzeichen
+                let foundClient = null;
+                try {
+                    foundClient = await Client.findOne({ aktenzeichen: { $regex: new RegExp(`^${normalizedAktenzeichen}$`, 'i') } });
+                } catch (error) {
+                    console.error('Error searching client:', error);
+                }
+
+                // SECURITY: Always return success response to prevent enumeration attacks
+                // Even if client not found, pretend we sent the email
+                if (!foundClient) {
+                    console.log(`⚠️ No client found for aktenzeichen: ${normalizedAktenzeichen} (returning generic success)`);
+                    return res.json({
+                        success: true,
+                        message: 'Wenn dieses Aktenzeichen existiert, wurde ein Code an die hinterlegte E-Mail-Adresse gesendet.',
+                        masked_email: 'v***@***.de',
+                        expires_in_seconds: 300
+                    });
+                }
+
+                if (!foundClient.email) {
+                    console.log(`⚠️ Client found but no email: ${normalizedAktenzeichen}`);
+                    return res.status(400).json({
+                        error: 'Keine E-Mail-Adresse für dieses Aktenzeichen hinterlegt. Bitte kontaktieren Sie uns.'
+                    });
+                }
+
+                // Generate verification code
+                const { code, expiresInSeconds } = verificationCodeService.createCode(normalizedAktenzeichen, foundClient.email);
+
+                // Send email
+                const emailResult = await emailService.sendVerificationCode(foundClient.email, code, 5);
+
+                if (!emailResult.success && !emailResult.devMode) {
+                    console.error(`❌ Failed to send verification email: ${emailResult.error}`);
+                    return res.status(500).json({
+                        error: 'E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.'
+                    });
+                }
+
+                // Mask email for response
+                const maskedEmail = emailService.maskEmail(foundClient.email);
+
+                console.log(`✅ Verification code sent for ${normalizedAktenzeichen} to ${maskedEmail}`);
+
+                res.json({
+                    success: true,
+                    message: 'Verifizierungscode wurde gesendet.',
+                    masked_email: maskedEmail,
+                    expires_in_seconds: expiresInSeconds
+                });
+
+            } catch (error) {
+                console.error('Error requesting verification code:', error);
+                res.status(500).json({
+                    error: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.'
+                });
+            }
+        },
+
+        /**
+         * Verify code and login
+         * POST /api/portal/verify-code
+         * Body: { aktenzeichen, code }
+         */
+        handleVerifyCode: async (req, res) => {
+            try {
+                const { aktenzeichen, code } = req.body;
+
+                if (!aktenzeichen || aktenzeichen.trim() === '') {
+                    return res.status(400).json({
+                        error: 'Aktenzeichen ist erforderlich'
+                    });
+                }
+
+                if (!code || code.trim() === '') {
+                    return res.status(400).json({
+                        error: 'Verifizierungscode ist erforderlich'
+                    });
+                }
+
+                const normalizedAktenzeichen = aktenzeichen.toString().trim().toUpperCase();
+                const normalizedCode = code.toString().trim();
+
+                console.log(`🔐 Verification attempt for: ${normalizedAktenzeichen}`);
+
+                // Verify the code
+                const verificationResult = verificationCodeService.verifyCode(normalizedAktenzeichen, normalizedCode);
+
+                if (!verificationResult.valid) {
+                    console.log(`❌ Verification failed for ${normalizedAktenzeichen}: ${verificationResult.error}`);
+                    return res.status(401).json({
+                        error: verificationResult.error,
+                        attempts_remaining: verificationResult.attemptsRemaining
+                    });
+                }
+
+                // Code is valid - find client and generate JWT
+                let foundClient = null;
+                try {
+                    foundClient = await Client.findOne({ aktenzeichen: { $regex: new RegExp(`^${normalizedAktenzeichen}$`, 'i') } });
+                } catch (error) {
+                    console.error('Error finding client:', error);
+                }
+
+                if (!foundClient) {
+                    // This shouldn't happen if code was valid, but handle it anyway
+                    return res.status(401).json({
+                        error: 'Client nicht gefunden'
+                    });
+                }
+
+                // Generate JWT token
+                const { generateClientToken } = require('../middleware/auth');
+                const jwtToken = generateClientToken(foundClient.id, foundClient.email);
+                const sessionToken = uuidv4();
+
+                // Update client with session token and last login
+                foundClient.session_token = sessionToken;
+                foundClient.last_login = new Date().toISOString();
+                await foundClient.save();
+
+                console.log(`✅ Verification successful for ${normalizedAktenzeichen} (Client ID: ${foundClient.id})`);
+
+                res.json({
+                    success: true,
+                    message: 'Anmeldung erfolgreich',
+                    client: {
+                        id: foundClient.id,
+                        firstName: foundClient.firstName,
+                        lastName: foundClient.lastName,
+                        email: foundClient.email,
+                        aktenzeichen: foundClient.aktenzeichen,
+                        phase: foundClient.phase,
+                        workflow_status: foundClient.workflow_status,
+                        documents_count: foundClient.documents?.length || 0,
+                        isPasswordSet: !!foundClient.isPasswordSet
+                    },
+                    session_token: sessionToken,
+                    token: jwtToken
+                });
+
+            } catch (error) {
+                console.error('Error verifying code:', error);
+                res.status(500).json({
+                    error: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.'
+                });
+            }
+        },
+
         handleLogin: async (req, res) => {
             try {
                 const { email, aktenzeichen, file_number, fileNumber, password } = req.body;
