@@ -248,6 +248,79 @@ class FirstRoundDocumentGenerator {
   }
 
   /**
+   * Direct variable replacement in XML
+   * This bypasses Docxtemplater and replaces variables directly in the XML,
+   * even when they are split across multiple <w:t> tags
+   */
+  directVariableReplacement(documentXml, templateData) {
+    console.log('   🔄 Starting direct variable replacement...');
+    let replacementCount = 0;
+
+    // Process each variable
+    for (const [varName, value] of Object.entries(templateData)) {
+      if (value === undefined || value === null) continue;
+
+      // Convert value to string and escape XML special characters
+      const safeValue = String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, '</w:t><w:br/><w:t>'); // Handle newlines
+
+      const words = varName.split(/\s+/);
+      const firstWord = words[0];
+      const lastWord = words[words.length - 1];
+
+      // Pattern to find the variable (possibly split across tags)
+      // Matches: "FirstWord...LastWord" where ... can include XML tags
+      // The variable text may be split: <w:t>"First</w:t>...<w:t>Last"</w:t>
+      const pattern = new RegExp(
+        `(<w:r[^>]*>(?:<w:rPr>[^<]*(?:<[^>]+>[^<]*)*</w:rPr>)?<w:t[^>]*>)"` +
+        this.escapeRegex(firstWord) +
+        `([\\s\\S]*?)` +
+        this.escapeRegex(lastWord) +
+        `"(</w:t></w:r>)`,
+        'g'
+      );
+
+      // Try to find and replace
+      const beforeLength = documentXml.length;
+      documentXml = documentXml.replace(pattern, (match, prefix, middle, suffix) => {
+        // Check if all words of the variable are present in the match
+        let hasAllWords = true;
+        for (const word of words) {
+          if (!match.includes(word)) {
+            hasAllWords = false;
+            break;
+          }
+        }
+
+        if (hasAllWords) {
+          console.log(`      ✅ Replaced "${varName}" with value`);
+          replacementCount++;
+          // Replace with a simple structure containing the value
+          return `<w:r><w:t>${safeValue}</w:t></w:r>`;
+        }
+        return match;
+      });
+
+      // If pattern didn't match, try simpler direct replacement for consolidated variables
+      if (documentXml.length === beforeLength) {
+        const simplePattern = `"${varName}"`;
+        if (documentXml.includes(simplePattern)) {
+          documentXml = documentXml.split(simplePattern).join(safeValue);
+          console.log(`      ✅ Replaced "${varName}" (simple pattern)`);
+          replacementCount++;
+        }
+      }
+    }
+
+    console.log(`   ✅ Direct replacement completed: ${replacementCount} variables replaced`);
+    return documentXml;
+  }
+
+  /**
    * Generate DOCX files for all creditors
    */
   async generateCreditorDocuments(clientData, creditors, client) {
@@ -342,80 +415,33 @@ class FirstRoundDocumentGenerator {
       // NORMALIZE: Consolidate split template variables
       documentXml = this.normalizeTemplateVariables(documentXml);
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:247',message:'after normalization, before Docxtemplater',data:{xmlLength:documentXml.length,variablesInXml:documentXml.match(/"[^"]{3,40}"/g)?.slice(0,10)||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      // Update the zip with normalized XML
-      zip.file('word/document.xml', documentXml);
-
-      // Now create Docxtemplater with normalized XML
-      // All quotes normalized to ASCII " in normalizeTemplateVariables()
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        delimiters: {
-          start: '"',
-          end: '"',
-        },
-      });
-
       // Prepare the data for replacement
       const templateData = this.prepareTemplateData(clientData, creditor);
 
       // Debug: Log template data
       console.log('🔍 Template Data for creditor:', creditor.sender_name || creditor.creditor_name);
       console.log('   Template variables:', Object.keys(templateData));
-      console.log('   Values:', {
-        'Adresse des Creditors': templateData['Adresse des Creditors']?.substring(0, 50),
-        'Creditor': templateData['Creditor'],
-        'Aktenzeichen des Credtiors': templateData['Aktenzeichen des Credtiors'],
-        'Name': templateData['Name'],
-        'Geburtstag': templateData['Geburtstag'],
-        'Adresse': templateData['Adresse']?.substring(0, 50),
-        'Aktenzeichen des Mandanten': templateData['Aktenzeichen des Mandanten'],
-        'heutiges Datum': templateData['heutiges Datum'],
-        'Datum in 14 Tagen': templateData['Datum in 14 Tagen']
-      });
 
-      // Render the document with the data
-      try {
-        // Get document XML before rendering to check for variables (German typographic quotes)
-        const xmlBefore = doc.getZip().files['word/document.xml'].asText();
-        const variableMatches = xmlBefore.match(/"[^"]{3,40}"/g);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:283',message:'before render',data:{variablesFound:variableMatches?.slice(0,10)||[],templateDataKeys:Object.keys(templateData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        if (variableMatches) {
-          console.log('🔍 Found potential template variables in XML:', variableMatches.slice(0, 10));
-        }
-        
-        doc.render(templateData);
-        console.log('✅ Document rendered successfully');
-        
-        // Check if variables were replaced
-        const xmlAfter = doc.getZip().files['word/document.xml'].asText();
-        const stillPresent = Object.keys(templateData).filter(key => {
-          const searchKey = `"${key}"`;
-          return xmlAfter.includes(searchKey);
-        });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:294',message:'after render',data:{stillPresent,allReplaced:stillPresent.length===0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        if (stillPresent.length > 0) {
-          console.warn('⚠️ Variables not replaced:', stillPresent);
-        } else {
-          console.log('✅ All variables were replaced');
-        }
-      } catch (renderError) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/63f60a49-8476-4655-b7ae-202a4e6ca487',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'firstRoundDocumentGenerator.js:303',message:'render error',data:{error:renderError.message,properties:renderError.properties,stack:renderError.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        console.error('❌ Error rendering document:', renderError.message);
-        if (renderError.properties) {
-          console.error('   Missing variables:', renderError.properties);
-        }
-        throw renderError;
+      // DIRECT REPLACEMENT: Replace variables directly in XML (bypasses Docxtemplater issues)
+      // This works even when variables are split across multiple <w:t> tags
+      documentXml = this.directVariableReplacement(documentXml, templateData);
+
+      // Update the zip with the processed XML
+      zip.file('word/document.xml', documentXml);
+
+      // Verify replacements
+      const stillPresent = Object.keys(templateData).filter(key => {
+        const searchKey = `"${key}"`;
+        return documentXml.includes(searchKey);
+      });
+      if (stillPresent.length > 0) {
+        console.warn('⚠️ Variables not replaced:', stillPresent);
+      } else {
+        console.log('✅ All variables were replaced');
       }
+
+      // Create document from the processed zip (no Docxtemplater rendering needed)
+      const doc = { getZip: () => zip };
 
       // Fix German hyphenation issues in the rendered document
       this.fixDocumentHyphenation(doc);
