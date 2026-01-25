@@ -327,21 +327,48 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         const enrichedAddress = docResult.extracted_data?.creditor_data?.address;
                         const enrichedSenderAddress = docResult.extracted_data?.creditor_data?.sender_address;
 
-                        // Check if BOTH email AND address are missing after enrichment
+                        // Check if email OR address is missing after enrichment
                         const hasEmail = (enrichedEmail && enrichedEmail !== 'N/A') || (enrichedSenderEmail && enrichedSenderEmail !== 'N/A');
                         const hasAddress = (enrichedAddress && enrichedAddress !== 'N/A') || (enrichedSenderAddress && enrichedSenderAddress !== 'N/A');
 
-                        if (!hasEmail && !hasAddress) {
-                            // Override status to needs_review if both email and address are missing
+                        if (!hasEmail || !hasAddress) {
+                            // Setze manual_review_required Flag
+                            docResult.manual_review_required = true;
+                            
+                            // Stelle sicher, dass validation Objekt existiert
+                            if (!docResult.validation) {
+                                docResult.validation = {};
+                            }
+                            docResult.validation.requires_manual_review = true;
+                            
+                            // Füge spezifische Review Reasons hinzu
+                            if (!docResult.validation.review_reasons) {
+                                docResult.validation.review_reasons = [];
+                            }
+                            if (!hasEmail) {
+                                docResult.validation.review_reasons.push('Fehlende Gläubiger-E-Mail');
+                            }
+                            if (!hasAddress) {
+                                docResult.validation.review_reasons.push('Fehlende Gläubiger-Adresse');
+                            }
+                            
+                            // Override status zu needs_review
                             if (finalDocumentStatus === 'creditor_confirmed') {
                                 finalDocumentStatus = 'needs_review';
-                                statusReason = 'KI: Kontaktdaten fehlen - Manuelle Prüfung erforderlich (Email und Adresse nicht gefunden)';
+                                const missingFields = [];
+                                if (!hasEmail) missingFields.push('Email');
+                                if (!hasAddress) missingFields.push('Adresse');
+                                statusReason = `KI: Kontaktdaten fehlen - Manuelle Prüfung erforderlich (${missingFields.join(' und ')} nicht gefunden)`;
                                 documentsNeedingReview.push(docResult);
-                                console.log('[webhook] Manual review triggered: Missing email AND address after DB enrichment', {
-                                    doc_id: docResult.id,
-                                    creditor_name: docResult.extracted_data?.creditor_data?.sender_name || 'N/A'
-                                });
                             }
+                            
+                            // Verbesserte Log-Nachricht
+                            console.log('[webhook] Manual review triggered: Missing contact info after DB enrichment', {
+                                doc_id: docResult.id,
+                                creditor_name: docResult.extracted_data?.creditor_data?.sender_name || 'N/A',
+                                missing_email: !hasEmail,
+                                missing_address: !hasAddress
+                            });
                         }
 
                         if (hasEmail || hasAddress) {
@@ -572,6 +599,42 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             // Continue processing even if enrichment fails
                         }
 
+                        // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
+                        const isMissing = (val) => {
+                            if (val === undefined || val === null) return true;
+                            if (typeof val === 'string') {
+                                const t = val.trim();
+                                if (!t) return true;
+                                const lower = t.toLowerCase();
+                                if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+                            }
+                            return false;
+                        };
+
+                        for (const creditor of deduplicated_creditors) {
+                            // Prüfe beide Feldnamen-Formate (deutsch und englisch)
+                            const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
+                            const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+                            
+                            if (!hasEmail || !hasAddress) {
+                                creditor.needs_manual_review = true;
+                                if (!creditor.review_reasons) {
+                                    creditor.review_reasons = [];
+                                }
+                                if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                                    creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
+                                }
+                                if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                                    creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
+                                }
+                                
+                                console.log(`[webhook] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
+                                    missing_email: !hasEmail,
+                                    missing_address: !hasAddress
+                                });
+                            }
+                        }
+
                         const existing = clientDoc.final_creditor_list || [];
                         clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
                             existing,
@@ -629,6 +692,42 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                 } catch (enrichError) {
                                     console.error('[webhook] ⚠️ Late upload enrichment failed, continuing without enrichment:', enrichError);
                                     // Continue processing even if enrichment fails
+                                }
+
+                                // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment for late uploads
+                                const isMissing = (val) => {
+                                    if (val === undefined || val === null) return true;
+                                    if (typeof val === 'string') {
+                                        const t = val.trim();
+                                        if (!t) return true;
+                                        const lower = t.toLowerCase();
+                                        if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+                                    }
+                                    return false;
+                                };
+
+                                for (const creditor of newCreditors) {
+                                    // Prüfe beide Feldnamen-Formate (deutsch und englisch)
+                                    const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
+                                    const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+                                    
+                                    if (!hasEmail || !hasAddress) {
+                                        creditor.needs_manual_review = true;
+                                        if (!creditor.review_reasons) {
+                                            creditor.review_reasons = [];
+                                        }
+                                        if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                                            creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
+                                        }
+                                        if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                                            creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
+                                        }
+                                        
+                                        console.log(`[webhook] Manual review triggered for late upload creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
+                                            missing_email: !hasEmail,
+                                            missing_address: !hasAddress
+                                        });
+                                    }
                                 }
 
                                 const existingList = clientDoc.final_creditor_list || [];

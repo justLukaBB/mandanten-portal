@@ -10,7 +10,7 @@ const { formatAddress } = require("../utils/addressFormatter");
  */
 class FirstRoundDocumentGenerator {
   constructor() {
-    this.templatePath = path.join(__dirname, "../templates/1.Schreiben.docx");
+    this.templatePath = path.join(__dirname, "../templates/1.Schreiben-Aktuell.docx");
     this.outputDir = path.join(__dirname, "../generated_documents/first_round");
   }
 

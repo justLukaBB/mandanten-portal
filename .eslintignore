@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build outputs
+build/
+dist/
+*.min.js
+
+# Generated files
+coverage/
+.nyc_output/
+
+# Config files
+*.config.js
+
+# Test data
+test-data/
+scripts/
+
+# Legacy/old files
+*.old.js
+*-old.js

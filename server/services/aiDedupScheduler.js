@@ -8,6 +8,7 @@
 
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const { findCreditorByName } = require('../utils/creditorLookup');
 
 // Store pending dedup jobs per client
 const pendingJobs = new Map();
@@ -121,13 +122,120 @@ async function runAIRededup(clientId, getClientFunction) {
       processing_time_ms: Date.now() - startTime
     });
 
+    // Helper function to check if value is missing
+    const isMissing = (val) => {
+      if (val === undefined || val === null) return true;
+      if (typeof val === 'string') {
+        const t = val.trim();
+        if (!t) return true;
+        const lower = t.toLowerCase();
+        if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+      }
+      return false;
+    };
+
+    // Enrich missing addresses/emails from local DB
+    try {
+      console.log(`[ai-dedup-scheduler] 🔍 Enriching ${deduplicated_creditors.length} creditors from local DB...`);
+      const credCache = new Map();
+
+      const ensureMatch = async (name) => {
+        if (!name) return null;
+        const key = name.toLowerCase().trim();
+        if (credCache.has(key)) return credCache.get(key);
+        const m = await findCreditorByName(name);
+        credCache.set(key, m || null);
+        return m;
+      };
+
+      // Enrich each creditor
+      for (const creditor of deduplicated_creditors) {
+        // Creditor - support BOTH German (glaeubiger_name) AND English (sender_name) field names
+        const creditorName = creditor.glaeubiger_name || creditor.sender_name;
+        if (creditorName) {
+          // Check if address is missing in either field format
+          const needAddrGerman = isMissing(creditor.glaeubiger_adresse);
+          const needAddrEnglish = isMissing(creditor.sender_address);
+          const needAddr = needAddrGerman && needAddrEnglish;
+
+          // Check if email is missing in either field format
+          const needEmailGerman = isMissing(creditor.email_glaeubiger);
+          const needEmailEnglish = isMissing(creditor.sender_email);
+          const needEmail = needEmailGerman && needEmailEnglish;
+
+          if (needAddr || needEmail) {
+            const match = await ensureMatch(creditorName);
+            if (match) {
+              if (needAddr && match.address) {
+                // Set BOTH field formats for compatibility
+                creditor.glaeubiger_adresse = match.address;
+                creditor.sender_address = match.address;
+              }
+              if (needEmail && match.email) {
+                // Set BOTH field formats for compatibility
+                creditor.email_glaeubiger = match.email;
+                creditor.sender_email = match.email;
+              }
+            }
+          }
+        }
+
+        // Representative - support BOTH German (glaeubigervertreter_name) AND English (actual_creditor for representatives)
+        const repName = creditor.glaeubigervertreter_name || (creditor.is_representative ? creditor.actual_creditor : null);
+        if (repName) {
+          const needAddrGerman = isMissing(creditor.glaeubigervertreter_adresse);
+          const needEmailGerman = isMissing(creditor.email_glaeubiger_vertreter);
+          if (needAddrGerman || needEmailGerman) {
+            const match = await ensureMatch(repName);
+            if (match) {
+              if (needAddrGerman && match.address) creditor.glaeubigervertreter_adresse = match.address;
+              if (needEmailGerman && match.email) creditor.email_glaeubiger_vertreter = match.email;
+            }
+          }
+        }
+      }
+
+      console.log(`[ai-dedup-scheduler] ✅ Enrichment complete. Cache hits: ${credCache.size}`);
+    } catch (enrichError) {
+      console.error('[ai-dedup-scheduler] ⚠️ Enrichment failed, continuing without enrichment:', enrichError);
+      // Continue processing even if enrichment fails
+    }
+
+    // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
+
+    for (const creditor of deduplicated_creditors) {
+      // Prüfe beide Feldnamen-Formate (deutsch und englisch)
+      const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
+      const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+      
+      if (!hasEmail || !hasAddress) {
+        creditor.needs_manual_review = true;
+        if (!creditor.review_reasons) {
+          creditor.review_reasons = [];
+        }
+        if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+          creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
+        }
+        if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+          creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
+        }
+        
+        console.log(`[ai-dedup-scheduler] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
+          missing_email: !hasEmail,
+          missing_address: !hasAddress
+        });
+      }
+    }
+
     // Ensure all creditors have IDs before saving
     client.final_creditor_list = deduplicated_creditors.map(c => ({
       ...c,
       id: c.id || uuidv4(), // Preserve existing ID or generate new one
       status: c.status || 'confirmed', // Ensure status exists
       ai_confidence: c.ai_confidence || 1.0,
-      created_at: c.created_at || new Date()
+      created_at: c.created_at || new Date(),
+      needs_manual_review: c.needs_manual_review || false,
+      review_reasons: c.review_reasons || []
     }));
 
     // Add deduplication history entry

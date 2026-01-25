@@ -28,15 +28,32 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
         return m;
     };
 
-    // Creditor (glaeubiger_name)
-    if (entry.glaeubiger_name) {
-        const needAddr = isMissing(entry.glaeubiger_adresse);
-        const needEmail = isMissing(entry.email_glaeubiger);
+    // Creditor - support BOTH German (glaeubiger_name) AND English (sender_name) field names
+    const creditorName = entry.glaeubiger_name || entry.sender_name;
+    if (creditorName) {
+        // Check if address is missing in either field format
+        const needAddrGerman = isMissing(entry.glaeubiger_adresse);
+        const needAddrEnglish = isMissing(entry.sender_address);
+        const needAddr = needAddrGerman && needAddrEnglish;
+
+        // Check if email is missing in either field format
+        const needEmailGerman = isMissing(entry.email_glaeubiger);
+        const needEmailEnglish = isMissing(entry.sender_email);
+        const needEmail = needEmailGerman && needEmailEnglish;
+
         if (needAddr || needEmail) {
-            const match = await ensureMatch(entry.glaeubiger_name);
+            const match = await ensureMatch(creditorName);
             if (match) {
-                if (needAddr && match.address) entry.glaeubiger_adresse = match.address;
-                if (needEmail && match.email) entry.email_glaeubiger = match.email;
+                if (needAddr && match.address) {
+                    // Set BOTH field formats for compatibility
+                    entry.glaeubiger_adresse = match.address;
+                    entry.sender_address = match.address;
+                }
+                if (needEmail && match.email) {
+                    // Set BOTH field formats for compatibility
+                    entry.email_glaeubiger = match.email;
+                    entry.sender_email = match.email;
+                }
             }
         }
     }
@@ -663,6 +680,42 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 } catch (enrichError) {
                     console.error('⚠️ Enrichment failed, continuing without enrichment:', enrichError);
                     // Continue processing even if enrichment fails
+                }
+
+                // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
+                const isMissing = (val) => {
+                    if (val === undefined || val === null) return true;
+                    if (typeof val === 'string') {
+                        const t = val.trim();
+                        if (!t) return true;
+                        const lower = t.toLowerCase();
+                        if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+                    }
+                    return false;
+                };
+
+                for (const creditor of deduplicated_creditors) {
+                    // Prüfe beide Feldnamen-Formate (deutsch und englisch)
+                    const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
+                    const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+                    
+                    if (!hasEmail || !hasAddress) {
+                        creditor.needs_manual_review = true;
+                        if (!creditor.review_reasons) {
+                            creditor.review_reasons = [];
+                        }
+                        if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                            creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
+                        }
+                        if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                            creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
+                        }
+                        
+                        console.log(`[admin-rededup] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
+                            missing_email: !hasEmail,
+                            missing_address: !hasAddress
+                        });
+                    }
                 }
 
                 // Ensure all creditors have required fields (especially 'id')

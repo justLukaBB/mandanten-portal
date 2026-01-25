@@ -19,6 +19,7 @@ server/.env.production
 server/mandanten-portal-backend-2.env
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -66,3 +67,15 @@ Thumbs.db
 
 # Test data with real information
 server/test-data/
+test-data/
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+*.temp
+upload_log*.txt
+template-readable-text.txt
+startup_log.txt
