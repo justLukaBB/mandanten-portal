@@ -905,8 +905,18 @@ const ReviewDashboard: React.FC = () => {
       console.log(`✅ Document ${action}ed successfully:`, result);
 
       // Refresh data to pull latest diffs/state; stay on summary if backend says so
+      // IMPORTANT: Don't reset currentDocIndex here blindly, because if we're on index 0 and item 0 is removed, 
+      // the new item 0 will be the next one.
       await loadReviewData({ silent: true });
-      setCurrentDocIndex(0);
+
+      // If we skipped/reviewed, the list of 'documents.need_review' shrinks by 1.
+      // So if we were at index 0, the next item slides into index 0.
+      // So we should actually keep the index as is (unless it's out of bounds).
+      setCurrentDocIndex(prev => {
+        // If we processed the last item, we might need to decrement or stay at 0
+        // We'll let the render logic handle "no docs left" -> summary
+        return Math.max(0, prev);
+      });
 
     } catch (error: any) {
       console.error(`❌ Error saving ${action}:`, error);
@@ -1027,7 +1037,7 @@ const ReviewDashboard: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Fehler beim Laden</h3>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={loadReviewData}
+            onClick={() => loadReviewData()}
             className="px-4 py-2 text-white rounded-md hover:opacity-90"
             style={{ backgroundColor: '#9f1a1d' }}
           >
