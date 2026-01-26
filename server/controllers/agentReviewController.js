@@ -312,40 +312,27 @@ Diese E-Mail wurde automatisch generiert.
                     //     console.log(client.final_creditor_list.map(c=>c.source_documents))
                     // }
 
-                // Find documents that need review
+                // Find documents that need review (ID-first matching + needs_manual_review flag)
                 const documentsToReview = documents.filter(doc => {
-                    const matchingCreditor = creditors.find(c => {
-                        // ID checks
-                        const idMatch = c.source_document_id === doc.id ||
-                                      c.primary_document_id === doc.id ||
-                                      (Array.isArray(c.document_links) && c.document_links.some(l => l.id === doc.id));
-                        
-                        if (idMatch) return true;
+                    const relatedCreditor = creditors.find(c => {
+                        const needsManual = c?.needs_manual_review === true || c?.needs_manual_review === 'true';
+                        if (!needsManual) return false;
 
-                        // Name checks
-                        if (Array.isArray(c.source_documents)) {
-                            return c.source_documents.some(sd => 
-                                sd === doc.filename || 
-                                sd === doc.name || 
-                                sd === doc.id ||
-                                (doc.filename && doc.filename.includes(sd)) ||
-                                (sd && doc.filename && sd.includes(doc.filename))
-                            );
+                        // ID matches (preferred)
+                        if (c?.source_document_id === doc.id) return true;
+                        if (c?.primary_document_id === doc.id) return true;
+                        if (Array.isArray(c?.document_links) && c.document_links.some(l => l?.id === doc.id)) return true;
+
+                        // Fallback: array contains id or filename/name (for legacy data)
+                        if (Array.isArray(c?.source_documents)) {
+                            if (c.source_documents.includes(doc.id)) return true;
+                            if (doc.filename && c.source_documents.includes(doc.filename)) return true;
+                            if (doc.name && c.source_documents.includes(doc.name)) return true;
                         }
                         return false;
                     });
 
-                    // Check if the matched creditor needs review
-                    const creditorNeedsReview = matchingCreditor && 
-                        (matchingCreditor.needs_manual_review === true || matchingCreditor.needs_manual_review === 'true');
-
-                    // If creditor needs review, include the doc even if it was already reviewed
-                    if (creditorNeedsReview) return true;
-
-                    // If doc is already reviewed and creditor doesn't need review, exclude it
-                    if (doc.manually_reviewed === true) return false;
-
-                    return doc.is_creditor_document === true;
+                    return relatedCreditor && doc.is_creditor_document === true;
                 });
 
             //    console.log('documentsToReview', documentsToReview);
@@ -446,49 +433,29 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
 
              
-            // Get documents that need review
+            // Get documents that need review (ID-first matching + needs_manual_review flag)
             const documentsToReview = documents.filter(doc => {
-                // Robust matching logic matching getClientReviewData matching
-                const matchingCreditor = creditors.find(c => {
-                    // ID checks
-                    const idMatch = c.source_document_id === doc.id ||
-                                  c.primary_document_id === doc.id ||
-                                  (Array.isArray(c.document_links) && c.document_links.some(l => l.id === doc.id));
-                    
-                    if (idMatch) return true;
+                const relatedCreditor = creditors.find(c => {
+                    const needsManual = c?.needs_manual_review === true || c?.needs_manual_review === 'true';
+                    if (!needsManual) return false;
 
-                    // Name checks
-                    if (Array.isArray(c.source_documents)) {
-                        return c.source_documents.some(sd => 
-                            sd === doc.filename || 
-                            sd === doc.name || 
-                            sd === doc.id ||
-                            (doc.filename && doc.filename.includes(sd)) ||
-                            (sd && doc.filename && sd.includes(doc.filename))
-                        );
+                    // ID matches (preferred)
+                    if (c?.source_document_id === doc.id) return true;
+                    if (c?.primary_document_id === doc.id) return true;
+                    if (Array.isArray(c?.document_links) && c.document_links.some(l => l?.id === doc.id)) return true;
+
+                    // Fallback: array contains id or filename/name (for legacy data)
+                    if (Array.isArray(c?.source_documents)) {
+                        if (c.source_documents.includes(doc.id)) return true;
+                        if (doc.filename && c.source_documents.includes(doc.filename)) return true;
+                        if (doc.name && c.source_documents.includes(doc.name)) return true;
                     }
                     return false;
                 });
 
-                // Check if the matched creditor needs review
-                const creditorNeedsReview = matchingCreditor && 
-                    (matchingCreditor.needs_manual_review === true || matchingCreditor.needs_manual_review === 'true');
-
-                // If creditor needs review, include the doc even if it was already reviewed
-                if (creditorNeedsReview) {
-                    console.log(`📄 Document ${doc.name} included because creditor ${matchingCreditor.sender_name} needs review`);
-                    return true;
-                }
-
-                // If doc is already reviewed and creditor doesn't need review, exclude it
-                if (doc.manually_reviewed === true) return false;
-
-                // Otherwise include if it's a creditor document
-                // This catches documents that aren't linked to a creditor yet but need review
-                // Or documents where matching failed but they are creditor documents
-                // However, we only want to enforce review if they are truly unreviewed
-                return doc.is_creditor_document === true;
+                return relatedCreditor && doc.is_creditor_document === true;
             });
+
 
             // Determine if we're in summary phase (all docs reviewed but session not completed)
             const hasCreditorManualFlags = creditors.some(c => c.needs_manual_review === true || c.needs_manual_review === 'true');

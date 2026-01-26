@@ -7,7 +7,7 @@ const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
     parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
 
 // Helper: ensure creditor carries stable document links
-const ensureCreditorLinks = (cred) => {
+const ensureCreditorLinks = (cred, docHint = null) => {
     if (!cred) return cred;
 
     const links = Array.isArray(cred.document_links) ? [...cred.document_links] : [];
@@ -21,11 +21,16 @@ const ensureCreditorLinks = (cred) => {
         if (!exists) links.push({ id, name, filename });
     };
 
+    // Try to pull a doc id from the provided hint
+    const hintId = docHint?.id || docHint?.document_id || docHint?.primary_document_id;
+    const hintName = docHint?.name || docHint?.source_document;
+    const hintFilename = docHint?.filename;
+
     // Primary / legacy ids
-    const primaryId = cred.primary_document_id || cred.document_id;
+    const primaryId = cred.primary_document_id || cred.document_id || hintId;
     if (primaryId) {
         cred.primary_document_id = primaryId;
-        addLink(primaryId, cred.source_document, cred.filename);
+        addLink(primaryId, cred.source_document || hintName, cred.filename || hintFilename);
     }
 
     // Legacy source_document / source_documents
@@ -37,11 +42,14 @@ const ensureCreditorLinks = (cred) => {
 
     cred.document_links = links;
 
-    // Best-effort: set source_document_id from first linked id if missing
+    // Best-effort: set source_document_id from first linked id (or hint) if missing
     if (!cred.source_document_id) {
         const firstLinkWithId = links.find(l => l.id);
         if (firstLinkWithId?.id) {
             cred.source_document_id = firstLinkWithId.id;
+        } else if (hintId) {
+            cred.source_document_id = hintId;
+            addLink(hintId, hintName, hintFilename);
         }
     }
 
@@ -589,7 +597,32 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             const credCache = new Map();
                             await Promise.all(
                                 deduplicated_creditors.map(c => {
-                                    ensureCreditorLinks(c);
+                                    // Try to link creditor to a processed doc (id-first)
+                                    const matchDoc = processedDocuments.find(pd => {
+                                        const fn = pd.filename || pd.name;
+                                        const srcs = Array.isArray(c.source_documents) ? c.source_documents : [];
+                                        return (
+                                            (c.document_id && c.document_id === pd.id) ||
+                                            (c.source_document_id && c.source_document_id === pd.id) ||
+                                            (c.primary_document_id && c.primary_document_id === pd.id) ||
+                                            srcs.includes(pd.id) ||
+                                            (fn && srcs.includes(fn))
+                                        );
+                                    });
+
+                                    if (matchDoc) {
+                                        // Prefer the actual doc id for linking
+                                        c.document_id = c.document_id || matchDoc.id;
+                                        c.source_document_id = c.source_document_id || matchDoc.id;
+                                        c.primary_document_id = c.primary_document_id || matchDoc.source_document_id || matchDoc.primary_document_id || matchDoc.id;
+                                        // Ensure source_documents contains the id (not only filename)
+                                        const srcArr = Array.isArray(c.source_documents) ? [...c.source_documents] : [];
+                                        if (matchDoc.id && !srcArr.includes(matchDoc.id)) srcArr.unshift(matchDoc.id);
+                                        if (matchDoc.filename && !srcArr.includes(matchDoc.filename)) srcArr.push(matchDoc.filename);
+                                        c.source_documents = srcArr;
+                                    }
+
+                                    ensureCreditorLinks(c, matchDoc || null);
                                     return enrichDedupedCreditorFromDb(c, credCache);
                                 })
                             );
@@ -683,10 +716,32 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                     console.log(`[webhook] Enriching ${newCreditors.length} late upload creditors from local DB...`);
                                     const credCache = new Map();
                                     await Promise.all(
-                                            newCreditors.map(c => {
-                                                ensureCreditorLinks(c);
-                                                return enrichDedupedCreditorFromDb(c, credCache);
-                                            })
+                                newCreditors.map(c => {
+                                    const matchDoc = processedDocuments.find(pd => {
+                                        const fn = pd.filename || pd.name;
+                                        const srcs = Array.isArray(c.source_documents) ? c.source_documents : [];
+                                        return (
+                                            (c.document_id && c.document_id === pd.id) ||
+                                            (c.source_document_id && c.source_document_id === pd.id) ||
+                                            (c.primary_document_id && c.primary_document_id === pd.id) ||
+                                            srcs.includes(pd.id) ||
+                                            (fn && srcs.includes(fn))
+                                        );
+                                    });
+
+                                    if (matchDoc) {
+                                        c.document_id = c.document_id || matchDoc.id;
+                                        c.source_document_id = c.source_document_id || matchDoc.id;
+                                        c.primary_document_id = c.primary_document_id || matchDoc.source_document_id || matchDoc.primary_document_id || matchDoc.id;
+                                        const srcArr = Array.isArray(c.source_documents) ? [...c.source_documents] : [];
+                                        if (matchDoc.id && !srcArr.includes(matchDoc.id)) srcArr.unshift(matchDoc.id);
+                                        if (matchDoc.filename && !srcArr.includes(matchDoc.filename)) srcArr.push(matchDoc.filename);
+                                        c.source_documents = srcArr;
+                                    }
+
+                                    ensureCreditorLinks(c, matchDoc || null);
+                                    return enrichDedupedCreditorFromDb(c, credCache);
+                                })
                                     );
                                     console.log(`[webhook] ✅ Late upload enrichment complete`);
                                 } catch (enrichError) {
