@@ -312,28 +312,33 @@ Diese E-Mail wurde automatisch generiert.
                     //     console.log(client.final_creditor_list.map(c=>c.source_documents))
                     // }
 
-                // Find documents that need review (ID-first matching + needs_manual_review flag)
-                const documentsToReview = documents.filter(doc => {
-                    const relatedCreditor = creditors.find(c => {
-                        const needsManual = c?.needs_manual_review === true || c?.needs_manual_review === 'true';
-                        if (!needsManual) return false;
+                // Build docs-to-review directly from creditors that need manual review
+                const findDocForCreditor = (cred) => {
+                    const ids = [];
+                    if (cred?.source_document_id) ids.push(cred.source_document_id);
+                    if (cred?.primary_document_id) ids.push(cred.primary_document_id);
+                    if (Array.isArray(cred?.document_links)) {
+                        cred.document_links.forEach(l => { if (l?.id) ids.push(l.id); });
+                    }
+                    const srcDocs = Array.isArray(cred?.source_documents) ? cred.source_documents : [];
 
-                        // ID matches (preferred)
-                        if (c?.source_document_id === doc.id) return true;
-                        if (c?.primary_document_id === doc.id) return true;
-                        if (Array.isArray(c?.document_links) && c.document_links.some(l => l?.id === doc.id)) return true;
+                    // Try id matches first
+                    const byId = documents.find(d => ids.includes(d.id));
+                    if (byId) return byId;
 
-                        // Fallback: array contains id or filename/name (for legacy data)
-                        if (Array.isArray(c?.source_documents)) {
-                            if (c.source_documents.includes(doc.id)) return true;
-                            if (doc.filename && c.source_documents.includes(doc.filename)) return true;
-                            if (doc.name && c.source_documents.includes(doc.name)) return true;
-                        }
-                        return false;
-                    });
+                    // Fallback to legacy filename/name matches if no id match
+                    const byName = documents.find(d =>
+                        srcDocs.includes(d.id) ||
+                        (d.filename && srcDocs.includes(d.filename)) ||
+                        (d.name && srcDocs.includes(d.name))
+                    );
+                    return byName || null;
+                };
 
-                    return relatedCreditor && doc.is_creditor_document === true;
-                });
+                const documentsToReview = creditors
+                    .filter(c => c?.needs_manual_review === true || c?.needs_manual_review === 'true')
+                    .map(c => findDocForCreditor(c))
+                    .filter(Boolean);
 
             //    console.log('documentsToReview', documentsToReview);
 
@@ -433,28 +438,33 @@ Diese E-Mail wurde automatisch generiert.
             const creditors = client.final_creditor_list || [];
 
              
-            // Get documents that need review (ID-first matching + needs_manual_review flag)
-            const documentsToReview = documents.filter(doc => {
-                const relatedCreditor = creditors.find(c => {
-                    const needsManual = c?.needs_manual_review === true || c?.needs_manual_review === 'true';
-                    if (!needsManual) return false;
+            // Build docs-to-review directly from creditors that need manual review
+            const findDocForCreditor = (cred) => {
+                const ids = [];
+                if (cred?.source_document_id) ids.push(cred.source_document_id);
+                if (cred?.primary_document_id) ids.push(cred.primary_document_id);
+                if (Array.isArray(cred?.document_links)) {
+                    cred.document_links.forEach(l => { if (l?.id) ids.push(l.id); });
+                }
+                const srcDocs = Array.isArray(cred?.source_documents) ? cred.source_documents : [];
 
-                    // ID matches (preferred)
-                    if (c?.source_document_id === doc.id) return true;
-                    if (c?.primary_document_id === doc.id) return true;
-                    if (Array.isArray(c?.document_links) && c.document_links.some(l => l?.id === doc.id)) return true;
+                // Try id matches first
+                const byId = documents.find(d => ids.includes(d.id));
+                if (byId) return byId;
 
-                    // Fallback: array contains id or filename/name (for legacy data)
-                    if (Array.isArray(c?.source_documents)) {
-                        if (c.source_documents.includes(doc.id)) return true;
-                        if (doc.filename && c.source_documents.includes(doc.filename)) return true;
-                        if (doc.name && c.source_documents.includes(doc.name)) return true;
-                    }
-                    return false;
-                });
+                // Fallback to legacy filename/name matches if no id match
+                const byName = documents.find(d =>
+                    srcDocs.includes(d.id) ||
+                    (d.filename && srcDocs.includes(d.filename)) ||
+                    (d.name && srcDocs.includes(d.name))
+                );
+                return byName || null;
+            };
 
-                return relatedCreditor && doc.is_creditor_document === true;
-            });
+            const documentsToReview = creditors
+                .filter(c => c?.needs_manual_review === true || c?.needs_manual_review === 'true')
+                .map(c => findDocForCreditor(c))
+                .filter(Boolean);
 
 
             // Determine if we're in summary phase (all docs reviewed but session not completed)
@@ -650,7 +660,7 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // Helper to build diff entry
-            const buildDiff = (docObj, origCred, updatedCred, origFallback) => {
+            const buildDiff = (docObj, origCred, updatedCred, creditorId, prevOriginal, clientOriginal) => {
                 const pickFields = (c) => {
                     const res = {};
                     if (!c) return res;
@@ -659,9 +669,10 @@ Diese E-Mail wurde automatisch generiert.
                             res[key] = val;
                         }
                     };
-                    setIf('sender_name', c.sender_name || c.glaeubiger_name);
-                    setIf('sender_email', c.sender_email || c.email_glaeubiger);
-                    setIf('sender_address', c.sender_address || c.glaeubiger_adresse);
+                    // Prefer German fields; fallback to English fields on the same creditor object
+                    setIf('sender_name', c.glaeubiger_name ?? c.sender_name);
+                    setIf('sender_email', c.email_glaeubiger ?? c.sender_email);
+                    setIf('sender_address', c.glaeubiger_adresse ?? c.sender_address);
                     setIf('reference_number', c.reference_number);
                     const amt = c.claim_amount ?? (c.claim_amount_raw ? parseFloat(c.claim_amount_raw) : undefined);
                     if (amt !== undefined && !isNaN(amt)) setIf('claim_amount', amt);
@@ -669,14 +680,23 @@ Diese E-Mail wurde automatisch generiert.
                     return res;
                 };
 
-                const originalPicked = pickFields(origCred);
-                const original = Object.keys(originalPicked).length ? originalPicked : pickFields(origFallback);
+                const originalPicked = clientOriginal && Object.keys(clientOriginal).length ? clientOriginal : pickFields(origCred);
+                const original = Object.keys(originalPicked).length ? originalPicked : {};
                 const updated = pickFields(updatedCred);
 
+                const docId = docObj?.id || docObj?.document_id || docObj?.documentId || docObj?.name;
+                const credId = creditorId || updatedCred?.id || origCred?.id;
+
+                // Preserve the very first "original" snapshot if it already exists for this key
+                const finalOriginal = prevOriginal || original;
+
                 return {
-                    docId: docObj?.id || docObj?.document_id || docObj?.documentId || docObj?.name,
+                    docId,
+                    creditorId: credId,
+                    key: `${docId || 'unknown'}:${credId || 'unknown'}`,
                     name: docObj?.name || docObj?.filename || docObj?.id,
-                    original,
+                    creditor_name: updatedCred?.sender_name || updatedCred?.glaeubiger_name || origCred?.sender_name || origCred?.glaeubiger_name,
+                    original: finalOriginal,
                     updated,
                     reviewed_at: new Date()
                 };
@@ -855,13 +875,16 @@ Diese E-Mail wurde automatisch generiert.
 
                     // Store diff
                     client.review_diffs = client.review_diffs || [];
+                    const existingDiff = client.review_diffs?.find(d => d.key === `${document?.id || docId || 'unknown'}:${(creditor_id || existing.id) || 'unknown'}`);
                     const newDiff = buildDiff(
                         document || { id: docId, name: docName, filename: docFilename },
                         originalData,
                         updated,
-                        document?.extracted_data?.creditor_data
+                        updated.id || existing.id,
+                        existingDiff?.original,
+                        req.body.original
                     );
-                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    const existingIdx = client.review_diffs.findIndex(d => d.key === newDiff.key);
                     if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
                     else client.review_diffs.push(newDiff);
 
@@ -965,13 +988,16 @@ Diese E-Mail wurde automatisch generiert.
 
                     // Store diff for newly created creditor
                     client.review_diffs = client.review_diffs || [];
+                    const existingDiff = client.review_diffs?.find(d => d.key === `${document?.id || document_id || 'unknown'}:${newCreditor.id || 'unknown'}`);
                     const newDiff = buildDiff(
                         document,
-                        document?.extracted_data?.creditor_data || null,
+                        {},
                         newCreditor,
-                        document?.extracted_data?.creditor_data
+                        newCreditor.id,
+                        existingDiff?.original,
+                        req.body.original
                     );
-                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    const existingIdx = client.review_diffs.findIndex(d => d.key === newDiff.key);
                     if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
                     else client.review_diffs.push(newDiff);
                 } else {
@@ -1031,13 +1057,16 @@ Diese E-Mail wurde automatisch generiert.
                     });
                     // Store diff for confirm (may be identical)
                     client.review_diffs = client.review_diffs || [];
+                    const existingDiff = client.review_diffs?.find(d => d.key === `${document?.id || docId || 'unknown'}:${(creditor_id || creditors[creditorIndex]?.id || originalData?.id) || 'unknown'}`);
                     const newDiff = buildDiff(
                         document || { id: docId, name: docName, filename: docFilename },
                         originalData,
                         creditors[creditorIndex],
-                        document?.extracted_data?.creditor_data
+                        creditors[creditorIndex]?.id || originalData?.id,
+                        existingDiff?.original,
+                        req.body.original
                     );
-                    const existingIdx = client.review_diffs.findIndex(d => d.docId === newDiff.docId);
+                    const existingIdx = client.review_diffs.findIndex(d => d.key === newDiff.key);
                     if (existingIdx >= 0) client.review_diffs[existingIdx] = newDiff;
                     else client.review_diffs.push(newDiff);
                     console.log(`✅ Confirmed existing creditor (index ${creditorIndex}) - creditor_id: ${creditor_id}, document_id: ${document_id}`);

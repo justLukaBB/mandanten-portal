@@ -80,11 +80,11 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState('');
   const [formData, setFormData] = useState<CorrectionFormData>({
-    sender_name: creditor.sender_name || '',
-    sender_email: creditor.sender_email || '',
-    sender_address: creditor.sender_address || '',
+    sender_name: creditor.glaeubiger_name || creditor.sender_name || '',
+    sender_email: creditor.email_glaeubiger || creditor.sender_email || '',
+    sender_address: creditor.glaeubiger_adresse || creditor.sender_address || '',
     reference_number: creditor.reference_number || '',
-    claim_amount: creditor.claim_amount?.toString() || '',
+    claim_amount: creditor.claim_amount?.toString() || creditor.claim_amount_raw || '',
     notes: ''
   });
 
@@ -92,6 +92,12 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
   const confidencePercent = Math.round(confidence * 100);
   const isHighConfidence = confidence >= 0.8;
   const isReviewed = creditor.manually_reviewed || creditor.status === 'confirmed';
+  const displayName = creditor.glaeubiger_name || creditor.sender_name || 'Unbekannter Gläubiger';
+  const displayEmail = creditor.email_glaeubiger || creditor.sender_email || '-';
+  const displayAddress = creditor.glaeubiger_adresse || creditor.sender_address || '-';
+  const displayAmount = creditor.claim_amount != null
+    ? `€${creditor.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}`
+    : creditor.claim_amount_raw;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -159,13 +165,11 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
 
             <div>
               <h3 className="font-semibold text-gray-900">
-                {creditor.sender_name || 'Unbekannter Gläubiger'}
+                {displayName}
               </h3>
               <div className="flex items-center space-x-3 text-sm text-gray-500">
-                {creditor.claim_amount != null && (
-                  <span className="font-medium text-gray-700">
-                    €{creditor.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}
-                  </span>
+                {displayAmount && (
+                  <span className="font-medium text-gray-700">{displayAmount}</span>
                 )}
                 {creditor.reference_number && (
                   <span>Az: {creditor.reference_number}</span>
@@ -259,11 +263,11 @@ const CreditorReviewCard: React.FC<CreditorReviewCardProps> = ({
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">E-Mail:</span>
-                  <p className="font-medium">{creditor.sender_email || '-'}</p>
+                  <p className="font-medium">{displayEmail}</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Adresse:</span>
-                  <p className="font-medium">{creditor.sender_address || '-'}</p>
+                  <p className="font-medium">{displayAddress}</p>
                 </div>
               </div>
 

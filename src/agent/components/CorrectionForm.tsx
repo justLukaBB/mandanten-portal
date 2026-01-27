@@ -24,6 +24,19 @@ interface CorrectionFormProps {
     };
     manually_reviewed?: boolean;
   };
+  creditor?: {
+    id?: string;
+    sender_name?: string;
+    sender_email?: string;
+    sender_address?: string;
+    glaeubiger_name?: string;
+    glaeubiger_adresse?: string;
+    email_glaeubiger?: string;
+    reference_number?: string;
+    claim_amount?: number;
+    claim_amount_raw?: string;
+    needs_manual_review?: boolean;
+  };
   onSave: (corrections: any) => void;
   onSkip: (reason: string) => void;
   disabled?: boolean;
@@ -41,6 +54,7 @@ interface FormData {
 
 const CorrectionForm: React.FC<CorrectionFormProps> = ({
   document,
+  creditor,
   onSave,
   onSkip,
   disabled = false,
@@ -58,20 +72,31 @@ const CorrectionForm: React.FC<CorrectionFormProps> = ({
   const [skipReason, setSkipReason] = useState('');
   const [showSkipForm, setShowSkipForm] = useState(false);
 
-  // Initialize form with AI extracted data
-  useEffect(() => {
-    const aiData = document.extracted_data?.creditor_data;
-    if (aiData) {
-      setFormData({
-        sender_name: aiData.sender_name || '',
-        sender_email: aiData.sender_email || '',
-        sender_address: aiData.sender_address || '',
-        reference_number: aiData.reference_number || '',
-        claim_amount: aiData.claim_amount?.toString() || '',
-        notes: ''
-      });
+  const parseAmount = (raw?: string | number) => {
+    if (raw === undefined || raw === null) {
+      return '';
     }
-  }, [document]);
+    if (typeof raw === 'number') {
+      return raw.toString();
+    }
+    const normalized = raw.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
+    const num = parseFloat(normalized);
+    return isNaN(num) ? '' : num.toString();
+  };
+
+  // Initialize form preferring creditor (final list) data, fallback to AI-extracted doc data
+  useEffect(() => {
+    const cred = creditor || {};
+    const aiData = document.extracted_data?.creditor_data || {};
+    setFormData({
+      sender_name: cred.glaeubiger_name || cred.sender_name || aiData.sender_name || '',
+      sender_email: cred.email_glaeubiger || cred.sender_email || aiData.sender_email || '',
+      sender_address: cred.glaeubiger_adresse || cred.sender_address || aiData.sender_address || '',
+      reference_number: cred.reference_number || aiData.reference_number || '',
+      claim_amount: parseAmount(cred.claim_amount ?? cred.claim_amount_raw ?? aiData.claim_amount),
+      notes: ''
+    });
+  }, [document, creditor]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

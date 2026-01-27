@@ -674,7 +674,7 @@
 // };
 
 // export default ReviewDashboard;
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   UserIcon,
@@ -863,15 +863,30 @@ const ReviewDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveCorrections = async (corrections: any, action: 'correct' | 'skip' | 'confirm') => {
-    if (!reviewData || !reviewData.documents.need_review[currentDocIndex]) {
+  const handleSaveCorrections = async (corrections: any, action: 'correct' | 'skip' | 'confirm', creditorId?: string) => {
+    if (!reviewData || !reviewItems[currentDocIndex]) {
       return;
     }
 
     setSaving(true);
 
     try {
-      const currentDoc = reviewData.documents.need_review[currentDocIndex];
+      const currentItem = reviewItems[currentDocIndex];
+      const currentDoc = currentItem.doc;
+      const effectiveCreditorId = creditorId || currentItem.creditor?.id;
+      const originalSnapshot = {
+        sender_name: currentItem.creditor?.glaeubiger_name ?? currentItem.creditor?.sender_name ?? '',
+        sender_email: currentItem.creditor?.email_glaeubiger ?? currentItem.creditor?.sender_email ?? '',
+        sender_address: currentItem.creditor?.glaeubiger_adresse ?? currentItem.creditor?.sender_address ?? '',
+        reference_number: currentItem.creditor?.reference_number ?? '',
+        claim_amount: typeof currentItem.creditor?.claim_amount === 'number'
+          ? currentItem.creditor.claim_amount
+          : (
+            currentItem.creditor?.claim_amount_raw
+              ? parseFloat(String(currentItem.creditor.claim_amount_raw).replace(/\./g, '').replace(',', '.'))
+              : undefined
+          )
+      };
       const token = localStorage.getItem('agent_token');
 
       console.log(`📤 Sending correction request:`, {
@@ -879,6 +894,7 @@ const ReviewDashboard: React.FC = () => {
         document_id: currentDoc.id,
         action,
         corrections,
+        originalSnapshot,
         hasToken: !!token
       });
 
@@ -890,7 +906,9 @@ const ReviewDashboard: React.FC = () => {
         },
         body: JSON.stringify({
           document_id: currentDoc.id,
+          creditor_id: effectiveCreditorId,
           corrections: corrections,
+          original: originalSnapshot,
           action: action
         })
       });
@@ -908,15 +926,6 @@ const ReviewDashboard: React.FC = () => {
       // IMPORTANT: Don't reset currentDocIndex here blindly, because if we're on index 0 and item 0 is removed, 
       // the new item 0 will be the next one.
       await loadReviewData({ silent: true });
-
-      // If we skipped/reviewed, the list of 'documents.need_review' shrinks by 1.
-      // So if we were at index 0, the next item slides into index 0.
-      // So we should actually keep the index as is (unless it's out of bounds).
-      setCurrentDocIndex(prev => {
-        // If we processed the last item, we might need to decrement or stay at 0
-        // We'll let the render logic handle "no docs left" -> summary
-        return Math.max(0, prev);
-      });
 
     } catch (error: any) {
       console.error(`❌ Error saving ${action}:`, error);
@@ -1007,7 +1016,7 @@ const ReviewDashboard: React.FC = () => {
   };
 
   const nextDocument = () => {
-    if (reviewData && currentDocIndex < reviewData.documents.need_review.length - 1) {
+    if (reviewItems.length > 0 && currentDocIndex < reviewItems.length - 1) {
       setCurrentDocIndex(currentDocIndex + 1);
     }
   };
@@ -1017,6 +1026,65 @@ const ReviewDashboard: React.FC = () => {
       setCurrentDocIndex(currentDocIndex - 1);
     }
   };
+
+  const reviewItems = useMemo(() => {
+    if (!reviewData) {
+      return [];
+    }
+    const allDocs = reviewData.documents?.all || [];
+    const matchDocumentForCreditor = (cred: any) => {
+      const ids: string[] = [];
+      if (cred?.source_document_id) { ids.push(cred.source_document_id); }
+      if (cred?.primary_document_id) { ids.push(cred.primary_document_id); }
+      if (Array.isArray(cred?.document_links)) {
+        cred.document_links.forEach((l: any) => {
+          if (l?.id) { ids.push(l.id); }
+        });
+      }
+      const srcDocs = Array.isArray(cred?.source_documents) ? cred.source_documents : [];
+
+      const byId = allDocs.find(d => ids.includes(d.id));
+      if (byId) { return byId; }
+
+      const byName = allDocs.find(d =>
+        srcDocs.includes(d.id) ||
+        (d.filename && srcDocs.includes(d.filename)) ||
+        (d.name && srcDocs.includes(d.name))
+      );
+      if (byName) { return byName; }
+
+      const placeholderName = srcDocs[0] || cred.glaeubiger_name || cred.sender_name || 'Unbekanntes Dokument';
+      const placeholderId = cred.source_document_id || cred.primary_document_id || cred.document_id || cred.id || placeholderName;
+      return {
+        id: placeholderId,
+        name: placeholderName,
+        filename: placeholderName,
+        is_placeholder: true,
+        is_creditor_document: true
+      };
+    };
+
+    return (reviewData.creditors?.all || [])
+      .filter((c: any) => c?.needs_manual_review === true || c?.needs_manual_review === 'true')
+      .map((cred: any) => {
+        const doc = matchDocumentForCreditor(cred);
+        return { creditor: cred, doc };
+      });
+  }, [reviewData]);
+
+  // Clamp current index if list shrinks; switch to summary if none left
+  useEffect(() => {
+    if (!reviewData) {
+      return;
+    }
+    setCurrentDocIndex(prev => {
+      if (reviewItems.length === 0) { return 0; }
+      return Math.min(prev, reviewItems.length - 1);
+    });
+    if (reviewItems.length === 0 && reviewPhase !== 'summary') {
+      setReviewPhase('summary');
+    }
+  }, [reviewItems.length, reviewData, reviewPhase]);
 
   if (loading) {
     return (
@@ -1037,7 +1105,9 @@ const ReviewDashboard: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Fehler beim Laden</h3>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={() => loadReviewData()}
+            onClick={() => {
+              loadReviewData();
+            }}
             className="px-4 py-2 text-white rounded-md hover:opacity-90"
             style={{ backgroundColor: '#9f1a1d' }}
           >
@@ -1052,12 +1122,13 @@ const ReviewDashboard: React.FC = () => {
     return null;
   }
 
-  const documentsToReview = reviewData.documents.need_review || [];
-  const currentDoc = documentsToReview[currentDocIndex];
+  const currentItem = reviewItems[currentDocIndex];
+  const currentDoc = currentItem?.doc;
+  const currentCreditor = currentItem?.creditor || null;
 
   // Log for debugging
   console.log('📄 Current document:', currentDoc);
-  console.log('📑 Documents to review:', documentsToReview);
+  console.log('📑 Review items:', reviewItems);
 
   // Get high-confidence documents and creditors
   const highConfidenceDocuments = reviewData.documents.all.filter(doc =>
@@ -1184,8 +1255,8 @@ const ReviewDashboard: React.FC = () => {
         </div>
 
         <ProgressBar
-          current={currentDocIndex + 1}
-          total={documentsToReview.length}
+          current={reviewItems.length > 0 ? currentDocIndex + 1 : 0}
+          total={reviewItems.length}
           className="mt-4"
         />
       </div>
@@ -1212,8 +1283,9 @@ const ReviewDashboard: React.FC = () => {
           {currentDoc ? (
             <CorrectionForm
               document={currentDoc}
-              onSave={(corrections) => handleSaveCorrections(corrections, 'correct')}
-              onSkip={(reason) => handleSaveCorrections({ skip_reason: reason }, 'skip')}
+              creditor={currentCreditor || undefined}
+              onSave={(corrections) => handleSaveCorrections(corrections, 'correct', currentCreditor?.id)}
+              onSkip={(reason) => handleSaveCorrections({ skip_reason: reason }, 'skip', currentCreditor?.id)}
               disabled={saving}
               className="h-full"
             />
@@ -1230,7 +1302,7 @@ const ReviewDashboard: React.FC = () => {
         <div className="flex items-center space-x-4">
           <DocumentTextIcon className="h-5 w-5 text-gray-400" />
           <span className="text-sm text-gray-700">
-            Dokument {currentDocIndex + 1} von {documentsToReview.length}: {currentDoc.filename || currentDoc.name}
+            Dokument {reviewItems.length > 0 ? currentDocIndex + 1 : 0} von {reviewItems.length}: {currentDoc ? (currentDoc.filename || currentDoc.name) : '—'}
           </span>
         </div>
 
@@ -1246,7 +1318,7 @@ const ReviewDashboard: React.FC = () => {
 
           <button
             onClick={nextDocument}
-            disabled={currentDocIndex === documentsToReview.length - 1 || saving}
+            disabled={currentDocIndex === reviewItems.length - 1 || saving}
             className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#9f1a1d' }}
           >

@@ -41,6 +41,9 @@ interface ReviewedDocDiff {
   name: string;
   original: ReviewedDocFields;
   updated: ReviewedDocFields;
+  key?: string;
+  creditorId?: string;
+  creditor_name?: string;
 }
 
 interface HighConfidenceSummaryProps {
@@ -176,15 +179,17 @@ const HighConfidenceSummary: React.FC<HighConfidenceSummaryProps> = ({
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Geprüfte Dokumente</h3>
           <div className="space-y-2">
             {reviewedDiffs.map((item) => {
-              const isOpen = openDocId === item.docId;
+              const diffKey = item.key || item.docId;
+              const title = item.creditor_name || item.name || 'Unbenanntes Dokument';
+              const isOpen = openDocId === diffKey;
               return (
-                <div key={item.docId} className="border border-gray-200 rounded-md">
+                <div key={diffKey} className="border border-gray-200 rounded-md">
                   <button
                     type="button"
                     className="w-full flex justify-between items-center px-4 py-3 text-left hover:bg-gray-50"
-                    onClick={() => setOpenDocId(isOpen ? null : item.docId)}
+                    onClick={() => setOpenDocId(isOpen ? null : diffKey)}
                   >
-                    <span className="text-sm font-semibold text-gray-900">{item.name || 'Unbenanntes Dokument'}</span>
+                    <span className="text-sm font-semibold text-gray-900">{title}</span>
                     <span className="text-xs text-gray-500">{isOpen ? '▼' : '▶'}</span>
                   </button>
                   {isOpen && (
