@@ -1049,7 +1049,9 @@ Diese E-Mail wurde automatisch generiert.
                         status: 'confirmed', // Change status from pending to confirmed
                         manually_reviewed: true,
                         needs_manual_review: false,
-                        review_reasons: Array.isArray(creditorData?.review_reasons) ? creditorData.review_reasons : [],
+                        review_reasons: Array.isArray(creditors[creditorIndex]?.review_reasons)
+                            ? creditors[creditorIndex].review_reasons
+                            : [],
                         reviewed_by: req.agentId,
                         reviewed_at: new Date(),
                         confirmed_at: new Date(), // Add confirmation timestamp
@@ -1090,10 +1092,8 @@ Diese E-Mail wurde automatisch generiert.
                             status: 'confirmed',
                             manually_reviewed: true,
                             needs_manual_review: false,
-                        review_reasons: Array.isArray(corrections.review_reasons)
-                            ? corrections.review_reasons
-                            : Array.isArray(existing.review_reasons)
-                                ? existing.review_reasons
+                            review_reasons: Array.isArray(corrections.review_reasons)
+                                ? corrections.review_reasons
                                 : [],
                             reviewed_by: req.agentId,
                             reviewed_at: new Date(),
