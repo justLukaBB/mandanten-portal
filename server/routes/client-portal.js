@@ -3,7 +3,7 @@ const router = express.Router();
 const createClientPortalController = require('../controllers/clientPortalController');
 const { authenticateClient } = require('../middleware/auth');
 const { rateLimits, validateFileUpload } = require('../middleware/security');
-const { upload } = require('../middleware/upload');
+const { upload, uploadTimeout } = require('../middleware/upload');
 
 /**
  * Client Portal Routes Factory
@@ -49,6 +49,7 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
 
     // Upload documents
     router.post('/clients/:clientId/documents',
+        uploadTimeout(300000), // 5 minute timeout for uploads
         rateLimits.upload,
         upload.fields([{ name: 'documents', maxCount: 10 }, { name: 'document', maxCount: 1 }]),
         validateFileUpload,

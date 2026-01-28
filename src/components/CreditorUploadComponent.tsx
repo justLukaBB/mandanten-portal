@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { CloudArrowUpIcon, DocumentIcon, XMarkIcon, CheckCircleIcon, DocumentTextIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon, MagnifyingGlassMinusIcon } from '@heroicons/react/24/outline';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { CloudArrowUpIcon, DocumentIcon, XMarkIcon, CheckCircleIcon, DocumentTextIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon, MagnifyingGlassMinusIcon, ArrowPathIcon, PauseIcon, PlayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../config/api';
+import { UploadQueueManager, QueuedFile, UploadStatus } from '../utils/uploadQueue';
 
 interface Client {
   id?: string;
@@ -29,11 +30,13 @@ interface CreditorUploadComponentProps {
   >;
 }
 
-interface UploadedFile {
-  file: File;
+interface DisplayFile {
   id: string;
+  file: File;
   progress: number;
-  status: 'uploading' | 'completed' | 'error';
+  status: UploadStatus;
+  error?: string;
+  retryCount?: number;
 }
 
 const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
@@ -44,12 +47,70 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   previewFile,
   setPreviewFile,
 }) => {
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [displayFiles, setDisplayFiles] = useState<DisplayFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [isPaused, setIsPaused] = useState(false);
+  const [queueStats, setQueueStats] = useState({ total: 0, completed: 0, failed: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const queueManagerRef = useRef<UploadQueueManager | null>(null);
   const [zoom, setZoom] = useState(1);
+
+  // Initialize queue manager
+  useEffect(() => {
+    const clientIdentifier = client?.id || client?.aktenzeichen || client?._id;
+    if (!clientIdentifier) return;
+
+    const uploadUrl = `${API_BASE_URL}/api/clients/${clientIdentifier}/documents`;
+
+    queueManagerRef.current = new UploadQueueManager(uploadUrl, {
+      onFileStatusChange: (fileId, status, progress, error) => {
+        setDisplayFiles(prev =>
+          prev.map(f =>
+            f.id === fileId
+              ? { ...f, status, progress: progress ?? f.progress, error }
+              : f
+          )
+        );
+        updateStats();
+      },
+      onUploadComplete: (fileId, response) => {
+        console.log(`[Upload] File ${fileId} completed:`, response);
+        updateStats();
+      },
+      onUploadError: (fileId, error, errorCode) => {
+        console.error(`[Upload] File ${fileId} failed:`, error, errorCode);
+        updateStats();
+      },
+      onQueueComplete: () => {
+        const stats = queueManagerRef.current?.getStats();
+        if (stats && stats.completed > 0) {
+          setSuccessMessage(`${stats.completed} Dokument(e) erfolgreich hochgeladen!`);
+          setTimeout(() => setSuccessMessage(''), 6000);
+        }
+      }
+    }, {
+      maxConcurrent: 2,
+      maxRetries: 3,
+      timeoutMs: 300000, // 5 minutes
+      baseRetryDelayMs: 2000
+    });
+
+    return () => {
+      queueManagerRef.current = null;
+    };
+  }, [client?.id, client?.aktenzeichen, client?._id]);
+
+  const updateStats = useCallback(() => {
+    if (queueManagerRef.current) {
+      const stats = queueManagerRef.current.getStats();
+      setQueueStats({
+        total: stats.total,
+        completed: stats.completed,
+        failed: stats.failed
+      });
+    }
+  }, []);
 
   const validateFile = (file: File): string | null => {
     // Check file size (10MB limit)
@@ -77,11 +138,11 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
       return `Ungültiger Dateiname: "${file.name}". Nur Buchstaben, Zahlen und einfache Sonderzeichen erlaubt.`;
     }
 
-    return null; // File is valid
+    return null;
   };
 
   const handleFileSelect = (files: FileList | null) => {
-    if (!files) {
+    if (!files || !queueManagerRef.current) {
       return;
     }
 
@@ -103,136 +164,68 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
       alert('Upload-Fehler:\n\n' + errors.join('\n'));
     }
 
-    // Only upload valid files
+    // Add valid files to queue
     if (validFiles.length > 0) {
-      const newFiles: UploadedFile[] = validFiles.map(file => ({
-        file,
-        id: Math.random().toString(36).substr(2, 9),
+      const queuedFiles = queueManagerRef.current.addToQueue(validFiles);
+
+      // Add to display files
+      const newDisplayFiles: DisplayFile[] = queuedFiles.map(qf => ({
+        id: qf.id,
+        file: qf.file,
         progress: 0,
-        status: 'uploading' as const
+        status: 'pending' as UploadStatus,
+        retryCount: 0
       }));
 
-      setUploadedFiles(prev => [...prev, ...newFiles]);
-
-      // Upload files to server
-      newFiles.forEach(uploadedFile => {
-        uploadFile(uploadedFile);
-      });
+      setDisplayFiles(prev => [...prev, ...newDisplayFiles]);
+      updateStats();
     }
   };
 
-  const uploadFile = async (uploadedFile: UploadedFile) => {
-    const formData = new FormData();
-    formData.append('documents', uploadedFile.file);
+  const handlePauseResume = () => {
+    if (!queueManagerRef.current) return;
 
-    // Debug: Log client information
-    console.log('Upload: Client Object:', client);
-    console.log('Upload: Client ID:', client?.id);
-    console.log('Upload: Client Aktenzeichen:', client?.aktenzeichen);
-    console.log('Upload: Client _id:', client?._id);
-
-    // Show debug info to user temporarily
-    if (!client?.id && !client?.aktenzeichen && !client?._id) {
-      alert('Debug: Kein Client-Objekt verfügbar! Client: ' + JSON.stringify(client));
+    if (isPaused) {
+      queueManagerRef.current.resume();
+      setIsPaused(false);
+    } else {
+      queueManagerRef.current.pause();
+      setIsPaused(true);
     }
+  };
 
-    try {
-      const xhr = new XMLHttpRequest();
-
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadedFiles(prev =>
-            prev.map(f =>
-              f.id === uploadedFile.id
-                ? { ...f, progress }
-                : f
-            )
-          );
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          setUploadedFiles(prev =>
-            prev.map(f =>
-              f.id === uploadedFile.id
-                ? { ...f, progress: 100, status: 'completed' as const }
-                : f
-            )
-          );
-          // Show success message (documents will appear in list after page reload)
-          if (response.documents) {
-            // ✅ Don't call onUploadComplete - prevents duplicate display
-            // Documents will appear in "Bereits erfolgreich hochgeladene Dokumente" after page reload
-            setSuccessMessage(`${response.documents.length} Dokument(e) erfolgreich hochgeladen!`);
-            setTimeout(() => setSuccessMessage(''), 6000);
-          }
-        } else {
-          // Parse error response if possible
-          let errorMessage = `Upload fehlgeschlagen (HTTP ${xhr.status})`;
-          try {
-            const errorResponse = JSON.parse(xhr.responseText);
-            errorMessage = errorResponse.error || errorMessage;
-          } catch (e) {
-            // Use default message if JSON parsing fails
-          }
-
-          console.error('Upload failed:', errorMessage);
-          alert(`Upload Fehler: ${errorMessage}`);
-
-          setUploadedFiles(prev =>
-            prev.map(f =>
-              f.id === uploadedFile.id
-                ? { ...f, status: 'error' as const }
-                : f
-            )
-          );
-        }
-      });
-
-      xhr.addEventListener('error', () => {
-        setUploadedFiles(prev =>
-          prev.map(f =>
-            f.id === uploadedFile.id
-              ? { ...f, status: 'error' as const }
-              : f
-          )
-        );
-      });
-
-      // Use client ID, aktenzeichen, or _id as fallback
-      const clientIdentifier = client?.id || client?.aktenzeichen || client?._id;
-
-      if (!clientIdentifier) {
-        throw new Error('Keine gültige Client-ID verfügbar. Bitte melden Sie sich erneut an.');
-      }
-
-      xhr.open('POST', `${API_BASE_URL}/api/clients/${clientIdentifier}/documents`);
-      xhr.send(formData);
-
-    } catch (error) {
-      console.error('Upload error:', error);
-
-      // Show specific error message to user
-      if (error instanceof Error && error.message.includes('Client-ID')) {
-        alert('Fehler: ' + error.message);
-      }
-
-      setUploadedFiles(prev =>
+  const handleRetryFile = (fileId: string) => {
+    if (queueManagerRef.current?.retryFile(fileId)) {
+      setDisplayFiles(prev =>
         prev.map(f =>
-          f.id === uploadedFile.id
-            ? { ...f, status: 'error' as const }
+          f.id === fileId
+            ? { ...f, status: 'pending', progress: 0, error: undefined }
             : f
         )
       );
     }
   };
 
+  const handleRetryAllFailed = () => {
+    if (queueManagerRef.current) {
+      const count = queueManagerRef.current.retryAllFailed();
+      if (count > 0) {
+        setDisplayFiles(prev =>
+          prev.map(f =>
+            f.status === 'failed'
+              ? { ...f, status: 'pending', progress: 0, error: undefined }
+              : f
+          )
+        );
+      }
+    }
+  };
+
   const removeFile = (fileId: string) => {
-    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+    if (queueManagerRef.current?.removeFile(fileId)) {
+      setDisplayFiles(prev => prev.filter(f => f.id !== fileId));
+      updateStats();
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -261,11 +254,52 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getStatusIcon = (status: UploadStatus) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircleIcon className="w-5 h-5 text-green-500" />;
+      case 'uploading':
+        return (
+          <div className="w-5 h-5">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          </div>
+        );
+      case 'retrying':
+        return (
+          <div className="w-5 h-5">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-500"></div>
+          </div>
+        );
+      case 'failed':
+        return <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />;
+      case 'pending':
+      default:
+        return (
+          <div className="w-5 h-5 rounded-full border-2 border-gray-300"></div>
+        );
+    }
+  };
+
+  const getStatusColor = (status: UploadStatus): string => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500';
+      case 'uploading':
+        return 'bg-blue-500';
+      case 'retrying':
+        return 'bg-yellow-500';
+      case 'failed':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-300';
+    }
+  };
+
   const handlePreview = async (fileOrDocument: any) => {
     try {
       setPreviewFile({ loading: true });
 
-      // 🧩 Case 1: Local uploaded file (not yet saved on backend)
+      // Case 1: Local uploaded file (not yet saved on backend)
       if (fileOrDocument.file instanceof File) {
         const file = fileOrDocument.file;
         const objectUrl = URL.createObjectURL(file);
@@ -279,7 +313,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         return;
       }
 
-      // 🧩 Case 2: Existing document from backend
+      // Case 2: Existing document from backend
       if (!client?.id || !fileOrDocument.id) {
         throw new Error("Invalid document reference");
       }
@@ -310,7 +344,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         type: contentType,
       });
     } catch (err) {
-      console.error("❌ Preview failed:", err);
+      console.error("Preview failed:", err);
       alert("Unable to load preview. Please try again.");
       setPreviewFile(null);
     }
@@ -319,12 +353,17 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
 
+  // Calculate active uploads count
+  const activeUploads = displayFiles.filter(f =>
+    f.status === 'uploading' || f.status === 'retrying' || f.status === 'pending'
+  ).length;
+  const failedUploads = displayFiles.filter(f => f.status === 'failed').length;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Dokumente hochladen</h3>
       <p className="text-sm text-gray-600 mb-6">
-        Laden Sie hier Ihre Gläubigerbriefe und anderen relevanten Dokumente hoch.
+        Laden Sie hier Ihre Glaubigerbriefe und anderen relevanten Dokumente hoch.
       </p>
 
       {/* Success Message */}
@@ -348,7 +387,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         </div>
       )}
 
-      {/* Upload Area - ALWAYS ACTIVE for iterative document uploads */}
+      {/* Upload Area */}
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${isDragOver
           ? 'border-blue-400 bg-blue-50'
@@ -380,15 +419,66 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         />
       </div>
 
+      {/* Queue Controls */}
+      {displayFiles.length > 0 && (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            <span className="font-medium">{queueStats.completed}</span> von{' '}
+            <span className="font-medium">{displayFiles.length}</span> hochgeladen
+            {failedUploads > 0 && (
+              <span className="text-red-600 ml-2">
+                ({failedUploads} fehlgeschlagen)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            {failedUploads > 0 && (
+              <button
+                onClick={handleRetryAllFailed}
+                className="flex items-center px-3 py-1.5 text-sm bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors"
+              >
+                <ArrowPathIcon className="w-4 h-4 mr-1" />
+                Alle wiederholen
+              </button>
+            )}
+            {activeUploads > 0 && (
+              <button
+                onClick={handlePauseResume}
+                className={`flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  isPaused
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {isPaused ? (
+                  <>
+                    <PlayIcon className="w-4 h-4 mr-1" />
+                    Fortsetzen
+                  </>
+                ) : (
+                  <>
+                    <PauseIcon className="w-4 h-4 mr-1" />
+                    Pause
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Uploaded Files List */}
-      {uploadedFiles.length > 0 && (
+      {displayFiles.length > 0 && (
         <div className="mt-6 space-y-3">
           <h4 className="text-sm font-medium text-gray-900">Aktuell hochgeladene Dateien</h4>
-          {uploadedFiles.map((uploadedFile) => (
+          {displayFiles.map((uploadedFile) => (
             <div
               key={uploadedFile.id}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer
-              hover:bg-gray-100 transition-colors duration-200 border border-transparent hover:border-gray-200"
+              className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 border ${
+                uploadedFile.status === 'failed'
+                  ? 'bg-red-50 border-red-200 hover:bg-red-100'
+                  : 'bg-gray-50 border-transparent hover:bg-gray-100 hover:border-gray-200'
+              }`}
               onClick={() => handlePreview(uploadedFile)}
             >
               <div className="flex items-center flex-1 min-w-0">
@@ -397,14 +487,21 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
                   <p className="text-sm font-medium text-gray-900 truncate">
                     {uploadedFile.file.name}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {formatFileSize(uploadedFile.file.size)}
-                  </p>
+                  <div className="flex items-center space-x-2">
+                    <p className="text-xs text-gray-500">
+                      {formatFileSize(uploadedFile.file.size)}
+                    </p>
+                    {uploadedFile.error && (
+                      <p className="text-xs text-red-600 truncate">
+                        {uploadedFile.error}
+                      </p>
+                    )}
+                  </div>
 
-                  {uploadedFile.status === 'uploading' && (
+                  {(uploadedFile.status === 'uploading' || uploadedFile.status === 'retrying') && (
                     <div className="mt-1 w-full bg-gray-200 rounded-full h-1">
                       <div
-                        className="bg-red-800 h-1 rounded-full transition-all duration-300"
+                        className={`h-1 rounded-full transition-all duration-300 ${getStatusColor(uploadedFile.status)}`}
                         style={{ width: `${uploadedFile.progress}%` }}
                       />
                     </div>
@@ -413,30 +510,33 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
               </div>
 
               <div className="flex items-center space-x-2 ml-4">
-                {uploadedFile.status === 'completed' && (
-                  <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                )}
                 {uploadedFile.status === 'uploading' && (
-                  <div className="w-5 h-5">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  </div>
+                  <span className="text-xs text-gray-500">{uploadedFile.progress}%</span>
                 )}
-                {uploadedFile.status === 'error' && (
-                  <div className="w-5 h-5 text-red-500">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+                {getStatusIcon(uploadedFile.status)}
+                {uploadedFile.status === 'failed' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRetryFile(uploadedFile.id);
+                    }}
+                    className="p-1 text-yellow-600 hover:text-yellow-700 transition-colors"
+                    title="Erneut versuchen"
+                  >
+                    <ArrowPathIcon className="w-4 h-4" />
+                  </button>
                 )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile(uploadedFile.id);
-                  }}
-                  className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
+                {uploadedFile.status !== 'uploading' && uploadedFile.status !== 'retrying' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(uploadedFile.id);
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -447,7 +547,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
         <div className="mt-6 space-y-3">
           <h4 className="text-sm font-medium text-gray-900">Bereits erfolgreich hochgeladene Dokumente:</h4>
           {documents
-            .filter((doc) => !uploadedFiles.some((file) => file.file.name === doc.filename)) // skip current files
+            .filter((doc) => !displayFiles.some((file) => file.file.name === doc.filename))
             .map((document) => (
               <div
                 key={document.extracted_data?.document_id}
@@ -504,7 +604,7 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
               }}
               className="absolute top-1 right-2 text-gray-600 hover:text-black z-10"
             >
-              ✕
+              X
             </button>
 
             {/* Header with controls */}
@@ -544,9 +644,6 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
                 >
                   <MagnifyingGlassPlusIcon className="h-4 w-4 text-gray-600" />
                 </button>
-
-
-
               </div>
             </div>
 

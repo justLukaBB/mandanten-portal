@@ -57,7 +57,49 @@ const upload = multer({
     fileFilter: fileFilter
 });
 
+/**
+ * Upload Timeout Middleware
+ * Sets a timeout for upload requests to prevent hanging connections
+ * @param {number} timeoutMs - Timeout in milliseconds (default: 5 minutes)
+ */
+const uploadTimeout = (timeoutMs = 300000) => {
+    return (req, res, next) => {
+        // Store original timeout for logging
+        const originalTimeout = req.socket.timeout;
+
+        console.log(`⏱️  Upload timeout middleware: Setting timeout to ${timeoutMs}ms (was ${originalTimeout}ms)`);
+
+        // Set request timeout
+        req.setTimeout(timeoutMs, () => {
+            console.error(`❌ Upload timeout: Request exceeded ${timeoutMs}ms`, {
+                method: req.method,
+                url: req.originalUrl,
+                contentLength: req.headers['content-length'],
+                contentType: req.headers['content-type'],
+                clientId: req.params?.clientId
+            });
+
+            if (!res.headersSent) {
+                res.status(408).json({
+                    error: 'Upload timeout - Die Anfrage dauerte zu lange',
+                    code: 'REQUEST_TIMEOUT',
+                    timeout: timeoutMs,
+                    hint: 'Versuchen Sie, weniger oder kleinere Dateien gleichzeitig hochzuladen'
+                });
+            }
+        });
+
+        // Also set response timeout
+        res.setTimeout(timeoutMs, () => {
+            console.error(`❌ Response timeout: Response exceeded ${timeoutMs}ms`);
+        });
+
+        next();
+    };
+};
+
 module.exports = {
     upload,
-    uploadsDir
+    uploadsDir,
+    uploadTimeout
 }

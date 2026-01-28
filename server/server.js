@@ -394,12 +394,66 @@ app.use((error, req, res, next) => {
     });
   }
 
+  // Enhanced Multer Error Handling
   if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        error: 'Datei zu groß. Maximale Größe: 10MB'
-      });
+    console.error('❌ Multer Error:', {
+      code: error.code,
+      field: error.field,
+      message: error.message,
+      stack: error.stack
+    });
+
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        return res.status(400).json({
+          error: 'Datei zu groß. Maximale Größe: 10MB',
+          code: 'LIMIT_FILE_SIZE'
+        });
+      case 'LIMIT_FILE_COUNT':
+        return res.status(400).json({
+          error: 'Zu viele Dateien. Maximum: 10 Dateien pro Upload',
+          code: 'LIMIT_FILE_COUNT'
+        });
+      case 'LIMIT_UNEXPECTED_FILE':
+        return res.status(400).json({
+          error: 'Unerwartetes Dateifeld',
+          code: 'LIMIT_UNEXPECTED_FILE'
+        });
+      case 'LIMIT_PART_COUNT':
+        return res.status(400).json({
+          error: 'Zu viele Teile in der Anfrage',
+          code: 'LIMIT_PART_COUNT'
+        });
+      case 'LIMIT_FIELD_KEY':
+        return res.status(400).json({
+          error: 'Feldname zu lang',
+          code: 'LIMIT_FIELD_KEY'
+        });
+      case 'LIMIT_FIELD_VALUE':
+        return res.status(400).json({
+          error: 'Feldwert zu lang',
+          code: 'LIMIT_FIELD_VALUE'
+        });
+      case 'LIMIT_FIELD_COUNT':
+        return res.status(400).json({
+          error: 'Zu viele Felder',
+          code: 'LIMIT_FIELD_COUNT'
+        });
+      default:
+        return res.status(400).json({
+          error: `Upload-Fehler: ${error.message}`,
+          code: error.code
+        });
     }
+  }
+
+  // Handle file filter errors (custom validation errors from multer fileFilter)
+  if (error.message && error.message.includes('Dateityp nicht unterstützt')) {
+    console.error('❌ File Type Error:', error.message);
+    return res.status(400).json({
+      error: error.message,
+      code: 'INVALID_FILE_TYPE'
+    });
   }
 
   res.status(500).json({
