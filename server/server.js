@@ -57,11 +57,18 @@ const LoginReminderService = require('./services/loginReminderService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
 const aiDedupScheduler = require('./services/aiDedupScheduler');
 
+// Webhook Queue System
+const WebhookWorker = require('./workers/webhookWorker');
+const createWebhookController = require('./controllers/webhookController');
+
 // =============================================================================
 // 5. OBSERVER INSTANTIATION (Global State)
 // =============================================================================
 const globalSideConversationMonitor = new SideConversationMonitor();
 const globalSettlementResponseMonitor = new SettlementResponseMonitor();
+
+// Webhook Worker (initialized after server starts)
+let webhookWorker = null;
 
 // =============================================================================
 // 6. SERVICE INSTANTIATION
@@ -142,6 +149,7 @@ const authImpersonationRoutes = require('./routes/auth-impersonation');
 const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const createAdminCreditorDatabaseRouter = require('./routes/admin-creditor-database');
 const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
+const adminWebhookQueueRoutes = require('./routes/admin-webhook-queue');
 const testRoutes = require('./routes/test-routes');
 
 // =============================================================================
@@ -253,12 +261,27 @@ app.use('/documents', express.static(path.join(__dirname, 'documents')));
 app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
 // 10.2 Webhooks
-app.use('/api/webhooks', createWebhooksRouter({
+// Create webhook controller for both HTTP routes and background worker
+const webhookController = createWebhookController({
   Client,
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
   getClient: clientService.getClient.bind(clientService),
   triggerProcessingCompleteWebhook,
   getIO
+});
+
+// Initialize webhook worker with the controller's processing function
+webhookWorker = new WebhookWorker({
+  processAiProcessingWebhook: webhookController.processAiProcessingWebhook
+});
+
+app.use('/api/webhooks', createWebhooksRouter({
+  Client,
+  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
+  getClient: clientService.getClient.bind(clientService),
+  triggerProcessingCompleteWebhook,
+  getIO,
+  webhookController // Pass the controller to avoid creating a second instance
 }));
 
 app.use('/api/zendesk-webhooks', createZendeskWebhooksRouter({
@@ -349,6 +372,7 @@ app.use('/api/admin', createAdminClientCreditorRouter({
 }));
 
 app.use('/api/admin', adminDelayedProcessingRoutes);
+app.use('/api/admin/webhook-queue', adminWebhookQueueRoutes);
 
 // 10.7 Client Portal Global Routes
 
@@ -482,6 +506,12 @@ async function startServer() {
         loginReminderService
       });
       scheduler.startScheduledTasks();
+
+      // Start webhook worker for background processing
+      if (webhookWorker) {
+        webhookWorker.start();
+        console.log('🔄 Webhook worker started');
+      }
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -492,12 +522,18 @@ async function startServer() {
 // Graceful Shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  if (webhookWorker) {
+    await webhookWorker.stop();
+  }
   await databaseService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+  if (webhookWorker) {
+    await webhookWorker.stop();
+  }
   await databaseService.disconnect();
   process.exit(0);
 });

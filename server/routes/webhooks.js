@@ -22,9 +22,11 @@ const createWebhookController = require('../controllers/webhookController');
 /**
  * Webhook Routes Factory
  * @param {Object} dependencies - dependencies injected from server.js
+ * @param {Object} dependencies.webhookController - Optional pre-created controller (for worker integration)
  */
-module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO }) => {
-  const controller = createWebhookController({
+module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO, webhookController }) => {
+  // Use provided controller or create a new one
+  const controller = webhookController || createWebhookController({
     Client,
     safeClientUpdate,
     getClient,
