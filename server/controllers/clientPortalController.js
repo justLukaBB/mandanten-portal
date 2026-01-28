@@ -795,7 +795,25 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                 const uploadedDocuments = [];
 
+                // Throttling configuration for FastAPI calls
+                const baseDelay = parseInt(process.env.FASTAPI_UPLOAD_DELAY_MS) || 2000;
+                const delayIncrement = parseInt(process.env.FASTAPI_UPLOAD_DELAY_INCREMENT_MS) || 500;
+                const totalFiles = allFiles.length;
+
+                // Log throttling configuration for batch uploads
+                if (totalFiles > 1) {
+                    const maxDelay = baseDelay + ((totalFiles - 2) * delayIncrement);
+                    const totalEstimatedTime = baseDelay * (totalFiles - 1) + (delayIncrement * (totalFiles - 1) * (totalFiles - 2)) / 2;
+                    console.log(`\n⏱️  UPLOAD THROTTLING CONFIGURATION:`);
+                    console.log(`   📊 Total files: ${totalFiles}`);
+                    console.log(`   ⏳ Base delay: ${baseDelay}ms`);
+                    console.log(`   📈 Delay increment: ${delayIncrement}ms`);
+                    console.log(`   🔚 Max delay (last file): ${maxDelay}ms`);
+                    console.log(`   ⏰ Estimated total spread time: ${(totalEstimatedTime / 1000).toFixed(1)}s\n`);
+                }
+
                 // Process each uploaded file
+                let fileIndex = 0;
                 for (const file of allFiles) {
                     const documentId = uuidv4();
 
@@ -846,8 +864,15 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                     uploadedDocuments.push(documentRecord);
 
-                    // Start AI processing in background with detailed logging and timeout
-                    setImmediate(async () => {
+                    // Calculate progressive delay for this file to avoid server overload
+                    // First file: 0ms (immediate), subsequent files: baseDelay + (index-1) * increment
+                    const delayMs = fileIndex === 0 ? 0 : baseDelay + ((fileIndex - 1) * delayIncrement);
+                    const currentFileIndex = fileIndex; // Capture for closure
+
+                    console.log(`⏱️  Scheduling FastAPI call for ${file.originalname} with ${delayMs}ms delay (file ${currentFileIndex + 1}/${totalFiles})`);
+
+                    // Start AI processing in background with progressive delay
+                    setTimeout(async () => {
                         const startTime = Date.now();
                         const PROCESSING_TIMEOUT = 5 * 60 * 1000; // 5 minutes timeout
 
@@ -858,6 +883,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                         console.log(`📊 Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
                         console.log(`🔤 Type: ${file.mimetype}`);
                         console.log(`🆔 Document ID: ${documentId}`);
+                        console.log(`📊 File ${currentFileIndex + 1}/${totalFiles} (delayed by ${delayMs}ms)`);
                         console.log(`⏰ Started at: ${new Date().toISOString()}`);
                         console.log(`⏱️  Timeout: ${PROCESSING_TIMEOUT / 1000}s`);
                         console.log(`🚀 =========================\n`);
@@ -971,7 +997,9 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                                 return client;
                             });
                         }
-                    }); // End setImmediate
+                    }, delayMs); // End setTimeout with throttling delay
+
+                    fileIndex++;
                 }
 
                 // Add documents to client using safeClientUpdate
