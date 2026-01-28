@@ -693,9 +693,32 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                 };
 
                 for (const creditor of deduplicated_creditors) {
-                    // Prüfe beide Feldnamen-Formate (deutsch und englisch)
-                    const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
-                    const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+                    // Prüfe ALLE möglichen Feldnamen-Formate
+                    const emailFields = {
+                        email_glaeubiger: creditor.email_glaeubiger,
+                        sender_email: creditor.sender_email,
+                        Email_Gläubiger: creditor.Email_Gläubiger,
+                        creditor_email: creditor.creditor_email
+                    };
+                    const addressFields = {
+                        glaeubiger_adresse: creditor.glaeubiger_adresse,
+                        sender_address: creditor.sender_address,
+                        Gläubiger_Adresse: creditor.Gläubiger_Adresse,
+                        creditor_address: creditor.creditor_address
+                    };
+
+                    const hasEmail = !isMissing(creditor.email_glaeubiger) ||
+                                     !isMissing(creditor.sender_email) ||
+                                     !isMissing(creditor.Email_Gläubiger);
+                    const hasAddress = !isMissing(creditor.glaeubiger_adresse) ||
+                                       !isMissing(creditor.sender_address) ||
+                                       !isMissing(creditor.Gläubiger_Adresse);
+
+                    // DEBUG: Log all field values for this creditor
+                    console.log(`[webhook] 📧 Checking creditor: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                    console.log(`  Email fields:`, JSON.stringify(emailFields));
+                    console.log(`  Address fields:`, JSON.stringify(addressFields));
+                    console.log(`  hasEmail: ${hasEmail}, hasAddress: ${hasAddress}`);
 
                     if (!hasEmail || !hasAddress) {
                         creditor.needs_manual_review = true;
@@ -709,10 +732,14 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
                         }
 
-                        console.log(`[webhook] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
+                        console.log(`[webhook] ⚠️ Manual review triggered for: ${creditor.sender_name || creditor.glaeubiger_name}`, {
                             missing_email: !hasEmail,
-                            missing_address: !hasAddress
+                            missing_address: !hasAddress,
+                            email_values: emailFields,
+                            address_values: addressFields
                         });
+                    } else {
+                        console.log(`[webhook] ✅ Creditor OK: ${creditor.sender_name || creditor.glaeubiger_name}`);
                     }
                 }
 
