@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs-extra');
 const { uploadToGCS } = require('../services/gcs-service');
-const { createProcessingJob } = require('../utils/fastApiClient');
+const documentQueueService = require('../services/documentQueueService');
 const GermanGarnishmentCalculator = require('../services/germanGarnishmentCalculator');
 const DocumentGenerator = require('../services/documentGenerator');
 const CreditorContactService = require('../services/creditorContactService');
@@ -795,25 +795,19 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                 const uploadedDocuments = [];
 
-                // Throttling configuration for FastAPI calls
-                const baseDelay = parseInt(process.env.FASTAPI_UPLOAD_DELAY_MS) || 2000;
-                const delayIncrement = parseInt(process.env.FASTAPI_UPLOAD_DELAY_INCREMENT_MS) || 500;
+                // Prepare webhook URL for FastAPI to send results back
+                const webhookBaseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
+                const webhookUrl = `${webhookBaseUrl}/api/webhooks/ai-processing`;
+                const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || null;
                 const totalFiles = allFiles.length;
 
-                // Log throttling configuration for batch uploads
-                if (totalFiles > 1) {
-                    const maxDelay = baseDelay + ((totalFiles - 2) * delayIncrement);
-                    const totalEstimatedTime = baseDelay * (totalFiles - 1) + (delayIncrement * (totalFiles - 1) * (totalFiles - 2)) / 2;
-                    console.log(`\n⏱️  UPLOAD THROTTLING CONFIGURATION:`);
-                    console.log(`   📊 Total files: ${totalFiles}`);
-                    console.log(`   ⏳ Base delay: ${baseDelay}ms`);
-                    console.log(`   📈 Delay increment: ${delayIncrement}ms`);
-                    console.log(`   🔚 Max delay (last file): ${maxDelay}ms`);
-                    console.log(`   ⏰ Estimated total spread time: ${(totalEstimatedTime / 1000).toFixed(1)}s\n`);
-                }
+                console.log(`\n📋 QUEUE-BASED PROCESSING:`);
+                console.log(`   📊 Total files: ${totalFiles}`);
+                console.log(`   🔔 Webhook URL: ${webhookUrl}`);
+                console.log(`   📋 Adding all documents to processing queue...\n`);
 
-                // Process each uploaded file
-                let fileIndex = 0;
+                // Process each uploaded file - upload to GCS and enqueue
+                const queuedJobs = [];
                 for (const file of allFiles) {
                     const documentId = uuidv4();
 
@@ -831,7 +825,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                         // Fallback: Write to local temp directory
                         try {
-                            const tempDir = path.join(__dirname, '../../uploads/temp_local_processing'); // Adjusted path for controller location
+                            const tempDir = path.join(__dirname, '../../uploads/temp_local_processing');
                             await fs.ensureDir(tempDir);
 
                             // Create a safe unique filename
@@ -843,7 +837,6 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                             cleanFilename = file.originalname;
                         } catch (writeError) {
                             console.error(`❌ Failed to write local temp file:`, writeError);
-                            // If both fail, we must skip
                             res.status(500).json({ error: 'Failed to store file (GCS and Local failed)' });
                             return;
                         }
@@ -852,154 +845,50 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     const documentRecord = {
                         id: documentId,
                         name: file.originalname,
-                        filename: cleanFilename, // Use clean GCS filename
+                        filename: cleanFilename,
                         type: file.mimetype,
                         size: file.size,
                         uploadedAt: new Date().toISOString(),
                         category: 'creditor',
-                        url: gcsUrl, // GCS URL
-                        processing_status: 'processing',
+                        url: gcsUrl,
+                        processing_status: 'queued', // Changed from 'processing' to 'queued'
                         extracted_data: null
                     };
 
                     uploadedDocuments.push(documentRecord);
 
-                    // Calculate progressive delay for this file to avoid server overload
-                    // First file: 0ms (immediate), subsequent files: baseDelay + (index-1) * increment
-                    const delayMs = fileIndex === 0 ? 0 : baseDelay + ((fileIndex - 1) * delayIncrement);
-                    const currentFileIndex = fileIndex; // Capture for closure
+                    // Enqueue document for processing (non-blocking)
+                    try {
+                        const queueResult = await documentQueueService.enqueue({
+                            clientId,
+                            documentId,
+                            fileData: {
+                                filename: cleanFilename || file.originalname,
+                                gcs_path: gcsUrl,
+                                local_path: localPath,
+                                mime_type: file.mimetype,
+                                size: file.size
+                            },
+                            webhookUrl,
+                            clientName,
+                            apiKey: process.env.GEMINI_API_KEY || null,
+                            priority: 5 // Default priority
+                        });
 
-                    console.log(`⏱️  Scheduling FastAPI call for ${file.originalname} with ${delayMs}ms delay (file ${currentFileIndex + 1}/${totalFiles})`);
-
-                    // Start AI processing in background with progressive delay
-                    setTimeout(async () => {
-                        const startTime = Date.now();
-                        const PROCESSING_TIMEOUT = 15 * 60 * 1000; // 15 minutes timeout (increased due to Gemini rate limiting)
-
-                        console.log(`\n🚀 =========================`);
-                        console.log(`🚀 STARTING AI PROCESSING`);
-                        console.log(`🚀 =========================`);
-                        console.log(`📁 Document: ${file.originalname}`);
-                        console.log(`📊 Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-                        console.log(`🔤 Type: ${file.mimetype}`);
-                        console.log(`🆔 Document ID: ${documentId}`);
-                        console.log(`📊 File ${currentFileIndex + 1}/${totalFiles} (delayed by ${delayMs}ms)`);
-                        console.log(`⏰ Started at: ${new Date().toISOString()}`);
-                        console.log(`⏱️  Timeout: ${PROCESSING_TIMEOUT / 1000}s`);
-                        console.log(`🚀 =========================\n`);
-
-                        // Set up timeout handler
-                        const timeoutId = setTimeout(async () => {
-                            console.log(`\n⏱️ =========================`);
-                            console.log(`⏱️ PROCESSING TIMEOUT`);
-                            console.log(`⏱️ =========================`);
-                            console.log(`📁 Document: ${file.originalname}`);
-                            console.log(`🆔 Document ID: ${documentId}`);
-                            console.log(`⏱️ Timeout after: ${PROCESSING_TIMEOUT / 1000}s`);
-                            console.log(`⏱️ =========================\n`);
-
-                            try {
-                                // Update document with timeout status using safe update
-                                await safeClientUpdate(clientId, (client) => {
-                                    const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-                                    if (docIndex !== -1 && client.documents[docIndex].processing_status === 'processing') {
-                                        client.documents[docIndex] = {
-                                            ...client.documents[docIndex],
-                                            processing_status: 'failed',
-                                            document_status: 'processing_timeout',
-                                            status_reason: `Verarbeitung nach ${PROCESSING_TIMEOUT / 1000} Sekunden abgebrochen`,
-                                            processing_error: 'Processing timeout exceeded',
-                                            processed_at: new Date().toISOString(),
-                                            processing_time_ms: PROCESSING_TIMEOUT
-                                        };
-                                    }
-                                    return client;
-                                });
-                            } catch (timeoutError) {
-                                console.error('Error handling timeout:', timeoutError);
-                            }
-                        }, PROCESSING_TIMEOUT);
-
-                        // ==========================================
-                        // FASTAPI Gemini AI Processing
-                        // ==========================================
-                        try {
-                            // Prepare webhook URL for FastAPI to send results back
-                            const webhookBaseUrl = process.env.BACKEND_URL || 'https://mandanten-portal-docker.onrender.com';
-                            const webhookUrl = `${webhookBaseUrl}/api/webhooks/ai-processing`;
-
-                            console.log(`🚀 Calling FastAPI for document processing...`);
-                            console.log(`📄 Document: ${file.originalname}`);
-                            console.log(`🆔 Document ID: ${documentId}`);
-                            console.log(`🔔 Webhook URL: ${webhookUrl}`);
-
-                            // Call FastAPI to process the document
-                            const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || null;
-                            const fastApiResult = await createProcessingJob({
-                                clientId,
-                                clientName,
-                                files: [{
-                                    filename: cleanFilename || file.originalname,
-                                    gcs_path: gcsUrl, // Can be null
-                                    local_path: localPath, // Can be null (but one of them should be set)
-                                    mime_type: file.mimetype,
-                                    size: file.size,
-                                    document_id: documentId
-                                }],
-                                webhookUrl: webhookUrl,
-                                apiKey: process.env.GEMINI_API_KEY || null
+                        if (queueResult.success) {
+                            queuedJobs.push({
+                                document_id: documentId,
+                                queue_job_id: queueResult.job_id,
+                                skipped: queueResult.skipped || false
                             });
-
-                            if (fastApiResult.success) {
-                                console.log(`✅ FastAPI job created successfully`);
-                                console.log(`🔑 Job ID: ${fastApiResult.jobId}`);
-                                console.log(`📊 Status: ${fastApiResult.status}`);
-
-                                // Clear timeout since FastAPI will handle the processing
-                                clearTimeout(timeoutId);
-
-                                // Update document with job ID
-                                await safeClientUpdate(clientId, (client) => {
-                                    const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-                                    if (docIndex !== -1) {
-                                        client.documents[docIndex].processing_job_id = fastApiResult.jobId;
-                                        client.documents[docIndex].processing_method = 'fastapi_gemini_ai';
-                                    }
-                                    return client;
-                                });
-                            } else {
-                                throw new Error(fastApiResult.error || 'FastAPI job creation failed');
-                            }
-                        } catch (processingError) {
-                            console.error(`❌ Document processing failed for ${documentId}:`, processingError.message);
-                            clearTimeout(timeoutId);
-
-                            // Update status to failed
-                            await safeClientUpdate(clientId, (client) => {
-                                const docIndex = client.documents.findIndex(doc => doc.id === documentId);
-                                if (docIndex !== -1) {
-                                    client.documents[docIndex] = {
-                                        ...client.documents[docIndex],
-                                        processing_status: 'failed',
-                                        processing_error: processingError.message,
-                                        document_status: 'processing_failed',
-                                        processed_at: new Date().toISOString()
-                                    };
-
-                                    // Also add a system note
-                                    if (!client.admin_notes) client.admin_notes = [];
-                                    client.admin_notes.push({
-                                        timestamp: new Date().toISOString(),
-                                        note: `❌ Document processing failed for ${file.originalname}: ${processingError.message}`,
-                                        admin: 'system'
-                                    });
-                                }
-                                return client;
-                            });
+                            console.log(`📋 Enqueued: ${file.originalname} (Job: ${queueResult.job_id})`);
                         }
-                    }, delayMs); // End setTimeout with throttling delay
-
-                    fileIndex++;
+                    } catch (queueError) {
+                        console.error(`❌ Failed to enqueue ${file.originalname}:`, queueError.message);
+                        // Mark document as failed if we couldn't enqueue it
+                        documentRecord.processing_status = 'failed';
+                        documentRecord.processing_error = `Queue error: ${queueError.message}`;
+                    }
                 }
 
                 // Add documents to client using safeClientUpdate
@@ -1016,12 +905,19 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 }
 
                 console.log(`✅ Successfully added ${uploadedDocuments.length} documents to client ${updatedClient.aktenzeichen}`);
+                console.log(`📋 Queued ${queuedJobs.length} documents for processing`);
 
-                // Return success with document details
-                res.json({
+                // Return 202 Accepted - processing will happen asynchronously via queue
+                res.status(202).json({
                     success: true,
-                    message: `${uploadedDocuments.length} Documents uploaded and processing started`,
+                    message: `${uploadedDocuments.length} Documents uploaded and queued for processing`,
                     documents: uploadedDocuments,
+                    queued_jobs: queuedJobs,
+                    queue_info: {
+                        total_queued: queuedJobs.length,
+                        processing_method: 'queue_based',
+                        note: 'Documents will be processed in order. Results will be sent via webhook.'
+                    },
                     client_id: updatedClient.id,
                     aktenzeichen: updatedClient.aktenzeichen
                 });

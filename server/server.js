@@ -61,6 +61,9 @@ const aiDedupScheduler = require('./services/aiDedupScheduler');
 const WebhookWorker = require('./workers/webhookWorker');
 const createWebhookController = require('./controllers/webhookController');
 
+// Document Processing Queue
+const documentQueueService = require('./services/documentQueueService');
+
 // =============================================================================
 // 5. OBSERVER INSTANTIATION (Global State)
 // =============================================================================
@@ -150,6 +153,7 @@ const adminUserDeletionRoutes = require('./routes/admin-user-deletion');
 const createAdminCreditorDatabaseRouter = require('./routes/admin-creditor-database');
 const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
 const adminWebhookQueueRoutes = require('./routes/admin-webhook-queue');
+const adminDocumentQueueRoutes = require('./routes/admin-document-queue');
 const testRoutes = require('./routes/test-routes');
 
 // =============================================================================
@@ -373,6 +377,7 @@ app.use('/api/admin', createAdminClientCreditorRouter({
 
 app.use('/api/admin', adminDelayedProcessingRoutes);
 app.use('/api/admin/webhook-queue', adminWebhookQueueRoutes);
+app.use('/api/admin/document-queue', adminDocumentQueueRoutes);
 
 // 10.7 Client Portal Global Routes
 
@@ -512,6 +517,10 @@ async function startServer() {
         webhookWorker.start();
         console.log('🔄 Webhook worker started');
       }
+
+      // Start document processing queue worker
+      documentQueueService.start();
+      console.log('📋 Document queue worker started');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
