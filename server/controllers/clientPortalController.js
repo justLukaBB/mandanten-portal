@@ -851,7 +851,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                         uploadedAt: new Date().toISOString(),
                         category: 'creditor',
                         url: gcsUrl,
-                        processing_status: 'queued', // Changed from 'processing' to 'queued'
+                        processing_status: 'processing', // Status for UI (internally queued)
                         extracted_data: null
                     };
 
