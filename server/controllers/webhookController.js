@@ -8,6 +8,7 @@
 const { v4: uuidv4 } = require('uuid');
 const webhookVerifier = require('../utils/webhookVerifier');
 const creditorDeduplication = require('../utils/creditorDeduplication');
+const { documentNeedsManualReview, getDocumentReviewReasons } = require('../utils/creditorDeduplication');
 const { findCreditorByName } = require('../utils/creditorLookup');
 const webhookQueueService = require('../services/webhookQueueService');
 
@@ -650,6 +651,22 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                 if (matchDoc.id && !srcArr.includes(matchDoc.id)) srcArr.unshift(matchDoc.id);
                                 if (matchDoc.filename && !srcArr.includes(matchDoc.filename)) srcArr.push(matchDoc.filename);
                                 c.source_documents = srcArr;
+
+                                // NEW: Set needs_manual_review based on document flags
+                                if (documentNeedsManualReview(matchDoc)) {
+                                    c.needs_manual_review = true;
+                                    if (!c.review_reasons) c.review_reasons = [];
+                                    const docReasons = getDocumentReviewReasons(matchDoc);
+                                    docReasons.forEach(reason => {
+                                        if (!c.review_reasons.includes(reason)) {
+                                            c.review_reasons.push(reason);
+                                        }
+                                    });
+                                    console.log(`[webhook] Manual review set from document flag for creditor: ${c.sender_name || c.glaeubiger_name}`, {
+                                        doc_id: matchDoc.id,
+                                        reasons: c.review_reasons
+                                    });
+                                }
                             }
 
                             ensureCreditorLinks(c, matchDoc || null);
@@ -767,6 +784,22 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                 if (matchDoc.id && !srcArr.includes(matchDoc.id)) srcArr.unshift(matchDoc.id);
                                 if (matchDoc.filename && !srcArr.includes(matchDoc.filename)) srcArr.push(matchDoc.filename);
                                 c.source_documents = srcArr;
+
+                                // NEW: Set needs_manual_review based on document flags for late uploads
+                                if (documentNeedsManualReview(matchDoc)) {
+                                    c.needs_manual_review = true;
+                                    if (!c.review_reasons) c.review_reasons = [];
+                                    const docReasons = getDocumentReviewReasons(matchDoc);
+                                    docReasons.forEach(reason => {
+                                        if (!c.review_reasons.includes(reason)) {
+                                            c.review_reasons.push(reason);
+                                        }
+                                    });
+                                    console.log(`[webhook] Manual review set from document flag for late upload creditor: ${c.sender_name || c.glaeubiger_name}`, {
+                                        doc_id: matchDoc.id,
+                                        reasons: c.review_reasons
+                                    });
+                                }
                             }
 
                             ensureCreditorLinks(c, matchDoc || null);

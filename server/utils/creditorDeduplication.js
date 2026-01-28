@@ -1,6 +1,35 @@
 const { v4: uuidv4 } = require('uuid');
 
 /**
+ * Check if a document requires manual review based on its flags
+ * @param {Object} doc - The document object
+ * @returns {boolean} True if the document needs manual review
+ */
+function documentNeedsManualReview(doc) {
+  if (!doc) return false;
+  return doc.manual_review_required === true ||
+         doc.validation?.requires_manual_review === true ||
+         doc.extracted_data?.manual_review_required === true;
+}
+
+/**
+ * Get review reasons from a document
+ * @param {Object} doc - The document object
+ * @returns {Array<string>} Array of review reasons
+ */
+function getDocumentReviewReasons(doc) {
+  if (!doc) return [];
+  const reasons = [];
+  if (doc.validation?.review_reasons && Array.isArray(doc.validation.review_reasons)) {
+    reasons.push(...doc.validation.review_reasons);
+  }
+  if (reasons.length === 0 && documentNeedsManualReview(doc)) {
+    reasons.push('Dokument benötigt manuelle Prüfung');
+  }
+  return reasons;
+}
+
+/**
  * Deduplicate creditors based on business rules
  * @param {Array} creditors
  * @param {string} strategy - 'latest' or 'highest_amount'
@@ -150,6 +179,20 @@ function deduplicateCreditors(creditors, strategy = 'highest_amount') {
       merged_names: duplicates.map(c => c.sender_name)
     };
 
+    // Merge needs_manual_review: if ANY creditor in the group needs review, the result needs review
+    const anyNeedsReview = group.some(c => c.needs_manual_review === true);
+    if (anyNeedsReview) {
+      selectedCreditor.needs_manual_review = true;
+      // Merge all unique review_reasons from the group
+      const allReasons = new Set(selectedCreditor.review_reasons || []);
+      group.forEach(c => {
+        if (Array.isArray(c.review_reasons)) {
+          c.review_reasons.forEach(r => allReasons.add(r));
+        }
+      });
+      selectedCreditor.review_reasons = Array.from(allReasons);
+    }
+
     return selectedCreditor;
   });
 
@@ -168,6 +211,9 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
   documents.forEach((doc) => {
     if (doc.is_creditor_document && doc.extracted_data?.creditor_data) {
       const cd = doc.extracted_data.creditor_data;
+      const docNeedsReview = documentNeedsManualReview(doc);
+      const reviewReasons = docNeedsReview ? getDocumentReviewReasons(doc) : [];
+
       extractedCreditors.push({
         id: doc.id || uuidv4(),
         sender_name: cd.sender_name,
@@ -184,6 +230,8 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
         created_at: doc.uploadedAt || new Date().toISOString(),
         confirmed_at: new Date().toISOString(),
         extraction_method: 'document_upload',
+        needs_manual_review: docNeedsReview,
+        review_reasons: reviewReasons,
       });
     }
   });
@@ -214,4 +262,6 @@ module.exports = {
   deduplicateCreditors,
   deduplicateCreditorsFromDocuments,
   mergeCreditorLists,
+  documentNeedsManualReview,
+  getDocumentReviewReasons,
 };
