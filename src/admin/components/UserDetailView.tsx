@@ -73,6 +73,7 @@ interface DetailedUser {
 interface Document {
   id: string;
   name: string;
+  filename?: string;
   size?: number;
   processing_status: 'processing' | 'completed' | 'failed';
   is_creditor_document?: boolean;
