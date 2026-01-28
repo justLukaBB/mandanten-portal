@@ -874,7 +874,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     // Start AI processing in background with progressive delay
                     setTimeout(async () => {
                         const startTime = Date.now();
-                        const PROCESSING_TIMEOUT = 5 * 60 * 1000; // 5 minutes timeout
+                        const PROCESSING_TIMEOUT = 15 * 60 * 1000; // 15 minutes timeout (increased due to Gemini rate limiting)
 
                         console.log(`\n🚀 =========================`);
                         console.log(`🚀 STARTING AI PROCESSING`);
