@@ -251,6 +251,13 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [deletingDocs, setDeletingDocs] = useState<Record<string, boolean>>({});
 
   const downloadDocument = async (documentId: string, documentName: string) => {
+    // KRITISCH: Validierung der Document ID vor dem Download
+    if (!documentId || documentId === 'undefined' || documentId.startsWith('error-')) {
+      console.error('❌ Cannot download document with invalid ID:', documentId);
+      alert('Dieses Dokument kann nicht heruntergeladen werden (ungültige ID). Bitte kontaktieren Sie den Support.');
+      return;
+    }
+
     try {
       console.log(`📥 Downloading document ${documentId} (${documentName})`);
       setDownloadingDocs(prev => ({ ...prev, [documentId]: true }));
@@ -1272,10 +1279,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-col items-start gap-1  mb-1">
-                                <p className="text-sm font-medium text-gray-900 truncate flex gap-2" title={doc.name}>
+                                <p className="text-sm font-medium text-gray-900 truncate flex gap-2" title={doc.name || doc.filename || 'Unbekanntes Dokument'}>
                                   {getDocumentStatusIcon(doc)}
                                   {(() => {
-                                    const name = doc.name;
+                                    const name = doc.name || doc.filename || 'Unbekanntes Dokument';
                                     const lastDotIndex = name?.lastIndexOf('.');
                                     if (lastDotIndex === -1 || name?.length <= 25) {
                                       return name;
@@ -1328,9 +1335,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                           </div>
                           <div className="flex-shrink-0 space-x-2">
                             <button
-                              onClick={() => downloadDocument(doc.id, doc.name)}
-                              disabled={downloadingDocs[doc.id]}
+                              onClick={() => downloadDocument(doc.id, doc.name || doc.filename || 'document')}
+                              disabled={downloadingDocs[doc.id] || !doc.id || doc.id === 'undefined' || doc.id.startsWith('error-')}
                               className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md border hover:bg-gray-50 transition-colors text-gray-600 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={!doc.id || doc.id === 'undefined' || doc.id.startsWith('error-') ? 'Download nicht verfügbar (ungültige ID)' : 'Dokument herunterladen'}
                             >
                               {downloadingDocs[doc.id] ? (
                                 <ArrowPathIcon className="w-3 h-3 mr-1 animate-spin" />

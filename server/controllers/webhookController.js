@@ -293,6 +293,26 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
 
                 // Per-document status handling
                 for (const docResult of results || []) {
+                    // ✅ VALIDATION: Ensure all required fields exist to prevent undefined documents
+                    if (!docResult.id) {
+                        console.error('⚠️ Document result missing ID, generating fallback:', docResult);
+                        docResult.id = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    }
+
+                    if (!docResult.name && !docResult.filename) {
+                        console.error('⚠️ Document result missing name/filename:', { id: docResult.id, status: docResult.processing_status });
+                        docResult.name = `Unbekanntes Dokument ${docResult.id}`;
+                        docResult.filename = 'unknown.pdf';
+                    } else {
+                        // Ensure both name and filename are set
+                        if (!docResult.name && docResult.filename) {
+                            docResult.name = docResult.filename;
+                        }
+                        if (!docResult.filename && docResult.name) {
+                            docResult.filename = docResult.name;
+                        }
+                    }
+
                     let finalDocumentStatus = docResult.document_status || 'pending';
                     let statusReason = '';
 
@@ -314,10 +334,25 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             finalDocumentStatus = 'non_creditor_confirmed';
                             statusReason = `KI: Kein Gläubigerdokument (${docResult.classification?.document_type || 'Unbekannt'})`;
                         }
-                    } else if (docResult.processing_status === 'error') {
+                    } else if (docResult.processing_status === 'error' || docResult.processing_status === 'failed') {
                         finalDocumentStatus = 'needs_review';
-                        statusReason = `Verarbeitungsfehler: ${docResult.processing_error || docResult.error || 'Unbekannt'}`;
+                        const errorMsg = docResult.processing_error || docResult.error || 'Unbekannter Fehler';
+                        statusReason = `Verarbeitungsfehler: ${errorMsg}`;
                         documentsNeedingReview.push(docResult);
+
+                        // ✅ Ensure error documents have valid fields for display
+                        if (!docResult.name || docResult.name === 'undefined' || docResult.name.includes('undefined')) {
+                            docResult.name = docResult.filename || `Fehlerhaftes Dokument ${docResult.id || 'unknown'}`;
+                        }
+                        if (!docResult.filename || docResult.filename === 'undefined') {
+                            docResult.filename = docResult.name || 'error.pdf';
+                        }
+
+                        console.log('⚠️ Error document processed:', {
+                            id: docResult.id,
+                            name: docResult.name,
+                            error: errorMsg
+                        });
                     }
 
                     await enrichCreditorContactFromDb(docResult, creditorLookupCache);
@@ -426,6 +461,15 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                 await safeClientUpdate(client_id, async (clientDoc) => {
                     // Handle multi-creditor splits and standard updates
                     for (const docResult of processedDocuments) {
+                        // ✅ KRITISCH: Skip documents with invalid IDs to prevent undefined in DB
+                        if (!docResult.id || docResult.id === 'undefined') {
+                            console.error('⚠️ Skipping document with invalid ID:', {
+                                id: docResult.id,
+                                name: docResult.name,
+                                status: docResult.processing_status
+                            });
+                            continue;
+                        }
                         if (docResult.source_document_id) {
                             const sourceDoc = clientDoc.documents.find((d) => d.id === docResult.source_document_id);
                             if (sourceDoc) {
