@@ -90,14 +90,33 @@ class ClientService {
                     throw new Error(`Client ${clientId} not found`);
                 }
 
+                const beforeCreditorCount = (client.final_creditor_list || []).length;
+                console.log(`📊 [safeClientUpdate] Before update - final_creditor_list count: ${beforeCreditorCount}`);
+
                 // Apply the update function
                 const updatedClient = await updateFunction(client);
 
+                if (!updatedClient) {
+                    console.error(`❌ [safeClientUpdate] updateFunction returned null/undefined!`);
+                    throw new Error('Update function did not return a client object');
+                }
+
+                const afterCreditorCount = (updatedClient.final_creditor_list || []).length;
+                console.log(`📊 [safeClientUpdate] After update - final_creditor_list count: ${afterCreditorCount}`);
+
                 // Save to database
-                await this.saveClient(updatedClient);
+                const savedClient = await this.saveClient(updatedClient);
+
+                // Verify save
+                const savedCreditorCount = (savedClient.final_creditor_list || []).length;
+                console.log(`📊 [safeClientUpdate] After save - final_creditor_list count: ${savedCreditorCount}`);
+
+                if (savedCreditorCount !== afterCreditorCount) {
+                    console.error(`⚠️ [safeClientUpdate] CREDITOR COUNT MISMATCH! Expected: ${afterCreditorCount}, Got: ${savedCreditorCount}`);
+                }
 
                 console.log(`✅ Lock released for client ${clientId}`);
-                return updatedClient;
+                return savedClient;
             } catch (error) {
                 console.error(`❌ Error in safeClientUpdate for ${clientId}:`, error);
                 throw error;

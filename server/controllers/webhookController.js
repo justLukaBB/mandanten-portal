@@ -717,11 +717,29 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                 }
 
                 const existing = clientDoc.final_creditor_list || [];
+                console.log(`\n📊 [webhook] CREDITOR MERGE DETAILS:`);
+                console.log(`  - Existing in final_creditor_list: ${existing.length}`);
+                console.log(`  - Incoming from FastAPI: ${deduplicated_creditors.length}`);
+
+                // Log incoming creditors for debugging
+                console.log(`  - Incoming creditor names:`);
+                deduplicated_creditors.forEach((c, i) => {
+                    console.log(`    ${i+1}. ${c.sender_name || c.glaeubiger_name || 'NO NAME'} (id: ${c.id || 'NO ID'})`);
+                });
+
                 clientDoc.final_creditor_list = creditorDeduplication.mergeCreditorLists(
                     existing,
                     deduplicated_creditors,
                     'highest_amount'
                 );
+
+                console.log(`  - After merge: ${clientDoc.final_creditor_list.length}`);
+                console.log(`  - Final creditor names:`);
+                clientDoc.final_creditor_list.forEach((c, i) => {
+                    console.log(`    ${i+1}. ${c.sender_name || c.glaeubiger_name || 'NO NAME'} (id: ${c.id})`);
+                });
+                console.log(`📊 [webhook] END CREDITOR MERGE\n`);
+
                 clientDoc.deduplication_stats = deduplication || {
                     original_count: deduplicated_creditors.length,
                     unique_count: deduplicated_creditors.length,
