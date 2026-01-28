@@ -21,9 +21,29 @@ const { getSignedUrl } = require("../services/gcs-service");
 // Retry configuration
 const FASTAPI_RETRY_ATTEMPTS = parseInt(process.env.FASTAPI_RETRY_ATTEMPTS) || 3;
 const FASTAPI_RETRY_DELAY_MS = parseInt(process.env.FASTAPI_RETRY_DELAY_MS) || 1000;
+const FASTAPI_MAX_RETRY_DELAY_MS = parseInt(process.env.FASTAPI_MAX_RETRY_DELAY_MS) || 30000;
 const FASTAPI_CONNECTION_TIMEOUT = parseInt(process.env.FASTAPI_CONNECTION_TIMEOUT) || 10000;
+const FASTAPI_CONNECTION_TIMEOUT_RETRY = parseInt(process.env.FASTAPI_CONNECTION_TIMEOUT_RETRY) || 30000; // Longer timeout for retries (Cold Start)
 const FASTAPI_ENABLE_HEALTH_CHECK = process.env.FASTAPI_ENABLE_HEALTH_CHECK === 'true';
 const FASTAPI_HEALTH_CHECK_CACHE_MS = parseInt(process.env.FASTAPI_HEALTH_CHECK_CACHE_MS) || 30000;
+
+// Circuit Breaker configuration
+const FASTAPI_CIRCUIT_BREAKER_THRESHOLD = parseInt(process.env.FASTAPI_CIRCUIT_BREAKER_THRESHOLD) || 5;
+const FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS = parseInt(process.env.FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS) || 60000;
+
+// Circuit Breaker state
+const CircuitState = {
+  CLOSED: 'CLOSED',     // Normal operation - requests allowed
+  OPEN: 'OPEN',         // Failure threshold reached - requests blocked
+  HALF_OPEN: 'HALF_OPEN' // Testing if service recovered - one request allowed
+};
+
+let circuitBreaker = {
+  state: CircuitState.CLOSED,
+  failureCount: 0,
+  lastFailureTime: 0,
+  nextAttemptTime: 0
+};
 
 // Health check cache
 let healthCheckCache = {
@@ -123,6 +143,141 @@ async function isFastApiHealthy() {
   return healthy;
 }
 
+// ============================================
+// Circuit Breaker Implementation
+// ============================================
+
+/**
+ * Check if circuit breaker allows the request
+ * @returns {Object} - { allowed: boolean, reason?: string }
+ */
+function checkCircuitBreaker() {
+  const now = Date.now();
+
+  switch (circuitBreaker.state) {
+    case CircuitState.CLOSED:
+      // Normal operation - allow request
+      return { allowed: true };
+
+    case CircuitState.OPEN:
+      // Check if timeout has passed
+      if (now >= circuitBreaker.nextAttemptTime) {
+        // Transition to HALF_OPEN - allow one test request
+        circuitBreaker.state = CircuitState.HALF_OPEN;
+        console.log(`\n🔌 ================================`);
+        console.log(`🔌 CIRCUIT BREAKER: HALF-OPEN`);
+        console.log(`🔌 ================================`);
+        console.log(`🧪 Allowing test request to check if FastAPI recovered`);
+        console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+        return { allowed: true, isTestRequest: true };
+      }
+      // Still in timeout period - block request
+      const waitTime = Math.ceil((circuitBreaker.nextAttemptTime - now) / 1000);
+      return {
+        allowed: false,
+        reason: `Circuit breaker OPEN - FastAPI unavailable. Retry in ${waitTime}s`
+      };
+
+    case CircuitState.HALF_OPEN:
+      // Only one request allowed in HALF_OPEN - block others
+      return {
+        allowed: false,
+        reason: 'Circuit breaker HALF-OPEN - test request in progress'
+      };
+
+    default:
+      return { allowed: true };
+  }
+}
+
+/**
+ * Record a successful request - reset circuit breaker
+ */
+function recordCircuitSuccess() {
+  if (circuitBreaker.state === CircuitState.HALF_OPEN) {
+    console.log(`\n✅ ================================`);
+    console.log(`✅ CIRCUIT BREAKER: CLOSED`);
+    console.log(`✅ ================================`);
+    console.log(`🎉 Test request succeeded - FastAPI recovered`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  }
+
+  // Reset on success
+  circuitBreaker = {
+    state: CircuitState.CLOSED,
+    failureCount: 0,
+    lastFailureTime: 0,
+    nextAttemptTime: 0
+  };
+}
+
+/**
+ * Record a failed request - potentially trip circuit breaker
+ */
+function recordCircuitFailure() {
+  const now = Date.now();
+  circuitBreaker.failureCount++;
+  circuitBreaker.lastFailureTime = now;
+
+  if (circuitBreaker.state === CircuitState.HALF_OPEN) {
+    // Test request failed - go back to OPEN
+    circuitBreaker.state = CircuitState.OPEN;
+    circuitBreaker.nextAttemptTime = now + FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS;
+
+    console.log(`\n🔴 ================================`);
+    console.log(`🔴 CIRCUIT BREAKER: OPEN (Test Failed)`);
+    console.log(`🔴 ================================`);
+    console.log(`💥 Test request failed - FastAPI still unavailable`);
+    console.log(`⏳ Next attempt in ${FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS / 1000}s`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+    return;
+  }
+
+  // Check if threshold reached
+  if (circuitBreaker.failureCount >= FASTAPI_CIRCUIT_BREAKER_THRESHOLD) {
+    circuitBreaker.state = CircuitState.OPEN;
+    circuitBreaker.nextAttemptTime = now + FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS;
+
+    console.log(`\n🔴 ================================`);
+    console.log(`🔴 CIRCUIT BREAKER: OPEN`);
+    console.log(`🔴 ================================`);
+    console.log(`💥 Failure threshold reached (${FASTAPI_CIRCUIT_BREAKER_THRESHOLD} consecutive failures)`);
+    console.log(`🚫 Blocking requests for ${FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS / 1000}s`);
+    console.log(`⏳ Next attempt at: ${new Date(circuitBreaker.nextAttemptTime).toISOString()}`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  } else {
+    console.log(`⚠️  Circuit breaker: ${circuitBreaker.failureCount}/${FASTAPI_CIRCUIT_BREAKER_THRESHOLD} failures`);
+  }
+}
+
+/**
+ * Get current circuit breaker state (for monitoring/debugging)
+ * @returns {Object}
+ */
+function getCircuitBreakerState() {
+  return {
+    state: circuitBreaker.state,
+    failureCount: circuitBreaker.failureCount,
+    threshold: FASTAPI_CIRCUIT_BREAKER_THRESHOLD,
+    lastFailureTime: circuitBreaker.lastFailureTime ? new Date(circuitBreaker.lastFailureTime).toISOString() : null,
+    nextAttemptTime: circuitBreaker.nextAttemptTime ? new Date(circuitBreaker.nextAttemptTime).toISOString() : null,
+    timeoutMs: FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS
+  };
+}
+
+/**
+ * Reset circuit breaker (for testing or manual recovery)
+ */
+function resetCircuitBreaker() {
+  circuitBreaker = {
+    state: CircuitState.CLOSED,
+    failureCount: 0,
+    lastFailureTime: 0,
+    nextAttemptTime: 0
+  };
+  console.log('🔄 Circuit breaker reset to CLOSED state');
+}
+
 /**
  * Helper function to create a fetch request with timeout
  *
@@ -159,7 +314,7 @@ async function fetchWithTimeout(url, options = {}, timeout = FASTAPI_TIMEOUT) {
 }
 
 /**
- * Fetch with retry logic and exponential backoff
+ * Fetch with retry logic, exponential backoff, and circuit breaker
  *
  * @param {string} url - Request URL
  * @param {Object} options - Fetch options
@@ -170,10 +325,21 @@ async function fetchWithTimeout(url, options = {}, timeout = FASTAPI_TIMEOUT) {
 async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retryAttempt = 0) {
   const maxRetries = FASTAPI_RETRY_ATTEMPTS;
   const baseDelay = FASTAPI_RETRY_DELAY_MS;
-  const maxDelay = 30000; // Cap at 30 seconds
+  const maxDelay = FASTAPI_MAX_RETRY_DELAY_MS;
+
+  // Check circuit breaker first
+  const circuitCheck = checkCircuitBreaker();
+  if (!circuitCheck.allowed) {
+    const error = new Error(circuitCheck.reason);
+    error.circuitBreakerOpen = true;
+    throw error;
+  }
+
+  // Use longer timeout for retries (Cold Start scenario)
+  const effectiveTimeout = retryAttempt > 0 ? FASTAPI_CONNECTION_TIMEOUT_RETRY : timeout;
 
   try {
-    // Optional health check before making request
+    // Optional health check before making request (only on first attempt)
     if (FASTAPI_ENABLE_HEALTH_CHECK && retryAttempt === 0) {
       const healthy = await isFastApiHealthy();
       if (!healthy) {
@@ -181,15 +347,36 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
       }
     }
 
+    // Log timeout info for retries
+    if (retryAttempt > 0) {
+      console.log(`⏱️  Using extended timeout: ${effectiveTimeout}ms (Cold Start mode)`);
+    }
+
     // Attempt fetch with timeout
-    const response = await fetchWithTimeout(url, options, timeout);
+    const response = await fetchWithTimeout(url, options, effectiveTimeout);
+
+    // Success - reset circuit breaker
+    recordCircuitSuccess();
+
     return response;
 
   } catch (error) {
     const errorType = classifyError(error);
 
+    // Record failure for circuit breaker (only for connection-level errors)
+    if (isRetryableError(error)) {
+      recordCircuitFailure();
+    }
+
     // Check if error is retryable and we haven't exceeded max retries
     if (isRetryableError(error) && retryAttempt < maxRetries) {
+      // Check circuit breaker again before retry
+      const retryCircuitCheck = checkCircuitBreaker();
+      if (!retryCircuitCheck.allowed) {
+        console.log(`🔴 Circuit breaker prevented retry: ${retryCircuitCheck.reason}`);
+        throw error;
+      }
+
       const delay = Math.min(baseDelay * Math.pow(2, retryAttempt), maxDelay);
 
       console.log(`\n🔄 ================================`);
@@ -198,7 +385,9 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
       console.log(`💥 Error Type: ${errorType}`);
       console.log(`💥 Error Message: ${error.message}`);
       console.log(`⏳ Waiting ${delay}ms before retry...`);
+      console.log(`⏱️  Next attempt will use timeout: ${FASTAPI_CONNECTION_TIMEOUT_RETRY}ms`);
       console.log(`🔗 URL: ${url}`);
+      console.log(`🔌 Circuit Breaker: ${circuitBreaker.failureCount}/${FASTAPI_CIRCUIT_BREAKER_THRESHOLD} failures`);
       console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
 
       await sleep(delay);
@@ -215,6 +404,7 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
       console.log(`💥 Error Type: ${errorType}`);
       console.log(`💥 Final Error: ${error.message}`);
       console.log(`🔗 URL: ${url}`);
+      console.log(`🔌 Circuit Breaker State: ${circuitBreaker.state}`);
       console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
     }
 
@@ -555,10 +745,16 @@ function getRetryConfig() {
   return {
     maxRetries: FASTAPI_RETRY_ATTEMPTS,
     baseDelayMs: FASTAPI_RETRY_DELAY_MS,
+    maxRetryDelayMs: FASTAPI_MAX_RETRY_DELAY_MS,
     connectionTimeoutMs: FASTAPI_CONNECTION_TIMEOUT,
+    connectionTimeoutRetryMs: FASTAPI_CONNECTION_TIMEOUT_RETRY,
     healthCheckEnabled: FASTAPI_ENABLE_HEALTH_CHECK,
     healthCheckCacheMs: FASTAPI_HEALTH_CHECK_CACHE_MS,
-    requestTimeoutMs: FASTAPI_TIMEOUT
+    requestTimeoutMs: FASTAPI_TIMEOUT,
+    circuitBreaker: {
+      threshold: FASTAPI_CIRCUIT_BREAKER_THRESHOLD,
+      timeoutMs: FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS
+    }
   };
 }
 
@@ -569,5 +765,8 @@ module.exports = {
   checkHealth,
   resetHealthCheckCache,
   getRetryConfig,
+  // Circuit Breaker exports
+  getCircuitBreakerState,
+  resetCircuitBreaker,
   FASTAPI_URL
 };
