@@ -1000,61 +1000,46 @@ Job ID: ${job_id}`,
          * Handle AI Processing Webhook (HTTP Endpoint)
          *
          * Implements "Acknowledge-First" pattern:
-         * 1. Validate basic request structure
-         * 2. Send 200 OK immediately (<1 second)
-         * 3. Queue job for async processing
+         * 1. Send 200 OK IMMEDIATELY (before ANY processing)
+         * 2. Parse and queue job asynchronously after response
          *
          * This prevents webhook timeouts from FastAPI.
          */
         handleAiProcessing: async (req, res) => {
-            const rawBody = req.body.toString('utf8');
-
-            console.log('\n📨 ================================');
+            // 🚀 SEND 200 OK IMMEDIATELY - Before ANY processing!
+            // This is the absolute fastest response possible
             console.log('📨 WEBHOOK RECEIVED FROM FASTAPI');
-            console.log('📨 ================================');
-            console.log('📦 Raw body length:', rawBody.length, 'bytes');
-
-            // 1. PARSE JSON (fast, synchronous)
-            let data;
-            try {
-                data = JSON.parse(rawBody);
-                console.log('✅ JSON parsed successfully');
-            } catch (parseError) {
-                console.log('❌ JSON parse error:', parseError.message);
-                return res.status(400).json({
-                    error: 'Invalid JSON',
-                    details: parseError.message,
-                    preview: rawBody.substring(0, 100)
-                });
-            }
-
-            // 2. BASIC VALIDATION (fast)
-            const { job_id, client_id } = data;
-
-            if (!client_id) {
-                return res.status(400).json({ error: 'Missing client_id' });
-            }
-
-            if (!job_id) {
-                return res.status(400).json({ error: 'Missing job_id' });
-            }
-
-            console.log(`🔑 Job ID: ${job_id}`);
-            console.log(`👤 Client ID: ${client_id}`);
-            console.log(`📄 Documents: ${data.results?.length || 0}`);
-
-            // 3. SEND IMMEDIATE 200 OK RESPONSE (<1 second)
-            // This is the key to preventing webhook timeouts!
             res.status(200).json({
                 success: true,
-                message: 'Webhook received, processing queued',
-                job_id: job_id,
+                message: 'Webhook received',
                 received_at: new Date().toISOString()
             });
 
-            // 4. ENQUEUE JOB FOR ASYNC PROCESSING (non-blocking)
+            // Get raw body for async processing
+            const rawBody = req.body.toString('utf8');
+
+            // ALL processing happens AFTER response is sent
             setImmediate(async () => {
                 try {
+                    // Parse JSON (after response already sent)
+                    let data;
+                    try {
+                        data = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        console.error('❌ JSON parse error:', parseError.message);
+                        return; // Can't recover - webhook already acknowledged
+                    }
+
+                    const { job_id, client_id } = data;
+
+                    if (!client_id || !job_id) {
+                        console.error('❌ Missing client_id or job_id in webhook payload');
+                        return;
+                    }
+
+                    console.log(`🔑 Job: ${job_id} | Client: ${client_id} | Docs: ${data.results?.length || 0}`);
+
+                    // Enqueue for background processing
                     const enqueueResult = await webhookQueueService.enqueue(
                         job_id,
                         'ai-processing',
@@ -1064,12 +1049,10 @@ Job ID: ${job_id}`,
                     if (enqueueResult.skipped) {
                         console.log(`📥 Job ${job_id} skipped: ${enqueueResult.reason}`);
                     } else {
-                        console.log(`📥 Job ${job_id} queued for processing`);
+                        console.log(`📥 Job ${job_id} queued`);
                     }
                 } catch (error) {
-                    console.error(`❌ Failed to queue webhook job ${job_id}:`, error);
-                    // The webhook was already acknowledged, so we can't return an error.
-                    // The job will be lost if queue fails - consider alerting here.
+                    console.error(`❌ Failed to process webhook:`, error.message);
                 }
             });
         },
