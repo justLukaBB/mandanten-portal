@@ -6,9 +6,14 @@
  *
  * Features:
  * - Retry logic with exponential backoff for connection errors
+ * - 429 Rate Limit error handling with Retry-After header support
+ * - Circuit breaker pattern for fault tolerance
+ * - Rate limiting with token bucket algorithm (for Google AI Studio/Gemini API limits)
+ * - Adaptive throttling based on 429 error rate
  * - Health check integration with caching
  * - Improved error handling and classification
  * - Keep-alive connections
+ * - Comprehensive error metrics tracking
  */
 // No axios import needed - using native fetch
 
@@ -26,6 +31,21 @@ const FASTAPI_CONNECTION_TIMEOUT = parseInt(process.env.FASTAPI_CONNECTION_TIMEO
 const FASTAPI_CONNECTION_TIMEOUT_RETRY = parseInt(process.env.FASTAPI_CONNECTION_TIMEOUT_RETRY) || 30000; // Longer timeout for retries (Cold Start)
 const FASTAPI_ENABLE_HEALTH_CHECK = process.env.FASTAPI_ENABLE_HEALTH_CHECK === 'true';
 const FASTAPI_HEALTH_CHECK_CACHE_MS = parseInt(process.env.FASTAPI_HEALTH_CHECK_CACHE_MS) || 30000;
+
+// 429 Rate Limit Retry Configuration
+const FASTAPI_429_RETRY_ATTEMPTS = parseInt(process.env.FASTAPI_429_RETRY_ATTEMPTS) || 5;
+const FASTAPI_429_BASE_DELAY_MS = parseInt(process.env.FASTAPI_429_BASE_DELAY_MS) || 2000;
+const FASTAPI_429_MAX_DELAY_MS = parseInt(process.env.FASTAPI_429_MAX_DELAY_MS) || 300000; // 5 minutes
+const FASTAPI_429_RETRY_AFTER_MULTIPLIER = parseFloat(process.env.FASTAPI_429_RETRY_AFTER_MULTIPLIER) || 1.2;
+
+// Rate Limiting Configuration (for Google AI Studio Free Tier: 15 RPM)
+const FASTAPI_MAX_CONCURRENT_REQUESTS = parseInt(process.env.FASTAPI_MAX_CONCURRENT_REQUESTS) || 2;
+const FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE = parseInt(process.env.FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE) || 12;
+const FASTAPI_ENABLE_RATE_LIMITING = process.env.FASTAPI_ENABLE_RATE_LIMITING !== 'false'; // Enabled by default
+
+// Adaptive Throttling Configuration
+const FASTAPI_ADAPTIVE_THROTTLING_ENABLED = process.env.FASTAPI_ADAPTIVE_THROTTLING_ENABLED !== 'false'; // Enabled by default
+const FASTAPI_429_ERROR_THRESHOLD = parseFloat(process.env.FASTAPI_429_ERROR_THRESHOLD) || 0.1; // 10%
 
 // Circuit Breaker configuration
 const FASTAPI_CIRCUIT_BREAKER_THRESHOLD = parseInt(process.env.FASTAPI_CIRCUIT_BREAKER_THRESHOLD) || 5;
@@ -51,6 +71,239 @@ let healthCheckCache = {
   lastCheck: 0
 };
 
+// ============================================
+// Rate Limiter Implementation
+// ============================================
+
+/**
+ * Rate Limiter for FastAPI requests
+ * Implements token bucket algorithm with adaptive throttling
+ */
+class RateLimiter {
+  constructor() {
+    this.requests = []; // Timestamps of recent requests
+    this.currentConcurrent = 0;
+    this.maxConcurrent = FASTAPI_MAX_CONCURRENT_REQUESTS;
+    this.requestsPerMinute = FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE;
+    this.queue = [];
+    this.processing = false;
+  }
+
+  /**
+   * Wait until a request slot is available
+   * @returns {Promise<void>}
+   */
+  async acquire() {
+    if (!FASTAPI_ENABLE_RATE_LIMITING) {
+      return;
+    }
+
+    return new Promise((resolve) => {
+      this.queue.push(resolve);
+      this._processQueue();
+    });
+  }
+
+  /**
+   * Release a request slot
+   */
+  release() {
+    if (!FASTAPI_ENABLE_RATE_LIMITING) {
+      return;
+    }
+
+    this.currentConcurrent = Math.max(0, this.currentConcurrent - 1);
+    this._processQueue();
+  }
+
+  /**
+   * Process the queue of waiting requests
+   */
+  async _processQueue() {
+    if (this.processing || this.queue.length === 0) {
+      return;
+    }
+
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      // Check concurrent limit
+      if (this.currentConcurrent >= this.maxConcurrent) {
+        break;
+      }
+
+      // Check rate limit (requests per minute)
+      const now = Date.now();
+      this.requests = this.requests.filter(t => t > now - 60000);
+
+      if (this.requests.length >= this.requestsPerMinute) {
+        // Calculate wait time until oldest request expires
+        const oldestRequest = this.requests[0];
+        const waitTime = 60000 - (now - oldestRequest) + 100; // Add 100ms buffer
+
+        if (waitTime > 0) {
+          console.log(`⏳ Rate limit reached (${this.requests.length}/${this.requestsPerMinute} RPM) - waiting ${waitTime}ms`);
+          await sleep(waitTime);
+          continue;
+        }
+      }
+
+      // Allow request
+      this.currentConcurrent++;
+      this.requests.push(now);
+
+      const resolve = this.queue.shift();
+      resolve();
+    }
+
+    this.processing = false;
+  }
+
+  /**
+   * Reduce rate limit (called when 429 errors occur)
+   */
+  reduceLimit() {
+    if (!FASTAPI_ADAPTIVE_THROTTLING_ENABLED) {
+      return;
+    }
+
+    const oldLimit = this.requestsPerMinute;
+    this.requestsPerMinute = Math.max(1, Math.floor(this.requestsPerMinute * 0.7));
+    this.maxConcurrent = Math.max(1, this.maxConcurrent - 1);
+
+    console.log(`\n🔽 ================================`);
+    console.log(`🔽 ADAPTIVE THROTTLING: REDUCING RATE`);
+    console.log(`🔽 ================================`);
+    console.log(`📉 RPM: ${oldLimit} → ${this.requestsPerMinute}`);
+    console.log(`📉 Max Concurrent: ${this.maxConcurrent + 1} → ${this.maxConcurrent}`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  }
+
+  /**
+   * Increase rate limit (called after successful requests)
+   */
+  increaseLimit() {
+    if (!FASTAPI_ADAPTIVE_THROTTLING_ENABLED) {
+      return;
+    }
+
+    const targetRpm = FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE;
+    const targetConcurrent = FASTAPI_MAX_CONCURRENT_REQUESTS;
+
+    if (this.requestsPerMinute < targetRpm) {
+      this.requestsPerMinute = Math.min(targetRpm, this.requestsPerMinute + 1);
+    }
+    if (this.maxConcurrent < targetConcurrent) {
+      this.maxConcurrent = Math.min(targetConcurrent, this.maxConcurrent + 1);
+    }
+  }
+
+  /**
+   * Get current rate limiter state (for monitoring)
+   * @returns {Object}
+   */
+  getState() {
+    return {
+      enabled: FASTAPI_ENABLE_RATE_LIMITING,
+      currentConcurrent: this.currentConcurrent,
+      maxConcurrent: this.maxConcurrent,
+      requestsInLastMinute: this.requests.length,
+      requestsPerMinuteLimit: this.requestsPerMinute,
+      queueLength: this.queue.length,
+      adaptiveThrottlingEnabled: FASTAPI_ADAPTIVE_THROTTLING_ENABLED
+    };
+  }
+
+  /**
+   * Reset rate limiter to default configuration
+   */
+  reset() {
+    this.requests = [];
+    this.currentConcurrent = 0;
+    this.maxConcurrent = FASTAPI_MAX_CONCURRENT_REQUESTS;
+    this.requestsPerMinute = FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE;
+    this.queue = [];
+    this.processing = false;
+    console.log('🔄 Rate limiter reset to defaults');
+  }
+}
+
+// Global rate limiter instance
+const rateLimiter = new RateLimiter();
+
+// ============================================
+// 429 Error Metrics Tracking
+// ============================================
+
+let errorMetrics = {
+  total429Errors: 0,
+  totalRequests: 0,
+  retryAttempts: 0,
+  successfulRetries: 0,
+  averageRetryDelay: 0,
+  lastErrorTime: null,
+  windowStart: Date.now()
+};
+
+/**
+ * Record a 429 error for metrics
+ */
+function record429Error() {
+  errorMetrics.total429Errors++;
+  errorMetrics.lastErrorTime = Date.now();
+  rateLimiter.reduceLimit();
+}
+
+/**
+ * Record a successful request for metrics
+ */
+function recordSuccess() {
+  errorMetrics.totalRequests++;
+  // Slowly increase rate limit after successful requests
+  if (errorMetrics.totalRequests % 10 === 0) {
+    rateLimiter.increaseLimit();
+  }
+}
+
+/**
+ * Get 429 error rate
+ * @returns {number} - Error rate between 0 and 1
+ */
+function get429ErrorRate() {
+  if (errorMetrics.totalRequests === 0) {
+    return 0;
+  }
+  return errorMetrics.total429Errors / errorMetrics.totalRequests;
+}
+
+/**
+ * Get error metrics (for monitoring)
+ * @returns {Object}
+ */
+function getErrorMetrics() {
+  return {
+    ...errorMetrics,
+    errorRate: get429ErrorRate(),
+    rateLimiterState: rateLimiter.getState()
+  };
+}
+
+/**
+ * Reset error metrics
+ */
+function resetErrorMetrics() {
+  errorMetrics = {
+    total429Errors: 0,
+    totalRequests: 0,
+    retryAttempts: 0,
+    successfulRetries: 0,
+    averageRetryDelay: 0,
+    lastErrorTime: null,
+    windowStart: Date.now()
+  };
+  console.log('🔄 Error metrics reset');
+}
+
 // Production warning
 if (process.env.NODE_ENV === 'production' && FASTAPI_URL.includes('localhost')) {
   console.warn('⚠️  WARNING: FASTAPI_URL not set in production environment - using localhost:8000');
@@ -69,9 +322,11 @@ function sleep(ms) {
 /**
  * Check if an error is retryable (connection-level errors)
  * @param {Error} error - The error to check
+ * @param {Response} [response] - Optional HTTP response to check status code
  * @returns {boolean} - True if the error is retryable
  */
-function isRetryableError(error) {
+function isRetryableError(error, response = null) {
+  // Connection-level errors (existing logic)
   const retryableMessages = [
     'fetch failed',
     'ECONNREFUSED',
@@ -86,10 +341,93 @@ function isRetryableError(error) {
     'Connection timeout'
   ];
 
-  const errorMessage = error.message || String(error);
-  return retryableMessages.some(msg =>
+  const errorMessage = error?.message || String(error);
+  if (retryableMessages.some(msg =>
     errorMessage.toLowerCase().includes(msg.toLowerCase())
-  );
+  )) {
+    return true;
+  }
+
+  // HTTP status code errors
+  if (response) {
+    const status = response.status;
+    // Retryable status codes: 429 (Rate Limit), 502, 503, 504 (Server errors)
+    if (status === 429 || status === 502 || status === 503 || status === 504) {
+      return true;
+    }
+    // Non-retryable client errors (except 429)
+    if (status >= 400 && status < 500 && status !== 429) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if HTTP status code indicates a rate limit error
+ * @param {number} status - HTTP status code
+ * @returns {boolean} - True if rate limit error
+ */
+function isRateLimitError(status) {
+  return status === 429;
+}
+
+/**
+ * Parse Retry-After header value
+ * @param {string} retryAfterHeader - Retry-After header value (seconds or HTTP date)
+ * @returns {number|null} - Delay in milliseconds, or null if invalid
+ */
+function parseRetryAfterHeader(retryAfterHeader) {
+  if (!retryAfterHeader) {
+    return null;
+  }
+
+  // Try to parse as seconds
+  const seconds = parseInt(retryAfterHeader, 10);
+  if (!isNaN(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  // Try to parse as HTTP date
+  const retryDate = new Date(retryAfterHeader);
+  if (!isNaN(retryDate.getTime())) {
+    const delayMs = Math.max(0, retryDate.getTime() - Date.now());
+    return delayMs;
+  }
+
+  return null;
+}
+
+/**
+ * Calculate retry delay for 429 errors with exponential backoff
+ * @param {number} retryAttempt - Current retry attempt (0-based)
+ * @param {string} [retryAfterHeader] - Optional Retry-After header value
+ * @returns {number} - Delay in milliseconds
+ */
+function calculateRetryDelay(retryAttempt, retryAfterHeader = null) {
+  const baseDelay = FASTAPI_429_BASE_DELAY_MS;
+  const maxDelay = FASTAPI_429_MAX_DELAY_MS;
+
+  // Use Retry-After header if provided
+  const retryAfterDelay = parseRetryAfterHeader(retryAfterHeader);
+  if (retryAfterDelay !== null && retryAfterDelay > 0) {
+    // Apply multiplier for safety margin
+    const delay = retryAfterDelay * FASTAPI_429_RETRY_AFTER_MULTIPLIER;
+    const clampedDelay = Math.min(delay, maxDelay);
+    console.log(`📊 Using Retry-After header: ${retryAfterHeader} → ${Math.round(clampedDelay)}ms`);
+    return Math.round(clampedDelay);
+  }
+
+  // Exponential backoff: 2s, 4s, 8s, 16s, 32s...
+  const delay = Math.min(baseDelay * Math.pow(2, retryAttempt), maxDelay);
+
+  // Add jitter (±10%) to prevent thundering herd
+  const jitter = delay * 0.1 * (Math.random() * 2 - 1);
+  const finalDelay = Math.round(delay + jitter);
+
+  console.log(`📊 Using exponential backoff: attempt ${retryAttempt + 1} → ${finalDelay}ms`);
+  return finalDelay;
 }
 
 /**
@@ -314,16 +652,18 @@ async function fetchWithTimeout(url, options = {}, timeout = FASTAPI_TIMEOUT) {
 }
 
 /**
- * Fetch with retry logic, exponential backoff, and circuit breaker
+ * Fetch with retry logic, exponential backoff, circuit breaker, and 429 handling
  *
  * @param {string} url - Request URL
  * @param {Object} options - Fetch options
  * @param {number} timeout - Timeout in milliseconds
- * @param {number} retryAttempt - Current retry attempt (internal use)
+ * @param {number} retryAttempt - Current retry attempt for connection errors (internal use)
+ * @param {number} rateLimitRetryAttempt - Current retry attempt for 429 errors (internal use)
  * @returns {Promise<Response>} - Fetch response
  */
-async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retryAttempt = 0) {
+async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retryAttempt = 0, rateLimitRetryAttempt = 0) {
   const maxRetries = FASTAPI_RETRY_ATTEMPTS;
+  const max429Retries = FASTAPI_429_RETRY_ATTEMPTS;
   const baseDelay = FASTAPI_RETRY_DELAY_MS;
   const maxDelay = FASTAPI_MAX_RETRY_DELAY_MS;
 
@@ -338,9 +678,12 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
   // Use longer timeout for retries (Cold Start scenario)
   const effectiveTimeout = retryAttempt > 0 ? FASTAPI_CONNECTION_TIMEOUT_RETRY : timeout;
 
+  // Acquire rate limiter slot
+  await rateLimiter.acquire();
+
   try {
     // Optional health check before making request (only on first attempt)
-    if (FASTAPI_ENABLE_HEALTH_CHECK && retryAttempt === 0) {
+    if (FASTAPI_ENABLE_HEALTH_CHECK && retryAttempt === 0 && rateLimitRetryAttempt === 0) {
       const healthy = await isFastApiHealthy();
       if (!healthy) {
         console.warn('⚠️  FastAPI server health check failed - attempting request anyway');
@@ -355,12 +698,89 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
     // Attempt fetch with timeout
     const response = await fetchWithTimeout(url, options, effectiveTimeout);
 
-    // Success - reset circuit breaker
+    // Check for HTTP errors that should be retried
+    if (!response.ok) {
+      const status = response.status;
+
+      // Handle 429 Rate Limit errors
+      if (isRateLimitError(status) && rateLimitRetryAttempt < max429Retries) {
+        // Record 429 error for metrics and adaptive throttling
+        record429Error();
+        errorMetrics.retryAttempts++;
+
+        // Extract Retry-After header
+        const retryAfterHeader = response.headers.get('Retry-After');
+        const delay = calculateRetryDelay(rateLimitRetryAttempt, retryAfterHeader);
+
+        console.log(`\n🚦 ================================`);
+        console.log(`🚦 429 RATE LIMIT ERROR`);
+        console.log(`🚦 ================================`);
+        console.log(`💥 Status: ${status} - Too Many Requests`);
+        console.log(`📊 Retry-After Header: ${retryAfterHeader || 'not provided'}`);
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        console.log(`🔄 Attempt ${rateLimitRetryAttempt + 1}/${max429Retries}`);
+        console.log(`📈 Total 429 Errors: ${errorMetrics.total429Errors}`);
+        console.log(`📉 Current Rate Limit: ${rateLimiter.requestsPerMinute} RPM`);
+        console.log(`🔗 URL: ${url}`);
+        console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+
+        // Release rate limiter slot before waiting
+        rateLimiter.release();
+
+        // Update average retry delay metric
+        errorMetrics.averageRetryDelay =
+          (errorMetrics.averageRetryDelay * (errorMetrics.retryAttempts - 1) + delay) /
+          errorMetrics.retryAttempts;
+
+        await sleep(delay);
+
+        console.log(`🔄 Retrying after 429 error...`);
+        return fetchWithRetry(url, options, timeout, retryAttempt, rateLimitRetryAttempt + 1);
+      }
+
+      // Handle other retryable HTTP errors (502, 503, 504)
+      if (isRetryableError(null, response) && retryAttempt < maxRetries) {
+        recordCircuitFailure();
+
+        const delay = Math.min(baseDelay * Math.pow(2, retryAttempt), maxDelay);
+
+        console.log(`\n🔄 ================================`);
+        console.log(`🔄 RETRYABLE HTTP ERROR`);
+        console.log(`🔄 ================================`);
+        console.log(`💥 Status: ${status}`);
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        console.log(`🔄 Attempt ${retryAttempt + 1}/${maxRetries}`);
+        console.log(`🔗 URL: ${url}`);
+        console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+
+        // Release rate limiter slot before waiting
+        rateLimiter.release();
+
+        await sleep(delay);
+
+        console.log(`🔄 Retrying request now...`);
+        return fetchWithRetry(url, options, timeout, retryAttempt + 1, rateLimitRetryAttempt);
+      }
+    }
+
+    // Success - reset circuit breaker and record success
     recordCircuitSuccess();
+    recordSuccess();
+
+    if (rateLimitRetryAttempt > 0) {
+      errorMetrics.successfulRetries++;
+      console.log(`✅ Request succeeded after ${rateLimitRetryAttempt} rate limit retries`);
+    }
+
+    // Release rate limiter slot
+    rateLimiter.release();
 
     return response;
 
   } catch (error) {
+    // Release rate limiter slot on error
+    rateLimiter.release();
+
     const errorType = classifyError(error);
 
     // Record failure for circuit breaker (only for connection-level errors)
@@ -393,7 +813,7 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
       await sleep(delay);
 
       console.log(`🔄 Retrying request now...`);
-      return fetchWithRetry(url, options, timeout, retryAttempt + 1);
+      return fetchWithRetry(url, options, timeout, retryAttempt + 1, rateLimitRetryAttempt);
     }
 
     // Not retryable or max retries exceeded
@@ -754,6 +1174,19 @@ function getRetryConfig() {
     circuitBreaker: {
       threshold: FASTAPI_CIRCUIT_BREAKER_THRESHOLD,
       timeoutMs: FASTAPI_CIRCUIT_BREAKER_TIMEOUT_MS
+    },
+    rateLimitRetry: {
+      maxRetries: FASTAPI_429_RETRY_ATTEMPTS,
+      baseDelayMs: FASTAPI_429_BASE_DELAY_MS,
+      maxDelayMs: FASTAPI_429_MAX_DELAY_MS,
+      retryAfterMultiplier: FASTAPI_429_RETRY_AFTER_MULTIPLIER
+    },
+    rateLimiting: {
+      enabled: FASTAPI_ENABLE_RATE_LIMITING,
+      maxConcurrentRequests: FASTAPI_MAX_CONCURRENT_REQUESTS,
+      requestsPerMinute: FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE,
+      adaptiveThrottlingEnabled: FASTAPI_ADAPTIVE_THROTTLING_ENABLED,
+      errorThreshold: FASTAPI_429_ERROR_THRESHOLD
     }
   };
 }
@@ -768,5 +1201,12 @@ module.exports = {
   // Circuit Breaker exports
   getCircuitBreakerState,
   resetCircuitBreaker,
+  // Rate Limiter exports
+  getRateLimiterState: () => rateLimiter.getState(),
+  resetRateLimiter: () => rateLimiter.reset(),
+  // Error Metrics exports
+  getErrorMetrics,
+  resetErrorMetrics,
+  get429ErrorRate,
   FASTAPI_URL
 };
