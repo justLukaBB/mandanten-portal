@@ -59,7 +59,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   // Initialize queue manager
   useEffect(() => {
     const clientIdentifier = client?.id || client?.aktenzeichen || client?._id;
-    if (!clientIdentifier) return;
+    if (!clientIdentifier) {
+      return;
+    }
 
     const uploadUrl = `${API_BASE_URL}/api/clients/${clientIdentifier}/documents`;
 
@@ -183,7 +185,9 @@ const CreditorUploadComponent: React.FC<CreditorUploadComponentProps> = ({
   };
 
   const handlePauseResume = () => {
-    if (!queueManagerRef.current) return;
+    if (!queueManagerRef.current) {
+      return;
+    }
 
     if (isPaused) {
       queueManagerRef.current.resume();
