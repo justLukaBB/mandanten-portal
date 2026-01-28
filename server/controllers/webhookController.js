@@ -265,6 +265,7 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
         console.log(`👤 Client ID: ${client_id}`);
         console.log(`📊 Status: ${status}`);
         console.log(`📄 Documents: ${results?.length || 0}`);
+        console.log(`👥 Deduplicated creditors received: ${Array.isArray(deduplicated_creditors) ? deduplicated_creditors.length : 'NOT AN ARRAY - ' + typeof deduplicated_creditors}`);
 
         // Validate client exists
         let client = await Client.findOne({ id: client_id });
