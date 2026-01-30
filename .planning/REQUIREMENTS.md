@@ -7,9 +7,9 @@
 
 ### Payment Status Logic
 
-- [ ] **PAY-01**: Payment handler checks `creditor.needs_manual_review` flag in addition to document flags and missing contact info
-- [ ] **PAY-02**: If any creditor has `needs_manual_review = true`, status routes to `creditor_review` regardless of document/contact status
-- [ ] **PAY-03**: Auto-approval only happens when ALL creditors have `needs_manual_review = false` AND pass document/contact checks
+- [x] **PAY-01**: Payment handler checks `creditor.needs_manual_review` flag in addition to document flags and missing contact info
+- [x] **PAY-02**: If any creditor has `needs_manual_review = true`, status routes to `creditor_review` regardless of document/contact status
+- [x] **PAY-03**: Auto-approval only happens when ALL creditors have `needs_manual_review = false` AND pass document/contact checks
 
 ### Deduplication Timing
 
@@ -46,9 +46,9 @@
 | DDP-02 | Phase 1 | Complete |
 | DDP-03 | Phase 1 | Complete |
 | DAT-01 | Phase 1 | Complete |
-| PAY-01 | Phase 2 | Pending |
-| PAY-02 | Phase 2 | Pending |
-| PAY-03 | Phase 2 | Pending |
+| PAY-01 | Phase 2 | Complete |
+| PAY-02 | Phase 2 | Complete |
+| PAY-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 7 total
