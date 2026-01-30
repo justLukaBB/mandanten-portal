@@ -718,6 +718,18 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     }
                 }
 
+                // Build lookup map of existing creditors for review flag preservation
+                const existingMap = new Map();
+                for (const existing of (client.final_creditor_list || [])) {
+                    if (existing.id) {
+                        existingMap.set(existing.id, existing);
+                    }
+                    const name = (existing.sender_name || existing.glaeubiger_name || '').toLowerCase().trim();
+                    if (name && !existingMap.has(`name:${name}`)) {
+                        existingMap.set(`name:${name}`, existing);
+                    }
+                }
+
                 // Ensure all creditors have required fields (especially 'id')
                 const processedCreditors = deduplicated_creditors.map(creditor => {
                     // If creditor has no id, generate one
@@ -726,19 +738,43 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                         console.log(`⚙️ Generated new ID for merged creditor: ${creditor.sender_name}`);
                     }
 
+                    // Find existing creditor for field preservation
+                    const existingById = existingMap.get(creditor.id);
+                    const name = (creditor.sender_name || creditor.glaeubiger_name || '').toLowerCase().trim();
+                    const existingByName = name ? existingMap.get(`name:${name}`) : null;
+                    const existing = existingById || existingByName;
+
+                    // Merge review reasons (union of existing and new)
+                    const existingReasons = Array.isArray(existing?.review_reasons) ? existing.review_reasons : [];
+                    const newReasons = Array.isArray(creditor.review_reasons) ? creditor.review_reasons : [];
+                    const mergedReasons = [...existingReasons];
+                    for (const reason of newReasons) {
+                        if (reason && !mergedReasons.includes(reason)) {
+                            mergedReasons.push(reason);
+                        }
+                    }
+
                     // Ensure other required fields have defaults
-                    // Note: Keep existing review_reasons as-is (don't clean them)
                     return {
                         ...creditor,
+                        id: creditor.id,
+                        status: creditor.status || 'confirmed',
+                        ai_confidence: creditor.ai_confidence || 1.0,
+                        created_at: existing?.created_at || creditor.created_at || new Date(),
                         contact_status: creditor.contact_status || 'no_response',
                         amount_source: creditor.amount_source || 'original_document',
                         settlement_response_status: creditor.settlement_response_status || 'pending',
                         nullplan_response_status: creditor.nullplan_response_status || 'pending',
-                        manually_reviewed: creditor.manually_reviewed || false,
-                        status: creditor.status || 'confirmed',
-                        created_at: creditor.created_at || new Date().toISOString(),
-                        needs_manual_review: creditor.needs_manual_review || false,
-                        review_reasons: creditor.review_reasons || []
+
+                        // PRESERVE manual review state from existing creditor
+                        needs_manual_review: existing?.needs_manual_review || creditor.needs_manual_review || false,
+                        review_reasons: mergedReasons,
+                        manually_reviewed: existing?.manually_reviewed || false,
+                        reviewed_at: existing?.reviewed_at,
+                        reviewed_by: existing?.reviewed_by,
+                        review_action: existing?.review_action,
+                        original_ai_data: existing?.original_ai_data,
+                        correction_notes: existing?.correction_notes,
                     };
                 });
 
