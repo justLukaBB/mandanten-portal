@@ -1,3 +1,13 @@
+# Requirements Archive: v1 Manual Review & Payment Status Flow Fix
+
+**Archived:** 2026-01-30
+**Status:** SHIPPED
+
+This is the archived requirements specification for v1.
+For current requirements, see `.planning/REQUIREMENTS.md` (created for next milestone).
+
+---
+
 # Requirements: Manual Review & Payment Status Flow Fix
 
 **Defined:** 2026-01-30
@@ -53,8 +63,15 @@
 **Coverage:**
 - v1 requirements: 7 total
 - Mapped to phases: 7
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
-*Requirements defined: 2026-01-30*
-*Last updated: 2026-01-30 after roadmap creation*
+
+## Milestone Summary
+
+**Shipped:** 7 of 7 v1 requirements
+**Adjusted:** None — all requirements implemented as originally specified
+**Dropped:** None
+
+---
+*Archived: 2026-01-30 as part of v1 milestone completion*

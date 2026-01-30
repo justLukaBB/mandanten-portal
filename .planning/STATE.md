@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** When a creditor has `needs_manual_review = true`, the case must route through agent review — never auto-approve and skip it.
-**Current focus:** Phase 1 complete, ready for Phase 2 - Payment Status Logic
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 2 of 2 (Payment Status Logic) — IN PROGRESS
-Plan: 1 of 1 in current phase — COMPLETE
-Status: Phase 2 Plan 01 complete
-Last activity: 2026-01-30 — Completed 02-01-PLAN.md
+Phase: v1 complete — all phases shipped
+Plan: N/A
+Status: Ready for next milestone
+Last activity: 2026-01-30 — v1 milestone complete
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% (v1)
 
 ## Performance Metrics
 
@@ -30,47 +30,24 @@ Progress: [██████████] 100%
 | 01-deduplication-timing-data-integrity | 3 | 8m 2s | 2m 41s |
 | 02-payment-status-logic | 1 | 2m 32s | 2m 32s |
 
-**Recent Trend:**
-- Last 5 plans: 2min, 2m 45s, 3m 17s, 2m 32s
-- Trend: Consistent execution speed (2-3 minutes per plan)
-
 *Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-| Decision | Context | Impact |
-|----------|---------|--------|
-| MongoDB atomic update for dedup guard | Plan 01-01 | Prevents race conditions without Redis/application locks |
-| setImmediate for async dedup execution | Plan 01-01 | Non-blocking webhook response, dedup runs after document save |
-| Always clear dedup_in_progress in finally | Plan 01-01 | Ensures flag cleared even on error, prevents permanent locks |
-| OR logic for needs_manual_review preservation | Plan 01-02 | Creditors never lose manual review flag during dedup |
-| Union merge for review_reasons arrays | Plan 01-02 | Both historical and new review reasons are preserved |
-| Dual lookup by ID and normalized name | Plan 01-02 | Handles FastAPI ID reassignment during dedup |
-| Preserve created_at from existing creditor | Plan 01-02 | Maintains provenance tracking across dedup runs |
-| 5-minute recent window for dedup wait | Plan 01-03 | Only waits if documents processed recently, avoids unnecessary delays |
-| 2-second poll interval for dedup status | Plan 01-03 | Balances responsiveness and database load |
-| 60-second max wait timeout | Plan 01-03 | Prevents infinite blocking if dedup hangs |
-| Reload client data even on timeout | Plan 01-03 | Get latest available state rather than stale initial data |
-| Check needs_manual_review flag FIRST | Plan 02-01 | Payment handler honors creditor flags set during dedup |
-| Auto-approval requires ALL checks | Plan 02-01 | Email + address + name + needs_manual_review=false all required |
-| Empty creditor list routes to review | Plan 02-01 | Edge case handled explicitly rather than silently auto-approving |
-| Single requiresManualReview boolean | Plan 02-01 | Consistent branching logic across 9 locations in payment handler |
+See PROJECT.md Key Decisions table for full history.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Phase 2 Plan 01 complete — Project complete (4/4 plans executed)
+Stopped at: v1 milestone complete — archived to .planning/milestones/
 Resume file: None

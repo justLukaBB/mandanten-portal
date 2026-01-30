@@ -17,26 +17,26 @@ When a creditor has `needs_manual_review = true`, the case must route through ag
 - ✓ Agent portal shows clients needing review — existing
 - ✓ Zendesk ticket created on creditor review — existing
 - ✓ Document processing pipeline extracts creditors with flags — existing
+- ✓ Payment handler checks `creditor.needs_manual_review` flag — v1
+- ✓ AI deduplication triggers after last document is processed instead of 30-minute timer — v1
+- ✓ Race condition eliminated: creditor list is finalized before payment status decision — v1
 
 ### Active
 
-- [ ] Payment handler checks `creditor.needs_manual_review` flag (not just document flags and contact info)
-- [ ] AI deduplication triggers after last document is processed instead of 30-minute timer
-- [ ] Race condition eliminated: creditor list is finalized before payment status decision
+(None — next milestone requirements TBD via `/gsd:new-milestone`)
 
 ### Out of Scope
 
 - Agent portal UX changes — not needed, portal already shows review clients correctly
 - Zendesk ticket creation changes — existing logic works, just needs to be reached
-- Status flow redesign — current flow is correct, just the check is incomplete
+- Status flow redesign — current flow is correct, check is now complete
 - Frontend admin panel changes — dedup button behavior unchanged
 
 ## Context
 
-- **Root cause**: `zendeskWebhookController.js:489` explicitly ignores `creditor.needs_manual_review` flag. Comment says "using document flags, NOT creditor.needs_manual_review"
-- **Race condition**: `aiDedupScheduler.js` schedules dedup with 30-minute delay after uploads. Payment can arrive before dedup completes, evaluating pre-dedup creditor list
-- **Dedup enrichment side effect**: Dedup fills in missing emails/addresses from local DB, which can make the payment handler think contact info is complete when review is still needed for other reasons
-- **Existing codebase**: Node.js/Express backend, MongoDB, React frontend. See `.planning/codebase/` for full mapping
+Shipped v1 with 7 files modified across Node.js/Express backend.
+Tech stack: Node.js/Express backend, MongoDB, React frontend.
+All 7 requirements satisfied, audit passed with full scores.
 
 ## Constraints
 
@@ -48,9 +48,13 @@ When a creditor has `needs_manual_review = true`, the case must route through ag
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Check `needs_manual_review` flag in payment handler | Flag is set by dedup and document processing but ignored at decision point | — Pending |
-| Trigger dedup after last document processed instead of 30-min timer | Eliminates race condition between dedup and payment | — Pending |
-| Keep existing Zendesk/agent portal logic unchanged | Already works correctly once `creditor_review` status is set | — Pending |
+| Check `needs_manual_review` flag in payment handler | Flag is set by dedup and document processing but ignored at decision point | ✓ Good — v1 |
+| Trigger dedup after last document processed instead of 30-min timer | Eliminates race condition between dedup and payment | ✓ Good — v1 |
+| Keep existing Zendesk/agent portal logic unchanged | Already works correctly once `creditor_review` status is set | ✓ Good — v1 |
+| MongoDB atomic update for dedup guard | Prevents race conditions without Redis/application locks | ✓ Good — v1 |
+| setImmediate for async dedup execution | Non-blocking webhook response, dedup runs after document save | ✓ Good — v1 |
+| OR logic for needs_manual_review preservation | Creditors never lose manual review flag during dedup | ✓ Good — v1 |
+| Single requiresManualReview boolean | Consistent branching logic across 9 locations in payment handler | ✓ Good — v1 |
 
 ---
-*Last updated: 2026-01-30 after initialization*
+*Last updated: 2026-01-30 after v1 milestone*
