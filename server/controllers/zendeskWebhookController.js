@@ -18,6 +18,52 @@ class ZendeskWebhookController {
         this.welcomeEmailService = welcomeEmailService;
     }
 
+    /**
+     * Wait for dedup to complete if documents were recently processed.
+     * Prevents payment status decisions on stale (pre-dedup) creditor data.
+     *
+     * @param {Object} client - Mongoose client document
+     * @param {Object} ClientModel - Mongoose Client model (for fresh queries)
+     * @returns {Object} - Fresh client document (reloaded if dedup was waited for)
+     */
+    async waitForDedupIfNeeded(client, ClientModel) {
+        // Only wait if documents were recently processed (within last 5 minutes)
+        const recentWindow = 5 * 60 * 1000; // 5 minutes
+        const recentlyProcessed = client.all_documents_processed_at &&
+            (Date.now() - new Date(client.all_documents_processed_at).getTime()) < recentWindow;
+
+        if (!recentlyProcessed || !client.dedup_in_progress) {
+            return client;
+        }
+
+        console.log(`[payment-handler] Dedup in progress for ${client.aktenzeichen}, waiting for completion...`);
+
+        const maxWait = 60000; // 60 seconds max wait
+        const pollInterval = 2000; // Poll every 2 seconds
+        const startWait = Date.now();
+
+        while (Date.now() - startWait < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+            // Reload client from DB to check dedup_in_progress
+            const fresh = await ClientModel.findById(client._id).lean(false);
+            if (!fresh) {
+                console.error(`[payment-handler] Client ${client.aktenzeichen} not found during dedup wait`);
+                return client;
+            }
+
+            if (!fresh.dedup_in_progress) {
+                console.log(`[payment-handler] Dedup completed for ${client.aktenzeichen} after ${Date.now() - startWait}ms`);
+                return fresh;
+            }
+        }
+
+        console.warn(`[payment-handler] Dedup wait timeout (60s) for ${client.aktenzeichen}, proceeding with current data`);
+        // Reload one final time to get latest data even if dedup is stuck
+        const finalClient = await ClientModel.findById(client._id).lean(false);
+        return finalClient || client;
+    }
+
     // Middleware to handle Zendesk's specific JSON format
     parseZendeskPayload(req, res, next) {
         console.log(
@@ -422,13 +468,17 @@ class ZendeskWebhookController {
                 `📋 Processing user payment confirmation for: ${client.firstName} ${client.lastName}`
             );
 
+            // Wait for dedup to complete if documents were recently processed
+            // This prevents evaluating stale creditor data before dedup merges
+            const freshClient = await this.waitForDedupIfNeeded(client, Client);
+
             // Update client status
-            client.first_payment_received = true;
-            client.current_status = "payment_confirmed";
-            client.updated_at = new Date();
+            freshClient.first_payment_received = true;
+            freshClient.current_status = "payment_confirmed";
+            freshClient.updated_at = new Date();
 
             // Add status history
-            client.status_history.push({
+            freshClient.status_history.push({
                 id: uuidv4(),
                 status: "payment_confirmed",
                 changed_by: "agent",
@@ -442,12 +492,12 @@ class ZendeskWebhookController {
 
             // Check if both conditions (payment + documents) are met for 7-day review
             const conditionCheckResult =
-                await this.conditionCheckService.handlePaymentConfirmed(client.id);
+                await this.conditionCheckService.handlePaymentConfirmed(freshClient.id);
             console.log(`🔍 Condition check result:`, conditionCheckResult);
 
-            const documents = client.documents || [];
+            const documents = freshClient.documents || [];
             const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
-            const creditors = client.final_creditor_list || [];
+            const creditors = freshClient.final_creditor_list || [];
 
             // Helper to check if a value is missing/empty
             const isMissingValue = (val) => {
@@ -490,7 +540,7 @@ class ZendeskWebhookController {
             const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
             const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
 
-            console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
+            console.log(`📊 Creditor analysis for ${freshClient.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
             console.log(`   Creditors needing manual review (from doc flags): ${needsReview.length}`);
             needsReview.forEach(c => {
@@ -505,7 +555,7 @@ class ZendeskWebhookController {
 
             // Generate automatic review ticket content
             const reviewTicketContent = this.generateCreditorReviewTicketContent(
-                client,
+                freshClient,
                 documents,
                 creditors,
                 needsReview.length > 0
@@ -516,18 +566,18 @@ class ZendeskWebhookController {
 
             if (needsReview.length > 0) {
                 // Manual review needed - send to Agent Portal
-                client.current_status = "creditor_review";
-                client.payment_ticket_type = "manual_review";
+                freshClient.current_status = "creditor_review";
+                freshClient.payment_ticket_type = "manual_review";
             } else {
                 // AUTO-APPROVED: No documents have manual review flags
                 // Skip agent review and go directly to client confirmation
-                client.current_status = "awaiting_client_confirmation";
-                client.payment_ticket_type = "auto_approved";
-                client.admin_approved = true;
-                client.admin_approved_at = new Date();
+                freshClient.current_status = "awaiting_client_confirmation";
+                freshClient.payment_ticket_type = "auto_approved";
+                freshClient.admin_approved = true;
+                freshClient.admin_approved_at = new Date();
 
                 // Add status history for auto-approval
-                client.status_history.push({
+                freshClient.status_history.push({
                     id: uuidv4(),
                     status: "awaiting_client_confirmation",
                     changed_by: "system",
@@ -538,9 +588,9 @@ class ZendeskWebhookController {
                     },
                 });
 
-                console.log(`🤖 AUTO-APPROVED: ${client.aktenzeichen} - All ${creditors.length} creditors' documents have no manual review flags`);
+                console.log(`🤖 AUTO-APPROVED: ${freshClient.aktenzeichen} - All ${creditors.length} creditors' documents have no manual review flags`);
             }
-            client.payment_processed_at = new Date();
+            freshClient.payment_processed_at = new Date();
 
             // CREATE ZENDESK TICKET FOR AGENT REVIEW
             let zendeskTicket = null;
@@ -549,13 +599,13 @@ class ZendeskWebhookController {
             if (this.zendeskService.isConfigured()) {
                 try {
                     console.log(
-                        `🎫 Creating Zendesk ticket for creditor review: ${client.aktenzeichen}`
+                        `🎫 Creating Zendesk ticket for creditor review: ${freshClient.aktenzeichen}`
                     );
 
                     zendeskTicket = await this.zendeskService.createTicket({
-                        subject: `Gläubiger-Review: ${client.firstName} ${client.lastName} (${client.aktenzeichen})`,
+                        subject: `Gläubiger-Review: ${freshClient.firstName} ${freshClient.lastName} (${freshClient.aktenzeichen})`,
                         content: reviewTicketContent,
-                        requesterEmail: client.email,
+                        requesterEmail: freshClient.email,
                         tags: [
                             "gläubiger-review",
                             "payment-confirmed",
@@ -571,7 +621,7 @@ class ZendeskWebhookController {
 
                     // Store ticket reference on client
                     if (zendeskTicket?.ticket_id) {
-                        client.zendesk_review_ticket_id = zendeskTicket.ticket_id;
+                        freshClient.zendesk_review_ticket_id = zendeskTicket.ticket_id;
                     }
                 } catch (ticketError) {
                     console.error(
@@ -584,21 +634,21 @@ class ZendeskWebhookController {
                 console.log(`⚠️ Zendesk not configured - skipping ticket creation`);
             }
 
-            await client.save({ validateModifiedOnly: true });
+            await freshClient.save({ validateModifiedOnly: true });
 
             // SEND CLIENT CONFIRMATION EMAIL FOR AUTO-APPROVED CASES
             if (needsReview.length === 0 && zendeskTicket?.ticket_id && creditors.length > 0) {
                 try {
-                    console.log(`📧 AUTO-APPROVED: Sending creditor confirmation email to client ${client.email}`);
+                    console.log(`📧 AUTO-APPROVED: Sending creditor confirmation email to client ${freshClient.email}`);
 
-                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${freshClient.portal_token}`;
                     const creditorsList = creditors
                         .map((c, i) => `${i + 1}. ${c.sender_name || "Unbekannt"} - €${(c.claim_amount || 0).toLocaleString("de-DE")}`)
                         .join("\n");
                     const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
 
                     const emailContent = this.generateCreditorConfirmationEmailContent(
-                        client,
+                        freshClient,
                         creditors,
                         portalUrl,
                         totalDebt
@@ -613,7 +663,7 @@ class ZendeskWebhookController {
 
                     if (emailResult?.success) {
                         clientConfirmationEmailSent = true;
-                        console.log(`✅ Creditor confirmation email sent to ${client.email}`);
+                        console.log(`✅ Creditor confirmation email sent to ${freshClient.email}`);
                     } else {
                         console.error(`❌ Failed to send creditor confirmation email: ${emailResult?.error}`);
                     }
@@ -623,21 +673,21 @@ class ZendeskWebhookController {
             }
 
             const reviewDashboardUrl = needsReview.length > 0
-                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/agent/review/${client.id}`
+                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/agent/review/${freshClient.id}`
                 : null;
 
             const portalConfirmationUrl = needsReview.length === 0
-                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`
+                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${freshClient.portal_token}`
                 : null;
 
             console.log(
-                `✅ Payment confirmed for ${client.aktenzeichen}. Ticket: ${ticketType}, Docs: ${documents.length}, Creditors: ${creditors.length}, Agent Portal: ${needsReview.length > 0 ? 'YES' : 'NO'}, Auto-Approved: ${needsReview.length === 0 ? 'YES' : 'NO'}`
+                `✅ Payment confirmed for ${freshClient.aktenzeichen}. Ticket: ${ticketType}, Docs: ${documents.length}, Creditors: ${creditors.length}, Agent Portal: ${needsReview.length > 0 ? 'YES' : 'NO'}, Auto-Approved: ${needsReview.length === 0 ? 'YES' : 'NO'}`
             );
 
             res.json({
                 success: true,
                 message: `User payment confirmation processed - ${ticketType}`,
-                client_status: client.current_status,
+                client_status: freshClient.current_status,
                 payment_ticket_type: ticketType,
                 documents_count: documents.length,
                 creditor_documents: creditorDocs.length,
