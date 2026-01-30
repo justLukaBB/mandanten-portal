@@ -13,7 +13,7 @@ Fix the creditor review status flow by ensuring deduplication runs immediately a
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Deduplication Timing & Data Integrity** - Fix when dedup runs and what it preserves
-- [ ] **Phase 2: Payment Status Logic** - Respect manual review flags in status decisions
+- [x] **Phase 2: Payment Status Logic** - Respect manual review flags in status decisions
 
 ## Phase Details
 
@@ -45,7 +45,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md — Add needs_manual_review flag check, name validation, and empty creditor guard to payment handler
+- [x] 02-01-PLAN.md — Add needs_manual_review flag check, name validation, and empty creditor guard to payment handler
 
 ## Progress
 
@@ -55,4 +55,4 @@ Phases execute in numeric order: 1 → 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Deduplication Timing & Data Integrity | 3/3 | Complete | 2026-01-30 |
-| 2. Payment Status Logic | 0/1 | Not started | - |
+| 2. Payment Status Logic | 1/1 | Complete | 2026-01-30 |
