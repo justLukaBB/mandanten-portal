@@ -10,6 +10,22 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { findCreditorByName } = require('../utils/creditorLookup');
 
+/**
+ * Merge review reasons from existing and new creditor data.
+ * Preserves all existing reasons and adds any new ones without duplicates.
+ */
+function mergeReviewReasons(existingReasons, newReasons) {
+  const existing = Array.isArray(existingReasons) ? existingReasons : [];
+  const incoming = Array.isArray(newReasons) ? newReasons : [];
+  const merged = [...existing];
+  for (const reason of incoming) {
+    if (reason && !merged.includes(reason)) {
+      merged.push(reason);
+    }
+  }
+  return merged;
+}
+
 // Store pending dedup jobs per client
 const pendingJobs = new Map();
 
@@ -227,16 +243,45 @@ async function runAIRededup(clientId, getClientFunction) {
       }
     }
 
-    // Ensure all creditors have IDs before saving
-    client.final_creditor_list = deduplicated_creditors.map(c => ({
-      ...c,
-      id: c.id || uuidv4(), // Preserve existing ID or generate new one
-      status: c.status || 'confirmed', // Ensure status exists
-      ai_confidence: c.ai_confidence || 1.0,
-      created_at: c.created_at || new Date(),
-      needs_manual_review: c.needs_manual_review || false,
-      review_reasons: c.review_reasons || []
-    }));
+    // Build lookup map of existing creditors for O(1) field preservation
+    const existingMap = new Map();
+    for (const existing of (client.final_creditor_list || [])) {
+      if (existing.id) {
+        existingMap.set(existing.id, existing);
+      }
+      // Also index by normalized name for creditors whose IDs changed during dedup
+      const name = (existing.sender_name || existing.glaeubiger_name || '').toLowerCase().trim();
+      if (name && !existingMap.has(`name:${name}`)) {
+        existingMap.set(`name:${name}`, existing);
+      }
+    }
+
+    client.final_creditor_list = deduplicated_creditors.map(c => {
+      // Find existing creditor by ID first, then by name
+      const existingById = existingMap.get(c.id);
+      const name = (c.sender_name || c.glaeubiger_name || '').toLowerCase().trim();
+      const existingByName = name ? existingMap.get(`name:${name}`) : null;
+      const existing = existingById || existingByName;
+
+      return {
+        ...c,
+        id: c.id || uuidv4(),
+        status: c.status || 'confirmed',
+        ai_confidence: c.ai_confidence || 1.0,
+        created_at: existing?.created_at || c.created_at || new Date(),
+
+        // PRESERVE manual review state from existing creditor
+        // Use existing values if they indicate review is needed, otherwise use dedup values
+        needs_manual_review: existing?.needs_manual_review || c.needs_manual_review || false,
+        review_reasons: mergeReviewReasons(existing?.review_reasons, c.review_reasons),
+        manually_reviewed: existing?.manually_reviewed || false,
+        reviewed_at: existing?.reviewed_at,
+        reviewed_by: existing?.reviewed_by,
+        review_action: existing?.review_action,
+        original_ai_data: existing?.original_ai_data,
+        correction_notes: existing?.correction_notes,
+      };
+    });
 
     // Add deduplication history entry
     if (!client.deduplication_history) {
