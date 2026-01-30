@@ -353,8 +353,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
       setAiDedupMessage(
         `✅ AI Re-Deduplication erfolgreich!\n` +
-        `Vorher: ${stats.before_count || 0} Gläubiger\n` +
-        `Nachher: ${stats.after_count || 0} Gläubiger\n` +
+        `Vorher: ${stats.original_count || stats.before_count || 0} Gläubiger\n` +
+        `Nachher: ${stats.unique_count || stats.after_count || 0} Gläubiger\n` +
         `Duplikate entfernt: ${stats.duplicates_removed || 0}\n` +
         `Dauer: ${(stats.processing_time_ms ? stats.processing_time_ms / 1000 : 0).toFixed(1)}s`
       );

@@ -595,6 +595,7 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
             const totalDocs = clientDoc.documents.length;
             const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
 
+            // Status transitions (only when in document processing states)
             if ((clientDoc.current_status === 'documents_uploaded' || clientDoc.current_status === 'documents_processing') && completedDocs.length > 0) {
                 if (allDocsCompleted) {
                     if (creditorDocs.length > 0) {
@@ -616,25 +617,24 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         },
                         created_at: new Date(),
                     });
-
-                    // Trigger immediate AI deduplication after all documents processed
-                    if (creditorDocs.length > 0) {
-                        console.log(`[webhook] All ${totalDocs} documents processed. Triggering immediate AI dedup for ${client_id}...`);
-                        // Set all_documents_processed_at timestamp
-                        clientDoc.all_documents_processed_at = new Date();
-                        // Fire dedup asynchronously — don't block webhook response
-                        setImmediate(async () => {
-                            try {
-                                await aiDedupScheduler.scheduleAIRededup(client_id, getClient);
-                                console.log(`[webhook] AI dedup completed for ${client_id}`);
-                            } catch (err) {
-                                console.error(`[webhook] AI dedup failed for ${client_id}:`, err.message);
-                            }
-                        });
-                    }
                 } else {
                     clientDoc.current_status = 'documents_processing';
                 }
+            }
+
+            // Trigger AI dedup when ALL documents are processed (independent of client status)
+            if (allDocsCompleted && creditorDocs.length > 0 && !clientDoc.all_documents_processed_at) {
+                console.log(`[webhook] All ${totalDocs} documents processed. Triggering immediate AI dedup for ${client_id}...`);
+                clientDoc.all_documents_processed_at = new Date();
+                // Fire dedup asynchronously — don't block webhook response
+                setImmediate(async () => {
+                    try {
+                        await aiDedupScheduler.scheduleAIRededup(client_id, getClient);
+                        console.log(`[webhook] AI dedup completed for ${client_id}`);
+                    } catch (err) {
+                        console.error(`[webhook] AI dedup failed for ${client_id}:`, err.message);
+                    }
+                });
             }
 
             // Node-side merge of FastAPI-deduped creditors
