@@ -509,44 +509,41 @@ class ZendeskWebhookController {
                 return false;
             };
 
-            // Helper to check if creditor needs review (document flags + missing contact info)
+            // Helper to check if creditor needs review (creditor flag + missing contact info)
             const creditorNeedsManualReview = (creditor) => {
-                // Check linked document's flags
-                const linkedDocs = documents.filter(doc =>
-                    creditor.document_id === doc.id ||
-                    creditor.source_document === doc.name ||
-                    (creditor.source_documents && creditor.source_documents.some(srcDoc =>
-                        srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
-                    ))
-                );
+                // Check 1: Creditor-level manual review flag (set by AI dedup)
+                if (creditor.needs_manual_review === true) {
+                    return true;
+                }
 
-                const documentNeedsReview = linkedDocs.some(doc =>
-                    doc.manual_review_required === true ||
-                    doc.validation?.requires_manual_review === true ||
-                    doc.extracted_data?.manual_review_required === true
-                );
+                // Check 2: Missing contact fields (email, address, name)
+                const creditorEmail = creditor.sender_email || creditor.email_glaeubiger;
+                const creditorAddress = creditor.sender_address || creditor.glaeubiger_adresse;
+                const creditorName = creditor.sender_name || creditor.glaeubiger_name;
 
-                // Also check if email OR address is missing for ANY creditor
-                const creditorEmail = creditor.email || creditor.sender_email;
-                const creditorAddress = creditor.address || creditor.sender_address;
                 const missingEmail = isMissingValue(creditorEmail);
                 const missingAddress = isMissingValue(creditorAddress);
-                const missingContactInfo = missingEmail || missingAddress;
+                const missingName = isMissingValue(creditorName);
 
-                return documentNeedsReview || missingContactInfo;
+                return missingEmail || missingAddress || missingName;
             };
 
-            // Check which creditors need manual review (using document flags, NOT creditor.needs_manual_review)
+            // Check which creditors need manual review (creditor.needs_manual_review flag + contact completeness)
             const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
             const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
 
             console.log(`📊 Creditor analysis for ${freshClient.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
-            console.log(`   Creditors needing manual review (from doc flags): ${needsReview.length}`);
+            console.log(`   Creditors needing review: ${needsReview.length}`);
             needsReview.forEach(c => {
-                console.log(`      - ${c.sender_name} (doc: ${c.document_id || c.source_document})`);
+                const reasons = [];
+                if (c.needs_manual_review === true) reasons.push('needs_manual_review');
+                if (isMissingValue(c.sender_email || c.email_glaeubiger)) reasons.push('missing email');
+                if (isMissingValue(c.sender_address || c.glaeubiger_adresse)) reasons.push('missing address');
+                if (isMissingValue(c.sender_name || c.glaeubiger_name)) reasons.push('missing name');
+                console.log(`      - ${c.sender_name || c.glaeubiger_name || 'Unknown'}: ${reasons.join(', ')}`);
             });
-            console.log(`   Creditors OK (no doc review flags): ${confidenceOk.length}`);
+            console.log(`   Creditors OK: ${confidenceOk.length}`);
 
             // Determine next action
             // Simplified logic for this port, assuming manual review if any needs review
@@ -582,7 +579,7 @@ class ZendeskWebhookController {
                     status: "awaiting_client_confirmation",
                     changed_by: "system",
                     metadata: {
-                        reason: "Auto-approved: No documents require manual review",
+                        reason: "Auto-approved: All creditors pass review flag and contact checks",
                         creditors_count: creditors.length,
                         auto_approved: true,
                     },
