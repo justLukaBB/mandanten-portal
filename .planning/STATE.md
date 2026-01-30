@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 1 of 2 (Deduplication Timing & Data Integrity)
-Plan: 1 of TBD in current phase
-Status: In progress
-Last activity: 2026-01-30 — Completed 01-01-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-01-30 — Completed 01-03-PLAN.md (Payment Handler Dedup Wait)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 2m 23s
-- Total execution time: 0.08 hours
+- Total plans completed: 3
+- Average duration: 2m 34s
+- Total execution time: 0.13 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-deduplication-timing-data-integrity | 2 | 4m 45s | 2m 23s |
+| 01-deduplication-timing-data-integrity | 3 | 8m 2s | 2m 41s |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 2m 45s
+- Last 5 plans: 2min, 2m 45s, 3m 17s
 - Trend: Consistent execution speed
 
 *Updated after each plan completion*
@@ -51,6 +51,10 @@ Recent decisions affecting current work:
 | Union merge for review_reasons arrays | Plan 01-02 | Both historical and new review reasons are preserved |
 | Dual lookup by ID and normalized name | Plan 01-02 | Handles FastAPI ID reassignment during dedup |
 | Preserve created_at from existing creditor | Plan 01-02 | Maintains provenance tracking across dedup runs |
+| 5-minute recent window for dedup wait | Plan 01-03 | Only waits if documents processed recently, avoids unnecessary delays |
+| 2-second poll interval for dedup status | Plan 01-03 | Balances responsiveness and database load |
+| 60-second max wait timeout | Plan 01-03 | Prevents infinite blocking if dedup hangs |
+| Reload client data even on timeout | Plan 01-03 | Get latest available state rather than stale initial data |
 
 ### Pending Todos
 
@@ -62,6 +66,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-30T14:58:19Z
-Stopped at: Completed 01-01-PLAN.md (Immediate Dedup Execution)
+Last session: 2026-01-30T15:07:24Z
+Stopped at: Completed 01-03-PLAN.md (Payment Handler Dedup Wait) - Phase 01 complete
 Resume file: None
