@@ -13,13 +13,13 @@
 
 ### Deduplication Timing
 
-- [ ] **DDP-01**: AI deduplication triggers immediately after the last document finishes processing (not on 30-minute timer)
-- [ ] **DDP-02**: Payment status decision waits for dedup to complete if documents were recently processed
-- [ ] **DDP-03**: Dedup scheduler cancels pending 30-minute jobs when immediate dedup runs
+- [x] **DDP-01**: AI deduplication triggers immediately after the last document finishes processing (not on 30-minute timer)
+- [x] **DDP-02**: Payment status decision waits for dedup to complete if documents were recently processed
+- [x] **DDP-03**: Dedup scheduler cancels pending 30-minute jobs when immediate dedup runs
 
 ### Data Integrity
 
-- [ ] **DAT-01**: Dedup preserves existing `needs_manual_review` and `review_reasons` when overwriting `final_creditor_list`
+- [x] **DAT-01**: Dedup preserves existing `needs_manual_review` and `review_reasons` when overwriting `final_creditor_list`
 
 ## v2 Requirements
 
@@ -42,10 +42,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DDP-01 | Phase 1 | Pending |
-| DDP-02 | Phase 1 | Pending |
-| DDP-03 | Phase 1 | Pending |
-| DAT-01 | Phase 1 | Pending |
+| DDP-01 | Phase 1 | Complete |
+| DDP-02 | Phase 1 | Complete |
+| DDP-03 | Phase 1 | Complete |
+| DAT-01 | Phase 1 | Complete |
 | PAY-01 | Phase 2 | Pending |
 | PAY-02 | Phase 2 | Pending |
 | PAY-03 | Phase 2 | Pending |
