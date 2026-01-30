@@ -12,26 +12,26 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 Phase: 1 of 2 (Deduplication Timing & Data Integrity)
 Plan: 1 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-30 — Completed 01-02-PLAN.md
+Last activity: 2026-01-30 — Completed 01-01-PLAN.md
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2 min
-- Total execution time: 0.03 hours
+- Total plans completed: 2
+- Average duration: 2m 23s
+- Total execution time: 0.08 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-deduplication-timing-data-integrity | 1 | 2min | 2min |
+| 01-deduplication-timing-data-integrity | 2 | 4m 45s | 2m 23s |
 
 **Recent Trend:**
-- Last 5 plans: 2min
-- Trend: Just started
+- Last 5 plans: 2min, 2m 45s
+- Trend: Consistent execution speed
 
 *Updated after each plan completion*
 
@@ -44,6 +44,9 @@ Recent decisions affecting current work:
 
 | Decision | Context | Impact |
 |----------|---------|--------|
+| MongoDB atomic update for dedup guard | Plan 01-01 | Prevents race conditions without Redis/application locks |
+| setImmediate for async dedup execution | Plan 01-01 | Non-blocking webhook response, dedup runs after document save |
+| Always clear dedup_in_progress in finally | Plan 01-01 | Ensures flag cleared even on error, prevents permanent locks |
 | OR logic for needs_manual_review preservation | Plan 01-02 | Creditors never lose manual review flag during dedup |
 | Union merge for review_reasons arrays | Plan 01-02 | Both historical and new review reasons are preserved |
 | Dual lookup by ID and normalized name | Plan 01-02 | Handles FastAPI ID reassignment during dedup |
@@ -59,6 +62,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-30T09:27:01Z
-Stopped at: Completed 01-02-PLAN.md (Review Flag Preservation)
+Last session: 2026-01-30T14:58:19Z
+Stopped at: Completed 01-01-PLAN.md (Immediate Dedup Execution)
 Resume file: None
