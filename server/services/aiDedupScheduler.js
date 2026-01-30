@@ -333,7 +333,7 @@ async function runAIRededup(clientId, getClientFunction) {
     // ALWAYS clear dedup_in_progress flag
     try {
       await Client.updateOne(
-        { id: clientId },
+        { _id: client._id },
         { $set: { dedup_in_progress: false, dedup_completed_at: new Date() } }
       );
     } catch (clearError) {
