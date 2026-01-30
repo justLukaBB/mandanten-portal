@@ -42,19 +42,19 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | — | Pending |
-| PAY-02 | — | Pending |
-| PAY-03 | — | Pending |
-| DDP-01 | — | Pending |
-| DDP-02 | — | Pending |
-| DDP-03 | — | Pending |
-| DAT-01 | — | Pending |
+| DDP-01 | Phase 1 | Pending |
+| DDP-02 | Phase 1 | Pending |
+| DDP-03 | Phase 1 | Pending |
+| DAT-01 | Phase 1 | Pending |
+| PAY-01 | Phase 2 | Pending |
+| PAY-02 | Phase 2 | Pending |
+| PAY-03 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-01-30*
-*Last updated: 2026-01-30 after initial definition*
+*Last updated: 2026-01-30 after roadmap creation*
