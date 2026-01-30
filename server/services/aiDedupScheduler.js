@@ -9,6 +9,7 @@
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { findCreditorByName } = require('../utils/creditorLookup');
+const Client = require('../models/Client');
 
 /**
  * Merge review reasons from existing and new creditor data.
@@ -30,7 +31,6 @@ function mergeReviewReasons(existingReasons, newReasons) {
 const pendingJobs = new Map();
 
 // Configuration
-const DEDUP_DELAY_MS = 30 * 60 * 1000; // 30 minutes
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
 const FASTAPI_API_KEY = process.env.FASTAPI_API_KEY;
 
@@ -45,11 +45,10 @@ if (process.env.NODE_ENV === 'production' && !FASTAPI_API_KEY) {
 /**
  * Schedule AI re-deduplication for a client
  *
- * If a job is already pending, cancel it and schedule a new one.
- * This ensures we wait for all uploads to finish before running dedup.
+ * Runs dedup IMMEDIATELY instead of scheduling a delay.
+ * Cancels any pending delayed job (legacy cleanup).
  */
-function scheduleAIRededup(clientId, getClientFunction) {
-  // Input validation
+async function scheduleAIRededup(clientId, getClientFunction) {
   if (!clientId) {
     console.error('[ai-dedup-scheduler] Cannot schedule - clientId is required');
     return;
@@ -59,24 +58,17 @@ function scheduleAIRededup(clientId, getClientFunction) {
     return;
   }
 
-  console.log(`[ai-dedup-scheduler] Scheduling AI re-dedup for client ${clientId} in 30 minutes...`);
+  console.log(`[ai-dedup-scheduler] Running immediate dedup for client ${clientId}...`);
 
-  // Cancel existing pending job if any
+  // Cancel any pending delayed job (legacy cleanup)
   if (pendingJobs.has(clientId)) {
     clearTimeout(pendingJobs.get(clientId));
-    console.log(`[ai-dedup-scheduler] Cancelled previous pending job for ${clientId}`);
+    pendingJobs.delete(clientId);
+    console.log(`[ai-dedup-scheduler] Cancelled pending delayed job for ${clientId}`);
   }
 
-  // Schedule new job
-  const timeoutId = setTimeout(async () => {
-    await runAIRededup(clientId, getClientFunction);
-    pendingJobs.delete(clientId);
-  }, DEDUP_DELAY_MS);
-
-  pendingJobs.set(clientId, timeoutId);
-
-  const scheduledTime = new Date(Date.now() + DEDUP_DELAY_MS);
-  console.log(`[ai-dedup-scheduler] AI re-dedup scheduled for ${clientId} at ${scheduledTime.toISOString()}`);
+  // Run dedup IMMEDIATELY (no 30-minute delay)
+  return runAIRededup(clientId, getClientFunction);
 }
 
 /**
@@ -96,6 +88,17 @@ async function runAIRededup(clientId, getClientFunction) {
     if (!client) {
       console.error(`[ai-dedup-scheduler] Client ${clientId} not found, skipping AI re-dedup`);
       return;
+    }
+
+    // Atomic guard: prevent double-execution via MongoDB atomic update
+    const guardResult = await Client.updateOne(
+      { _id: client._id, dedup_in_progress: { $ne: true } },
+      { $set: { dedup_in_progress: true, dedup_started_at: new Date() } }
+    );
+
+    if (guardResult.modifiedCount === 0) {
+      console.log(`[ai-dedup-scheduler] Dedup already in progress for ${clientId}, skipping`);
+      return { success: false, reason: 'dedup_already_in_progress' };
     }
 
     const creditorList = client.final_creditor_list || [];
@@ -290,7 +293,7 @@ async function runAIRededup(clientId, getClientFunction) {
 
     client.deduplication_history.push({
       timestamp: new Date(),
-      method: 'periodic-ai-rededup',
+      method: 'immediate-ai-rededup',
       before_count: beforeCount,
       after_count: deduplicated_creditors.length,
       duplicates_removed: stats.duplicates_removed,
@@ -326,6 +329,16 @@ async function runAIRededup(clientId, getClientFunction) {
       success: false,
       error: error.message
     };
+  } finally {
+    // ALWAYS clear dedup_in_progress flag
+    try {
+      await Client.updateOne(
+        { id: clientId },
+        { $set: { dedup_in_progress: false, dedup_completed_at: new Date() } }
+      );
+    } catch (clearError) {
+      console.error(`[ai-dedup-scheduler] Failed to clear dedup_in_progress for ${clientId}:`, clearError.message);
+    }
   }
 }
 

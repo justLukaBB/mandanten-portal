@@ -311,6 +311,11 @@ const clientSchema = new mongoose.Schema({
   document_request_email_sent_at: Date,
   all_documents_processed_at: Date,
 
+  // Deduplication coordination
+  dedup_in_progress: { type: Boolean, default: false },
+  dedup_started_at: Date,
+  dedup_completed_at: Date,
+
   // Document reminder tracking
   document_reminder_count: { type: Number, default: 0 },
   last_document_reminder_at: Date,
