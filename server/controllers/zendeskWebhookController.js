@@ -528,6 +528,11 @@ class ZendeskWebhookController {
                 return missingEmail || missingAddress || missingName;
             };
 
+            // Edge case: Empty creditor list is abnormal after payment — route to review
+            if (creditors.length === 0) {
+                console.log(`[payment-handler] No creditors found for ${freshClient.aktenzeichen} — routing to creditor_review`);
+            }
+
             // Check which creditors need manual review (creditor.needs_manual_review flag + contact completeness)
             const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
             const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
@@ -545,9 +550,9 @@ class ZendeskWebhookController {
             });
             console.log(`   Creditors OK: ${confidenceOk.length}`);
 
-            // Determine next action
-            // Simplified logic for this port, assuming manual review if any needs review
-            const nextAction = needsReview.length > 0 ? "manual_review" : "auto_approved";
+            // Determine if manual review is required (either creditors need review OR empty creditor list)
+            const requiresManualReview = needsReview.length > 0 || creditors.length === 0;
+            const nextAction = requiresManualReview ? "manual_review" : "auto_approved";
             const ticketType = nextAction;
 
             // Generate automatic review ticket content
@@ -555,18 +560,18 @@ class ZendeskWebhookController {
                 freshClient,
                 documents,
                 creditors,
-                needsReview.length > 0
+                requiresManualReview
             );
 
             // Set status based on whether manual review is needed
             let clientConfirmationEmailSent = false;
 
-            if (needsReview.length > 0) {
+            if (requiresManualReview) {
                 // Manual review needed - send to Agent Portal
                 freshClient.current_status = "creditor_review";
                 freshClient.payment_ticket_type = "manual_review";
             } else {
-                // AUTO-APPROVED: No documents have manual review flags
+                // AUTO-APPROVED: All creditors pass review flag and contact checks
                 // Skip agent review and go directly to client confirmation
                 freshClient.current_status = "awaiting_client_confirmation";
                 freshClient.payment_ticket_type = "auto_approved";
@@ -585,7 +590,7 @@ class ZendeskWebhookController {
                     },
                 });
 
-                console.log(`🤖 AUTO-APPROVED: ${freshClient.aktenzeichen} - All ${creditors.length} creditors' documents have no manual review flags`);
+                console.log(`🤖 AUTO-APPROVED: ${freshClient.aktenzeichen} - All ${creditors.length} creditors pass review flag and contact checks`);
             }
             freshClient.payment_processed_at = new Date();
 
@@ -606,9 +611,9 @@ class ZendeskWebhookController {
                         tags: [
                             "gläubiger-review",
                             "payment-confirmed",
-                            needsReview.length > 0 ? "manual-review-needed" : "auto-approved",
+                            requiresManualReview ? "manual-review-needed" : "auto-approved",
                         ],
-                        priority: needsReview.length > 0 ? "normal" : "low",
+                        priority: requiresManualReview ? "normal" : "low",
                         type: "task",
                     });
 
@@ -634,7 +639,7 @@ class ZendeskWebhookController {
             await freshClient.save({ validateModifiedOnly: true });
 
             // SEND CLIENT CONFIRMATION EMAIL FOR AUTO-APPROVED CASES
-            if (needsReview.length === 0 && zendeskTicket?.ticket_id && creditors.length > 0) {
+            if (!requiresManualReview && zendeskTicket?.ticket_id && creditors.length > 0) {
                 try {
                     console.log(`📧 AUTO-APPROVED: Sending creditor confirmation email to client ${freshClient.email}`);
 
@@ -669,16 +674,16 @@ class ZendeskWebhookController {
                 }
             }
 
-            const reviewDashboardUrl = needsReview.length > 0
+            const reviewDashboardUrl = requiresManualReview
                 ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/agent/review/${freshClient.id}`
                 : null;
 
-            const portalConfirmationUrl = needsReview.length === 0
+            const portalConfirmationUrl = !requiresManualReview
                 ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${freshClient.portal_token}`
                 : null;
 
             console.log(
-                `✅ Payment confirmed for ${freshClient.aktenzeichen}. Ticket: ${ticketType}, Docs: ${documents.length}, Creditors: ${creditors.length}, Agent Portal: ${needsReview.length > 0 ? 'YES' : 'NO'}, Auto-Approved: ${needsReview.length === 0 ? 'YES' : 'NO'}`
+                `✅ Payment confirmed for ${freshClient.aktenzeichen}. Ticket: ${ticketType}, Docs: ${documents.length}, Creditors: ${creditors.length}, Agent Portal: ${requiresManualReview ? 'YES' : 'NO'}, Auto-Approved: ${!requiresManualReview ? 'YES' : 'NO'}`
             );
 
             res.json({
@@ -691,8 +696,8 @@ class ZendeskWebhookController {
                 extracted_creditors: creditors.length,
                 creditors_need_review: needsReview.length,
                 creditors_confidence_ok: confidenceOk.length,
-                manual_review_required: needsReview.length > 0,
-                auto_approved: needsReview.length === 0,
+                manual_review_required: requiresManualReview,
+                auto_approved: !requiresManualReview,
                 client_confirmation_email_sent: clientConfirmationEmailSent,
                 zendesk_ticket: zendeskTicket
                     ? {
@@ -703,7 +708,7 @@ class ZendeskWebhookController {
                 zendesk_error: ticketCreationError,
                 review_dashboard_url: reviewDashboardUrl,
                 portal_confirmation_url: portalConfirmationUrl,
-                agent_portal_visible: needsReview.length > 0,
+                agent_portal_visible: requiresManualReview,
             });
         } catch (error) {
             console.error("❌ Error in user-payment-confirmed webhook:", error);
