@@ -237,7 +237,7 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
     }
 }
 
-const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO }) => {
+const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO, aiDedupScheduler }) => {
     /**
      * Process AI Processing Webhook (called by WebhookWorker)
      *
@@ -616,6 +616,22 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         },
                         created_at: new Date(),
                     });
+
+                    // Trigger immediate AI deduplication after all documents processed
+                    if (creditorDocs.length > 0) {
+                        console.log(`[webhook] All ${totalDocs} documents processed. Triggering immediate AI dedup for ${client_id}...`);
+                        // Set all_documents_processed_at timestamp
+                        clientDoc.all_documents_processed_at = new Date();
+                        // Fire dedup asynchronously — don't block webhook response
+                        setImmediate(async () => {
+                            try {
+                                await aiDedupScheduler.scheduleAIRededup(client_id, getClient);
+                                console.log(`[webhook] AI dedup completed for ${client_id}`);
+                            } catch (err) {
+                                console.error(`[webhook] AI dedup failed for ${client_id}:`, err.message);
+                            }
+                        });
+                    }
                 } else {
                     clientDoc.current_status = 'documents_processing';
                 }

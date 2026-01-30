@@ -271,7 +271,8 @@ const webhookController = createWebhookController({
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
   getClient: clientService.getClient.bind(clientService),
   triggerProcessingCompleteWebhook,
-  getIO
+  getIO,
+  aiDedupScheduler
 });
 
 // Initialize webhook worker with the controller's processing function
@@ -285,6 +286,7 @@ app.use('/api/webhooks', createWebhooksRouter({
   getClient: clientService.getClient.bind(clientService),
   triggerProcessingCompleteWebhook,
   getIO,
+  aiDedupScheduler,
   webhookController // Pass the controller to avoid creating a second instance
 }));
 
