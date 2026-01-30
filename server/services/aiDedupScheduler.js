@@ -273,6 +273,13 @@ async function runAIRededup(clientId, getClientFunction) {
         ai_confidence: c.ai_confidence || 1.0,
         created_at: existing?.created_at || c.created_at || new Date(),
 
+        // PRESERVE document links from existing creditor (FastAPI response doesn't include these)
+        source_documents: c.source_documents || existing?.source_documents || [],
+        source_document_id: c.source_document_id || existing?.source_document_id,
+        primary_document_id: c.primary_document_id || existing?.primary_document_id,
+        document_id: c.document_id || existing?.document_id,
+        document_links: c.document_links || existing?.document_links || [],
+
         // PRESERVE manual review state from existing creditor
         // Use existing values if they indicate review is needed, otherwise use dedup values
         needs_manual_review: existing?.needs_manual_review || c.needs_manual_review || false,

@@ -595,7 +595,7 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
             const totalDocs = clientDoc.documents.length;
             const allDocsCompleted = completedDocs.length === totalDocs && totalDocs > 0;
 
-            if (clientDoc.current_status === 'documents_uploaded' && completedDocs.length > 0) {
+            if ((clientDoc.current_status === 'documents_uploaded' || clientDoc.current_status === 'documents_processing') && completedDocs.length > 0) {
                 if (allDocsCompleted) {
                     if (creditorDocs.length > 0) {
                         clientDoc.current_status = 'documents_completed';

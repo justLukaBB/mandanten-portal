@@ -766,6 +766,13 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                         settlement_response_status: creditor.settlement_response_status || 'pending',
                         nullplan_response_status: creditor.nullplan_response_status || 'pending',
 
+                        // PRESERVE document links from existing creditor (FastAPI response doesn't include these)
+                        source_documents: creditor.source_documents || existing?.source_documents || [],
+                        source_document_id: creditor.source_document_id || existing?.source_document_id,
+                        primary_document_id: creditor.primary_document_id || existing?.primary_document_id,
+                        document_id: creditor.document_id || existing?.document_id,
+                        document_links: creditor.document_links || existing?.document_links || [],
+
                         // PRESERVE manual review state from existing creditor
                         needs_manual_review: existing?.needs_manual_review || creditor.needs_manual_review || false,
                         review_reasons: mergedReasons,
