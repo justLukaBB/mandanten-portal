@@ -42,10 +42,10 @@ Plans:
   2. If ANY creditor has `needs_manual_review = true`, status is set to `creditor_review` regardless of document/contact status
   3. Auto-approval to `ready_for_payment` only occurs when ALL creditors have `needs_manual_review = false` AND pass document/contact checks
   4. Cases with manual review flags appear in agent portal review queue instead of skipping to client approval
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Add needs_manual_review flag check, name validation, and empty creditor guard to payment handler
 
 ## Progress
 
@@ -55,4 +55,4 @@ Phases execute in numeric order: 1 → 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Deduplication Timing & Data Integrity | 3/3 | Complete | 2026-01-30 |
-| 2. Payment Status Logic | 0/TBD | Not started | - |
+| 2. Payment Status Logic | 0/1 | Not started | - |
