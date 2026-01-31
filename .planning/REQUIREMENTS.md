@@ -52,27 +52,33 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LLM-01 | TBD | Pending |
-| LLM-02 | TBD | Pending |
-| LLM-03 | TBD | Pending |
-| MERGE-01 | TBD | Pending |
-| MERGE-02 | TBD | Pending |
-| MERGE-03 | TBD | Pending |
-| MERGE-04 | TBD | Pending |
-| MERGE-05 | TBD | Pending |
-| MERGE-06 | TBD | Pending |
-| MERGE-07 | TBD | Pending |
-| FAIL-01 | TBD | Pending |
-| FAIL-02 | TBD | Pending |
-| FAIL-03 | TBD | Pending |
-| PATH-01 | TBD | Pending |
-| PATH-02 | TBD | Pending |
+| LLM-01 | Phase 3 | Pending |
+| LLM-02 | Phase 3 | Pending |
+| LLM-03 | Phase 3 | Pending |
+| MERGE-01 | Phase 4 | Pending |
+| MERGE-02 | Phase 4 | Pending |
+| MERGE-03 | Phase 4 | Pending |
+| MERGE-04 | Phase 4 | Pending |
+| MERGE-05 | Phase 4 | Pending |
+| MERGE-06 | Phase 4 | Pending |
+| MERGE-07 | Phase 4 | Pending |
+| FAIL-01 | Phase 5 | Pending |
+| FAIL-02 | Phase 5 | Pending |
+| FAIL-03 | Phase 5 | Pending |
+| PATH-01 | Phase 6 | Pending |
+| PATH-02 | Phase 6 | Pending |
 
 **Coverage:**
 - v2 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
+
+**Phase Distribution:**
+- Phase 3 (LLM Prompt Optimization): 3 requirements
+- Phase 4 (Code-Based Merge Logic): 7 requirements
+- Phase 5 (Failure Handling & Retry): 3 requirements
+- Phase 6 (Path Consistency & Integration): 2 requirements
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after initial definition*
+*Last updated: 2026-01-31 after roadmap creation - 100% coverage achieved*
