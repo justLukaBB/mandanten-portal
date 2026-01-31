@@ -40,11 +40,11 @@ Plans:
   1. Dedup prompt sends only minimal fields (sender_name, reference_number, is_representative, actual_creditor) instead of full creditor objects
   2. LLM returns duplicate group mappings (array of index arrays) instead of full creditor JSON
   3. Token usage for 50 creditors stays well under 8192 output token limit
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Minimal payload helpers + validation infrastructure
+- [ ] 03-02-PLAN.md -- Wire into live deduplicate_with_llm() method
 
 #### Phase 4: Code-Based Merge Logic
 **Goal**: Deterministic creditor merging in Python code after LLM identifies groups
@@ -98,7 +98,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|-----------|----------------|--------|-----------|
 | 1. Dedup Scheduler Refactor | v1 | 2/2 | Complete | 2026-01-30 |
 | 2. Payment Handler Logic | v1 | 2/2 | Complete | 2026-01-30 |
-| 3. LLM Prompt Optimization | v2 | 0/2 | Not started | - |
+| 3. LLM Prompt Optimization | v2 | 0/2 | Planned | - |
 | 4. Code-Based Merge Logic | v2 | 0/2 | Not started | - |
 | 5. Failure Handling & Retry | v2 | 0/2 | Not started | - |
 | 6. Path Consistency & Integration | v2 | 0/1 | Not started | - |
