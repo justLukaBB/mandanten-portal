@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-30)
+See: .planning/PROJECT.md (updated 2026-01-31)
 
-**Core value:** When a creditor has `needs_manual_review = true`, the case must route through agent review — never auto-approve and skip it.
-**Current focus:** Planning next milestone
+**Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
+**Current focus:** Defining requirements for v2 Robust Dedup
 
 ## Current Position
 
-Phase: v1 complete — all phases shipped
-Plan: N/A
-Status: Ready for next milestone
-Last activity: 2026-01-30 — v1 milestone complete
-
-Progress: [██████████] 100% (v1)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-31 — Milestone v2 started
 
 ## Performance Metrics
 
@@ -23,14 +21,12 @@ Progress: [██████████] 100% (v1)
 - Average duration: 2m 34s
 - Total execution time: 0.17 hours
 
-**By Phase:**
+**By Phase (v1):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-deduplication-timing-data-integrity | 3 | 8m 2s | 2m 41s |
 | 02-payment-status-logic | 1 | 2m 32s | 2m 32s |
-
-*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -44,10 +40,11 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- gemini-2.0-flash max output tokens is 8192 — current approach exceeds this for 47+ creditors
+- Failed dedup silently passes duplicates through to client cases
 
 ## Session Continuity
 
-Last session: 2026-01-30
-Stopped at: v1 milestone complete — archived to .planning/milestones/
+Last session: 2026-01-31
+Stopped at: Defining v2 milestone requirements
 Resume file: None
