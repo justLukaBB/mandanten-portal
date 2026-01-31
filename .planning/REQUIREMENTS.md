@@ -7,9 +7,9 @@
 
 ### LLM Prompt Optimization
 
-- [ ] **LLM-01**: Dedup prompt sends only sender_name, reference_number, is_representative, and actual_creditor per creditor — not full objects
-- [ ] **LLM-02**: LLM returns duplicate group mappings (e.g., `[[0,3,7], [2,5]]`) instead of full creditor JSON
-- [ ] **LLM-03**: Output token usage stays well under 8192 for 50 creditors
+- [x] **LLM-01**: Dedup prompt sends only sender_name, reference_number, is_representative, and actual_creditor per creditor — not full objects
+- [x] **LLM-02**: LLM returns duplicate group mappings (e.g., `[[0,3,7], [2,5]]`) instead of full creditor JSON
+- [x] **LLM-03**: Output token usage stays well under 8192 for 50 creditors
 
 ### Code-Based Merging
 
@@ -52,9 +52,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LLM-01 | Phase 3 | Pending |
-| LLM-02 | Phase 3 | Pending |
-| LLM-03 | Phase 3 | Pending |
+| LLM-01 | Phase 3 | Complete |
+| LLM-02 | Phase 3 | Complete |
+| LLM-03 | Phase 3 | Complete |
 | MERGE-01 | Phase 4 | Pending |
 | MERGE-02 | Phase 4 | Pending |
 | MERGE-03 | Phase 4 | Pending |
