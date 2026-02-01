@@ -315,6 +315,7 @@ const clientSchema = new mongoose.Schema({
   dedup_in_progress: { type: Boolean, default: false },
   dedup_started_at: Date,
   dedup_completed_at: Date,
+  dedup_failure_reason: String, // Reason for dedup failure (e.g., "AI deduplication failed after 2 attempts: timeout")
 
   // Document reminder tracking
   document_reminder_count: { type: Number, default: 0 },
