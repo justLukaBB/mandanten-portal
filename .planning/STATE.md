@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-31)
 
 ## Current Position
 
-Phase: 4 of 6 (Code-Based Merge Logic) — IN PROGRESS
-Plan: 1/2 complete
-Status: Phase 4 Plan 1 complete — deterministic merge logic implemented
-Last activity: 2026-02-01 — Completed 04-01-PLAN.md
+Phase: 4 of 6 (Code-Based Merge Logic) — COMPLETE
+Plan: 2/2 complete
+Status: Phase 4 complete — deterministic merge fully integrated into LLM dedup pipeline
+Last activity: 2026-02-01 — Completed 04-02-PLAN.md
 
-Progress: [███████░░░] 70% (7/10 plans complete across all milestones)
+Progress: [████████░░] 80% (8/10 plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -30,15 +30,15 @@ Progress: [███████░░░] 70% (7/10 plans complete across all m
 | 1 - Dedup Scheduler Refactor | 2/2 | 8m 2s | 2m 41s | v1 |
 | 2 - Payment Handler Logic | 2/2 | 2m 32s | 2m 32s | v1 |
 | 3 - LLM Prompt Optimization | 2/2 | 7m 7s | 3m 33s | v2 |
-| 4 - Code-Based Merge Logic | 1/2 | 2m | 2m | v2 |
+| 4 - Code-Based Merge Logic | 2/2 | 3m | 1m 30s | v2 |
 | 5 - Failure Handling & Retry | 0/2 | - | - | v2 |
 | 6 - Path Consistency & Integration | 0/1 | - | - | v2 |
 
 **Recent Trend:**
 - v1 average: 2m 34s per plan
-- v2 average: 2m 53s per plan (3 completed)
+- v2 average: 2m 32s per plan (4 completed)
 
-*Updated: 2026-02-01 after 04-01 completion*
+*Updated: 2026-02-01 after 04-02 completion*
 
 ## Accumulated Context
 
@@ -61,6 +61,8 @@ Recent decisions affecting current work:
 - v2 (04-01): All-N/A fields become None - Clean database, no sentinel pollution
 - v2 (04-01): German mirror fields sync with English - Consistency after merge (glaeubiger_name = sender_name)
 - v2 (04-01): Representative fallback to non-rep name - If rep's actual_creditor is N/A, use non-rep's sender_name
+- v2 (04-02): Count invariant assertion - assert len(result) == len(groups) catches data flow errors early
+- v2 (04-02): Direct merge integration - Replaced 40-line placeholder with 3-line merge_creditor_group() call
 - v2 Pending: Retry + flag on dedup failure - Prevents silent duplicate pass-through
 
 ### Pending Todos
@@ -75,7 +77,7 @@ Addressed in v2 design:
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 4 Plan 1 execution)
-Stopped at: Completed 04-01-PLAN.md (merge_creditor_group implemented with TDD)
+Last session: 2026-02-01 (Phase 4 Plan 2 execution)
+Stopped at: Completed 04-02-PLAN.md (merge_creditor_group wired into deduplicate_with_llm)
 Resume file: None
-Next step: Execute 04-02-PLAN.md to integrate merge_creditor_group into deduplicate_with_llm
+Next step: Begin Phase 5 (Failure Handling & Retry) - execute 05-01-PLAN.md
