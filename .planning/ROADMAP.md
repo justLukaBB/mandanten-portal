@@ -56,11 +56,11 @@ Plans:
   3. source_documents combines all documents from merged creditors without duplicates
   4. claim_amount prefers numeric values, falls back to raw string
   5. Representative + actual creditor merges preserve both names explicitly (sender_name for rep, actual_creditor for real creditor)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- TDD: Merge helper functions + unit tests
+- [ ] 04-02-PLAN.md -- Wire merge_creditor_group() into deduplicate_with_llm()
 
 #### Phase 5: Failure Handling & Retry
 **Goal**: Dedup failures retry once and flag cases for manual review instead of silently passing through duplicates
