@@ -4,6 +4,9 @@ const Docxtemplater = require("docxtemplater");
 const PizZip = require("pizzip");
 const { formatAddress } = require("../utils/addressFormatter");
 
+const isUsableValue = (val) =>
+  typeof val === "string" && val.trim() !== "" && val.trim().toUpperCase() !== "N/A";
+
 /**
  * First Round Document Generator
  * Generates individual DOCX files for each creditor using the template
@@ -43,10 +46,10 @@ class FirstRoundDocumentGenerator {
             doc.extracted_data.creditor_data.reference_number === creditor.reference_number
         );
 
-        // If found, and creditor has no actual_creditor, copy it from the document
+        // If found, and creditor has no usable actual_creditor, copy it from the document
         if (
-          (!creditor.actual_creditor || creditor.actual_creditor.trim() === '') &&
-          matchedDoc?.extracted_data?.creditor_data?.actual_creditor
+          !isUsableValue(creditor.actual_creditor) &&
+          isUsableValue(matchedDoc?.extracted_data?.creditor_data?.actual_creditor)
         ) {
           creditor.actual_creditor = matchedDoc.extracted_data.creditor_data.actual_creditor;
         }
@@ -1322,11 +1325,11 @@ class FirstRoundDocumentGenerator {
 
     return {
       // Creditor information
-      "Adresse D C": `${creditor.sender_name ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
+      "Adresse D C": `${isUsableValue(creditor.sender_name) ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
 
       Creditor:
-        creditor.actual_creditor ||
-        creditor.sender_name ||
+        (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
+        (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
         "Unbekannter Gläubiger",
 
       "Aktenzeichen D C":
