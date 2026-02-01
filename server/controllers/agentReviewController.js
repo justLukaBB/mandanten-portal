@@ -1019,16 +1019,25 @@ Diese E-Mail wurde automatisch generiert.
                     console.log(`⏭️ No creditor found to remove (creditor_id: ${creditor_id}, document_id: ${document_id})`);
                 }
 
-                // Also mark the document as not a creditor document (if we have one)
-                if (document) {
+                // Only mark the document as non-creditor if no remaining creditors reference it.
+                // For multi-creditor splits, multiple creditors share the same source document —
+                // marking it is_creditor_document=false would hide ALL siblings in the client portal.
+                const otherCreditorsReferenceDoc = document && creditors.some(c => {
+                    if (c.source_document_id === document.id) return true;
+                    if (c.primary_document_id === document.id) return true;
+                    if (c.document_id === document.id) return true;
+                    if (Array.isArray(c.document_links) && c.document_links.some(l => l?.id === document.id)) return true;
+                    return false;
+                });
+
+                if (document && !otherCreditorsReferenceDoc) {
                     document.is_creditor_document = false;
-                    document.document_status = 'not_a_creditor'; // CRITICAL: Change document_status to prevent re-generation
+                    document.document_status = 'not_a_creditor';
                     document.manually_reviewed = true;
                     document.reviewed_by = req.agentId;
                     document.reviewed_at = new Date();
                     document.review_action = 'skipped_not_creditor';
-                    
-                    // ✅ CRITICAL FIX: Clear document-level manual review flags to prevent loop
+
                     if (document.validation) {
                         document.validation.requires_manual_review = false;
                     }
@@ -1036,8 +1045,14 @@ Diese E-Mail wurde automatisch generiert.
                         document.extracted_data.manual_review_required = false;
                     }
                     document.manual_review_required = false;
-                    
+
                     console.log(`⏭️ Document ${document_id} marked as non-creditor document with document_status='not_a_creditor'`);
+                } else if (document) {
+                    // Document still referenced by other creditors — only record the review, keep is_creditor_document intact
+                    document.manually_reviewed = true;
+                    document.reviewed_by = req.agentId;
+                    document.reviewed_at = new Date();
+                    console.log(`⏭️ Document ${document_id} still referenced by ${creditors.filter(c => c.source_document_id === document.id || c.primary_document_id === document.id || c.document_id === document.id).length} other creditor(s) — NOT marking as non-creditor`);
                 }
             } else if (action === 'confirm') {
                 // Confirm AI extraction is correct
