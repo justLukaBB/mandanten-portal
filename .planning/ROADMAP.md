@@ -59,8 +59,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- TDD: Merge helper functions + unit tests
-- [ ] 04-02-PLAN.md -- Wire merge_creditor_group() into deduplicate_with_llm()
+- [x] 04-01-PLAN.md -- TDD: Merge helper functions + unit tests
+- [x] 04-02-PLAN.md -- Wire merge_creditor_group() into deduplicate_with_llm()
 
 #### Phase 5: Failure Handling & Retry
 **Goal**: Dedup failures retry once and flag cases for manual review instead of silently passing through duplicates
@@ -99,6 +99,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Dedup Scheduler Refactor | v1 | 2/2 | Complete | 2026-01-30 |
 | 2. Payment Handler Logic | v1 | 2/2 | Complete | 2026-01-30 |
 | 3. LLM Prompt Optimization | v2 | 2/2 | Complete | 2026-01-31 |
-| 4. Code-Based Merge Logic | v2 | 0/2 | Not started | - |
+| 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
 | 5. Failure Handling & Retry | v2 | 0/2 | Not started | - |
 | 6. Path Consistency & Integration | v2 | 0/1 | Not started | - |

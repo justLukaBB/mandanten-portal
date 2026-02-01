@@ -13,13 +13,13 @@
 
 ### Code-Based Merging
 
-- [ ] **MERGE-01**: Python code merges creditors within each duplicate group using deterministic rules
-- [ ] **MERGE-02**: Merge prefers non-"N/A" values; when both have values, keep longest/most complete
-- [ ] **MERGE-03**: `needs_manual_review` is true if ANY creditor in the group had it true
-- [ ] **MERGE-04**: `source_documents` combines all documents from merged creditors (unique)
-- [ ] **MERGE-05**: `claim_amount` prefers numeric value, falls back to raw string
-- [ ] **MERGE-06**: When merging representative + actual creditor, preserve both names explicitly (sender_name for representative, actual_creditor for the real creditor)
-- [ ] **MERGE-07**: `is_representative` is true if ANY entry in the group was a representative
+- [x] **MERGE-01**: Python code merges creditors within each duplicate group using deterministic rules
+- [x] **MERGE-02**: Merge prefers non-"N/A" values; when both have values, keep longest/most complete
+- [x] **MERGE-03**: `needs_manual_review` is true if ANY creditor in the group had it true
+- [x] **MERGE-04**: `source_documents` combines all documents from merged creditors (unique)
+- [x] **MERGE-05**: `claim_amount` prefers numeric value, falls back to raw string
+- [x] **MERGE-06**: When merging representative + actual creditor, preserve both names explicitly (sender_name for representative, actual_creditor for the real creditor)
+- [x] **MERGE-07**: `is_representative` is true if ANY entry in the group was a representative
 
 ### Failure Handling
 
@@ -55,13 +55,13 @@
 | LLM-01 | Phase 3 | Complete |
 | LLM-02 | Phase 3 | Complete |
 | LLM-03 | Phase 3 | Complete |
-| MERGE-01 | Phase 4 | Pending |
-| MERGE-02 | Phase 4 | Pending |
-| MERGE-03 | Phase 4 | Pending |
-| MERGE-04 | Phase 4 | Pending |
-| MERGE-05 | Phase 4 | Pending |
-| MERGE-06 | Phase 4 | Pending |
-| MERGE-07 | Phase 4 | Pending |
+| MERGE-01 | Phase 4 | Complete |
+| MERGE-02 | Phase 4 | Complete |
+| MERGE-03 | Phase 4 | Complete |
+| MERGE-04 | Phase 4 | Complete |
+| MERGE-05 | Phase 4 | Complete |
+| MERGE-06 | Phase 4 | Complete |
+| MERGE-07 | Phase 4 | Complete |
 | FAIL-01 | Phase 5 | Pending |
 | FAIL-02 | Phase 5 | Pending |
 | FAIL-03 | Phase 5 | Pending |
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after roadmap creation - 100% coverage achieved*
+*Last updated: 2026-02-01 after Phase 4 completion - MERGE-01 through MERGE-07 complete*
