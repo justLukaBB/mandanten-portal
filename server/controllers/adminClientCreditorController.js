@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { findCreditorByName } = require('../utils/creditorLookup');
+const { runAIRededup } = require('../services/aiDedupScheduler');
 
 /**
  * Enrich deduplicated creditor entry (table data) with local DB info for creditor and representative.
@@ -645,194 +646,56 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                 console.log(`📊 Starting AI re-deduplication for ${client.final_creditor_list.length} creditors`);
 
-                // Call FastAPI deduplication endpoint
-                const axios = require('axios');
-                const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
-
-                const response = await axios.post(
-                    `${FASTAPI_URL}/api/dedup/deduplicate-all`,
-                    {
-                        creditors: client.final_creditor_list
-                    },
-                    {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-API-Key': process.env.FASTAPI_API_KEY || ''
-                        },
-                        timeout: 300000 // 5 minutes timeout (increased from 2 minutes)
-                    }
-                );
-
-                const { deduplicated_creditors, stats } = response.data;
-
-                console.log(`✅ AI re-deduplication complete:`, stats);
-                console.log(`📊 Received ${deduplicated_creditors?.length || 0} deduplicated creditors from FastAPI`);
-                console.log(`📋 First creditor sample:`, JSON.stringify(deduplicated_creditors?.[0], null, 2));
-
-                // Enrich missing addresses/emails from local DB
-                try {
-                    console.log(`🔍 Enriching ${deduplicated_creditors.length} creditors from local DB...`);
-                    const credCache = new Map();
-                    await Promise.all(
-                        deduplicated_creditors.map(c => enrichDedupedCreditorFromDb(c, credCache))
-                    );
-                    console.log(`✅ Enrichment complete. Cache hits: ${credCache.size}`);
-                } catch (enrichError) {
-                    console.error('⚠️ Enrichment failed, continuing without enrichment:', enrichError);
-                    // Continue processing even if enrichment fails
-                }
-
-                // ✅ NEW RULE: Check if email/address still missing AFTER DB enrichment
-                const isMissing = (val) => {
-                    if (val === undefined || val === null) return true;
-                    if (typeof val === 'string') {
-                        const t = val.trim();
-                        if (!t) return true;
-                        const lower = t.toLowerCase();
-                        if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
-                    }
-                    return false;
-                };
-
-                for (const creditor of deduplicated_creditors) {
-                    // Prüfe beide Feldnamen-Formate (deutsch und englisch)
-                    const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
-                    const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
-                    
-                    if (!hasEmail || !hasAddress) {
-                        creditor.needs_manual_review = true;
-                        if (!creditor.review_reasons) {
-                            creditor.review_reasons = [];
-                        }
-                        if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
-                            creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
-                        }
-                        if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
-                            creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
-                        }
-                        
-                        console.log(`[admin-rededup] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
-                            missing_email: !hasEmail,
-                            missing_address: !hasAddress
-                        });
-                    }
-                }
-
-                // Build lookup map of existing creditors for review flag preservation
-                const existingMap = new Map();
-                for (const existing of (client.final_creditor_list || [])) {
-                    if (existing.id) {
-                        existingMap.set(existing.id, existing);
-                    }
-                    const name = (existing.sender_name || existing.glaeubiger_name || '').toLowerCase().trim();
-                    if (name && !existingMap.has(`name:${name}`)) {
-                        existingMap.set(`name:${name}`, existing);
-                    }
-                }
-
-                // Ensure all creditors have required fields (especially 'id')
-                const processedCreditors = deduplicated_creditors.map(creditor => {
-                    // If creditor has no id, generate one
-                    if (!creditor.id) {
-                        creditor.id = uuidv4();
-                        console.log(`⚙️ Generated new ID for merged creditor: ${creditor.sender_name}`);
-                    }
-
-                    // Find existing creditor for field preservation
-                    const existingById = existingMap.get(creditor.id);
-                    const name = (creditor.sender_name || creditor.glaeubiger_name || '').toLowerCase().trim();
-                    const existingByName = name ? existingMap.get(`name:${name}`) : null;
-                    const existing = existingById || existingByName;
-
-                    // Merge review reasons (union of existing and new)
-                    const existingReasons = Array.isArray(existing?.review_reasons) ? existing.review_reasons : [];
-                    const newReasons = Array.isArray(creditor.review_reasons) ? creditor.review_reasons : [];
-                    const mergedReasons = [...existingReasons];
-                    for (const reason of newReasons) {
-                        if (reason && !mergedReasons.includes(reason)) {
-                            mergedReasons.push(reason);
-                        }
-                    }
-
-                    // Ensure other required fields have defaults
-                    return {
-                        ...creditor,
-                        id: creditor.id,
-                        status: creditor.status || 'confirmed',
-                        ai_confidence: creditor.ai_confidence || 1.0,
-                        created_at: existing?.created_at || creditor.created_at || new Date(),
-                        contact_status: creditor.contact_status || 'no_response',
-                        amount_source: creditor.amount_source || 'original_document',
-                        settlement_response_status: creditor.settlement_response_status || 'pending',
-                        nullplan_response_status: creditor.nullplan_response_status || 'pending',
-
-                        // PRESERVE document links from existing creditor (FastAPI response may return empty arrays)
-                        source_documents: (creditor.source_documents?.length ? creditor.source_documents : null) || existing?.source_documents || [],
-                        source_document_id: creditor.source_document_id || existing?.source_document_id,
-                        primary_document_id: creditor.primary_document_id || existing?.primary_document_id,
-                        document_id: creditor.document_id || existing?.document_id,
-                        document_links: (creditor.document_links?.length ? creditor.document_links : null) || existing?.document_links || [],
-
-                        // PRESERVE manual review state from existing creditor
-                        needs_manual_review: existing?.needs_manual_review || creditor.needs_manual_review || false,
-                        review_reasons: mergedReasons,
-                        manually_reviewed: existing?.manually_reviewed || false,
-                        reviewed_at: existing?.reviewed_at,
-                        reviewed_by: existing?.reviewed_by,
-                        review_action: existing?.review_action,
-                        original_ai_data: existing?.original_ai_data,
-                        correction_notes: existing?.correction_notes,
-                    };
+                // Call shared service layer
+                const result = await runAIRededup(client._id, (id) => Client.findById(id), {
+                    source: 'admin'
                 });
 
-                // Update client with deduplicated creditors
-                console.log(`💾 Saving ${processedCreditors.length} processed creditors to database`);
-                client.final_creditor_list = processedCreditors;
-                client.updated_at = new Date();
+                // Handle concurrent operation (atomic guard failed)
+                if (!result) {
+                    // runAIRededup returns undefined for edge cases (no creditors, client not found)
+                    return res.status(500).json({
+                        error: 'Deduplication returned no result',
+                        details: 'Unexpected state - check server logs'
+                    });
+                }
 
-                // Add to status history
-                client.status_history.push({
-                    id: uuidv4(),
-                    status: 'ai_rededup_triggered',
-                    changed_by: 'admin',
-                    metadata: {
-                        original_count: stats.original_count,
-                        unique_count: stats.unique_count,
-                        duplicates_removed: stats.duplicates_removed,
-                        triggered_by: req.adminEmail || 'admin'
-                    }
-                });
+                if (!result.success && result.reason === 'dedup_already_in_progress') {
+                    return res.status(409).json({
+                        error: 'Deduplication already in progress',
+                        message: 'Another dedup operation is currently running for this client. Please wait and try again.',
+                        retry_after: 60
+                    });
+                }
 
-                await client.save();
+                // Handle failure (retry exhausted, manual review flagged)
+                if (!result.success) {
+                    return res.status(500).json({
+                        error: 'Failed to trigger AI re-deduplication',
+                        details: result.error || result.failure_reason || 'Unknown error',
+                        manual_review_flagged: result.manual_review_flagged || false
+                    });
+                }
 
-                console.log(`✅ Client saved successfully with ${client.final_creditor_list.length} creditors`);
+                // Success: reload client for updated creditor list (frontend needs full array)
+                const updatedClient = await Client.findById(client._id);
 
                 res.json({
                     success: true,
                     message: 'AI re-deduplication completed successfully',
                     stats: {
-                        original_count: stats.original_count,
-                        unique_count: stats.unique_count,
-                        duplicates_removed: stats.duplicates_removed
+                        original_count: result.before_count,
+                        unique_count: result.after_count,
+                        duplicates_removed: result.duplicates_removed
                     },
-                    creditors: deduplicated_creditors
+                    creditors: updatedClient.final_creditor_list
                 });
 
             } catch (error) {
-                console.error('❌ Error triggering AI re-dedup:', error);
-
-                let errorMessage = error.message;
-                let statusCode = 500;
-
-                if (error.response) {
-                    // FastAPI returned an error
-                    errorMessage = error.response.data?.detail || error.response.data?.error || error.message;
-                    statusCode = error.response.status;
-                }
-
-                res.status(statusCode).json({
+                console.error('[admin-rededup] Error triggering AI re-dedup:', error.message);
+                res.status(500).json({
                     error: 'Failed to trigger AI re-deduplication',
-                    details: errorMessage
+                    details: error.message
                 });
             }
         }
