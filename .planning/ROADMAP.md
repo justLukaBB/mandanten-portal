@@ -84,10 +84,10 @@ Plans:
   1. Auto pipeline dedup and admin manual trigger call the same dedup function
   2. Response schema to Node.js backend remains unchanged (backward compatible)
   3. Both paths use optimized prompts, deterministic merge, and retry logic
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md -- Unify admin controller to call shared runAIRededup service + HTTP 409 guard
 
 ## Progress
 
