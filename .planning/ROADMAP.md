@@ -73,8 +73,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Retry infrastructure: schema field + retryWithDelay helper + timeout reduction
-- [ ] 05-02-PLAN.md -- Wire retry into dedup flow + manual review flagging on failure
+- [x] 05-01-PLAN.md -- Retry infrastructure: schema field + retryWithDelay helper + timeout reduction
+- [x] 05-02-PLAN.md -- Wire retry into dedup flow + manual review flagging on failure
 
 #### Phase 6: Path Consistency & Integration
 **Goal**: Auto pipeline and admin manual trigger use identical robust dedup logic
@@ -100,5 +100,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Payment Handler Logic | v1 | 2/2 | Complete | 2026-01-30 |
 | 3. LLM Prompt Optimization | v2 | 2/2 | Complete | 2026-01-31 |
 | 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
-| 5. Failure Handling & Retry | v2 | 0/2 | Not started | - |
+| 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
 | 6. Path Consistency & Integration | v2 | 0/1 | Not started | - |

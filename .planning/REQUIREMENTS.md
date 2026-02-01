@@ -23,9 +23,9 @@
 
 ### Failure Handling
 
-- [ ] **FAIL-01**: Dedup retries once on LLM failure before falling back
-- [ ] **FAIL-02**: If retry fails, case is flagged for manual review (not silently passed through with duplicates)
-- [ ] **FAIL-03**: Failure logged with creditor count, error, and attempt number
+- [x] **FAIL-01**: Dedup retries once on LLM failure before falling back
+- [x] **FAIL-02**: If retry fails, case is flagged for manual review (not silently passed through with duplicates)
+- [x] **FAIL-03**: Failure logged with creditor count, error, and attempt number
 
 ### Path Consistency
 
@@ -62,9 +62,9 @@
 | MERGE-05 | Phase 4 | Complete |
 | MERGE-06 | Phase 4 | Complete |
 | MERGE-07 | Phase 4 | Complete |
-| FAIL-01 | Phase 5 | Pending |
-| FAIL-02 | Phase 5 | Pending |
-| FAIL-03 | Phase 5 | Pending |
+| FAIL-01 | Phase 5 | Complete |
+| FAIL-02 | Phase 5 | Complete |
+| FAIL-03 | Phase 5 | Complete |
 | PATH-01 | Phase 6 | Pending |
 | PATH-02 | Phase 6 | Pending |
 
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-02-01 after Phase 4 completion - MERGE-01 through MERGE-07 complete*
+*Last updated: 2026-02-01 after Phase 5 completion - FAIL-01 through FAIL-03 complete*
