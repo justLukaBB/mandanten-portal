@@ -1301,6 +1301,11 @@ Diese E-Mail wurde automatisch generiert.
             // Auto-confirm all creditors that don't need manual review
             let autoConfirmedCount = 0;
             creditors.forEach(c => {
+                // Clear creditor-level needs_manual_review for all creditors after agent completion
+                if (c.needs_manual_review) {
+                    c.needs_manual_review = false;
+                }
+
                 if (!c.manually_reviewed && !creditorNeedsManualReview(c)) {
                     c.manually_reviewed = true;
                     c.status = 'confirmed';

@@ -464,6 +464,24 @@ class ZendeskWebhookController {
                 });
             }
 
+            // Guard: Don't overwrite downstream statuses (e.g., after agent review completed)
+            const downstreamStatuses = [
+                'awaiting_client_confirmation',
+                'client_confirmation',
+                'creditor_contact_initiated',
+                'creditor_contact_failed',
+                'completed'
+            ];
+            if (downstreamStatuses.includes(client.current_status)) {
+                console.log(`⏭️ Payment webhook skipped for ${client.aktenzeichen}: already in status '${client.current_status}'`);
+                return res.json({
+                    success: true,
+                    message: `Client already in downstream status: ${client.current_status}`,
+                    client_status: client.current_status,
+                    skipped: true
+                });
+            }
+
             console.log(
                 `📋 Processing user payment confirmation for: ${client.firstName} ${client.lastName}`
             );

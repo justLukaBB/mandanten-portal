@@ -1195,7 +1195,7 @@ const ReviewDashboard: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Review erfolgreich abgeschlossen!</h2>
 
               <p className="text-gray-700 mb-2">
-                {completionResult?.summary?.creditors?.total_count || 0} Gläubiger bestätigt.
+                {completionResult?.creditors_count || 0} Gläubiger bestätigt.
               </p>
               <p className="text-gray-700 mb-2">
                 📧 Gläubigerliste wurde automatisch an den Mandanten gesendet.
