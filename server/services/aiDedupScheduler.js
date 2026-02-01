@@ -116,12 +116,14 @@ async function scheduleAIRededup(clientId, getClientFunction) {
  */
 async function runAIRededup(clientId, getClientFunction) {
   const startTime = Date.now();
+  let client;
+  let creditorList;
 
   try {
     console.log(`[ai-dedup-scheduler] Starting AI re-dedup for client ${clientId}...`);
 
     // Get latest client data
-    const client = await getClientFunction(clientId);
+    client = await getClientFunction(clientId);
 
     if (!client) {
       console.error(`[ai-dedup-scheduler] Client ${clientId} not found, skipping AI re-dedup`);
@@ -139,7 +141,7 @@ async function runAIRededup(clientId, getClientFunction) {
       return { success: false, reason: 'dedup_already_in_progress' };
     }
 
-    const creditorList = client.final_creditor_list || [];
+    creditorList = client.final_creditor_list || [];
 
     if (creditorList.length === 0) {
       console.log(`[ai-dedup-scheduler] No creditors to deduplicate for ${clientId}`);
@@ -367,7 +369,7 @@ async function runAIRededup(clientId, getClientFunction) {
   } catch (error) {
     // FAIL-03: Log failure with creditor count, error, and attempt number
     console.error(`[ai-dedup-scheduler] AI re-dedup failed for ${clientId} after all retry attempts:`, {
-      creditor_count: creditorList.length,
+      creditor_count: creditorList ? creditorList.length : 'unknown',
       error_message: error.message,
       attempts_exhausted: 2,
       status: error.response?.status || 'no_response',
