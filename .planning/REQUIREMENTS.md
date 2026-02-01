@@ -29,8 +29,8 @@
 
 ### Path Consistency
 
-- [ ] **PATH-01**: Auto pipeline dedup and admin manual trigger use the same dedup function
-- [ ] **PATH-02**: Response schema to Node.js backend remains unchanged
+- [x] **PATH-01**: Auto pipeline dedup and admin manual trigger use the same dedup function
+- [x] **PATH-02**: Response schema to Node.js backend remains unchanged
 
 ## Future Requirements
 
@@ -65,8 +65,8 @@
 | FAIL-01 | Phase 5 | Complete |
 | FAIL-02 | Phase 5 | Complete |
 | FAIL-03 | Phase 5 | Complete |
-| PATH-01 | Phase 6 | Pending |
-| PATH-02 | Phase 6 | Pending |
+| PATH-01 | Phase 6 | Complete |
+| PATH-02 | Phase 6 | Complete |
 
 **Coverage:**
 - v2 requirements: 15 total
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-02-01 after Phase 5 completion - FAIL-01 through FAIL-03 complete*
+*Last updated: 2026-02-01 after Phase 6 completion - all 15 v2 requirements complete*

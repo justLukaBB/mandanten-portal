@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1 Manual Review & Payment Status Flow Fix** - Phases 1-2 (shipped 2026-01-30)
-- 🚧 **v2 Robust Dedup** - Phases 3-6 (in progress)
+- ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
 
 ## Phases
 
@@ -28,7 +28,7 @@ Plans:
 
 </details>
 
-### 🚧 v2 Robust Dedup (In Progress)
+### ✅ v2 Robust Dedup — SHIPPED 2026-02-01
 
 **Milestone Goal:** Refactor AI dedup service so the LLM only identifies duplicate groups (small payload), merging happens in code, failures retry and flag for review instead of silently passing through.
 
@@ -87,7 +87,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Unify admin controller to call shared runAIRededup service + HTTP 409 guard
+- [x] 06-01-PLAN.md -- Unify admin controller to call shared runAIRededup service + HTTP 409 guard
 
 ## Progress
 
@@ -101,4 +101,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. LLM Prompt Optimization | v2 | 2/2 | Complete | 2026-01-31 |
 | 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
 | 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
-| 6. Path Consistency & Integration | v2 | 0/1 | Not started | - |
+| 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
