@@ -149,17 +149,23 @@ async function runAIRededup(clientId, getClientFunction) {
     const beforeCount = creditorList.length;
     console.log(`[ai-dedup-scheduler] Sending ${beforeCount} creditors to FastAPI for AI deduplication...`);
 
-    // Call FastAPI deduplication endpoint
-    const response = await axios.post(
-      `${FASTAPI_URL}/api/dedup/deduplicate-all`,
-      { creditors: creditorList },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': FASTAPI_API_KEY
-        },
-        timeout: 60000 // 60 seconds timeout
-      }
+    // Call FastAPI deduplication endpoint with retry wrapper
+    const response = await retryWithDelay(
+      async (attempt) => {
+        console.log(`[ai-dedup-scheduler] Dedup attempt ${attempt} for ${clientId} (${creditorList.length} creditors)...`);
+        return await axios.post(
+          `${FASTAPI_URL}/api/dedup/deduplicate-all`,
+          { creditors: creditorList },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': FASTAPI_API_KEY
+            },
+            timeout: 60000 // 60 seconds timeout
+          }
+        );
+      },
+      { maxAttempts: 2, delayMs: 2000 }
     );
 
     const { deduplicated_creditors, stats } = response.data;
@@ -359,9 +365,15 @@ async function runAIRededup(clientId, getClientFunction) {
     };
 
   } catch (error) {
-    console.error(`[ai-dedup-scheduler] ❌ AI re-dedup failed for ${clientId}:`, error.message);
+    // FAIL-03: Log failure with creditor count, error, and attempt number
+    console.error(`[ai-dedup-scheduler] AI re-dedup failed for ${clientId} after all retry attempts:`, {
+      creditor_count: creditorList.length,
+      error_message: error.message,
+      attempts_exhausted: 2,
+      status: error.response?.status || 'no_response',
+      timestamp: new Date().toISOString()
+    });
 
-    // Log error details for debugging
     if (error.response) {
       console.error(`[ai-dedup-scheduler] FastAPI error response:`, {
         status: error.response.status,
@@ -369,10 +381,32 @@ async function runAIRededup(clientId, getClientFunction) {
       });
     }
 
-    // Return error result
+    // FAIL-02: Flag case for manual review — no silent duplicate pass-through
+    // Creditors pass through UNMERGED (final_creditor_list unchanged)
+    // Use atomic update to avoid race conditions with other operations
+    const failureReason = `AI deduplication failed after 2 attempts: ${error.message}`;
+    if (client && client._id) {
+      try {
+        await Client.updateOne(
+          { _id: client._id },
+          {
+            $set: {
+              dedup_failure_reason: failureReason
+            }
+          }
+        );
+        console.log(`[ai-dedup-scheduler] Flagged ${clientId} for manual review: ${failureReason}`);
+      } catch (flagError) {
+        console.error(`[ai-dedup-scheduler] Failed to flag ${clientId} for manual review:`, flagError.message);
+      }
+    }
+
+    // Return error result — pipeline continues with unmerged creditors
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      manual_review_flagged: true,
+      failure_reason: failureReason
     };
   } finally {
     // ALWAYS clear dedup_in_progress flag
