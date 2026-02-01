@@ -27,6 +27,44 @@ function mergeReviewReasons(existingReasons, newReasons) {
   return merged;
 }
 
+/**
+ * Retry an async function with delay between attempts.
+ * Logs each attempt per FAIL-03 requirement.
+ *
+ * @param {Function} fn - Async function to retry. Receives (attemptNumber) as argument.
+ * @param {Object} options - { maxAttempts: 2, delayMs: 2000 }
+ * @returns {Promise<*>} Result of fn on success
+ * @throws Last error if all attempts fail
+ */
+async function retryWithDelay(fn, options = {}) {
+  const maxAttempts = options.maxAttempts || 2;
+  const delayMs = options.delayMs || 2000;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (error) {
+      lastError = error;
+
+      console.error(`[ai-dedup-scheduler] Attempt ${attempt}/${maxAttempts} failed:`, {
+        error_message: error.message,
+        attempt_number: attempt,
+        max_attempts: maxAttempts,
+        status: error.response?.status || 'no_response',
+        will_retry: attempt < maxAttempts
+      });
+
+      if (attempt < maxAttempts) {
+        console.log(`[ai-dedup-scheduler] Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 // Store pending dedup jobs per client
 const pendingJobs = new Map();
 
@@ -120,7 +158,7 @@ async function runAIRededup(clientId, getClientFunction) {
           'Content-Type': 'application/json',
           'X-API-Key': FASTAPI_API_KEY
         },
-        timeout: 300000 // 5 minutes timeout (increased from 2 minutes)
+        timeout: 60000 // 60 seconds timeout
       }
     );
 
