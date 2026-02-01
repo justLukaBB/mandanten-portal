@@ -70,11 +70,11 @@ Plans:
   1. Dedup retries once on LLM failure before falling back
   2. Cases flag for manual review if retry fails (no silent duplicate pass-through)
   3. Failures logged with creditor count, error message, and attempt number
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md -- Retry infrastructure: schema field + retryWithDelay helper + timeout reduction
+- [ ] 05-02-PLAN.md -- Wire retry into dedup flow + manual review flagging on failure
 
 #### Phase 6: Path Consistency & Integration
 **Goal**: Auto pipeline and admin manual trigger use identical robust dedup logic
