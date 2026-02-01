@@ -112,9 +112,13 @@ async function scheduleAIRededup(clientId, getClientFunction) {
 /**
  * Execute AI re-deduplication for a client
  *
+ * @param {string} clientId - Client identifier
+ * @param {Function} getClientFunction - Function to fetch client data
+ * @param {Object} options - Optional configuration { source: 'auto'|'admin' }
  * @returns {Promise<Object|null>} Result object with before/after counts, or null on error
  */
-async function runAIRededup(clientId, getClientFunction) {
+async function runAIRededup(clientId, getClientFunction, options = {}) {
+  const { source = 'auto' } = options;
   const startTime = Date.now();
   let client;
   let creditorList;
@@ -347,6 +351,7 @@ async function runAIRededup(clientId, getClientFunction) {
     client.deduplication_history.push({
       timestamp: new Date(),
       method: 'immediate-ai-rededup',
+      source: source,
       before_count: beforeCount,
       after_count: deduplicated_creditors.length,
       duplicates_removed: stats.duplicates_removed,
