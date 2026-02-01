@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-31)
 
 ## Current Position
 
-Phase: 3 of 6 (LLM Prompt Optimization) — VERIFIED ✓
-Plan: 2/2 complete
-Status: Phase 3 verified, ready for Phase 4
-Last activity: 2026-01-31 — Phase 3 verified (8/8 must-haves passed)
+Phase: 4 of 6 (Code-Based Merge Logic) — IN PROGRESS
+Plan: 1/2 complete
+Status: Phase 4 Plan 1 complete — deterministic merge logic implemented
+Last activity: 2026-02-01 — Completed 04-01-PLAN.md
 
-Progress: [██████░░░░] 60% (6/10 plans complete across all milestones)
+Progress: [███████░░░] 70% (7/10 plans complete across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6 (4 v1, 2 v2)
-- Average duration: 2m 42s
-- Total execution time: 0.27 hours
+- Total plans completed: 7 (4 v1, 3 v2)
+- Average duration: 2m 31s
+- Total execution time: 0.29 hours
 
 **By Phase:**
 
@@ -30,15 +30,15 @@ Progress: [██████░░░░] 60% (6/10 plans complete across all m
 | 1 - Dedup Scheduler Refactor | 2/2 | 8m 2s | 2m 41s | v1 |
 | 2 - Payment Handler Logic | 2/2 | 2m 32s | 2m 32s | v1 |
 | 3 - LLM Prompt Optimization | 2/2 | 7m 7s | 3m 33s | v2 |
-| 4 - Code-Based Merge Logic | 0/2 | - | - | v2 |
+| 4 - Code-Based Merge Logic | 1/2 | 2m | 2m | v2 |
 | 5 - Failure Handling & Retry | 0/2 | - | - | v2 |
 | 6 - Path Consistency & Integration | 0/1 | - | - | v2 |
 
 **Recent Trend:**
 - v1 average: 2m 34s per plan
-- v2 average: 3m 33s per plan (2 completed)
+- v2 average: 2m 53s per plan (3 completed)
 
-*Updated: 2026-01-31 after 03-02 completion*
+*Updated: 2026-02-01 after 04-01 completion*
 
 ## Accumulated Context
 
@@ -58,6 +58,9 @@ Recent decisions affecting current work:
 - v2 (03-02): Skip LLM call for <= 1 creditor - Performance optimization when nothing to deduplicate
 - v2 (03-02): Simple merge until Phase 4 - Keep first creditor, combine source_documents (placeholder for code-based merge)
 - v2 (03-02): Preserve OR logic for needs_manual_review - Any creditor needing review flags entire merged group
+- v2 (04-01): All-N/A fields become None - Clean database, no sentinel pollution
+- v2 (04-01): German mirror fields sync with English - Consistency after merge (glaeubiger_name = sender_name)
+- v2 (04-01): Representative fallback to non-rep name - If rep's actual_creditor is N/A, use non-rep's sender_name
 - v2 Pending: Retry + flag on dedup failure - Prevents silent duplicate pass-through
 
 ### Pending Todos
@@ -72,7 +75,7 @@ Addressed in v2 design:
 
 ## Session Continuity
 
-Last session: 2026-01-31 (Phase 3 execution + verification)
-Stopped at: Phase 3 verified ✓ — all 3 LLM requirements complete
+Last session: 2026-02-01 (Phase 4 Plan 1 execution)
+Stopped at: Completed 04-01-PLAN.md (merge_creditor_group implemented with TDD)
 Resume file: None
-Next step: Run `/gsd:discuss-phase 4` or `/gsd:plan-phase 4` to plan Code-Based Merge Logic
+Next step: Execute 04-02-PLAN.md to integrate merge_creditor_group into deduplicate_with_llm
