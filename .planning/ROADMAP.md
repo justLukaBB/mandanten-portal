@@ -81,7 +81,10 @@ Plans:
   1. When a creditor's Aktenzeichen is missing or "N/A", the generated first Anschreiben Word document shows an empty/blank field instead of "N/A"
   2. When a creditor HAS an Aktenzeichen, it displays normally (no regression)
   3. Other fields in the template remain unaffected
-**Plans**: TBD (created during `/gsd:plan-phase 7`)
+**Plans**: 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md -- Apply isUsableValue filter to Aktenzeichen fallback chain + edge case verification
 
 ## Progress
 
@@ -96,4 +99,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
 | 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
-| 7. Aktenzeichen N/A Suppression | v2.1 | 0/? | Pending | — |
+| 7. Aktenzeichen N/A Suppression | v2.1 | 0/1 | Pending | -- |
