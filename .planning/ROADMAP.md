@@ -4,6 +4,7 @@
 
 - ✅ **v1 Manual Review & Payment Status Flow Fix** - Phases 1-2 (shipped 2026-01-30)
 - ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
+- ◆ **v2.1 Aktenzeichen Display Fix** - Phase 7
 
 ## Phases
 
@@ -28,18 +29,12 @@ Plans:
 
 </details>
 
-### ✅ v2 Robust Dedup — SHIPPED 2026-02-01
-
-**Milestone Goal:** Refactor AI dedup service so the LLM only identifies duplicate groups (small payload), merging happens in code, failures retry and flag for review instead of silently passing through.
+<details>
+<summary>✅ v2 Robust Dedup (Phases 3-6) - SHIPPED 2026-02-01</summary>
 
 #### Phase 3: LLM Prompt Optimization
 **Goal**: Minimize LLM payload to avoid token limits
-**Depends on**: Phase 2 (v1 shipped)
 **Requirements**: LLM-01, LLM-02, LLM-03
-**Success Criteria** (what must be TRUE):
-  1. Dedup prompt sends only minimal fields (sender_name, reference_number, is_representative, actual_creditor) instead of full creditor objects
-  2. LLM returns duplicate group mappings (array of index arrays) instead of full creditor JSON
-  3. Token usage for 50 creditors stays well under 8192 output token limit
 **Plans**: 2 plans
 
 Plans:
@@ -48,14 +43,7 @@ Plans:
 
 #### Phase 4: Code-Based Merge Logic
 **Goal**: Deterministic creditor merging in Python code after LLM identifies groups
-**Depends on**: Phase 3 (new LLM contract)
 **Requirements**: MERGE-01, MERGE-02, MERGE-03, MERGE-04, MERGE-05, MERGE-06, MERGE-07
-**Success Criteria** (what must be TRUE):
-  1. Python code merges creditors within each duplicate group using deterministic rules (prefer non-"N/A", keep longest/most complete)
-  2. needs_manual_review flag is true if ANY creditor in merge group had it true
-  3. source_documents combines all documents from merged creditors without duplicates
-  4. claim_amount prefers numeric values, falls back to raw string
-  5. Representative + actual creditor merges preserve both names explicitly (sender_name for rep, actual_creditor for real creditor)
 **Plans**: 2 plans
 
 Plans:
@@ -64,12 +52,7 @@ Plans:
 
 #### Phase 5: Failure Handling & Retry
 **Goal**: Dedup failures retry once and flag cases for manual review instead of silently passing through duplicates
-**Depends on**: Phase 4 (merge logic working)
 **Requirements**: FAIL-01, FAIL-02, FAIL-03
-**Success Criteria** (what must be TRUE):
-  1. Dedup retries once on LLM failure before falling back
-  2. Cases flag for manual review if retry fails (no silent duplicate pass-through)
-  3. Failures logged with creditor count, error message, and attempt number
 **Plans**: 2 plans
 
 Plans:
@@ -78,21 +61,32 @@ Plans:
 
 #### Phase 6: Path Consistency & Integration
 **Goal**: Auto pipeline and admin manual trigger use identical robust dedup logic
-**Depends on**: Phase 5 (retry logic working)
 **Requirements**: PATH-01, PATH-02
-**Success Criteria** (what must be TRUE):
-  1. Auto pipeline dedup and admin manual trigger call the same dedup function
-  2. Response schema to Node.js backend remains unchanged (backward compatible)
-  3. Both paths use optimized prompts, deterministic merge, and retry logic
 **Plans**: 1 plan
 
 Plans:
 - [x] 06-01-PLAN.md -- Unify admin controller to call shared runAIRededup service + HTTP 409 guard
 
+</details>
+
+### v2.1 Aktenzeichen Display Fix
+
+**Milestone Goal:** When a creditor has no Aktenzeichen, the first Anschreiben Word template shows nothing instead of "N/A".
+
+#### Phase 7: Aktenzeichen N/A Suppression
+**Goal**: First Anschreiben Word template displays empty string instead of "N/A" for missing Aktenzeichen
+**Depends on**: Phase 6 (v2 shipped)
+**Requirements**: TMPL-01
+**Success Criteria** (what must be TRUE):
+  1. When a creditor's Aktenzeichen is missing or "N/A", the generated first Anschreiben Word document shows an empty/blank field instead of "N/A"
+  2. When a creditor HAS an Aktenzeichen, it displays normally (no regression)
+  3. Other fields in the template remain unaffected
+**Plans**: TBD (created during `/gsd:plan-phase 7`)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -102,3 +96,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
 | 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
+| 7. Aktenzeichen N/A Suppression | v2.1 | 0/? | Pending | — |
