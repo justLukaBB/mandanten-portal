@@ -1333,11 +1333,12 @@ class FirstRoundDocumentGenerator {
         "Unbekannter Gläubiger",
 
       "Aktenzeichen D C":
-        creditor.reference_number ||
-        creditor.creditor_reference ||
-        creditor.reference ||
-        creditor.aktenzeichen ||
-        "Nicht verfügbar",
+        [
+          creditor.reference_number,
+          creditor.creditor_reference,
+          creditor.reference,
+          creditor.aktenzeichen
+        ].find(ref => isUsableValue(ref)) || "",
 
       // Client information
       Name: clientData.name,
