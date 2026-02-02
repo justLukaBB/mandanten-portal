@@ -72,6 +72,11 @@ class ClientCreditorController {
                 (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
 
                 const validCreditors = (client.final_creditor_list || []).filter(creditor => {
+                    // Hide creditors that need manual review but haven't been reviewed yet
+                    if (creditor.needs_manual_review && !creditor.manually_reviewed) {
+                        return false;
+                    }
+
                     const doc = (client.documents || []).find(d =>
                         d.id === creditor.document_id ||
                         d.id === creditor.source_document_id ||

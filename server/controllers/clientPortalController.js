@@ -1185,7 +1185,12 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     });
                 }
 
-                const creditors = client.final_creditor_list || [];
+                const allCreditors = client.final_creditor_list || [];
+
+                // Hide creditors that need manual review but haven't been reviewed yet
+                const creditors = allCreditors.filter(creditor =>
+                    !creditor.needs_manual_review || creditor.manually_reviewed
+                );
 
                 res.json({
                     success: true,
