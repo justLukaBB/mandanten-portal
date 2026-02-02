@@ -8,15 +8,12 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v2 Robust Dedup
+## Current Milestone: v2.1 Aktenzeichen Display Fix
 
-**Goal:** Refactor the AI dedup service so the LLM only identifies duplicate groups (small payload), merging happens in code, failures retry and flag for review instead of silently passing through.
+**Goal:** When a creditor has no Aktenzeichen (reference number), the first Anschreiben (Word template) should display nothing instead of "N/A".
 
 **Target features:**
-- Minimal LLM payload: send only names/references, not full creditor objects
-- Code-based merging: deterministic merge logic after LLM identifies groups
-- Retry with fallback: retry once on failure, flag case for manual review if still fails
-- Both paths covered: auto pipeline and admin manual trigger use the same robust logic
+- Aktenzeichen field in first Anschreiben Word template shows empty string instead of "N/A" when missing
 
 ## Requirements
 
@@ -33,7 +30,7 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-(Defined in REQUIREMENTS.md for v2 milestone)
+- [ ] Aktenzeichen displays empty instead of "N/A" in first Anschreiben Word template
 
 ### Out of Scope
 
@@ -71,8 +68,8 @@ Tech stack:
 | Trigger dedup after last document processed instead of 30-min timer | Eliminates race condition between dedup and payment | ✓ Good — v1 |
 | MongoDB atomic update for dedup guard | Prevents race conditions without Redis/application locks | ✓ Good — v1 |
 | OR logic for needs_manual_review preservation | Creditors never lose manual review flag during dedup | ✓ Good — v1 |
-| LLM identifies groups only, merging in code | Reduces token usage dramatically, makes merging deterministic | — Pending |
-| Retry + flag on dedup failure | Prevents silent duplicate pass-through | — Pending |
+| LLM identifies groups only, merging in code | Reduces token usage dramatically, makes merging deterministic | ✓ Good — v2 |
+| Retry + flag on dedup failure | Prevents silent duplicate pass-through | ✓ Good — v2 |
 
 ---
-*Last updated: 2026-01-31 after v2 milestone start*
+*Last updated: 2026-02-02 after v2.1 milestone start*
