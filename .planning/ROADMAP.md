@@ -4,7 +4,7 @@
 
 - ✅ **v1 Manual Review & Payment Status Flow Fix** - Phases 1-2 (shipped 2026-01-30)
 - ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
-- ◆ **v2.1 Aktenzeichen Display Fix** - Phase 7
+- ✅ **v2.1 Aktenzeichen Display Fix** - Phase 7 (shipped 2026-02-02)
 
 ## Phases
 
@@ -69,22 +69,19 @@ Plans:
 
 </details>
 
-### v2.1 Aktenzeichen Display Fix
-
-**Milestone Goal:** When a creditor has no Aktenzeichen, the first Anschreiben Word template shows nothing instead of "N/A".
+<details>
+<summary>✅ v2.1 Aktenzeichen Display Fix (Phase 7) - SHIPPED 2026-02-02</summary>
 
 #### Phase 7: Aktenzeichen N/A Suppression
 **Goal**: First Anschreiben Word template displays empty string instead of "N/A" for missing Aktenzeichen
 **Depends on**: Phase 6 (v2 shipped)
 **Requirements**: TMPL-01
-**Success Criteria** (what must be TRUE):
-  1. When a creditor's Aktenzeichen is missing or "N/A", the generated first Anschreiben Word document shows an empty/blank field instead of "N/A"
-  2. When a creditor HAS an Aktenzeichen, it displays normally (no regression)
-  3. Other fields in the template remain unaffected
 **Plans**: 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md -- Apply isUsableValue filter to Aktenzeichen fallback chain + edge case verification
+- [x] 07-01-PLAN.md -- Apply isUsableValue filter to Aktenzeichen fallback chain + edge case verification
+
+</details>
 
 ## Progress
 
@@ -99,4 +96,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Code-Based Merge Logic | v2 | 2/2 | Complete | 2026-02-01 |
 | 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
-| 7. Aktenzeichen N/A Suppression | v2.1 | 0/1 | Pending | -- |
+| 7. Aktenzeichen N/A Suppression | v2.1 | 1/1 | Complete | 2026-02-02 |

@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v2.1 Aktenzeichen Display Fix — Defining requirements
+**Current focus:** v2.1 Aktenzeichen Display Fix — Complete
 
 ## Current Position
 
 Phase: 07-aktenzeichen-na-suppression (1 of 1 in milestone v2.1)
 Plan: 01 of 01 (complete)
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 07-01-PLAN.md
+Status: Milestone v2.1 complete — all phases verified
+Last activity: 2026-02-02 — Phase 7 verified, milestone complete
 
 Progress: █ 100%
 
@@ -47,4 +47,4 @@ None.
 Last session: 2026-02-02 16:26 UTC
 Stopped at: Completed 07-01-PLAN.md
 Resume file: None
-Next step: Milestone v2.1 complete - ready for deployment/testing
+Next step: Audit milestone or archive directly

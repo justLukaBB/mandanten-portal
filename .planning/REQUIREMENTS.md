@@ -7,7 +7,7 @@
 
 ### Template Display
 
-- [ ] **TMPL-01**: When a creditor's Aktenzeichen (reference number) is missing or "N/A", the first Anschreiben Word template displays an empty string instead of "N/A"
+- [x] **TMPL-01**: When a creditor's Aktenzeichen (reference number) is missing or "N/A", the first Anschreiben Word template displays an empty string instead of "N/A"
 
 ## Future Requirements
 
@@ -28,7 +28,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TMPL-01 | Phase 7 | Pending |
+| TMPL-01 | Phase 7 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 1 total
@@ -37,4 +37,4 @@
 
 ---
 *Requirements defined: 2026-02-02*
-*Last updated: 2026-02-02 after initial definition*
+*Last updated: 2026-02-02 after Phase 7 execution*
