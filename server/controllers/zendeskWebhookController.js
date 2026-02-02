@@ -661,7 +661,7 @@ class ZendeskWebhookController {
                 try {
                     console.log(`📧 AUTO-APPROVED: Sending creditor confirmation email to client ${freshClient.email}`);
 
-                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${freshClient.portal_token}`;
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
                     const creditorsList = creditors
                         .map((c, i) => `${i + 1}. ${c.sender_name || "Unbekannt"} - €${(c.claim_amount || 0).toLocaleString("de-DE")}`)
                         .join("\n");
@@ -1365,7 +1365,7 @@ Diese E-Mail wurde automatisch generiert.
                 // Send email to client with creditor list
                 if (this.zendeskService.isConfigured() && creditors.length > 0) {
                     try {
-                        const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                        const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
                         const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
 
                         const emailContent = this.generateCreditorConfirmationEmailContent(
@@ -1595,7 +1595,7 @@ Diese E-Mail wurde automatisch generiert.
                 try {
                     console.log(`📧 Sending creditor confirmation email to client ${client.email}`);
 
-                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
                     const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
 
                     const emailContent = this.generateCreditorConfirmationEmailContent(

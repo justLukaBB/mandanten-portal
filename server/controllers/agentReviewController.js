@@ -1394,7 +1394,7 @@ Diese E-Mail wurde automatisch generiert.
                 try {
                     console.log(`📧 Sending creditor confirmation email to client ${client.email}`);
 
-                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
+                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
 
                     const emailContent = generateCreditorConfirmationEmailContent(
                         client,
