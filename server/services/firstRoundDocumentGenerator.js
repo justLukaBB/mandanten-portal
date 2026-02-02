@@ -1338,7 +1338,7 @@ class FirstRoundDocumentGenerator {
           creditor.creditor_reference,
           creditor.reference,
           creditor.aktenzeichen
-        ].find(ref => isUsableValue(ref)) || "",
+        ].find(ref => isUsableValue(ref)) || "AZ nicht vorhanden",
 
       // Client information
       Name: clientData.name,
