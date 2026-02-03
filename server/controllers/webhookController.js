@@ -985,6 +985,86 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             },
                             created_at: new Date(),
                         });
+
+                        // Create Zendesk ticket if any late upload creditors need manual review
+                        const manualReviewCreditors = newCreditors.filter(c => c.needs_manual_review === true && c.review_reasons && c.review_reasons.length > 0);
+                        if (manualReviewCreditors.length > 0) {
+                            console.log(`[webhook] ${manualReviewCreditors.length} late upload creditors need manual review - creating Zendesk ticket`);
+                            setImmediate(async () => {
+                                try {
+                                    const ZendeskService = require('../services/zendeskService');
+                                    const zendeskService = new ZendeskService();
+
+                                    if (!zendeskService.isConfigured()) {
+                                        console.log(`[webhook] Zendesk not configured - skipping late upload manual review ticket`);
+                                        return;
+                                    }
+
+                                    const clientForTicket = await getClient(client_id);
+                                    if (!clientForTicket) {
+                                        console.error(`[webhook] Client ${client_id} not found for late upload review ticket`);
+                                        return;
+                                    }
+
+                                    const creditorListText = manualReviewCreditors.map((c, i) => {
+                                        const name = c.sender_name || c.glaeubiger_name || 'Unbekannter Gläubiger';
+                                        const amount = c.claim_amount ? `€${Number(c.claim_amount).toLocaleString('de-DE')}` : 'k.A.';
+                                        const reasons = (c.review_reasons || []).map(r => `  - ${r}`).join('\n');
+                                        return `${i + 1}. ${name} (${amount})\n${reasons}`;
+                                    }).join('\n');
+
+                                    const ticketResult = await zendeskService.createTicket({
+                                        subject: `Manuelle Prüfung: Nachträglich hochgeladene Gläubiger - ${clientForTicket.firstName} ${clientForTicket.lastName} (${clientForTicket.aktenzeichen})`,
+                                        content: `**MANUELLE PRÜFUNG ERFORDERLICH - NACHTRÄGLICHE GLÄUBIGER**
+
+👤 **Client:** ${clientForTicket.firstName} ${clientForTicket.lastName}
+📧 **Email:** ${clientForTicket.email}
+📁 **Aktenzeichen:** ${clientForTicket.aktenzeichen}
+
+📊 **Situation:**
+• Status war: Wartend auf Client-Bestätigung
+• Nachträglich hochgeladene Dokumente wurden automatisch verarbeitet
+• ${manualReviewCreditors.length} von ${newCreditors.length} neuen Gläubigern benötigen manuelle Prüfung
+
+📋 **Gläubiger mit Prüfungsbedarf:**
+${creditorListText}
+
+⚠️ **AKTION ERFORDERLICH:**
+1. Bitte die oben genannten Gläubiger im Agent Portal prüfen
+2. Fehlende Kontaktdaten (E-Mail/Adresse) manuell ergänzen
+3. Gläubiger nach Prüfung bestätigen
+
+🔗 **Agent Portal:** ${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/agent/review/${clientForTicket.id}
+
+Job ID: ${job_id}`,
+                                        requesterEmail: clientForTicket.email,
+                                        tags: ['late-upload', 'manual-review-required', 'creditor-contact-missing', 'agent-review-required'],
+                                        priority: 'normal',
+                                    });
+
+                                    if (ticketResult.success) {
+                                        console.log(`[webhook] ✅ Zendesk ticket created for late upload manual review: ${ticketResult.ticket_id}`);
+                                        await safeClientUpdate(client_id, (clientDoc) => {
+                                            clientDoc.zendesk_tickets = clientDoc.zendesk_tickets || [];
+                                            clientDoc.zendesk_tickets.push({
+                                                ticket_id: ticketResult.ticket_id,
+                                                ticket_type: 'late_upload_manual_review',
+                                                ticket_scenario: 'late_upload_creditor_review',
+                                                status: 'open',
+                                                created_at: new Date(),
+                                                creditor_names: manualReviewCreditors.map(c => c.sender_name || c.glaeubiger_name),
+                                                document_ids: newCreditorDocs.map(d => d.id),
+                                            });
+                                            return clientDoc;
+                                        });
+                                    } else {
+                                        console.error(`[webhook] ❌ Failed to create Zendesk ticket for late upload manual review:`, ticketResult.error);
+                                    }
+                                } catch (zendeskError) {
+                                    console.error(`[webhook] ❌ Failed to create Zendesk ticket for late upload manual review:`, zendeskError);
+                                }
+                            });
+                        }
                     }
                 }
             }
