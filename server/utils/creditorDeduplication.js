@@ -469,10 +469,53 @@ function mergeCreditorLists(existingCreditors = [], newCreditors = [], strategy 
   return result;
 }
 
+/**
+ * Remove stale "Fehlende Gläubiger-E-Mail" / "Fehlende Gläubiger-Adresse" review reasons
+ * from creditors that actually have those fields populated (e.g. after DB enrichment).
+ * Also resets needs_manual_review if no reasons remain.
+ * @param {Array} creditors
+ * @returns {Array} The same array, mutated in-place for convenience
+ */
+function cleanupStaleContactReviewReasons(creditors) {
+  if (!Array.isArray(creditors)) return creditors;
+
+  const isMissing = (val) => {
+    if (val === undefined || val === null) return true;
+    if (typeof val === 'string') {
+      const t = val.trim();
+      if (!t) return true;
+      const lower = t.toLowerCase();
+      if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+    }
+    return false;
+  };
+
+  for (const creditor of creditors) {
+    if (!Array.isArray(creditor.review_reasons) || creditor.review_reasons.length === 0) continue;
+
+    const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
+    const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
+
+    if (hasEmail && creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+      creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+    }
+    if (hasAddress && creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+      creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+    }
+
+    if (creditor.review_reasons.length === 0) {
+      creditor.needs_manual_review = false;
+    }
+  }
+
+  return creditors;
+}
+
 module.exports = {
   deduplicateCreditors,
   deduplicateCreditorsFromDocuments,
   mergeCreditorLists,
   documentNeedsManualReview,
   getDocumentReviewReasons,
+  cleanupStaleContactReviewReasons,
 };

@@ -276,23 +276,39 @@ async function runAIRededup(clientId, getClientFunction, options = {}) {
       // Prüfe beide Feldnamen-Formate (deutsch und englisch)
       const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
       const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
-      
+
+      if (!creditor.review_reasons) {
+        creditor.review_reasons = [];
+      }
+
       if (!hasEmail || !hasAddress) {
         creditor.needs_manual_review = true;
-        if (!creditor.review_reasons) {
-          creditor.review_reasons = [];
-        }
         if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
           creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
         }
         if (!hasAddress && !creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
           creditor.review_reasons.push('Fehlende Gläubiger-Adresse');
         }
-        
+
         console.log(`[ai-dedup-scheduler] Manual review triggered for creditor: ${creditor.sender_name || creditor.glaeubiger_name}`, {
           missing_email: !hasEmail,
           missing_address: !hasAddress
         });
+      }
+
+      // Clean up stale review reasons: if enrichment resolved the issue, REMOVE the reason
+      if (hasEmail && creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+        creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+        console.log(`[ai-dedup-scheduler] 🧹 Removed stale 'Fehlende Gläubiger-E-Mail' for: ${creditor.sender_name || creditor.glaeubiger_name}`);
+      }
+      if (hasAddress && creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+        creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+        console.log(`[ai-dedup-scheduler] 🧹 Removed stale 'Fehlende Gläubiger-Adresse' for: ${creditor.sender_name || creditor.glaeubiger_name}`);
+      }
+
+      // Re-evaluate needs_manual_review: if no reasons left, clear the flag
+      if (creditor.review_reasons.length === 0) {
+        creditor.needs_manual_review = false;
       }
     }
 
@@ -316,7 +332,7 @@ async function runAIRededup(clientId, getClientFunction, options = {}) {
       const existingByName = name ? existingMap.get(`name:${name}`) : null;
       const existing = existingById || existingByName;
 
-      return {
+      const merged = {
         ...c,
         id: c.id || uuidv4(),
         status: c.status || 'confirmed',
@@ -341,6 +357,26 @@ async function runAIRededup(clientId, getClientFunction, options = {}) {
         original_ai_data: existing?.original_ai_data,
         correction_notes: existing?.correction_notes,
       };
+
+      // Post-merge cleanup: remove stale contact-data review reasons that enrichment has resolved
+      const mergedHasEmail = !isMissing(merged.email_glaeubiger) || !isMissing(merged.sender_email);
+      const mergedHasAddress = !isMissing(merged.glaeubiger_adresse) || !isMissing(merged.sender_address);
+
+      if (mergedHasEmail && merged.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+        merged.review_reasons = merged.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+        console.log(`[ai-dedup-scheduler] 🧹 Post-merge: removed stale 'Fehlende Gläubiger-E-Mail' for: ${merged.sender_name || merged.glaeubiger_name}`);
+      }
+      if (mergedHasAddress && merged.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+        merged.review_reasons = merged.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+        console.log(`[ai-dedup-scheduler] 🧹 Post-merge: removed stale 'Fehlende Gläubiger-Adresse' for: ${merged.sender_name || merged.glaeubiger_name}`);
+      }
+
+      // Re-evaluate needs_manual_review after cleanup
+      if (merged.review_reasons.length === 0) {
+        merged.needs_manual_review = false;
+      }
+
+      return merged;
     });
 
     // Add deduplication history entry

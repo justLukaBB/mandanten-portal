@@ -8,7 +8,7 @@
 const { v4: uuidv4 } = require('uuid');
 const webhookVerifier = require('../utils/webhookVerifier');
 const creditorDeduplication = require('../utils/creditorDeduplication');
-const { documentNeedsManualReview, getDocumentReviewReasons } = require('../utils/creditorDeduplication');
+const { documentNeedsManualReview, getDocumentReviewReasons, cleanupStaleContactReviewReasons } = require('../utils/creditorDeduplication');
 const { findCreditorByName } = require('../utils/creditorLookup');
 const webhookQueueService = require('../services/webhookQueueService');
 
@@ -411,6 +411,24 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         sender_address: enrichedSenderAddress || null,
                     });
                 }
+
+                // Clean up stale review reasons from earlier stages (e.g. claudeAI extraction)
+                // that enrichment has now resolved
+                if (docResult.validation?.review_reasons?.length) {
+                    if (hasEmail && docResult.validation.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                        docResult.validation.review_reasons = docResult.validation.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+                        console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-E-Mail' from doc ${docResult.id} after enrichment`);
+                    }
+                    if (hasAddress && docResult.validation.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                        docResult.validation.review_reasons = docResult.validation.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+                        console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-Adresse' from doc ${docResult.id} after enrichment`);
+                    }
+                    // Re-evaluate manual review if no reasons remain
+                    if (docResult.validation.review_reasons.length === 0) {
+                        docResult.validation.requires_manual_review = false;
+                        docResult.manual_review_required = false;
+                    }
+                }
             }
 
             processedDocuments.push({
@@ -736,11 +754,12 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                     console.log(`  Address fields:`, JSON.stringify(addressFields));
                     console.log(`  hasEmail: ${hasEmail}, hasAddress: ${hasAddress}`);
 
+                    if (!creditor.review_reasons) {
+                        creditor.review_reasons = [];
+                    }
+
                     if (!hasEmail || !hasAddress) {
                         creditor.needs_manual_review = true;
-                        if (!creditor.review_reasons) {
-                            creditor.review_reasons = [];
-                        }
                         if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
                             creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
                         }
@@ -756,6 +775,21 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                         });
                     } else {
                         console.log(`[webhook] ✅ Creditor OK: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                    }
+
+                    // Clean up stale review reasons: if enrichment resolved the issue, REMOVE the reason
+                    if (hasEmail && creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                        creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+                        console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-E-Mail' for: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                    }
+                    if (hasAddress && creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                        creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+                        console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-Adresse' for: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                    }
+
+                    // Re-evaluate needs_manual_review: if no reasons left, clear the flag
+                    if (creditor.review_reasons.length === 0) {
+                        creditor.needs_manual_review = false;
                     }
                 }
 
@@ -775,6 +809,9 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                     deduplicated_creditors,
                     'highest_amount'
                 );
+
+                // Post-merge cleanup: remove stale contact review reasons inherited from existing creditors
+                cleanupStaleContactReviewReasons(clientDoc.final_creditor_list);
 
                 console.log(`  - After merge: ${clientDoc.final_creditor_list.length}`);
                 console.log(`  - Final creditor names:`);
@@ -891,11 +928,12 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             const hasEmail = !isMissing(creditor.email_glaeubiger) || !isMissing(creditor.sender_email);
                             const hasAddress = !isMissing(creditor.glaeubiger_adresse) || !isMissing(creditor.sender_address);
 
+                            if (!creditor.review_reasons) {
+                                creditor.review_reasons = [];
+                            }
+
                             if (!hasEmail || !hasAddress) {
                                 creditor.needs_manual_review = true;
-                                if (!creditor.review_reasons) {
-                                    creditor.review_reasons = [];
-                                }
                                 if (!hasEmail && !creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
                                     creditor.review_reasons.push('Fehlende Gläubiger-E-Mail');
                                 }
@@ -908,6 +946,21 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                                     missing_address: !hasAddress
                                 });
                             }
+
+                            // Clean up stale review reasons: if enrichment resolved the issue, REMOVE the reason
+                            if (hasEmail && creditor.review_reasons.includes('Fehlende Gläubiger-E-Mail')) {
+                                creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-E-Mail');
+                                console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-E-Mail' for late upload: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                            }
+                            if (hasAddress && creditor.review_reasons.includes('Fehlende Gläubiger-Adresse')) {
+                                creditor.review_reasons = creditor.review_reasons.filter(r => r !== 'Fehlende Gläubiger-Adresse');
+                                console.log(`[webhook] 🧹 Removed stale 'Fehlende Gläubiger-Adresse' for late upload: ${creditor.sender_name || creditor.glaeubiger_name}`);
+                            }
+
+                            // Re-evaluate needs_manual_review: if no reasons left, clear the flag
+                            if (creditor.review_reasons.length === 0) {
+                                creditor.needs_manual_review = false;
+                            }
                         }
 
                         const existingList = clientDoc.final_creditor_list || [];
@@ -916,6 +969,9 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
                             newCreditors,
                             'highest_amount'
                         );
+
+                        // Post-merge cleanup: remove stale contact review reasons inherited from existing creditors
+                        cleanupStaleContactReviewReasons(clientDoc.final_creditor_list);
 
                         clientDoc.status_history = clientDoc.status_history || [];
                         clientDoc.status_history.push({
