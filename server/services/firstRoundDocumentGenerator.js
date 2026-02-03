@@ -1328,15 +1328,13 @@ class FirstRoundDocumentGenerator {
       // Creditor information
       "Adresse D C": `${isUsableValue(creditor.sender_name) ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
 
-      Creditor: creditor.is_representative
-        ? (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
-          (isUsableValue(creditor.glaeubiger_name) && creditor.glaeubiger_name) ||
-          (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
-          "Unbekannter Gläubiger"
-        : (isUsableValue(creditor.glaeubiger_name) && creditor.glaeubiger_name) ||
-          (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
-          (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
-          "Unbekannter Gläubiger",
+      // Use glaeubiger_name (admin display name) as primary source — actual_creditor
+      // is unreliable for multi-creditor splits where the AI can mix up names between entries
+      Creditor:
+        (isUsableValue(creditor.glaeubiger_name) && creditor.glaeubiger_name) ||
+        (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
+        (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
+        "Unbekannter Gläubiger",
 
       "Aktenzeichen D C":
         [
