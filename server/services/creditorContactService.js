@@ -391,7 +391,7 @@ class CreditorContactService {
                     original_claim_amount: creditor.claim_amount || 0,
                     document_ids: creditor.document_id ? [creditor.document_id] : [],
                     is_representative: creditor.is_representative || false,
-                    actual_creditor: creditor.actual_creditor || creditor.glaeubiger_name || creditor.sender_name,
+                    actual_creditor: creditor.actual_creditor || creditor.glaeubiger_name || (creditor.is_representative ? creditor.sender_name : null),
                     sender_name: creditor.sender_name, // Keep original sender name for contact record
                     needs_manual_contact: !emailToUse // Flag for manual processing
                 };

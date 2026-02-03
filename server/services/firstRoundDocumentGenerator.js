@@ -46,8 +46,9 @@ class FirstRoundDocumentGenerator {
             doc.extracted_data.creditor_data.reference_number === creditor.reference_number
         );
 
-        // If found, and creditor has no usable actual_creditor, copy it from the document
+        // If found, creditor is a representative, and has no usable actual_creditor, copy it from the document
         if (
+          creditor.is_representative &&
           !isUsableValue(creditor.actual_creditor) &&
           isUsableValue(matchedDoc?.extracted_data?.creditor_data?.actual_creditor)
         ) {
@@ -1327,10 +1328,15 @@ class FirstRoundDocumentGenerator {
       // Creditor information
       "Adresse D C": `${isUsableValue(creditor.sender_name) ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
 
-      Creditor:
-        (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
-        (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
-        "Unbekannter Gläubiger",
+      Creditor: creditor.is_representative
+        ? (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
+          (isUsableValue(creditor.glaeubiger_name) && creditor.glaeubiger_name) ||
+          (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
+          "Unbekannter Gläubiger"
+        : (isUsableValue(creditor.glaeubiger_name) && creditor.glaeubiger_name) ||
+          (isUsableValue(creditor.sender_name) && creditor.sender_name) ||
+          (isUsableValue(creditor.actual_creditor) && creditor.actual_creditor) ||
+          "Unbekannter Gläubiger",
 
       "Aktenzeichen D C":
         [
