@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const ZendeskManager = require('./zendeskManager');
+const { syncInquiryToMatcher } = require('./sync_inquiry_to_matcher');
 
 /**
  * Creditor Contact Service
@@ -723,6 +724,41 @@ class CreditorContactService {
                         }
                     } catch (dbError) {
                         console.error(`❌ Failed to save Side Conversation ID to MongoDB for ${contactInfo.creditor_name}:`, dbError.message);
+                        // Don't throw - continue processing other creditors
+                    }
+
+                    // ✅ NEW: Sync inquiry to Matcher API for response tracking
+                    try {
+                        const Client = require('../models/Client');
+                        const clientDoc = await Client.findOne({ aktenzeichen: contactRecord.client_reference });
+
+                        if (clientDoc) {
+                            // Find the creditor in final_creditor_list
+                            const creditorInList = clientDoc.final_creditor_list?.find(c =>
+                                c.id === contactInfo.creditor_id ||
+                                c.sender_email === contactRecord.creditor_email
+                            );
+
+                            if (creditorInList) {
+                                // Update creditor with side_conversation_id for sync
+                                creditorInList.side_conversation_id = result.side_conversation_id;
+                                creditorInList.email_sent_at = new Date().toISOString();
+
+                                const syncResult = await syncInquiryToMatcher({
+                                    client: clientDoc,
+                                    creditor: creditorInList,
+                                    mainTicketId: mainTicketId
+                                });
+
+                                if (syncResult.success) {
+                                    console.log(`✅ [Matcher] Synced inquiry for ${contactInfo.creditor_name}`);
+                                } else {
+                                    console.warn(`⚠️ [Matcher] Failed to sync inquiry: ${syncResult.error}`);
+                                }
+                            }
+                        }
+                    } catch (syncError) {
+                        console.error(`❌ [Matcher] Sync error for ${contactInfo.creditor_name}:`, syncError.message);
                         // Don't throw - continue processing other creditors
                     }
                 }
