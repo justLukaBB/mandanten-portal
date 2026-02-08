@@ -25,6 +25,8 @@ const config = {
 
   // Email (Resend)
   RESEND_API_KEY: process.env.RESEND_API_KEY,
+  RESEND_CREDITOR_FROM_EMAIL: process.env.RESEND_CREDITOR_FROM_EMAIL || 'office@scuric.de',
+  RESEND_CREDITOR_FROM_NAME: process.env.RESEND_CREDITOR_FROM_NAME || 'Thomas Scuric Rechtsanwälte',
   
   // File Upload
   MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 10485760, // 10MB

@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const ZendeskManager = require('./zendeskManager');
 const { syncInquiryToMatcher } = require('./sync_inquiry_to_matcher');
+const creditorEmailService = require('./creditorEmailService');
 
 /**
  * Creditor Contact Service
@@ -651,7 +652,7 @@ class CreditorContactService {
             const contactInfo = emailableContacts[i];
 
             try {
-                console.log(`📧 Creating Side Conversation ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with document...`);
+                console.log(`📧 Sending email via Resend ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with document...`);
 
                 // Get the full contact record for this creditor
                 const contactRecord = Array.from(this.creditorContacts.values())
@@ -678,18 +679,39 @@ class CreditorContactService {
                     creditor_reference: contactRecord.creditor_reference || contactRecord.reference
                 };
 
-                // Send Side Conversation email with document link
-                const result = await this.zendesk.createFirstRoundSideConversationWithDocument(
-                    mainTicketId,
-                    creditorData,
-                    clientData,
-                    documentUrl.download_url
-                );
+                // Send email via Resend (replaces Zendesk Side Conversations)
+                const result = await creditorEmailService.sendFirstRoundEmail({
+                    recipientEmail: contactRecord.creditor_email,
+                    recipientName: creditorData.creditor_name,
+                    clientName: clientData.name,
+                    clientReference: clientData.reference,
+                    documentUrl: documentUrl.download_url,
+                    creditorReference: creditorData.creditor_reference
+                });
+
+                // Add internal Zendesk comment for audit trail
+                if (result.success) {
+                    try {
+                        await this.zendesk.addTicketComment(
+                            mainTicketId,
+                            `📧 **E-Mail via Resend gesendet**\n\n` +
+                            `• Empfänger: ${creditorData.creditor_name} (${contactRecord.creditor_email})\n` +
+                            `• Dokument: ${documentUrl.filename}\n` +
+                            `• Download-Link: ${documentUrl.download_url}\n` +
+                            `• Resend ID: ${result.emailId}\n` +
+                            `• Zeitpunkt: ${new Date().toLocaleString('de-DE')}`,
+                            false // internal comment
+                        );
+                    } catch (commentError) {
+                        console.warn(`⚠️ Failed to add Zendesk audit comment: ${commentError.message}`);
+                    }
+                }
 
                 // Update contact record (in-memory)
                 contactRecord.contact_status = result.success ? 'email_sent_with_document' : 'failed';
                 contactRecord.email_sent_at = result.success ? new Date().toISOString() : null;
-                contactRecord.side_conversation_id = result.side_conversation_id;
+                contactRecord.resend_email_id = result.emailId;
+                contactRecord.email_provider = 'resend';
                 contactRecord.document_url = result.success ? documentUrl.download_url : null;
                 contactRecord.updated_at = new Date().toISOString();
 
@@ -704,9 +726,9 @@ class CreditorContactService {
                             },
                             {
                                 $set: {
-                                    'final_creditor_list.$.side_conversation_id': result.side_conversation_id,
+                                    'final_creditor_list.$.resend_email_id': result.emailId,
+                                    'final_creditor_list.$.email_provider': 'resend',
                                     'final_creditor_list.$.main_zendesk_ticket_id': mainTicketId,
-                                    'final_creditor_list.$.side_conversation_created_at': new Date(),
                                     'final_creditor_list.$.first_round_document_url': documentUrl.download_url,
                                     'final_creditor_list.$.first_round_document_filename': documentUrl.filename,
                                     'final_creditor_list.$.document_sent_at': new Date(),
@@ -718,12 +740,12 @@ class CreditorContactService {
                         );
 
                         if (updateResult.modifiedCount > 0) {
-                            console.log(`✅ Saved Side Conversation ID to MongoDB for ${contactInfo.creditor_name}`);
+                            console.log(`✅ Saved Resend email ID to MongoDB for ${contactInfo.creditor_name}`);
                         } else {
                             console.warn(`⚠️ MongoDB update returned 0 modified documents for ${contactInfo.creditor_name}`);
                         }
                     } catch (dbError) {
-                        console.error(`❌ Failed to save Side Conversation ID to MongoDB for ${contactInfo.creditor_name}:`, dbError.message);
+                        console.error(`❌ Failed to save Resend email ID to MongoDB for ${contactInfo.creditor_name}:`, dbError.message);
                         // Don't throw - continue processing other creditors
                     }
 
@@ -740,8 +762,9 @@ class CreditorContactService {
                             );
 
                             if (creditorInList) {
-                                // Update creditor with side_conversation_id for sync
-                                creditorInList.side_conversation_id = result.side_conversation_id;
+                                // Update creditor with resend_email_id for sync
+                                creditorInList.resend_email_id = result.emailId;
+                                creditorInList.email_provider = 'resend';
                                 creditorInList.email_sent_at = new Date().toISOString();
 
                                 const syncResult = await syncInquiryToMatcher({
@@ -767,8 +790,9 @@ class CreditorContactService {
                     contact_id: contactInfo.contact_id,
                     creditor_name: contactInfo.creditor_name,
                     creditor_email: contactRecord.creditor_email,
-                    recipient_email: result.recipient_email,
-                    side_conversation_id: result.side_conversation_id,
+                    recipient_email: contactRecord.creditor_email,
+                    resend_email_id: result.emailId,
+                    email_provider: 'resend',
                     main_ticket_id: mainTicketId,
                     document_filename: documentUrl.filename,
                     document_url: documentUrl.download_url,

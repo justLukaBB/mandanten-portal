@@ -1,8 +1,9 @@
 const ZendeskManager = require('./zendeskManager');
+const creditorEmailService = require('./creditorEmailService');
 
 /**
  * Second Round Email Sender
- * Sends individual "Pfändbares Einkommen" documents to each creditor via Zendesk Side Conversations
+ * Sends individual "Pfändbares Einkommen" documents to each creditor via Resend
  */
 class SecondRoundEmailSender {
     constructor() {
@@ -125,33 +126,39 @@ class SecondRoundEmailSender {
                 };
             }
 
-            // Build email content for second round
-            const emailContent = this.buildSecondRoundEmailContent(
-                creditorContact.creditor_name,
-                clientData,
-                creditorDocument
-            );
+            // Send email via Resend (replaces Zendesk Side Conversations)
+            const emailResult = await creditorEmailService.sendSecondRoundEmail({
+                recipientEmail: creditorEmail,
+                recipientName: creditorContact.creditor_name,
+                clientName: clientData.name,
+                clientReference: clientData.reference,
+                documentUrl: creditorDocument.download_url || creditorDocument.content_url,
+                documentFilename: creditorDocument.filename
+            });
 
-            // Create side conversation with the creditor
-            const sideConversationResult = await this.zendesk.createSideConversation(
-                mainTicketId,
-                {
-                    subject: `2. Runde - Pfändbares Einkommen Dokument - ${clientData.name}`,
-                    recipients: [creditorEmail],
-                    message: emailContent.text,
-                    html_message: emailContent.html,
-                    document_url: creditorDocument.download_url || creditorDocument.content_url,
-                    document_filename: creditorDocument.filename
-                }
-            );
+            if (!emailResult.success) {
+                throw new Error(emailResult.error || 'Failed to send email via Resend');
+            }
 
-            if (!sideConversationResult.success) {
-                throw new Error(sideConversationResult.error || 'Failed to create side conversation');
+            // Add internal Zendesk comment for audit trail
+            try {
+                await this.zendesk.addTicketComment(
+                    mainTicketId,
+                    `📧 **2. Runde E-Mail via Resend gesendet**\n\n` +
+                    `• Empfänger: ${creditorContact.creditor_name} (${creditorEmail})\n` +
+                    `• Dokument: ${creditorDocument.filename}\n` +
+                    `• Resend ID: ${emailResult.emailId}\n` +
+                    `• Zeitpunkt: ${new Date().toLocaleString('de-DE')}`,
+                    false // internal comment
+                );
+            } catch (commentError) {
+                console.warn(`⚠️ Failed to add Zendesk audit comment: ${commentError.message}`);
             }
 
             return {
                 success: true,
-                side_conversation_id: sideConversationResult.side_conversation_id,
+                resend_email_id: emailResult.emailId,
+                email_provider: 'resend',
                 recipient_email: creditorEmail,
                 creditor_name: creditorContact.creditor_name,
                 document_sent: creditorDocument.filename,

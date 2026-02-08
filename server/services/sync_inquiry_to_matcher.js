@@ -56,6 +56,10 @@ async function syncInquiryToMatcher({ client, creditor, mainTicketId }) {
       zendesk_ticket_id: mainTicketId,
       zendesk_side_conversation_id: creditor.side_conversation_id || null,
 
+      // Resend tracking (new email provider)
+      resend_email_id: creditor.resend_email_id || null,
+      email_provider: creditor.email_provider || 'zendesk',
+
       // Timing
       sent_at: creditor.email_sent_at || creditor.side_conversation_created_at || new Date().toISOString(),
 
@@ -137,8 +141,8 @@ async function syncAllInquiriesForClient(client, mainTicketId) {
 
   // Sync each creditor with email sent
   for (const creditor of client.final_creditor_list) {
-    // Only sync creditors where email was actually sent
-    if (!creditor.email_sent_at && !creditor.side_conversation_id) {
+    // Only sync creditors where email was actually sent (via Resend or Zendesk)
+    if (!creditor.email_sent_at && !creditor.side_conversation_id && !creditor.resend_email_id) {
       console.log(`[Matcher Sync] Skipping ${creditor.sender_name} - no email sent yet`);
       skipped++;
       continue;
