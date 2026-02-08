@@ -129,7 +129,7 @@ class SecondRoundManager {
                 mainTicketId,
                 creditorContacts,
                 clientData,
-                uploadResult.document_urls
+                documentResult.documents  // Pass documents with local file paths for attachments
             );
             processResult.processing_steps.email_sending = emailResult;
 

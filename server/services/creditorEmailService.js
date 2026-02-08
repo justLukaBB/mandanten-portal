@@ -1,4 +1,6 @@
 const config = require('../config');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * CreditorEmailService
@@ -37,32 +39,49 @@ class CreditorEmailService {
   }
 
   /**
-   * Send first round creditor email with document link
+   * Send first round creditor email with document attachment
    * @param {Object} options
    * @param {string} options.recipientEmail - Creditor email address
    * @param {string} options.recipientName - Creditor name
    * @param {string} options.clientName - Client full name
    * @param {string} options.clientReference - Aktenzeichen
-   * @param {string} options.documentUrl - Download URL for the first round document
    * @param {string} [options.creditorReference] - Creditor's reference number (optional)
+   * @param {Object} [options.attachment] - Document attachment
+   * @param {string} options.attachment.filename - Document filename
+   * @param {string} options.attachment.path - Local file path to the document
    * @returns {Promise<{success: boolean, emailId?: string, error?: string}>}
    */
-  async sendFirstRoundEmail({ recipientEmail, recipientName, clientName, clientReference, documentUrl, creditorReference }) {
-    const subject = `Außergerichtlicher Einigungsversuch - ${recipientName} - Az: ${clientReference}`;
+  async sendFirstRoundEmail({ recipientEmail, recipientName, clientName, clientReference, creditorReference, attachment }) {
+    const subject = `Außergerichtlicher Einigungsversuch - ${clientName} - Az: ${clientReference}`;
     const html = this.generateFirstRoundEmailHtml({
       recipientName,
       clientName,
       clientReference,
-      documentUrl,
-      creditorReference
+      creditorReference,
+      attachmentFilename: attachment?.filename
     });
     const text = this.generateFirstRoundEmailText({
       recipientName,
       clientName,
       clientReference,
-      documentUrl,
-      creditorReference
+      creditorReference,
+      attachmentFilename: attachment?.filename
     });
+
+    // Prepare attachment if provided
+    let attachments = [];
+    if (attachment?.path) {
+      try {
+        const content = fs.readFileSync(attachment.path);
+        attachments.push({
+          filename: attachment.filename || path.basename(attachment.path),
+          content: content
+        });
+        console.log(`📎 Attachment prepared: ${attachment.filename} (${Math.round(content.length / 1024)} KB)`);
+      } catch (err) {
+        console.error(`❌ Failed to read attachment file: ${err.message}`);
+      }
+    }
 
     return this.sendEmail({
       to: recipientEmail,
@@ -70,6 +89,7 @@ class CreditorEmailService {
       subject,
       html,
       text,
+      attachments,
       tags: [
         { name: 'type', value: 'first_round' },
         { name: 'client_reference', value: clientReference }
@@ -78,35 +98,49 @@ class CreditorEmailService {
   }
 
   /**
-   * Send second round creditor email with settlement plan
+   * Send second round creditor email with settlement plan attachment
    * @param {Object} options
    * @param {string} options.recipientEmail - Creditor email address
    * @param {string} options.recipientName - Creditor name
    * @param {string} options.clientName - Client full name
    * @param {string} options.clientReference - Aktenzeichen
-   * @param {string} options.documentUrl - Download URL for the settlement document
-   * @param {string} [options.documentFilename] - Document filename
+   * @param {Object} [options.attachment] - Document attachment
+   * @param {string} options.attachment.filename - Document filename
+   * @param {string} options.attachment.path - Local file path to the document
    * @param {Object} [options.settlementDetails] - Settlement plan details
    * @returns {Promise<{success: boolean, emailId?: string, error?: string}>}
    */
-  async sendSecondRoundEmail({ recipientEmail, recipientName, clientName, clientReference, documentUrl, documentFilename, settlementDetails }) {
-    const subject = `2. Runde - Schuldenbereinigungsplan - ${clientName} - Az: ${clientReference}`;
+  async sendSecondRoundEmail({ recipientEmail, recipientName, clientName, clientReference, attachment, settlementDetails }) {
+    const subject = `Schuldenbereinigungsplan - ${clientName} - Az: ${clientReference}`;
     const html = this.generateSecondRoundEmailHtml({
       recipientName,
       clientName,
       clientReference,
-      documentUrl,
-      documentFilename,
+      attachmentFilename: attachment?.filename,
       settlementDetails
     });
     const text = this.generateSecondRoundEmailText({
       recipientName,
       clientName,
       clientReference,
-      documentUrl,
-      documentFilename,
+      attachmentFilename: attachment?.filename,
       settlementDetails
     });
+
+    // Prepare attachment if provided
+    let attachments = [];
+    if (attachment?.path) {
+      try {
+        const content = fs.readFileSync(attachment.path);
+        attachments.push({
+          filename: attachment.filename || path.basename(attachment.path),
+          content: content
+        });
+        console.log(`📎 Attachment prepared: ${attachment.filename} (${Math.round(content.length / 1024)} KB)`);
+      } catch (err) {
+        console.error(`❌ Failed to read attachment file: ${err.message}`);
+      }
+    }
 
     return this.sendEmail({
       to: recipientEmail,
@@ -114,6 +148,7 @@ class CreditorEmailService {
       subject,
       html,
       text,
+      attachments,
       tags: [
         { name: 'type', value: 'second_round' },
         { name: 'client_reference', value: clientReference }
@@ -125,7 +160,7 @@ class CreditorEmailService {
    * Core email sending function
    * @private
    */
-  async sendEmail({ to, toName, subject, html, text, tags = [] }) {
+  async sendEmail({ to, toName, subject, html, text, attachments = [], tags = [] }) {
     // TEST MODE: Override recipient for all creditor emails
     const TEST_RECIPIENT = 'justlukax@gmail.com';
     const originalRecipient = to;
@@ -140,6 +175,7 @@ class CreditorEmailService {
       console.log(`📧 From: ${this.fromName} <${this.fromEmail}>`);
       console.log(`📧 To: ${toName} <${to}>`);
       console.log(`📧 Subject: ${subject}`);
+      console.log(`📧 Attachments: ${attachments.length > 0 ? attachments.map(a => a.filename).join(', ') : 'none'}`);
       console.log(`📧 Tags: ${JSON.stringify(tags)}`);
       console.log('📧 ================================\n');
 
@@ -147,7 +183,7 @@ class CreditorEmailService {
     }
 
     try {
-      const response = await this.resend.emails.send({
+      const emailPayload = {
         from: `${this.fromName} <${this.fromEmail}>`,
         to: to,
         reply_to: this.replyTo,
@@ -155,9 +191,16 @@ class CreditorEmailService {
         html,
         text,
         tags
-      });
+      };
 
-      console.log(`✅ Creditor email sent to ${to} (ID: ${response.id})`);
+      // Add attachments if present
+      if (attachments.length > 0) {
+        emailPayload.attachments = attachments;
+      }
+
+      const response = await this.resend.emails.send(emailPayload);
+
+      console.log(`✅ Creditor email sent to ${to} (ID: ${response.id})${attachments.length > 0 ? ` with ${attachments.length} attachment(s)` : ''}`);
 
       return { success: true, emailId: response.id };
     } catch (error) {
@@ -172,9 +215,10 @@ class CreditorEmailService {
 
   /**
    * Generate HTML email for first round (Erstschreiben)
+   * Clean, modern design matching verification emails
    * @private
    */
-  generateFirstRoundEmailHtml({ recipientName, clientName, clientReference, documentUrl, creditorReference }) {
+  generateFirstRoundEmailHtml({ recipientName, clientName, clientReference, creditorReference, attachmentFilename }) {
     const currentDate = new Date().toLocaleDateString('de-DE');
 
     return `
@@ -189,10 +233,10 @@ class CreditorEmailService {
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
     <tr>
       <td style="padding: 40px 20px;">
-        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+        <table role="presentation" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
           <!-- Header -->
           <tr>
-            <td style="padding: 24px 32px; text-align: center; background-color: #2c5aa0; border-radius: 8px 8px 0 0;">
+            <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #eee;">
               <img src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwälte" style="height: 40px; width: auto;">
             </td>
           </tr>
@@ -200,45 +244,45 @@ class CreditorEmailService {
           <!-- Content -->
           <tr>
             <td style="padding: 32px;">
-              <h2 style="margin: 0 0 24px; font-size: 20px; font-weight: 600; color: #2c5aa0;">
+              <h1 style="margin: 0 0 16px; font-size: 22px; font-weight: 600; color: #111827; text-align: center;">
                 Außergerichtlicher Einigungsversuch
-              </h2>
+              </h1>
 
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #333;">
+              <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
                 Sehr geehrte Damen und Herren,
               </p>
 
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #333;">
-                im Auftrag unseres Mandanten <strong>${clientName}</strong> führen wir einen außergerichtlichen Einigungsversuch im Rahmen der Insolvenzordnung durch.
+              <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
+                im Auftrag unseres Mandanten <strong>${clientName}</strong> führen wir einen außergerichtlichen Einigungsversuch gemäß § 305 InsO durch.
               </p>
 
-              <!-- Document Download Button -->
-              <div style="text-align: center; margin: 32px 0;">
-                <a href="${documentUrl}"
-                   style="display: inline-block; background-color: #2c5aa0; color: #ffffff; padding: 14px 28px;
-                          text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 15px;">
-                  Erstschreiben herunterladen
-                </a>
-              </div>
-
-              <!-- Instructions Box -->
-              <div style="background-color: #f8f9fa; padding: 20px; border-left: 4px solid #2c5aa0; margin: 24px 0;">
-                <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #333;">Nächste Schritte:</h4>
-                <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; color: #555;">
-                  <li>Dokument herunterladen und prüfen</li>
-                  <li>Aktuelle Forderungshöhe mitteilen (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)</li>
-                  <li>Kopie eventuell vorliegender Titel übersenden</li>
-                  <li>Sicherheiten mitteilen (falls vorhanden)</li>
-                </ul>
-                <p style="margin: 12px 0 0; font-size: 14px; color: #666;">
-                  <strong>Antwortfrist:</strong> 14 Tage ab heute
+              <!-- Attachment Notice -->
+              <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 24px 0;">
+                <p style="margin: 0; font-size: 14px; color: #0369a1;">
+                  📎 <strong>Anlage:</strong> ${attachmentFilename || 'Erstschreiben'}
                 </p>
               </div>
 
-              <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #333;">
+              <!-- Action Items -->
+              <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                <h3 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #111827;">
+                  Wir bitten um Mitteilung folgender Informationen:
+                </h3>
+                <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; color: #4b5563;">
+                  <li>Aktuelle Forderungshöhe (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)</li>
+                  <li>Kopie eventuell vorliegender Titel</li>
+                  <li>Angabe bestehender Sicherheiten</li>
+                </ul>
+              </div>
+
+              <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280; text-align: center;">
+                <strong>Antwortfrist:</strong> 14 Tage
+              </p>
+
+              <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #374151;">
                 Mit freundlichen Grüßen
               </p>
-              <p style="margin: 8px 0 0; font-size: 15px; font-weight: 600; color: #333;">
+              <p style="margin: 4px 0 0; font-size: 15px; font-weight: 600; color: #111827;">
                 Thomas Scuric Rechtsanwälte
               </p>
             </td>
@@ -246,21 +290,25 @@ class CreditorEmailService {
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 24px 32px; background-color: #f8f9fa; border-top: 1px solid #eee; border-radius: 0 0 8px 8px;">
+            <td style="padding: 24px 32px; background-color: #f9fafb; border-top: 1px solid #eee; border-radius: 0 0 12px 12px;">
               <table style="width: 100%;">
                 <tr>
-                  <td style="font-size: 12px; color: #666; line-height: 1.6;">
+                  <td style="font-size: 12px; color: #6b7280; line-height: 1.6;">
                     <strong>Thomas Scuric Rechtsanwälte</strong><br>
                     Bongardstraße 33, 44787 Bochum<br>
-                    Tel: 0234 913681-0<br>
-                    E-Mail: office@scuric.de
+                    Tel: 0234 913681-0 · E-Mail: office@scuric.de
                   </td>
-                  <td style="font-size: 12px; color: #888; text-align: right; vertical-align: top;">
-                    Aktenzeichen: ${clientReference}<br>
-                    Datum: ${currentDate}
+                  <td style="font-size: 12px; color: #9ca3af; text-align: right; vertical-align: top;">
+                    Az: ${clientReference}<br>
+                    ${currentDate}
                   </td>
                 </tr>
               </table>
+              <p style="margin: 16px 0 0; font-size: 11px; color: #9ca3af; text-align: center;">
+                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
+                <span style="color: #d1d5db;"> · </span>
+                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
+              </p>
             </td>
           </tr>
         </table>
@@ -276,29 +324,26 @@ class CreditorEmailService {
    * Generate plain text email for first round
    * @private
    */
-  generateFirstRoundEmailText({ recipientName, clientName, clientReference, documentUrl, creditorReference }) {
+  generateFirstRoundEmailText({ recipientName, clientName, clientReference, creditorReference, attachmentFilename }) {
     const currentDate = new Date().toLocaleDateString('de-DE');
 
     return `
 Außergerichtlicher Einigungsversuch
+====================================
 
 Sehr geehrte Damen und Herren,
 
-im Auftrag unseres Mandanten ${clientName} führen wir einen außergerichtlichen Einigungsversuch im Rahmen der Insolvenzordnung durch.
+im Auftrag unseres Mandanten ${clientName} führen wir einen außergerichtlichen Einigungsversuch gemäß § 305 InsO durch.
 
-BEIGEFÜGTES DOKUMENT:
+ANLAGE: ${attachmentFilename || 'Erstschreiben'}
 
-Bitte laden Sie das Erstschreiben herunter:
-${documentUrl}
+Wir bitten um Mitteilung folgender Informationen:
 
-NÄCHSTE SCHRITTE:
+- Aktuelle Forderungshöhe (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)
+- Kopie eventuell vorliegender Titel
+- Angabe bestehender Sicherheiten
 
-1. Dokument herunterladen und prüfen
-2. Aktuelle Forderungshöhe mitteilen (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)
-3. Kopie eventuell vorliegender Titel übersenden
-4. Sicherheiten mitteilen (falls vorhanden)
-
-Antwortfrist: 14 Tage ab heute
+Antwortfrist: 14 Tage
 
 Mit freundlichen Grüßen
 
@@ -306,7 +351,7 @@ Thomas Scuric Rechtsanwälte
 Bongardstraße 33
 44787 Bochum
 
-Telefon: 0234 913681-0
+Tel: 0234 913681-0
 E-Mail: office@scuric.de
 
 ---
@@ -317,9 +362,10 @@ Datum: ${currentDate}
 
   /**
    * Generate HTML email for second round (Schuldenbereinigungsplan)
+   * Clean, modern design matching verification emails
    * @private
    */
-  generateSecondRoundEmailHtml({ recipientName, clientName, clientReference, documentUrl, documentFilename, settlementDetails }) {
+  generateSecondRoundEmailHtml({ recipientName, clientName, clientReference, attachmentFilename, settlementDetails }) {
     const currentDate = new Date().toLocaleDateString('de-DE');
 
     return `
@@ -334,10 +380,10 @@ Datum: ${currentDate}
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
     <tr>
       <td style="padding: 40px 20px;">
-        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+        <table role="presentation" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
           <!-- Header -->
           <tr>
-            <td style="padding: 24px 32px; text-align: center; background-color: #2c5aa0; border-radius: 8px 8px 0 0;">
+            <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #eee;">
               <img src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwälte" style="height: 40px; width: auto;">
             </td>
           </tr>
@@ -345,41 +391,36 @@ Datum: ${currentDate}
           <!-- Content -->
           <tr>
             <td style="padding: 32px;">
-              <h2 style="margin: 0 0 24px; font-size: 20px; font-weight: 600; color: #2c5aa0;">
-                Schuldenbereinigungsplan - 2. Runde
-              </h2>
+              <h1 style="margin: 0 0 16px; font-size: 22px; font-weight: 600; color: #111827; text-align: center;">
+                Schuldenbereinigungsplan
+              </h1>
 
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #333;">
+              <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
                 Sehr geehrte Damen und Herren,
               </p>
 
-              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #333;">
+              <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
                 wir übersenden Ihnen den außergerichtlichen Schuldenbereinigungsplan für unseren Mandanten <strong>${clientName}</strong>.
               </p>
 
-              <!-- Document Download Button -->
-              <div style="text-align: center; margin: 32px 0;">
-                <a href="${documentUrl}"
-                   style="display: inline-block; background-color: #2c5aa0; color: #ffffff; padding: 14px 28px;
-                          text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 15px;">
-                  ${documentFilename || 'Dokument herunterladen'}
-                </a>
+              <!-- Attachment Notice -->
+              <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 24px 0;">
+                <p style="margin: 0; font-size: 14px; color: #0369a1;">
+                  📎 <strong>Anlage:</strong> ${attachmentFilename || 'Schuldenbereinigungsplan'}
+                </p>
               </div>
 
-              <!-- Instructions Box -->
-              <div style="background-color: #f8f9fa; padding: 20px; border-left: 4px solid #2c5aa0; margin: 24px 0;">
-                <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #333;">Wichtige Hinweise:</h4>
-                <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; color: #555;">
-                  <li>Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan</li>
-                  <li>Teilen Sie uns Ihre Entscheidung innerhalb der Frist mit</li>
-                  <li>Bei Rückfragen stehen wir Ihnen gerne zur Verfügung</li>
-                </ul>
+              <!-- Important Notice -->
+              <div style="background-color: #fefce8; border: 1px solid #fde047; border-radius: 8px; padding: 16px; margin: 24px 0;">
+                <p style="margin: 0; font-size: 14px; color: #854d0e;">
+                  <strong>Hinweis:</strong> Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan und teilen Sie uns Ihre Entscheidung innerhalb der gesetzten Frist mit.
+                </p>
               </div>
 
-              <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #333;">
+              <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #374151;">
                 Mit freundlichen Grüßen
               </p>
-              <p style="margin: 8px 0 0; font-size: 15px; font-weight: 600; color: #333;">
+              <p style="margin: 4px 0 0; font-size: 15px; font-weight: 600; color: #111827;">
                 Thomas Scuric Rechtsanwälte
               </p>
             </td>
@@ -387,21 +428,25 @@ Datum: ${currentDate}
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 24px 32px; background-color: #f8f9fa; border-top: 1px solid #eee; border-radius: 0 0 8px 8px;">
+            <td style="padding: 24px 32px; background-color: #f9fafb; border-top: 1px solid #eee; border-radius: 0 0 12px 12px;">
               <table style="width: 100%;">
                 <tr>
-                  <td style="font-size: 12px; color: #666; line-height: 1.6;">
+                  <td style="font-size: 12px; color: #6b7280; line-height: 1.6;">
                     <strong>Thomas Scuric Rechtsanwälte</strong><br>
                     Bongardstraße 33, 44787 Bochum<br>
-                    Tel: 0234 913681-0<br>
-                    E-Mail: office@scuric.de
+                    Tel: 0234 913681-0 · E-Mail: office@scuric.de
                   </td>
-                  <td style="font-size: 12px; color: #888; text-align: right; vertical-align: top;">
-                    Aktenzeichen: ${clientReference}<br>
-                    Datum: ${currentDate}
+                  <td style="font-size: 12px; color: #9ca3af; text-align: right; vertical-align: top;">
+                    Az: ${clientReference}<br>
+                    ${currentDate}
                   </td>
                 </tr>
               </table>
+              <p style="margin: 16px 0 0; font-size: 11px; color: #9ca3af; text-align: center;">
+                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
+                <span style="color: #d1d5db;"> · </span>
+                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
+              </p>
             </td>
           </tr>
         </table>
@@ -417,26 +462,20 @@ Datum: ${currentDate}
    * Generate plain text email for second round
    * @private
    */
-  generateSecondRoundEmailText({ recipientName, clientName, clientReference, documentUrl, documentFilename, settlementDetails }) {
+  generateSecondRoundEmailText({ recipientName, clientName, clientReference, attachmentFilename, settlementDetails }) {
     const currentDate = new Date().toLocaleDateString('de-DE');
 
     return `
-Schuldenbereinigungsplan - 2. Runde
+Schuldenbereinigungsplan
+========================
 
 Sehr geehrte Damen und Herren,
 
 wir übersenden Ihnen den außergerichtlichen Schuldenbereinigungsplan für unseren Mandanten ${clientName}.
 
-DOKUMENT ZUM DOWNLOAD:
+ANLAGE: ${attachmentFilename || 'Schuldenbereinigungsplan'}
 
-${documentFilename || 'Schuldenbereinigungsplan'}:
-${documentUrl}
-
-WICHTIGE HINWEISE:
-
-- Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan
-- Teilen Sie uns Ihre Entscheidung innerhalb der Frist mit
-- Bei Rückfragen stehen wir Ihnen gerne zur Verfügung
+HINWEIS: Bitte prüfen Sie den beigefügten Schuldenbereinigungsplan und teilen Sie uns Ihre Entscheidung innerhalb der gesetzten Frist mit.
 
 Mit freundlichen Grüßen
 
@@ -444,7 +483,7 @@ Thomas Scuric Rechtsanwälte
 Bongardstraße 33
 44787 Bochum
 
-Telefon: 0234 913681-0
+Tel: 0234 913681-0
 E-Mail: office@scuric.de
 
 ---

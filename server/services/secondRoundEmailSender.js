@@ -12,9 +12,9 @@ class SecondRoundEmailSender {
     }
 
     /**
-     * Send second round emails with individual documents to all creditors
+     * Send second round emails with document attachments to all creditors
      */
-    async sendSecondRoundEmails(mainTicketId, creditorContacts, clientData, documentUrls) {
+    async sendSecondRoundEmails(mainTicketId, creditorContacts, clientData, documents) {
         try {
             console.log(`📧 Starting 2nd round email dispatch for ${creditorContacts.length} creditors...`);
             console.log(`🎫 Main ticket ID: ${mainTicketId}`);
@@ -37,9 +37,12 @@ class SecondRoundEmailSender {
                 console.log(`📤 Sending email ${i + 1}/${creditorContacts.length} to: ${contact.creditor_name}`);
 
                 try {
-                    // Get the specific document for this creditor
-                    const creditorDocument = documentUrls[contact.creditor_name];
-                    
+                    // Get the specific document for this creditor (match by creditor_name)
+                    const creditorDocument = documents.find(doc =>
+                        doc.creditor_name === contact.creditor_name ||
+                        doc.creditor_index === (i + 1)
+                    );
+
                     if (!creditorDocument) {
                         throw new Error(`No document found for creditor: ${contact.creditor_name}`);
                     }
@@ -126,14 +129,16 @@ class SecondRoundEmailSender {
                 };
             }
 
-            // Send email via Resend (replaces Zendesk Side Conversations)
+            // Send email via Resend with attachment
             const emailResult = await creditorEmailService.sendSecondRoundEmail({
                 recipientEmail: creditorEmail,
                 recipientName: creditorContact.creditor_name,
                 clientName: clientData.name,
                 clientReference: clientData.reference,
-                documentUrl: creditorDocument.download_url || creditorDocument.content_url,
-                documentFilename: creditorDocument.filename
+                attachment: {
+                    filename: creditorDocument.filename,
+                    path: creditorDocument.path
+                }
             });
 
             if (!emailResult.success) {
@@ -144,7 +149,7 @@ class SecondRoundEmailSender {
             try {
                 await this.zendesk.addTicketComment(
                     mainTicketId,
-                    `📧 **2. Runde E-Mail via Resend gesendet**\n\n` +
+                    `📧 **2. Runde E-Mail via Resend gesendet (mit Anhang)**\n\n` +
                     `• Empfänger: ${creditorContact.creditor_name} (${creditorEmail})\n` +
                     `• Dokument: ${creditorDocument.filename}\n` +
                     `• Resend ID: ${emailResult.emailId}\n` +

@@ -69,6 +69,7 @@ class CreditorContactService {
                     email: client.email,
                     phone: client.phone || '',
                     address: client.address || '',
+                    reference: clientReference,  // Aktenzeichen for email templates
                     // Provide structured address fields if available
                     street: street,
                     houseNumber: houseNumber,
@@ -199,12 +200,12 @@ class CreditorContactService {
 
             console.log(`✅ Uploaded ${uploadResults.uploaded_count} documents to main ticket`);
 
-            // Step 8: Send Side Conversation emails with individual document links
+            // Step 8: Send emails with document attachments via Resend
             const sideConversationResults = await this.sendFirstRoundEmailsWithDocuments(
                 mainTicket.id,
                 contactRecords.filter(r => r.success),
                 clientData,
-                uploadResults.document_urls
+                documentResults.documents  // Pass documents with local file paths for attachments
             );
 
             const successfulContacts = contactRecords.filter(r => r.success);
@@ -597,9 +598,9 @@ class CreditorContactService {
     }
 
     /**
-     * Send first round emails with individual document links
+     * Send first round emails with document attachments via Resend
      */
-    async sendFirstRoundEmailsWithDocuments(mainTicketId, contactRecords, clientData, documentUrls) {
+    async sendFirstRoundEmailsWithDocuments(mainTicketId, contactRecords, clientData, documents) {
         const sideConversationResults = [];
 
         // Filter only creditors with email addresses
@@ -621,7 +622,7 @@ class CreditorContactService {
                 console.log(`   ${index + 1}. ${contact.creditor_name}`);
             });
 
-            // ✅ NEW: Mark manual contacts in MongoDB
+            // Mark manual contacts in MongoDB
             for (const contact of manualContacts) {
                 try {
                     const Client = require('../models/Client');
@@ -652,7 +653,7 @@ class CreditorContactService {
             const contactInfo = emailableContacts[i];
 
             try {
-                console.log(`📧 Sending email via Resend ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with document...`);
+                console.log(`📧 Sending email via Resend ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with attachment...`);
 
                 // Get the full contact record for this creditor
                 const contactRecord = Array.from(this.creditorContacts.values())
@@ -662,13 +663,13 @@ class CreditorContactService {
                     throw new Error('Contact record not found');
                 }
 
-                // Find the document URL for this creditor
-                const documentUrl = documentUrls.find(doc => 
-                    doc.creditor_id === contactInfo.creditor_id && doc.success
+                // Find the document for this creditor (with local file path)
+                const document = documents.find(doc =>
+                    doc.creditor_id === contactInfo.creditor_id
                 );
 
-                if (!documentUrl) {
-                    throw new Error(`Document URL not found for creditor ${contactInfo.creditor_name}`);
+                if (!document) {
+                    throw new Error(`Document not found for creditor ${contactInfo.creditor_name}`);
                 }
 
                 // Create creditor data for the email
@@ -679,14 +680,17 @@ class CreditorContactService {
                     creditor_reference: contactRecord.creditor_reference || contactRecord.reference
                 };
 
-                // Send email via Resend (replaces Zendesk Side Conversations)
+                // Send email via Resend with attachment
                 const result = await creditorEmailService.sendFirstRoundEmail({
                     recipientEmail: contactRecord.creditor_email,
                     recipientName: creditorData.creditor_name,
                     clientName: clientData.name,
                     clientReference: clientData.reference,
-                    documentUrl: documentUrl.download_url,
-                    creditorReference: creditorData.creditor_reference
+                    creditorReference: creditorData.creditor_reference,
+                    attachment: {
+                        filename: document.filename,
+                        path: document.path
+                    }
                 });
 
                 // Add internal Zendesk comment for audit trail
@@ -694,10 +698,9 @@ class CreditorContactService {
                     try {
                         await this.zendesk.addTicketComment(
                             mainTicketId,
-                            `📧 **E-Mail via Resend gesendet**\n\n` +
+                            `📧 **E-Mail via Resend gesendet (mit Anhang)**\n\n` +
                             `• Empfänger: ${creditorData.creditor_name} (${contactRecord.creditor_email})\n` +
-                            `• Dokument: ${documentUrl.filename}\n` +
-                            `• Download-Link: ${documentUrl.download_url}\n` +
+                            `• Dokument: ${document.filename}\n` +
                             `• Resend ID: ${result.emailId}\n` +
                             `• Zeitpunkt: ${new Date().toLocaleString('de-DE')}`,
                             false // internal comment
@@ -712,7 +715,7 @@ class CreditorContactService {
                 contactRecord.email_sent_at = result.success ? new Date().toISOString() : null;
                 contactRecord.resend_email_id = result.emailId;
                 contactRecord.email_provider = 'resend';
-                contactRecord.document_url = result.success ? documentUrl.download_url : null;
+                contactRecord.document_filename = result.success ? document.filename : null;
                 contactRecord.updated_at = new Date().toISOString();
 
                 // ✅ NEW: Save to MongoDB - Update the creditor in final_creditor_list
@@ -729,12 +732,11 @@ class CreditorContactService {
                                     'final_creditor_list.$.resend_email_id': result.emailId,
                                     'final_creditor_list.$.email_provider': 'resend',
                                     'final_creditor_list.$.main_zendesk_ticket_id': mainTicketId,
-                                    'final_creditor_list.$.first_round_document_url': documentUrl.download_url,
-                                    'final_creditor_list.$.first_round_document_filename': documentUrl.filename,
+                                    'final_creditor_list.$.first_round_document_filename': document.filename,
                                     'final_creditor_list.$.document_sent_at': new Date(),
                                     'final_creditor_list.$.email_sent_at': new Date(),
                                     'final_creditor_list.$.last_contacted_at': new Date(),
-                                    'final_creditor_list.$.contact_status': 'email_sent_with_document'
+                                    'final_creditor_list.$.contact_status': 'email_sent_with_attachment'
                                 }
                             }
                         );
@@ -794,8 +796,7 @@ class CreditorContactService {
                     resend_email_id: result.emailId,
                     email_provider: 'resend',
                     main_ticket_id: mainTicketId,
-                    document_filename: documentUrl.filename,
-                    document_url: documentUrl.download_url,
+                    document_filename: document.filename,
                     success: result.success,
                     error: result.error || null,
                     timestamp: new Date().toISOString()
