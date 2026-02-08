@@ -1846,7 +1846,7 @@ Diese E-Mail wurde automatisch generiert im Rahmen des außergerichtlichen Schul
             const sideConversationData = {
                 message: {
                     from: {
-                        email: "glaubiger@scuric.zendesk.com",
+                        email: "office@scuric.de",
                         name: "Gläubiger-Team"
                     },
                     to: [
@@ -1924,7 +1924,7 @@ Bongardstraße 33
 44787 Bochum
 
 Telefon: 0234 913681-0
-E-Mail: glaubiger@scuric.zendesk.com
+E-Mail: office@scuric.de
 
 ---
 Aktenzeichen: ${clientData.reference}
