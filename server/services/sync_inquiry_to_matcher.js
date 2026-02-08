@@ -180,7 +180,7 @@ async function syncAllInquiriesForClient(client, mainTicketId) {
 
 /**
  * Extract client name from MongoDB client document
- * Tries different field combinations
+ * Tries different field combinations (camelCase and snake_case)
  */
 function getClientName(client) {
   // Try full name first
@@ -188,12 +188,20 @@ function getClientName(client) {
     return client.full_name;
   }
 
-  // Try combining first and last name
+  // Try camelCase (actual MongoDB schema fields)
+  if (client.firstName && client.lastName) {
+    return `${client.lastName}, ${client.firstName}`;
+  }
+
+  // Try snake_case (fallback)
   if (client.first_name && client.last_name) {
     return `${client.last_name}, ${client.first_name}`;
   }
 
-  // Try just last name and first name separately
+  // Try just lastName/last_name
+  if (client.lastName) {
+    return client.firstName ? `${client.firstName} ${client.lastName}` : client.lastName;
+  }
   if (client.last_name) {
     return client.first_name ? `${client.first_name} ${client.last_name}` : client.last_name;
   }

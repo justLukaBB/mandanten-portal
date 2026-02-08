@@ -280,9 +280,12 @@ class CreditorEmailService {
 
       const response = await this.resend.emails.send(emailPayload);
 
-      console.log(`✅ Creditor email sent to ${to} (ID: ${response.id})${attachments.length > 0 ? ` with ${attachments.length} attachment(s)` : ''}`);
+      // Resend SDK v6.x returns { data: { id: '...' }, error: null }
+      const emailId = response.data?.id || response.id;
 
-      return { success: true, emailId: response.id };
+      console.log(`✅ Creditor email sent to ${to} (ID: ${emailId})${attachments.length > 0 ? ` with ${attachments.length} attachment(s)` : ''}`);
+
+      return { success: true, emailId };
     } catch (error) {
       console.error(`❌ Failed to send creditor email to ${to}:`, error.message);
 
