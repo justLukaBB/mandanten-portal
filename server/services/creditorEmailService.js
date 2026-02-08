@@ -1,12 +1,18 @@
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+
+// Matcher API URL for syncing inquiries
+const MATCHER_API_URL = config.MATCHER_API_URL || process.env.MATCHER_API_URL || 'https://creditor-email-matcher.onrender.com';
 
 /**
  * CreditorEmailService
  * Sends creditor emails (first round, second round) using Resend SDK
  * Replaces Zendesk Side Conversations for better control over sender address
  * In development mode without API key: logs email to console
+ *
+ * NEW: Automatically syncs sent emails to creditor-email-matcher for reply matching
  */
 class CreditorEmailService {
   constructor() {
@@ -35,6 +41,50 @@ class CreditorEmailService {
       }
     } else {
       console.log('⚠️ CreditorEmailService: No RESEND_API_KEY configured - emails will be logged to console');
+    }
+  }
+
+  /**
+   * Sync sent email to matcher service for reply matching
+   * @private
+   */
+  async syncToMatcher({ clientName, clientReference, creditorName, creditorEmail, creditorReference, resendEmailId, emailType }) {
+    try {
+      const payload = {
+        client_name: clientName,
+        client_reference_number: clientReference,
+        creditor_name: creditorName,
+        creditor_email: creditorEmail,
+        reference_numbers: creditorReference ? [creditorReference] : [],
+        resend_email_id: resendEmailId,
+        email_provider: 'resend',
+        sent_at: new Date().toISOString(),
+        notes: `${emailType} email sent via Resend`
+      };
+
+      console.log(`🔄 Syncing to matcher: ${clientName} → ${creditorName}`);
+
+      const response = await axios.post(
+        `${MATCHER_API_URL}/api/v1/inquiries/`,
+        payload,
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000
+        }
+      );
+
+      console.log(`✅ Synced to matcher - Inquiry ID: ${response.data.id}`);
+      return { success: true, inquiryId: response.data.id };
+
+    } catch (error) {
+      if (error.response?.status === 409) {
+        console.log(`ℹ️ Matcher sync: Inquiry already exists`);
+        return { success: true, duplicate: true };
+      }
+
+      console.error(`⚠️ Matcher sync failed (non-blocking):`, error.message);
+      // Non-blocking - email was sent successfully, sync failure is logged but doesn't fail the operation
+      return { success: false, error: error.message };
     }
   }
 
@@ -83,7 +133,7 @@ class CreditorEmailService {
       }
     }
 
-    return this.sendEmail({
+    const result = await this.sendEmail({
       to: recipientEmail,
       toName: recipientName,
       subject,
@@ -95,6 +145,21 @@ class CreditorEmailService {
         { name: 'client_reference', value: clientReference }
       ]
     });
+
+    // Sync to matcher after successful send
+    if (result.success && result.emailId) {
+      await this.syncToMatcher({
+        clientName,
+        clientReference,
+        creditorName: recipientName,
+        creditorEmail: recipientEmail,
+        creditorReference,
+        resendEmailId: result.emailId,
+        emailType: 'first_round'
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -142,7 +207,7 @@ class CreditorEmailService {
       }
     }
 
-    return this.sendEmail({
+    const result = await this.sendEmail({
       to: recipientEmail,
       toName: recipientName,
       subject,
@@ -154,6 +219,21 @@ class CreditorEmailService {
         { name: 'client_reference', value: clientReference }
       ]
     });
+
+    // Sync to matcher after successful send
+    if (result.success && result.emailId) {
+      await this.syncToMatcher({
+        clientName,
+        clientReference,
+        creditorName: recipientName,
+        creditorEmail: recipientEmail,
+        creditorReference: null,
+        resendEmailId: result.emailId,
+        emailType: 'second_round'
+      });
+    }
+
+    return result;
   }
 
   /**
