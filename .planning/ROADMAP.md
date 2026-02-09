@@ -106,7 +106,11 @@ Plans:
 **Goal**: Gemini extracts all creditors from multi-page PDFs with correct page assignments
 **Depends on**: Phase 8
 **Requirements**: PDF-02, PDF-03, COMPAT-02
-**Plans**: Pending planning
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md -- PDF page assignment prompt extension + CreditorData model + page data parsing
+- [ ] 09-02-PLAN.md -- Pipeline wiring (page_count threading, zero-creditor error, COMPAT-02 verification)
 
 **Success Criteria:**
 1. User uploads sammel-scan PDF with 3+ creditor letters and all creditors are extracted separately
@@ -129,7 +133,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
 | 7. Aktenzeichen N/A Suppression | v2.1 | 1/1 | Complete | 2026-02-02 |
 | 8. FastAPI PDF Support | v3 | 2/2 | Complete | 2026-02-09 |
-| 9. Multi-Page Extraction | v3 | 0/? | Pending | -- |
+| 9. Multi-Page Extraction | v3 | 0/2 | Pending | -- |
 
 ---
 *Last updated: 2026-02-09*
