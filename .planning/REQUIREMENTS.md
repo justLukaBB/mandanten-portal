@@ -47,18 +47,18 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PDF-01 | TBD | Pending |
-| PDF-02 | TBD | Pending |
-| PDF-03 | TBD | Pending |
-| COMPAT-01 | TBD | Pending |
-| COMPAT-02 | TBD | Pending |
-| ERR-01 | TBD | Pending |
+| PDF-01 | Phase 8 | Pending |
+| PDF-02 | Phase 9 | Pending |
+| PDF-03 | Phase 9 | Pending |
+| COMPAT-01 | Phase 8 | Pending |
+| COMPAT-02 | Phase 9 | Pending |
+| ERR-01 | Phase 8 | Pending |
 
 **Coverage:**
 - v3 requirements: 6 total
-- Mapped to phases: 0
-- Unmapped: 6
+- Mapped to phases: 6
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-09*
-*Last updated: 2026-02-09 after milestone v3 initialization*
+*Last updated: 2026-02-09 after v3 roadmap creation*
