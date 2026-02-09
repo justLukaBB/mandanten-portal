@@ -5,7 +5,7 @@
 - ✅ **v1 Manual Review & Payment Status Flow Fix** - Phases 1-2 (shipped 2026-01-30)
 - ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
 - ✅ **v2.1 Aktenzeichen Display Fix** - Phase 7 (shipped 2026-02-02)
-- ⬜ **v3 Multi-Page PDF Support** - Phases 8-9 (in progress)
+- ✅ **v3 Multi-Page PDF Support** - Phases 8-9 (shipped 2026-02-09)
 
 ## Phases
 
@@ -109,8 +109,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- PDF page assignment prompt extension + CreditorData model + page data parsing
-- [ ] 09-02-PLAN.md -- Pipeline wiring (page_count threading, zero-creditor error, COMPAT-02 verification)
+- [x] 09-01-PLAN.md -- PDF page assignment prompt extension + CreditorData model + page data parsing
+- [x] 09-02-PLAN.md -- Pipeline wiring (page_count threading, zero-creditor error, COMPAT-02 verification)
 
 **Success Criteria:**
 1. User uploads sammel-scan PDF with 3+ creditor letters and all creditors are extracted separately
@@ -133,7 +133,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
 | 7. Aktenzeichen N/A Suppression | v2.1 | 1/1 | Complete | 2026-02-02 |
 | 8. FastAPI PDF Support | v3 | 2/2 | Complete | 2026-02-09 |
-| 9. Multi-Page Extraction | v3 | 0/2 | Pending | -- |
+| 9. Multi-Page Extraction | v3 | 2/2 | Complete | 2026-02-09 |
 
 ---
 *Last updated: 2026-02-09*
