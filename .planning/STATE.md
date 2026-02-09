@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-02)
+See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v2.1 Aktenzeichen Display Fix — Complete
+**Current focus:** v3 Multi-Page PDF Support
 
 ## Current Position
 
-Phase: 07-aktenzeichen-na-suppression (1 of 1 in milestone v2.1)
-Plan: 01 of 01 (complete)
-Status: Milestone v2.1 complete — all phases verified
-Last activity: 2026-02-02 — Phase 7 verified, milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-09 — Milestone v3 started
 
-Progress: █ 100%
+Progress: ░░░░░░░░░░ 0%
 
 ## Performance Metrics
 
@@ -30,9 +30,9 @@ Progress: █ 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Carried from previous milestones — see PROJECT.md for full history.
 
-**Phase 07-01 decisions:**
-- Empty string for missing Aktenzeichen: Returns "" instead of "Nicht verfügbar" when all reference number candidates are null/undefined/empty/"N/A"
-- isUsableValue filtering pattern: Applied existing helper to filter reference numbers, maintaining consistency with Creditor and Address fields
+**v3 decisions:**
+- Let Gemini decide page grouping: Send whole PDF to Gemini 2.5 Pro, let it identify creditors and page assignments (simpler than pre-splitting)
+- No physical PDF splitting: Only extract data + page assignments, don't create separate PDF files per creditor
 
 ### Pending Todos
 
@@ -40,11 +40,12 @@ None yet.
 
 ### Blockers/Concerns
 
-None.
+- FastAPI `_load_image_as_part()` only handles image MIME types — needs PDF support added
+- Need to verify Gemini 2.5 Pro handles large multi-page PDFs within token limits in practice
 
 ## Session Continuity
 
-Last session: 2026-02-02 16:26 UTC
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-02-09
+Stopped at: Milestone v3 initialization
 Resume file: None
-Next step: Audit milestone or archive directly
+Next step: Define requirements, then create roadmap

@@ -8,12 +8,15 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v2.1 Aktenzeichen Display Fix
+## Current Milestone: v3 Multi-Page PDF Support
 
-**Goal:** When a creditor has no Aktenzeichen (reference number), the first Anschreiben (Word template) should display nothing instead of "N/A".
+**Goal:** FastAPI service can process multi-page PDF documents, extracting all creditors with correct page assignments — no manual splitting required.
 
 **Target features:**
-- Aktenzeichen field in first Anschreiben Word template shows empty string instead of "N/A" when missing
+- Multi-page PDFs processed natively by FastAPI/Gemini
+- Gemini identifies which pages belong to which creditor
+- Page assignment info included in extraction results
+- All existing upload scenarios work: single images, sammel-scans, mehrseitige Briefe
 
 ## Requirements
 
@@ -27,38 +30,44 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 - ✓ Payment handler checks `creditor.needs_manual_review` flag — v1
 - ✓ AI deduplication triggers after last document is processed instead of 30-minute timer — v1
 - ✓ Race condition eliminated: creditor list is finalized before payment status decision — v1
+- ✓ Aktenzeichen displays empty instead of "N/A" in first Anschreiben Word template — v2.1
+- ✓ Creditor emails sent via Resend with PDF attachments — v2.2
+- ✓ Sent emails synced to creditor-email-matcher — v2.2
 
 ### Active
 
-- [ ] Aktenzeichen displays empty instead of "N/A" in first Anschreiben Word template
+- [ ] FastAPI processes multi-page PDFs natively (not just images)
+- [ ] Gemini extraction prompt handles multi-page documents with multiple creditors
+- [ ] Page assignment (which pages belong to which creditor) included in results
+- [ ] Existing single-image upload flow continues to work unchanged
 
 ### Out of Scope
 
-- Agent portal UX changes — not needed, portal already shows review clients correctly
-- Zendesk ticket creation changes — existing logic works
-- Frontend admin panel changes — dedup button behavior unchanged
-- Changing the document processing / extraction pipeline — working correctly
-- Switching away from Gemini — model works, just need to use it smarter
+- Physical PDF page splitting into separate files — only data extraction needed
+- PDF viewer/preview in frontend — existing document links sufficient
+- OCR preprocessing — Gemini handles text extraction natively
+- Changing the upload UI — existing drag-and-drop works for PDFs already
 
 ## Context
 
-Shipped v1 (payment status flow fix) with 7 files modified across Node.js/Express backend.
-FastAPI AI service lives at `/Users/luka.s/Cursor : Mandanten - Portal/Creditor-process-fastAPI`.
-Current dedup sends full creditor JSON (~53KB for 47 creditors) to Gemini and expects full JSON back.
-gemini-2.0-flash has 8192 max output tokens — insufficient for large creditor tables.
-When dedup fails, cases fall through with duplicate creditors (silent failure).
+Shipped v1 (payment status flow), v2 (robust dedup), v2.1 (Aktenzeichen fix), v2.2 (Resend email attachments).
+FastAPI AI service repo: `github.com/justLukaBB/Creditor-process-fastAPI` (branch: `fix/over-aggressive-dedup`).
+FastAPI currently only processes images (JPG/PNG) — `_load_image_as_part()` has no PDF MIME type mapping.
+Gemini 2.5 Pro supports PDF input natively via `Part.from_data(pdf_bytes, "application/pdf")` with 1M input tokens.
+Multi-creditor splitting logic already exists in Node.js webhook handler (`creditor_index`, `creditor_count`, `source_document_id`).
+Node.js backend already accepts PDF uploads and sends them to FastAPI — FastAPI just can't process them.
 
 Tech stack:
 - **Backend**: Node.js/Express, MongoDB
-- **AI Service**: Python FastAPI, Google Vertex AI (Gemini), deployed on Render
+- **AI Service**: Python FastAPI, Google Vertex AI (Gemini 2.5 Pro), deployed on Render
 - **Frontend**: React
 
 ## Constraints
 
-- **Tech stack**: No new dependencies — work within existing FastAPI + Node.js setup
-- **Backward compatibility**: Dedup results must match the same schema the Node.js backend expects
-- **Model limits**: gemini-2.0-flash caps at 8192 output tokens — solution must stay well within this
-- **Both paths**: Auto pipeline dedup and admin manual trigger must use identical logic
+- **Tech stack**: No new dependencies — PDF support is native in Gemini API
+- **Backward compatibility**: Single-image processing must continue to work identically
+- **Model**: Gemini 2.5 Pro for extraction (1M input tokens, handles PDFs natively)
+- **No physical splitting**: Only extract data + page assignments, don't split PDFs into files
 
 ## Key Decisions
 
@@ -70,6 +79,7 @@ Tech stack:
 | OR logic for needs_manual_review preservation | Creditors never lose manual review flag during dedup | ✓ Good — v1 |
 | LLM identifies groups only, merging in code | Reduces token usage dramatically, makes merging deterministic | ✓ Good — v2 |
 | Retry + flag on dedup failure | Prevents silent duplicate pass-through | ✓ Good — v2 |
+| Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
 ---
-*Last updated: 2026-02-02 after v2.1 milestone start*
+*Last updated: 2026-02-09 after v3 milestone start*
