@@ -134,7 +134,8 @@ ${creditorsWithoutEmail.length > 0 ? `- ${creditorsWithoutEmail.length} Gläubig
                     requester_id: clientUserId,
                     subject: subject,
                     comment: {
-                        body: description
+                        body: description,
+                        public: false
                     },
                     type: 'task',
                     priority: 'normal',
@@ -176,7 +177,8 @@ ${creditorsWithoutEmail.length > 0 ? `- ${creditorsWithoutEmail.length} Gläubig
                             requester_id: clientUserId,
                             subject: subject,
                             comment: {
-                                body: description
+                                body: description,
+                                public: false
                             },
                             type: 'task',
                             priority: 'normal',
