@@ -90,7 +90,11 @@ Plans:
 **Goal**: FastAPI service accepts and processes PDF files with backward compatibility for existing image uploads
 **Depends on**: Phase 7 (v2.1 shipped)
 **Requirements**: PDF-01, ERR-01, COMPAT-01
-**Plans**: Pending planning
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- PDF validation + document processor extension (pypdf, _load_image_as_part, rotation skip)
+- [ ] 08-02-PLAN.md -- MIME type pipeline wiring + end-to-end verification
 
 **Success Criteria:**
 1. User can upload PDF document and FastAPI processes it end-to-end without errors
@@ -113,7 +117,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -124,8 +128,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Failure Handling & Retry | v2 | 2/2 | Complete | 2026-02-01 |
 | 6. Path Consistency & Integration | v2 | 1/1 | Complete | 2026-02-01 |
 | 7. Aktenzeichen N/A Suppression | v2.1 | 1/1 | Complete | 2026-02-02 |
-| 8. FastAPI PDF Support | v3 | 0/? | Pending | — |
-| 9. Multi-Page Extraction | v3 | 0/? | Pending | — |
+| 8. FastAPI PDF Support | v3 | 0/2 | Planned | -- |
+| 9. Multi-Page Extraction | v3 | 0/? | Pending | -- |
 
 ---
 *Last updated: 2026-02-09*
