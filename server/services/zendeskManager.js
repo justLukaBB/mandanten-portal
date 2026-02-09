@@ -366,31 +366,10 @@ Diese Status-Updates werden automatisch aktualisiert wenn Gläubiger antworten.`
     }
 
     /**
-     * Add a comment to an existing ticket
+     * @deprecated Use the unified addTicketComment below (line ~1195)
+     * This method was shadowed by the duplicate definition below.
+     * Removed to prevent confusion — all callers now use the single method.
      */
-    async addTicketComment(ticketId, commentBody, isPublic = false) {
-        try {
-            const commentData = {
-                ticket: {
-                    comment: {
-                        body: commentBody,
-                        public: isPublic
-                    }
-                }
-            };
-
-            const url = `${this.apiUrl}tickets/${ticketId}.json`;
-            const response = await axios.put(url, commentData, {
-                auth: this.auth,
-                headers: this.headers
-            });
-
-            return response.data;
-        } catch (error) {
-            console.error(`❌ Error adding comment to ticket ${ticketId}:`, error.message);
-            throw error;
-        }
-    }
 
     /**
      * Generate professional email content for creditor inquiry
@@ -1190,15 +1169,21 @@ Status updates will be posted to this ticket as emails are sent.
     }
 
     /**
-     * Add comment with attachments to existing ticket
+     * Add comment to existing ticket (always internal/private unless explicitly public)
+     * Accepts either a string body or an object { body, uploads, public, ... }
      */
-    async addTicketComment(ticketId, commentData) {
+    async addTicketComment(ticketId, commentData, isPublic = false) {
         try {
             console.log(`💬 Adding comment to ticket ${ticketId}`);
-            
+
+            // Normalize: string → object
+            const comment = typeof commentData === 'string'
+                ? { body: commentData, public: isPublic }
+                : { ...commentData, public: commentData.public ?? isPublic };
+
             const ticketData = {
                 ticket: {
-                    comment: commentData
+                    comment
                 }
             };
 
