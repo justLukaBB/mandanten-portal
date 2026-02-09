@@ -7,18 +7,18 @@
 
 ### PDF Processing
 
-- [ ] **PDF-01**: FastAPI akzeptiert und verarbeitet `application/pdf` MIME-Type neben bestehenden Bildformaten
+- [x] **PDF-01**: FastAPI akzeptiert und verarbeitet `application/pdf` MIME-Type neben bestehenden Bildformaten
 - [ ] **PDF-02**: Gemini extrahiert alle Gläubiger aus mehrseitigen PDFs (Sammel-Scans mit mehreren Briefen)
 - [ ] **PDF-03**: Mehrseitige Gläubiger-Briefe (1 Gläubiger über 2-3 Seiten) werden als ein Gläubiger erkannt
 
 ### Backward Compatibility
 
-- [ ] **COMPAT-01**: Bestehender Single-Image Upload-Flow funktioniert unverändert
+- [x] **COMPAT-01**: Bestehender Single-Image Upload-Flow funktioniert unverändert
 - [ ] **COMPAT-02**: Webhook-Ergebnisse für PDFs nutzen identische Datenstruktur wie für Bilder (`creditor_index`, `creditor_count`, `source_document_id`)
 
 ### Error Handling
 
-- [ ] **ERR-01**: Korrupte/passwortgeschützte PDFs liefern klare Fehlermeldung statt Crash
+- [x] **ERR-01**: Korrupte/passwortgeschützte PDFs liefern klare Fehlermeldung statt Crash
 
 ## Future Requirements
 
@@ -47,12 +47,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PDF-01 | Phase 8 | Pending |
+| PDF-01 | Phase 8 | Complete |
 | PDF-02 | Phase 9 | Pending |
 | PDF-03 | Phase 9 | Pending |
-| COMPAT-01 | Phase 8 | Pending |
+| COMPAT-01 | Phase 8 | Complete |
 | COMPAT-02 | Phase 9 | Pending |
-| ERR-01 | Phase 8 | Pending |
+| ERR-01 | Phase 8 | Complete |
 
 **Coverage:**
 - v3 requirements: 6 total
