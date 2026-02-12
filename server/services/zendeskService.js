@@ -166,6 +166,29 @@ class ZendeskService {
     }
   }
 
+  // Get user information by Zendesk user ID
+  async getUser(userId) {
+    try {
+      console.log(`👤 Fetching Zendesk user: ${userId}`);
+      const response = await this.api.get(`/users/${userId}.json`);
+      console.log(`✅ Zendesk user fetched:`, {
+        id: response.data.user.id,
+        name: response.data.user.name,
+        email: response.data.user.email,
+      });
+      return {
+        success: true,
+        user: response.data.user,
+      };
+    } catch (error) {
+      console.error('❌ Failed to get Zendesk user:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message,
+      };
+    }
+  }
+
   // Check if service is configured
   isConfigured() {
     return !!(this.domain && this.email && this.token);

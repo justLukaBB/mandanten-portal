@@ -216,6 +216,22 @@ class ZendeskWebhookController {
                 }
             }
 
+            // Fallback: fetch email from Zendesk API if missing but user ID is available
+            if (!email && zendesk_user_id && this.zendeskService) {
+                console.log(`📧 Email missing in payload, fetching from Zendesk API for user ${zendesk_user_id}...`);
+                try {
+                    const userResult = await this.zendeskService.getUser(zendesk_user_id);
+                    if (userResult.success && userResult.user.email) {
+                        email = userResult.user.email;
+                        console.log(`✅ Email fetched from Zendesk API: ${email}`);
+                    } else {
+                        console.log(`⚠️ Could not fetch email from Zendesk API for user ${zendesk_user_id}`);
+                    }
+                } catch (err) {
+                    console.error(`❌ Error fetching user from Zendesk API:`, err.message);
+                }
+            }
+
             // Validate required fields
             const missingFields = [];
             if (!email) missingFields.push("email");
