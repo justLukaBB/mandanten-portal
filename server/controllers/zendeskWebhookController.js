@@ -156,10 +156,22 @@ class ZendeskWebhookController {
                 address = requester.adresse || "";
                 geburtstag = requester.geburtstag || "";
 
-                // Parse name - assume "FirstName LastName" format
-                const nameParts = (requester.name || "").split(" ");
-                firstName = nameParts[0] || "";
-                lastName = nameParts.slice(1).join(" ") || "";
+                // Parse name - try space first, then hyphen as fallback
+                const fullName = (requester.name || "").trim();
+                let nameParts = fullName.split(" ");
+                if (nameParts.length >= 2) {
+                    firstName = nameParts[0];
+                    lastName = nameParts.slice(1).join(" ");
+                } else if (fullName.includes("-")) {
+                    // Fallback: split by hyphen (e.g. "Manuel-sohn" → "Manuel" + "sohn")
+                    const hyphenParts = fullName.split("-");
+                    firstName = hyphenParts[0];
+                    lastName = hyphenParts.slice(1).join("-");
+                } else {
+                    // Single word name — use as both first and last
+                    firstName = fullName;
+                    lastName = fullName;
+                }
 
                 console.log("📋 Parsed Zendesk webhook data:", {
                     email,
@@ -205,10 +217,15 @@ class ZendeskWebhookController {
             }
 
             // Validate required fields
-            if (!email || !aktenzeichen || !firstName || !lastName) {
+            const missingFields = [];
+            if (!email) missingFields.push("email");
+            if (!aktenzeichen) missingFields.push("aktenzeichen");
+            if (!firstName) missingFields.push("firstName");
+            if (!lastName) missingFields.push("lastName");
+            if (missingFields.length > 0) {
                 return res.status(400).json({
-                    error:
-                        "Missing required fields: email, aktenzeichen, firstName, lastName",
+                    error: `Missing required fields: ${missingFields.join(", ")}`,
+                    received: { email, aktenzeichen, firstName, lastName },
                 });
             }
 
