@@ -142,15 +142,6 @@ const AdminLogin: React.FC = () => {
               )}
             </button>
           </div>
-
-
-          <div className="text-center">
-            <div className="text-sm text-gray-600 bg-gray-100 p-3 rounded-md">
-              <strong>Demo-Anmeldedaten:</strong><br />
-              E-Mail: <code className="bg-white px-1 py-0.5 rounded">admin@mandanten-portal.de</code><br />
-              Passwort: <code className="bg-white px-1 py-0.5 rounded">admin123</code>
-            </div>
-          </div>
         </form>
       </div>
     </div>
