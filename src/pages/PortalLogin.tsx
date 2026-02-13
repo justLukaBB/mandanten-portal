@@ -447,17 +447,6 @@ const PortalLogin: React.FC = () => {
             </div>
           )}
 
-          {/* Media Section */}
-          <div className="text-center mt-16 pt-12 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-6 font-medium">Bekannt aus:</p>
-            <div className="flex justify-center">
-              <img
-                src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png"
-                alt="Bekannt aus verschiedenen Medien"
-                className="max-w-full h-auto max-h-12 object-contain opacity-60 hover:opacity-80 transition-opacity"
-              />
-            </div>
-          </div>
 
           {/* Footer */}
           <div className="text-center mt-12 pt-8">
