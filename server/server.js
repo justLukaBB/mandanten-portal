@@ -147,7 +147,6 @@ const testAgentReviewRoutes = require('./routes/test-agent-review');
 const documentGenerationRoutes = require('./routes/document-generation');
 const insolvenzantragRoutes = require('./routes/insolvenzantrag');
 const secondRoundApiRoutes = require('./routes/second-round-api');
-const settlementPlanApiRoutes = require('./routes/settlement-plan-api');
 const adminImpersonationRoutes = require('./routes/admin-impersonation');
 const authImpersonationRoutes = require('./routes/auth-impersonation');
 const authRefreshRoutes = require('./routes/auth-refresh');
@@ -317,7 +316,6 @@ app.use('/api/test/agent-review', testAgentReviewRoutes);
 app.use('/api/documents', documentGenerationRoutes);
 app.use('/api/insolvenzantrag', insolvenzantragRoutes);
 app.use('/api/second-round', secondRoundApiRoutes);
-app.use('/api', settlementPlanApiRoutes);
 
 // 10.5 Admin Core Routes
 app.use('/api/admin', createAdminAuthRouter()); // Login
