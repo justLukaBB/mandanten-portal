@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ShieldCheckIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { API_BASE_URL } from '../../config/api';
+import { API_BASE_URL, startProactiveTokenRefresh } from '../../config/api';
 
 const AgentLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -45,6 +45,7 @@ const AgentLogin: React.FC = () => {
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem('agent_token', data.token);
       localStorage.setItem('agent_data', JSON.stringify(data.agent));
+      startProactiveTokenRefresh();
 
       // Check if there's a redirect URL (for direct review links)
       const clientId = searchParams.get('clientId');

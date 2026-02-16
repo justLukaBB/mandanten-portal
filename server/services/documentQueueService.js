@@ -12,7 +12,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const DocumentProcessingJob = require('../models/DocumentProcessingJob');
-const { createProcessingJob } = require('../utils/fastApiClient');
+const { createProcessingJob, getCircuitBreakerState } = require('../utils/fastApiClient');
 
 // Configuration
 const MAX_CONCURRENT = parseInt(process.env.DOC_QUEUE_MAX_CONCURRENT) || 2;
@@ -34,6 +34,7 @@ class DocumentQueueService {
       totalRetried: 0,
       startedAt: null
     };
+    this.circuitBreakerPauseLogged = false;
   }
 
   /**
@@ -153,6 +154,24 @@ class DocumentQueueService {
     if (!this.isRunning) return;
 
     try {
+      // Check circuit breaker before claiming jobs
+      const cbState = getCircuitBreakerState();
+      if (cbState.state === 'OPEN' || cbState.state === 'HALF_OPEN') {
+        if (!this.circuitBreakerPauseLogged) {
+          console.log(`[DocumentQueue] ⏸️  Paused — circuit breaker ${cbState.state}. Waiting for FastAPI recovery...`);
+          this.circuitBreakerPauseLogged = true;
+        }
+        // Skip this poll cycle, schedule next
+        this.pollInterval = setTimeout(() => this._poll(), POLL_INTERVAL_MS);
+        return;
+      }
+
+      // Circuit breaker recovered
+      if (this.circuitBreakerPauseLogged) {
+        console.log('[DocumentQueue] ▶️  Resumed — circuit breaker closed, FastAPI recovered');
+        this.circuitBreakerPauseLogged = false;
+      }
+
       // Check if we can process more jobs
       while (this.currentProcessing < MAX_CONCURRENT) {
         const job = await this._claimNextJob();
@@ -284,6 +303,16 @@ class DocumentQueueService {
    * @private
    */
   async _handleJobFailure(job, error) {
+    // Don't count circuit breaker rejections as job failures — requeue without incrementing retry
+    if (error.circuitBreakerOpen) {
+      await DocumentProcessingJob.findOneAndUpdate(
+        { job_id: job.job_id },
+        { $set: { status: 'pending' } }
+      );
+      console.log(`[DocumentQueue] 🔄 Job ${job.job_id} requeued — circuit breaker active (no retry count increment)`);
+      return;
+    }
+
     const retryCount = job.retry_count + 1;
 
     // Check if we should retry
@@ -359,8 +388,7 @@ class DocumentQueueService {
       'rate limit',
       '502',
       '503',
-      '504',
-      'circuit breaker'
+      '504'
     ];
 
     return retryablePatterns.some(pattern =>

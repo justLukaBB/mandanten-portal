@@ -31,7 +31,14 @@ export const PendingDocumentsMonitor: React.FC = () => {
   useEffect(() => {
     fetchPendingClients();
     // Refresh every 5 minutes
-    const interval = setInterval(fetchPendingClients, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      // Stop polling if admin token is missing (logged out)
+      if (!localStorage.getItem('admin_token')) {
+        clearInterval(interval);
+        return;
+      }
+      fetchPendingClients();
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -39,7 +46,7 @@ export const PendingDocumentsMonitor: React.FC = () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/clients/pending-documents`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
       });
       setClients(response.data.clients || []);
@@ -58,7 +65,7 @@ export const PendingDocumentsMonitor: React.FC = () => {
         {},
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+            'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
           }
         }
       );

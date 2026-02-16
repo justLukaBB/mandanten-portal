@@ -65,6 +65,21 @@ let circuitBreaker = {
   nextAttemptTime: 0
 };
 
+// Circuit Breaker log throttling
+let lastCircuitBreakerLogTime = 0;
+let circuitBreakerRejectedCount = 0;
+const CIRCUIT_BREAKER_LOG_INTERVAL_MS = 30000; // Log summary max every 30s
+
+function logCircuitBreakerRejection(reason) {
+  circuitBreakerRejectedCount++;
+  const now = Date.now();
+  if (now - lastCircuitBreakerLogTime >= CIRCUIT_BREAKER_LOG_INTERVAL_MS) {
+    console.log(`🔴 Circuit breaker: ${circuitBreakerRejectedCount} request(s) rejected in last ${CIRCUIT_BREAKER_LOG_INTERVAL_MS / 1000}s — ${reason}`);
+    circuitBreakerRejectedCount = 0;
+    lastCircuitBreakerLogTime = now;
+  }
+}
+
 // Health check cache
 let healthCheckCache = {
   healthy: null,
@@ -497,7 +512,7 @@ function checkCircuitBreaker() {
       // Normal operation - allow request
       return { allowed: true };
 
-    case CircuitState.OPEN:
+    case CircuitState.OPEN: {
       // Check if timeout has passed
       if (now >= circuitBreaker.nextAttemptTime) {
         // Transition to HALF_OPEN - allow one test request
@@ -511,17 +526,23 @@ function checkCircuitBreaker() {
       }
       // Still in timeout period - block request
       const waitTime = Math.ceil((circuitBreaker.nextAttemptTime - now) / 1000);
+      const reason = `Circuit breaker OPEN - FastAPI unavailable. Retry in ${waitTime}s`;
+      logCircuitBreakerRejection(reason);
       return {
         allowed: false,
-        reason: `Circuit breaker OPEN - FastAPI unavailable. Retry in ${waitTime}s`
+        reason
       };
+    }
 
-    case CircuitState.HALF_OPEN:
+    case CircuitState.HALF_OPEN: {
       // Only one request allowed in HALF_OPEN - block others
+      const reason = 'Circuit breaker HALF-OPEN - test request in progress';
+      logCircuitBreakerRejection(reason);
       return {
         allowed: false,
-        reason: 'Circuit breaker HALF-OPEN - test request in progress'
+        reason
       };
+    }
 
     default:
       return { allowed: true };
@@ -547,6 +568,7 @@ function recordCircuitSuccess() {
     lastFailureTime: 0,
     nextAttemptTime: 0
   };
+  circuitBreakerRejectedCount = 0;
 }
 
 /**
@@ -911,8 +933,6 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl, ap
 
 
 
-    console.log("=====================requestBody========================", requestBody)
-
     const response = await fetchWithRetry(
       `${FASTAPI_URL}/processing/jobs`,
       {
@@ -959,6 +979,16 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl, ap
     };
 
   } catch (error) {
+    // Skip verbose logging for circuit breaker rejections (already throttled)
+    if (error.circuitBreakerOpen) {
+      return {
+        success: false,
+        error: error.message,
+        errorType: 'CIRCUIT_BREAKER_OPEN',
+        retryable: true
+      };
+    }
+
     const errorType = classifyError(error);
 
     console.log(`\n❌ ================================`);

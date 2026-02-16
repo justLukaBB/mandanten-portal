@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import api from '../../config/api';
+import api, { startProactiveTokenRefresh } from '../../config/api';
 import { useNavigate } from 'react-router-dom';
 
 const AdminLogin: React.FC = () => {
@@ -43,6 +43,7 @@ const AdminLogin: React.FC = () => {
           email: response.data.user.email
         });
 
+        startProactiveTokenRefresh();
         navigate("/admin");
 
         // Don't manually set headers - let the interceptor handle it

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, startProactiveTokenRefresh } from '../config/api';
 
 type LoginStep = 'credentials' | 'verification';
 
@@ -176,6 +176,7 @@ const PortalLogin: React.FC = () => {
         localStorage.setItem('auth_token', jwtToken);
         localStorage.setItem('portal_client_id', clientId);
         localStorage.setItem('portal_client_data', clientData);
+        startProactiveTokenRefresh();
 
         console.log('💾 Tokens stored successfully');
 

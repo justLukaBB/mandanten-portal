@@ -78,6 +78,11 @@ const DocumentExtractionViewer: React.FC<DocumentExtractionViewerProps> = ({
   // Auto-refresh every 5 seconds to check for processing updates
   useEffect(() => {
     const interval = setInterval(() => {
+      // Stop polling if auth token is missing (logged out)
+      if (!localStorage.getItem('auth_token')) {
+        clearInterval(interval);
+        return;
+      }
       const hasProcessing = documents.some(doc => doc.processing_status === 'processing');
       if (hasProcessing) {
         onRefresh();
