@@ -165,11 +165,11 @@ Plans:
   2. Admin fills a new row and blurs the last field — a new creditor is created via POST /clients/:clientId/add-creditor and appears in the table without a page reload
   3. Admin clicks delete on a creditor row and a confirmation dialog appears before any data is removed
   4. Admin confirms deletion — the row is removed via DELETE /clients/:clientId/creditors/:creditorId and disappears from the table immediately
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: Add new row button wired to POST add-creditor endpoint
-- [ ] 12-02: Delete row with confirmation dialog wired to DELETE endpoint
+- [ ] 12-01-PLAN.md -- Hinzufuegen button + new row inline editing + POST add-creditor with German field support
+- [ ] 12-02-PLAN.md -- Delete row with inline confirm/cancel + DELETE endpoint integration
 
 ### 🚧 v5 1. Rate Bestätigung (Phases 13-15)
 
