@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** Phase 15 complete — Admin Payment Handler trigger button shipped
+**Current focus:** Phase 12 Plan 01 complete — Hinzufuegen button with inline add-row UX
 
 ## Current Position
 
-Phase: 15 of 15 (Admin Trigger Button — COMPLETE)
-Plan: 2 of 2 — COMPLETE
-Status: Phase 15 complete (all plans done)
-Last activity: 2026-02-17 — Executed Phase 15 Plan 02
+Phase: 12 of 15 (Row Management)
+Plan: 1 of 1 — COMPLETE
+Status: Phase 12 Plan 01 complete
+Last activity: 2026-02-17 — Executed Phase 12 Plan 01
 
-Progress: [███████████████] 100% (15/15 phases complete)
+Progress: [████████████████] 100% (ongoing — row management shipped)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 22 (4 v1, 7 v2, 1 v2.1, 5 v3, 2 v4, 2 v5, 1 v4-inline, 2 v5-admin)
+- Total plans completed: 23 (4 v1, 7 v2, 1 v2.1, 5 v3, 2 v4, 2 v5, 1 v4-inline, 2 v5-admin, 1 v12-row)
 - Average duration: ~2m
 - Total execution time: ~0.75 hours
 
@@ -35,6 +35,7 @@ Progress: [███████████████] 100% (15/15 phases com
 | v5 (13-14) | 2 | ~7m | 3.5m |
 | v4-inline (11) | 1 | ~3m | 3.0m |
 | v5-admin (15) | 2 | ~4m | 2.0m |
+| v12-row (12) | 1 | ~5m | 5.0m |
 
 **Recent Trend:**
 - Stable at ~2-5m per plan
@@ -54,24 +55,26 @@ Recent decisions affecting v5 work:
 - v5 Phase 15-02: window.confirm used for ADMIN-03 confirmation dialog (consistent with triggerAIRededup pattern, avoids new modal state) (IMPLEMENTED)
 - [Phase 10-backend-german-field-support]: Undefined-guard spread pattern for German fields: each field only written to creditor document if explicitly sent in request body
 - [Phase 11-inline-cell-editing]: EditableCell boolean type converts Ja/Nein to true/false before PUT; transformBeforeSend prop supports array conversion for review_reasons; 150ms blur timeout prevents select option click race condition (IMPLEMENTED)
+- [Phase 12-01-row-add]: React.useRef used to read newRows state in async handleNewRowSave — avoids stale closure over state in async handlers (IMPLEMENTED)
+- [Phase 12-01-row-add]: POST fires only when glaeubiger_name is non-empty on blur; all other fields optional (IMPLEMENTED)
 
 ### Pending Todos
 
 - v4 Phase 11 Plan 01 COMPLETE: EditableCell component + Gläubiger-Tabelle inline editing (11 editable columns)
-- v4 Phase 12 (if planned): Next inline editing phase
+- v4 Phase 12 Plan 01 COMPLETE: Hinzufuegen button + inline add-row UX + German field support in addCreditor
 - Test PDF processing with real documents in live environment
 - Verify Gemini 2.5 Pro handles multi-page PDFs correctly in practice
 
 ### Blockers/Concerns
 
-None — all phases complete.
+None.
 
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 15-02-PLAN.md — Admin Payment Handler button in UserDetailView
+Stopped at: Completed 12-01-PLAN.md — Hinzufuegen button with new-row state management
 Resume file: None
-Next step: None — Phase 15 fully complete. ADMIN-01 through ADMIN-04 all implemented.
+Next step: None planned — check ROADMAP.md for next phase if needed.
 
 ---
-*Last updated: 2026-02-17 (Phase 15 Plan 02 complete)*
+*Last updated: 2026-02-17 (Phase 12 Plan 01 complete)*
