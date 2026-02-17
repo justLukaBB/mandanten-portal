@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v4 Editable Creditor Table
+**Current focus:** v4 Editable Creditor Table — Phase 10: Backend German Field Support
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-17 — Milestone v4 started
+Phase: 10 of 12 (Backend German Field Support)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-17 — v4 roadmap created, phases 10-12 defined
+
+Progress: [█████████░░░] 75% (9/12 phases complete)
 
 ## Performance Metrics
 
@@ -21,12 +23,27 @@ Last activity: 2026-02-17 — Milestone v4 started
 - Average duration: 2m 19s
 - Total execution time: ~0.7 hours
 
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| v1 (1-2) | 4 | ~9m | ~2m 15s |
+| v2 (3-6) | 7 | ~16m | ~2m 17s |
+| v2.1 (7) | 1 | ~2m | ~2m |
+| v3 (8-9) | 5 | ~12m | ~2m 24s |
+
+**Recent Trend:**
+- Trend: Stable
+
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Carried from previous milestones — see PROJECT.md for full history.
+
+Recent decisions affecting v4:
+- Backend PUT endpoint currently only accepts old field names — must extend updateCreditor controller before any frontend save will work
+- Auto-save on blur chosen over explicit save button — matches fast admin workflow, visual feedback per cell handles errors
 
 ### Pending Todos
 
@@ -35,15 +52,14 @@ Carried from previous milestones — see PROJECT.md for full history.
 
 ### Blockers/Concerns
 
-- Backend PUT endpoint only accepts old field names (sender_name, etc.) — needs extension for German fields
-- UserDetailView.tsx is 1800+ lines — editable table adds complexity
+- UserDetailView.tsx is 1800+ lines — inline edit additions must be scoped carefully to avoid regressions in adjacent components
 
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Milestone v4 initialization
+Stopped at: Roadmap created for v4 (phases 10-12)
 Resume file: None
-Next step: Create roadmap, then `/gsd:plan-phase [N]`
+Next step: `/gsd:plan-phase 10`
 
 ---
 *Last updated: 2026-02-17*

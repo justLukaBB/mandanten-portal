@@ -42,19 +42,19 @@ Requirements for editable Gläubiger-Tabelle. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | — | Pending |
-| EDIT-02 | — | Pending |
-| EDIT-03 | — | Pending |
-| EDIT-04 | — | Pending |
-| ROW-01 | — | Pending |
-| ROW-02 | — | Pending |
-| ROW-03 | — | Pending |
+| EDIT-04 | Phase 10 | Pending |
+| EDIT-01 | Phase 11 | Pending |
+| EDIT-02 | Phase 11 | Pending |
+| EDIT-03 | Phase 11 | Pending |
+| ROW-01 | Phase 12 | Pending |
+| ROW-02 | Phase 12 | Pending |
+| ROW-03 | Phase 12 | Pending |
 
 **Coverage:**
 - v4 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7
+- Mapped to phases: 7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after initial definition*
+*Last updated: 2026-02-17 after roadmap creation*
