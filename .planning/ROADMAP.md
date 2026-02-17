@@ -151,11 +151,10 @@ Plans:
   3. After a successful save, the cell shows a brief success indicator (green checkmark or similar) before returning to display mode
   4. After a failed save, the cell shows an error state and retains the unsaved value so the admin can retry
   5. All 13 columns of the table are editable via this mechanism
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 11-01: Convert Gläubiger-Tabelle HTML cells to inline-edit components
-- [ ] 11-02: Wire blur-triggered auto-save to PUT endpoint with success/error feedback
+- [ ] 11-01-PLAN.md -- Create EditableCell component + replace Gläubiger-Tabelle static cells with inline-edit cells wired to PUT endpoint
 
 #### Phase 12: Row Management
 **Goal**: Admin can add new creditor rows and delete existing rows, with the table reflecting changes immediately
