@@ -125,7 +125,7 @@ function getClientDisplayStatus(client) {
  * @param {Object} dependencies.clientsData - In-memory fallback data (optional)
  * @param {String} dependencies.uploadsDir - Path to uploads directory for cleanup
  */
-const createAdminDashboardController = ({ Client, databaseService, clientsData = {}, uploadsDir, DelayedProcessingService }) => {
+const createAdminDashboardController = ({ Client, databaseService, clientsData = {}, uploadsDir, DelayedProcessingService, zendeskWebhookController }) => {
     return {
         // Dashboard Stats Endpoint
         getDashboardStats: async (req, res) => {
@@ -540,6 +540,47 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     error: 'Error marking payment received',
                     details: error.message
                 });
+            }
+        },
+
+        // Trigger Full Payment Handler (runs same logic as Zendesk webhook handleUserPaymentConfirmed)
+        triggerPaymentHandler: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                console.log(`[admin] Triggering full payment handler for ${client.aktenzeichen} (${client.firstName} ${client.lastName})`);
+
+                if (!zendeskWebhookController) {
+                    return res.status(500).json({ error: 'Payment handler service not available' });
+                }
+
+                // Build a synthetic request mimicking the direct webhook format
+                const syntheticReq = {
+                    body: {
+                        aktenzeichen: client.aktenzeichen,
+                        email: client.email,
+                        name: `${client.firstName} ${client.lastName}`,
+                        agent_email: 'admin-dashboard'
+                    }
+                };
+
+                // Delegate to the existing payment handler — it handles everything:
+                // dedup wait, creditor analysis, Zendesk ticket, email, status updates
+                await zendeskWebhookController.handleUserPaymentConfirmed(syntheticReq, res);
+            } catch (error) {
+                console.error('[admin] Error triggering payment handler:', error);
+                // Only send error response if headers haven't been sent by handleUserPaymentConfirmed
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        error: 'Error triggering payment handler',
+                        details: error.message
+                    });
+                }
             }
         },
 

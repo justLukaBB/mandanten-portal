@@ -339,7 +339,8 @@ app.use('/api/admin', createAdminDashboardRouter({
   DelayedProcessingService,
   garnishmentCalculator,
   financialDataReminderService,
-  safeClientUpdate: clientService.safeClientUpdate.bind(clientService)
+  safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
+  zendeskWebhookController
 }));
 
 app.use('/api/admin', createAdminDocumentsRouter({
