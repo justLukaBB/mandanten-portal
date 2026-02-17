@@ -150,7 +150,7 @@ Plans:
   2. Admin edits a cell value and clicks away — the value is sent to the backend and saved without any page action
   3. After a successful save, the cell shows a brief success indicator (green checkmark or similar) before returning to display mode
   4. After a failed save, the cell shows an error state and retains the unsaved value so the admin can retry
-  5. All 13 columns of the table are editable via this mechanism
+  5. All 11 data columns of the table are editable via this mechanism (2 computed columns — Anzahl Dokumente, Quell-Dokumente — remain read-only)
 **Plans**: 1 plan
 
 Plans:
@@ -200,7 +200,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 14-01-PLAN.md — Add dedup wait to handleProcessingComplete + conditionCheckService no_documents_email_sent recognition
+- [x] 14-01-PLAN.md — Add dedup wait to handleProcessingComplete + conditionCheckService no_documents_email_sent recognition
 
 #### Phase 15: Admin Trigger Button
 **Goal**: Admin can trigger the full payment handler from the Client-Detail view at any time, with a warning when the client's 1. Rate is already marked received
@@ -238,7 +238,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 11. Inline Cell Editing | v4 | 0/TBD | Not started | - |
 | 12. Row Management | v4 | 0/TBD | Not started | - |
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
-| 14. Auto-Continuation After Document Upload | v5 | 0/TBD | Not started | - |
+| 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | 0/TBD | Not started | - |
 
 ---
