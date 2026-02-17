@@ -69,6 +69,8 @@ interface DetailedUser {
   seven_day_review_triggered?: boolean;
   seven_day_review_scheduled_at?: string;
   deduplication_stats?: any;
+  first_payment_received?: boolean;
+  no_documents_email_sent?: boolean;
 }
 
 interface Document {
@@ -152,6 +154,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [skippingDelay, setSkippingDelay] = useState(false);
   const [aiDedupLoading, setAiDedupLoading] = useState(false);
   const [aiDedupMessage, setAiDedupMessage] = useState<string | null>(null);
+  const [triggeringPaymentHandler, setTriggeringPaymentHandler] = useState(false);
+  const [paymentHandlerResult, setPaymentHandlerResult] = useState<string | null>(null);
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -381,6 +385,65 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     } finally {
       setAiDedupLoading(false);
     }
+  };
+
+  const triggerPaymentHandler = async () => {
+    try {
+      setTriggeringPaymentHandler(true);
+      setPaymentHandlerResult(null);
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/trigger-payment-handler`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `Request failed: ${response.status}`);
+      }
+
+      // Build a human-readable summary
+      const parts = [];
+      if (result.skipped) {
+        parts.push(`Status: Übersprungen (${result.message})`);
+      } else {
+        parts.push(`Status: ${result.client_status || 'Unbekannt'}`);
+        if (result.payment_ticket_type) parts.push(`Ticket-Typ: ${result.payment_ticket_type}`);
+        if (result.extracted_creditors !== undefined) parts.push(`Gläubiger: ${result.extracted_creditors}`);
+        if (result.manual_review_required !== undefined) parts.push(`Manuelle Prüfung: ${result.manual_review_required ? 'Ja' : 'Nein'}`);
+        if (result.auto_approved) parts.push('Auto-Freigabe: Ja');
+        if (result.zendesk_ticket?.ticket_id) parts.push(`Zendesk Ticket: ${result.zendesk_ticket.ticket_id}`);
+        if (result.no_documents_email_sent) parts.push('Dokument-Anfrage Email gesendet');
+      }
+
+      setPaymentHandlerResult(parts.join('\n'));
+
+      // Refresh user data
+      await fetchUserDetails({ silent: true });
+
+    } catch (error: any) {
+      console.error('Payment handler trigger error:', error);
+      setPaymentHandlerResult(`Fehler: ${error.message}`);
+    } finally {
+      setTriggeringPaymentHandler(false);
+    }
+  };
+
+  const handlePaymentHandlerClick = () => {
+    if (user?.first_payment_received) {
+      const confirmed = window.confirm(
+        '⚠️ Achtung: Die 1. Rate ist bereits als bezahlt markiert.\n\n' +
+        'Der Payment Handler wurde möglicherweise bereits ausgeführt. ' +
+        'Ein erneutes Auslösen kann zu doppelten Zendesk-Tickets führen.\n\n' +
+        'Trotzdem fortfahren?'
+      );
+      if (!confirmed) return;
+    }
+    triggerPaymentHandler();
   };
 
   const [downloadingAllDocuments, setDownloadingAllDocuments] = useState(false);
@@ -1103,6 +1166,25 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
             )} */}
 
             <button
+              onClick={handlePaymentHandlerClick}
+              disabled={triggeringPaymentHandler}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+              title="Vollen Payment Handler auslösen (Gläubigeranalyse, Zendesk Ticket, Email)"
+            >
+              {triggeringPaymentHandler ? (
+                <>
+                  <ArrowPathIcon className="w-4 h-4 mr-1 animate-spin" />
+                  Handler läuft...
+                </>
+              ) : (
+                <>
+                  <CurrencyEuroIcon className="w-4 h-4 mr-1" />
+                  Payment Handler
+                </>
+              )}
+            </button>
+
+            <button
               onClick={() => setShowSettlementPlan(true)}
               className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"
               title="Open Schuldenbereinigungsplan"
@@ -1182,6 +1264,18 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {paymentHandlerResult && (
+            <div className={`mb-4 p-3 rounded-lg text-sm whitespace-pre-line ${
+              paymentHandlerResult.startsWith('Fehler') ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'
+            }`}>
+              <div className="flex justify-between items-start">
+                <span>{paymentHandlerResult}</span>
+                <button onClick={() => setPaymentHandlerResult(null)} className="ml-2 text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col md:flex-row gap-2 max-h-[500px]">
             {/* User Profile */}
             <div className="bg-gray-50 rounded-lg p-4 w-[25%] ">
