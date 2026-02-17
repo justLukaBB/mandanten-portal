@@ -1,69 +1,62 @@
-# Requirements: Mandanten Portal — 1. Rate Bestätigung
+# Requirements: Mandanten Portal — Async Creditor Confirm
 
 **Defined:** 2026-02-17
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v5 Requirements
+## v6 Requirements
 
-### Payment Flow — No Documents Case
+### Async Confirmation
 
-- [x] **PAY-01**: When 1. Rate is confirmed and no documents exist, system sends email via Resend asking client to upload documents
-- [x] **PAY-02**: When 1. Rate is confirmed and no documents exist, no Zendesk review ticket is created
-- [x] **PAY-03**: When 1. Rate is confirmed and documents exist, existing flow continues unchanged (Gläubigeranalyse, Zendesk Ticket, ggf. Auto-Approval Email)
+- [ ] **CONF-01**: Gläubiger-Bestätigung speichert sofort in DB und antwortet dem User in <2 Sekunden
+- [ ] **CONF-02**: Creditor-Contact-Emails werden asynchron im Hintergrund nach Bestätigung verschickt (fire-and-forget)
+- [ ] **CONF-03**: Frontend zeigt sofort "Bestätigt" Success-State ohne auf Email-Versand zu warten
 
-### Auto-Continuation After Document Upload
+## Previous Milestone Requirements (all satisfied)
 
-- [x] **CONT-01**: After client uploads documents and AI processing completes, full payment flow runs automatically if 1. Rate was already paid
-- [x] **CONT-02**: Auto-continuation performs identical logic to webhook-triggered payment handler (dedup wait, creditor analysis, Zendesk ticket, email)
+### v5 — 1. Rate Bestätigung (Phases 13-15)
 
-### Admin Dashboard Button
+- [x] **PAY-01**: When 1. Rate is confirmed and no documents exist, system sends email via Resend
+- [x] **PAY-02**: No Zendesk review ticket when no documents exist
+- [x] **PAY-03**: Existing flow unchanged when documents exist
+- [x] **CONT-01**: Auto-continuation after document upload + AI processing
+- [x] **CONT-02**: Auto-continuation identical to webhook-triggered handler
+- [x] **ADMIN-01**: Admin can trigger full payment handler from Client-Detail
+- [x] **ADMIN-02**: Button always visible regardless of payment status
+- [x] **ADMIN-03**: Warning if first_payment_received = true
+- [x] **ADMIN-04**: Admin-triggered flow identical to Zendesk webhook
 
-- [x] **ADMIN-01**: Admin can trigger full payment handler from button in Client-Detail view
-- [x] **ADMIN-02**: Button is always visible regardless of payment status
-- [x] **ADMIN-03**: Button shows warning/confirmation if client already has first_payment_received = true
-- [x] **ADMIN-04**: Admin-triggered payment flow runs identical logic to Zendesk webhook (Gläubigeranalyse, Zendesk Ticket, Email, 7-Tage-Review)
-
-## Future Requirements
-
-### Editable Creditor Table (deferred from v4)
+### v4 — Editable Creditor Table (Phases 10-12)
 
 - [x] **EDIT-01**: Admin can inline-edit all cells in Gläubiger-Tabelle
 - [x] **EDIT-02**: Auto-save on blur with success/error feedback
 - [x] **EDIT-03**: Admin can add new creditor rows
 - [x] **EDIT-04**: Admin can delete creditor rows with confirmation
 
+## Future Requirements
+
+None planned.
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Changing Zendesk checkbox trigger | Existing webhook stays, admin button is additive |
-| Email template redesign | Simple "bitte Dokumente hochladen" text sufficient |
-| Multiple rate tracking | Only 1. Rate confirmation needed |
-| Payment provider integration | Rate confirmation is manual, no Stripe/etc. |
+| Email-Status im User-Portal | Admin sieht Status, User braucht das nicht |
+| Email-Templates ändern | Bestehende Templates bleiben |
+| Retry-Logik für fehlgeschlagene Emails | Bestehendes Error-Handling reicht |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | Phase 13 | Satisfied |
-| PAY-02 | Phase 13 | Satisfied |
-| PAY-03 | Phase 13 | Satisfied |
-| CONT-01 | Phase 14 | Satisfied |
-| CONT-02 | Phase 14 | Satisfied |
-| ADMIN-01 | Phase 15 | Satisfied |
-| ADMIN-02 | Phase 15 | Satisfied |
-| ADMIN-03 | Phase 15 | Satisfied |
-| ADMIN-04 | Phase 15 | Satisfied |
-| EDIT-01 | Phase 11 | Satisfied |
-| EDIT-02 | Phase 11 | Satisfied |
-| EDIT-03 | Phase 12 | Satisfied |
-| EDIT-04 | Phase 12 | Satisfied |
+| CONF-01 | TBD | Pending |
+| CONF-02 | TBD | Pending |
+| CONF-03 | TBD | Pending |
 
 **Coverage:**
-- v5 requirements: 9 total → Satisfied: 9/9 ✓
-- v4 requirements: 4 total → Satisfied: 4/4 ✓
-- Unmapped: 0 ✓
+- v6 requirements: 3 total
+- Mapped to phases: 0
+- Unmapped: 3 ⚠️
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after gap closure (documentation fixes)*
+*Last updated: 2026-02-17 after initial definition*
