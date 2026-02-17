@@ -87,15 +87,24 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     claim_amount,
                     notes,
                     is_representative,
-                    actual_creditor
+                    actual_creditor,
+                    // German field names (Glaeubiger-Tabelle convention)
+                    glaeubiger_name,
+                    glaeubiger_adresse,
+                    glaeubigervertreter_name,
+                    glaeubigervertreter_adresse,
+                    forderungbetrag,
+                    email_glaeubiger,
+                    email_glaeubiger_vertreter,
+                    dokumenttyp
                 } = req.body;
 
                 console.log(`👤 Admin adding manual creditor to client ${clientId}`);
 
-                // Validate required fields
-                if (!sender_name) {
+                // Validate required fields — accept EITHER sender_name OR glaeubiger_name
+                if (!sender_name && !glaeubiger_name) {
                     return res.status(400).json({
-                        error: 'sender_name is required'
+                        error: 'sender_name or glaeubiger_name is required'
                     });
                 }
 
@@ -129,15 +138,26 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 console.log(`📋 Adding creditor to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
 
                 // Create new creditor
+                const resolvedName = sender_name || glaeubiger_name;
                 const newCreditor = {
                     id: uuidv4(),
-                    sender_name: sender_name.trim(),
+                    sender_name: resolvedName.trim(),
                     sender_email: sender_email?.trim() || '',
                     sender_address: sender_address?.trim() || '',
                     reference_number: reference_number?.trim() || '',
                     claim_amount: claim_amount ? parseFloat(claim_amount) : 0,
                     is_representative: is_representative === true,
                     actual_creditor: actual_creditor?.trim() || '',
+
+                    // German field names (Glaeubiger-Tabelle convention)
+                    ...(glaeubiger_name !== undefined && { glaeubiger_name: glaeubiger_name.trim() }),
+                    ...(glaeubiger_adresse !== undefined && { glaeubiger_adresse: glaeubiger_adresse.trim() }),
+                    ...(glaeubigervertreter_name !== undefined && { glaeubigervertreter_name: glaeubigervertreter_name.trim() }),
+                    ...(glaeubigervertreter_adresse !== undefined && { glaeubigervertreter_adresse: glaeubigervertreter_adresse.trim() }),
+                    ...(forderungbetrag !== undefined && { forderungbetrag: forderungbetrag.trim() }),
+                    ...(email_glaeubiger !== undefined && { email_glaeubiger: email_glaeubiger.trim() }),
+                    ...(email_glaeubiger_vertreter !== undefined && { email_glaeubiger_vertreter: email_glaeubiger_vertreter.trim() }),
+                    ...(dokumenttyp !== undefined && { dokumenttyp: dokumenttyp.trim() }),
 
                     // Manual creation metadata
                     status: 'confirmed',
@@ -172,7 +192,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     status: 'manual_creditor_added',
                     changed_by: 'admin',
                     metadata: {
-                        creditor_name: sender_name,
+                        creditor_name: resolvedName,
                         creditor_amount: claim_amount || 0,
                         added_by: req.adminId || req.agentId || 'admin',
                         admin_action: 'manual_creditor_creation',
@@ -183,11 +203,11 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 // Save client
                 await client.save();
 
-                console.log(`✅ Successfully added creditor "${sender_name}" to client ${client.aktenzeichen}`);
+                console.log(`✅ Successfully added creditor "${resolvedName}" to client ${client.aktenzeichen}`);
 
                 res.json({
                     success: true,
-                    message: `Creditor "${sender_name}" added successfully`,
+                    message: `Creditor "${resolvedName}" added successfully`,
                     creditor: {
                         id: newCreditor.id,
                         sender_name: newCreditor.sender_name,

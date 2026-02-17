@@ -16,9 +16,10 @@ import {
   ArrowDownTrayIcon,
   CalculatorIcon,
   CurrencyEuroIcon,
-  ArrowUturnLeftIcon
+  ArrowUturnLeftIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
-import { API_BASE_URL } from '../../config/api';
+import api, { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 import ManualCreditorManager from './ManualCreditorManager';
@@ -140,6 +141,15 @@ interface Creditor {
   source_document_id?: string;
 }
 
+interface NewCreditorRow {
+  tempId: string;
+  fields: Record<string, string>;
+  saving: boolean;
+  saved: boolean;
+  savedId?: string;
+  error?: string;
+}
+
 const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [user, setUser] = useState<DetailedUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,6 +166,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
   const [aiDedupMessage, setAiDedupMessage] = useState<string | null>(null);
   const [triggeringPaymentHandler, setTriggeringPaymentHandler] = useState(false);
   const [paymentHandlerResult, setPaymentHandlerResult] = useState<string | null>(null);
+
+  // New unsaved creditor rows state
+  const [newRows, setNewRows] = useState<NewCreditorRow[]>([]);
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -336,6 +349,80 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         )
       };
     });
+  };
+
+  const handleNewRowFieldChange = (tempId: string, fieldName: string, value: string) => {
+    setNewRows(prev => prev.map(r =>
+      r.tempId === tempId ? { ...r, fields: { ...r.fields, [fieldName]: value } } : r
+    ));
+  };
+
+  const newRowsRef = React.useRef<NewCreditorRow[]>([]);
+  // Keep ref in sync with state so async handlers can read current values
+  React.useEffect(() => {
+    newRowsRef.current = newRows;
+  }, [newRows]);
+
+  const handleNewRowSave = async (tempId: string) => {
+    // Read current row synchronously from ref
+    const currentRow = newRowsRef.current.find(r => r.tempId === tempId);
+    if (!currentRow) { return; }
+    if (!currentRow.fields.glaeubiger_name || !currentRow.fields.glaeubiger_name.trim()) { return; }
+    if (currentRow.saving || currentRow.saved) { return; }
+
+    // Capture fields before async call
+    const rowFields = { ...currentRow.fields };
+
+    // Mark row as saving
+    setNewRows(prev => prev.map(r =>
+      r.tempId === tempId ? { ...r, saving: true } : r
+    ));
+
+    try {
+      const response = await api.post(`/api/admin/clients/${userId}/add-creditor`, rowFields);
+      const creditorId = response.data?.creditor?.id;
+
+      // Build the new creditor object for local state
+      const newCreditor: Creditor = {
+        id: creditorId,
+        sender_name: rowFields.glaeubiger_name || '',
+        status: 'confirmed',
+        glaeubiger_name: rowFields.glaeubiger_name,
+        glaeubiger_adresse: rowFields.glaeubiger_adresse,
+        glaeubigervertreter_name: rowFields.glaeubigervertreter_name,
+        glaeubigervertreter_adresse: rowFields.glaeubigervertreter_adresse,
+        forderungbetrag: rowFields.forderungbetrag,
+        email_glaeubiger: rowFields.email_glaeubiger,
+        email_glaeubiger_vertreter: rowFields.email_glaeubiger_vertreter,
+        dokumenttyp: rowFields.dokumenttyp,
+        reference_number: rowFields.reference_number,
+      };
+
+      // Update row to saved state (green flash)
+      setNewRows(prev => prev.map(r =>
+        r.tempId === tempId ? { ...r, saving: false, saved: true, savedId: creditorId } : r
+      ));
+
+      // Append new creditor to user's final_creditor_list
+      setUser(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          final_creditor_list: [...(prev.final_creditor_list || []), newCreditor]
+        };
+      });
+
+      // After green flash, remove row from newRows (it now appears in regular rows)
+      setTimeout(() => {
+        setNewRows(prev => prev.filter(r => r.tempId !== tempId));
+      }, 1000);
+
+    } catch (err) {
+      console.error('Error saving new creditor row:', err);
+      setNewRows(prev => prev.map(r =>
+        r.tempId === tempId ? { ...r, saving: false, error: 'Speichern fehlgeschlagen' } : r
+      ));
+    }
   };
 
   const triggerAIRededup = async () => {
@@ -1541,6 +1628,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                   )}
                 </button>
                 <button
+                  onClick={() => setNewRows(prev => [...prev, { tempId: `new-${Date.now()}`, fields: {}, saving: false, saved: false }])}
+                  className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-red-800 text-white hover:bg-red-700 transition-colors"
+                  title="Neuen Gläubiger hinzufügen"
+                >
+                  <PlusIcon className="w-4 h-4 mr-1" />
+                  Hinzufügen
+                </button>
+                <button
                   onClick={exportCreditorTableToXLSX}
                   className="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
                   title="Tabelle als Excel exportieren"
@@ -1688,7 +1783,151 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                         </tr>
                       );
                     })
-                  ) : (
+                  ) : null}
+                  {/* New unsaved creditor rows */}
+                  {newRows.map((newRow) => {
+                    const rowClass = newRow.error
+                      ? 'bg-red-50'
+                      : newRow.saved
+                        ? 'bg-green-50 transition-colors'
+                        : 'bg-blue-50';
+                    const inputClass = 'border rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-700 focus:border-red-700 w-full min-w-[120px] border-gray-300';
+                    return (
+                      <tr key={newRow.tempId} className={rowClass}>
+                        {/* Manuelle Prüfung */}
+                        <td className="px-3 py-2">
+                          <select
+                            className={inputClass}
+                            value={newRow.fields.needs_manual_review || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'needs_manual_review', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          >
+                            <option value="">-</option>
+                            <option value="Nein">Nein</option>
+                            <option value="Ja">Ja</option>
+                          </select>
+                        </td>
+                        {/* Prüfungsgrund */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Prüfungsgrund"
+                            value={newRow.fields.review_reasons || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'review_reasons', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Dokumenttyp */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Dokumenttyp"
+                            value={newRow.fields.dokumenttyp || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'dokumenttyp', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Gläubiger Name (required) */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Gläubiger Name *"
+                            value={newRow.fields.glaeubiger_name || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'glaeubiger_name', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                          {newRow.error && (
+                            <p className="text-red-600 text-xs mt-1">{newRow.error}</p>
+                          )}
+                        </td>
+                        {/* Aktenzeichen */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Aktenzeichen"
+                            value={newRow.fields.reference_number || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'reference_number', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Gläubiger Adresse */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Gläubiger Adresse"
+                            value={newRow.fields.glaeubiger_adresse || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'glaeubiger_adresse', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Gläubigervertreter Name */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Vertreter Name"
+                            value={newRow.fields.glaeubigervertreter_name || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'glaeubigervertreter_name', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Gläubigervertreter Adresse */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Vertreter Adresse"
+                            value={newRow.fields.glaeubigervertreter_adresse || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'glaeubigervertreter_adresse', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Forderungsbetrag */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Forderungsbetrag"
+                            value={newRow.fields.forderungbetrag || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'forderungbetrag', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Email Gläubiger */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Email Gläubiger"
+                            value={newRow.fields.email_glaeubiger || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'email_glaeubiger', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Email Gläubigervertreter */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="Email Vertreter"
+                            value={newRow.fields.email_glaeubiger_vertreter || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'email_glaeubiger_vertreter', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* Anzahl Dokumente (read-only) */}
+                        <td className="px-3 py-2 text-gray-400 text-center">0</td>
+                        {/* Quell-Dokumente (read-only) */}
+                        <td className="px-3 py-2 text-gray-400">N/A</td>
+                      </tr>
+                    );
+                  })}
+                  {(!user.final_creditor_list || user.final_creditor_list.length === 0) && newRows.length === 0 && (
                     <tr>
                       <td colSpan={13} className="px-3 py-4 text-center text-gray-500">
                         Keine Gläubiger-Daten vorhanden.
