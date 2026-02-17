@@ -239,7 +239,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 12. Row Management | v4 | 0/TBD | Not started | - |
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
-| 15. Admin Trigger Button | v5 | 0/TBD | Not started | - |
+| 15. Admin Trigger Button | v5 | Complete    | 2026-02-17 | - |
 
 ---
 *Last updated: 2026-02-17*
