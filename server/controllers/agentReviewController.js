@@ -225,12 +225,6 @@ Diese E-Mail wurde automatisch generiert.
                 </p>
             </div>
 
-            <!-- Media Section -->
-            <div style="text-align: center; margin-top: 48px; padding-top: 32px; border-top: 1px solid #e5e7eb;">
-                <p style="font-size: 13px; color: #6b7280; font-weight: 500; margin: 0 0 20px 0;">Bekannt aus:</p>
-                <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2019/11/medien.png" alt="Bekannt aus verschiedenen Medien" style="max-width: 100%; height: auto; max-height: 48px; opacity: 0.6;">
-            </div>
-
             <!-- Footer Links -->
             <div style="text-align: center; margin-top: 32px; padding-top: 24px;">
                 <div style="margin-bottom: 12px;">
