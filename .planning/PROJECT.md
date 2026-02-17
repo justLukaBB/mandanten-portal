@@ -8,14 +8,14 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v5 1. Rate Bestätigung
+## Current Milestone: v6 Async Creditor Confirm
 
-**Goal:** Payment handler handles the "no documents yet" case properly (email via Resend instead of pointless Zendesk ticket), auto-continues after document upload, and admin can trigger the full payment flow from the dashboard.
+**Goal:** Gläubiger-Bestätigung durch den User antwortet sofort (<2s), statt minutenlang auf den Versand aller Creditor-Emails zu warten. Emails laufen async im Hintergrund.
 
 **Target features:**
-- Payment handler: wenn 1. Rate bezahlt aber keine Dokumente → Resend Email an Mandant statt Zendesk Review-Ticket
-- Auto-Continuation: nach Dokument-Upload + Verarbeitung läuft Payment Flow automatisch weiter
-- Admin Dashboard: Button im Client-Detail der den kompletten Payment Handler auslöst (immer sichtbar, Warnung wenn schon bezahlt)
+- Bestätigung speichert sofort und antwortet schnell
+- Creditor-Emails werden asynchron im Backend verschickt (fire-and-forget)
+- User-Portal zeigt sofort "Bestätigt" ohne auf Email-Versand zu warten
 
 ## Requirements
 
@@ -34,24 +34,28 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 - ✓ Sent emails synced to creditor-email-matcher — v2.2
 - ✓ FastAPI processes multi-page PDFs natively — v3
 - ✓ Gemini extraction handles multi-page documents with page assignments — v3
+- ✓ Payment handler sends Resend email when 1. Rate paid without documents — v5
+- ✓ After document upload + processing, payment flow auto-continues — v5
+- ✓ Admin dashboard button triggers full payment handler flow — v5
+- ✓ Editable creditor table with inline edit, add, delete — v4
+- ✓ German field support in creditor management — v4
+- ✓ Creditor details shown in portal with German field fallbacks — v5-fix
 
 ### Active
 
-- [ ] Payment handler sends Resend email when 1. Rate paid without documents
-- [ ] No Zendesk ticket created when no documents exist
-- [ ] After document upload + processing, payment flow auto-continues
-- [ ] Admin dashboard button triggers full payment handler flow
-- [ ] Button always visible with warning if already paid
+- [ ] Gläubiger-Bestätigung speichert sofort und antwortet in <2 Sekunden
+- [ ] Creditor-Emails werden asynchron nach Bestätigung im Backend verschickt
+- [ ] User-Portal zeigt sofort "Bestätigt" ohne auf Email-Versand zu warten
 
 ### Out of Scope
 
 - Changing the Zendesk checkbox trigger — existing webhook stays as-is
-- Email templates redesign — simple "bitte Dokumente hochladen" Email
-- Editable Creditor Table — deferred to v6
+- Email-Status für User sichtbar machen — Admin sieht Status, User nicht nötig
+- Email templates redesign — bestehende Templates bleiben
 
 ## Context
 
-Shipped v1 (payment status flow), v2 (robust dedup), v2.1 (Aktenzeichen fix), v2.2 (Resend email attachments).
+Shipped v1 (payment status flow), v2 (robust dedup), v2.1 (Aktenzeichen fix), v2.2 (Resend email attachments), v3 (multi-page PDF), v4 (editable creditor table), v5 (1. Rate Bestätigung).
 FastAPI AI service repo: `github.com/justLukaBB/Creditor-process-fastAPI` (branch: `fix/over-aggressive-dedup`).
 FastAPI currently only processes images (JPG/PNG) — `_load_image_as_part()` has no PDF MIME type mapping.
 Gemini 2.5 Pro supports PDF input natively via `Part.from_data(pdf_bytes, "application/pdf")` with 1M input tokens.
@@ -83,4 +87,4 @@ Tech stack:
 | Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
 ---
-*Last updated: 2026-02-17 after v5 milestone start*
+*Last updated: 2026-02-17 after v6 milestone start*
