@@ -139,7 +139,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md -- Extend updateCreditor controller to accept and persist German field names
+- [x] 10-01-PLAN.md -- Extend updateCreditor controller to accept and persist German field names
 
 #### Phase 11: Inline Cell Editing
 **Goal**: Admin can click any cell in the Gläubiger-Tabelle, edit it inline, and changes save automatically on blur with visual feedback
@@ -188,7 +188,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 13-01-PLAN.md — Add idempotency flag + document request email method + document-existence branch to payment handler
+- [x] 13-01-PLAN.md — Add idempotency flag + document request email method + document-existence branch to payment handler
 
 #### Phase 14: Auto-Continuation After Document Upload
 **Goal**: After a client uploads documents and AI processing completes, the full payment flow runs automatically if 1. Rate was already confirmed — no manual re-triggering needed
@@ -235,10 +235,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Aktenzeichen N/A Suppression | v2.1 | 1/1 | Complete | 2026-02-02 |
 | 8. FastAPI PDF Support | v3 | 2/2 | Complete | 2026-02-09 |
 | 9. Multi-Page Extraction | v3 | 2/2 | Complete | 2026-02-09 |
-| 10. Backend German Field Support | v4 | 0/TBD | Not started | - |
+| 10. Backend German Field Support | v4 | 1/1 | Complete | 2026-02-17 |
 | 11. Inline Cell Editing | v4 | 0/TBD | Not started | - |
 | 12. Row Management | v4 | 0/TBD | Not started | - |
-| 13. Payment Handler — No Documents Case | v5 | 0/TBD | Not started | - |
+| 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 0/TBD | Not started | - |
 | 15. Admin Trigger Button | v5 | 0/TBD | Not started | - |
 
