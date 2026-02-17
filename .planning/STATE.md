@@ -5,19 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** Milestone v6 — Async Creditor Confirm
+**Current focus:** Phase 16 — Async Confirmation (v6)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-17 — Milestone v6 started
+Phase: 16 of 16 (Async Confirmation)
+Plan: 0 of 1 in current phase
+Status: Ready to plan
+Last activity: 2026-02-17 — v6 roadmap created, Phase 16 defined
+
+Progress: [################__] 94%
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 24 (4 v1, 7 v2, 1 v2.1, 5 v3, 2 v4, 2 v5, 1 v4-inline, 2 v5-admin, 2 v12-row)
+- Total plans completed: 24
 - Average duration: ~2m
 - Total execution time: ~0.75 hours
 
@@ -29,11 +31,8 @@ Last activity: 2026-02-17 — Milestone v6 started
 | v2 (3-6) | 7 | ~16m | 2.3m |
 | v2.1 (7) | 1 | ~2m | 2.0m |
 | v3 (8-9) | 5 | ~10m | 2.0m |
-| v4 (10) | 1 | ~3m | 3.0m |
-| v5 (13-14) | 2 | ~7m | 3.5m |
-| v4-inline (11) | 1 | ~3m | 3.0m |
-| v5-admin (15) | 2 | ~4m | 2.0m |
-| v12-row (12) | 2 | ~7m | 3.5m |
+| v4 (10-12) | 4 | ~13m | 3.3m |
+| v5 (13-15) | 4 | ~11m | 2.8m |
 
 **Recent Trend:**
 - Stable at ~2-5m per plan
@@ -43,7 +42,8 @@ Last activity: 2026-02-17 — Milestone v6 started
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Previous milestone decisions preserved for reference.
+
+Key decision for v6: confirmCreditors in clientCreditorController.js awaits processClientCreditorConfirmation() and startMonitoringForClient() synchronously — blocking response for minutes with many creditors. Fix: save confirmation first, respond immediately, then fire email sending as fire-and-forget (no await).
 
 ### Pending Todos
 
@@ -57,9 +57,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Starting milestone v6
+Stopped at: v6 roadmap created — Phase 16 (Async Confirmation) ready to plan
 Resume file: None
-Next step: Define requirements and roadmap for v6
+Next step: /gsd:plan-phase 16
 
 ---
-*Last updated: 2026-02-17 (Milestone v6 started)*
+*Last updated: 2026-02-17 (v6 roadmap created)*

@@ -6,8 +6,9 @@
 - ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
 - ✅ **v2.1 Aktenzeichen Display Fix** - Phase 7 (shipped 2026-02-02)
 - ✅ **v3 Multi-Page PDF Support** - Phases 8-9 (shipped 2026-02-09)
-- 🚧 **v4 Editable Creditor Table** - Phases 10-12 (not started)
-- 🚧 **v5 1. Rate Bestätigung** - Phases 13-15 (in progress)
+- ✅ **v4 Editable Creditor Table** - Phases 10-12 (shipped 2026-02-17)
+- ✅ **v5 1. Rate Bestätigung** - Phases 13-15 (shipped 2026-02-17)
+- 🚧 **v6 Async Creditor Confirm** - Phase 16 (in progress)
 
 ## Phases
 
@@ -123,9 +124,8 @@ Plans:
 
 </details>
 
-### 🚧 v4 Editable Creditor Table (Phases 10-12)
-
-**Milestone Goal:** Admin can fully edit, add, and delete creditors inline in the Gläubiger-Tabelle — no page reload, instant auto-save.
+<details>
+<summary>✅ v4 Editable Creditor Table (Phases 10-12) - SHIPPED 2026-02-17</summary>
 
 #### Phase 10: Backend German Field Support
 **Goal**: Backend PUT /clients/:clientId/creditors/:creditorId accepts all German field names used in the Gläubiger-Tabelle
@@ -168,12 +168,13 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 12-01-PLAN.md -- Hinzufuegen button + new row inline editing + POST add-creditor with German field support
-- [ ] 12-02-PLAN.md -- Delete row with inline confirm/cancel + DELETE endpoint integration
+- [x] 12-01-PLAN.md -- Hinzufuegen button + new row inline editing + POST add-creditor with German field support
+- [x] 12-02-PLAN.md -- Delete row with inline confirm/cancel + DELETE endpoint integration
 
-### 🚧 v5 1. Rate Bestätigung (Phases 13-15)
+</details>
 
-**Milestone Goal:** Payment handler handles the "no documents yet" case properly (Resend email instead of Zendesk ticket), auto-continues after document upload and processing, and admin can trigger the full payment flow from the dashboard.
+<details>
+<summary>✅ v5 1. Rate Bestätigung (Phases 13-15) - SHIPPED 2026-02-17</summary>
 
 #### Phase 13: Payment Handler — No Documents Case
 **Goal**: When 1. Rate is confirmed and no documents exist, the system emails the client via Resend asking for documents instead of creating a pointless Zendesk review ticket
@@ -215,13 +216,33 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Inject zendeskWebhookController into admin dashboard + add trigger-payment-handler endpoint
-- [ ] 15-02-PLAN.md — Add Payment Handler button to UserDetailView with conditional warning dialog
+- [x] 15-01-PLAN.md — Inject zendeskWebhookController into admin dashboard + add trigger-payment-handler endpoint
+- [x] 15-02-PLAN.md — Add Payment Handler button to UserDetailView with conditional warning dialog
+
+</details>
+
+### 🚧 v6 Async Creditor Confirm (Phase 16)
+
+**Milestone Goal:** Gläubiger-Bestätigung durch den User antwortet sofort (<2s), statt minutenlang auf den Versand aller Creditor-Emails zu warten. Emails laufen async im Hintergrund.
+
+#### Phase 16: Async Confirmation
+**Goal**: Creditor confirmation saves immediately and responds in <2s — email sending runs asynchronously in the background after the response is sent
+**Depends on**: Phase 15 (v5 shipped)
+**Requirements**: CONF-01, CONF-02, CONF-03
+**Success Criteria** (what must be TRUE):
+  1. User confirms creditors in the portal and receives a success response within 2 seconds regardless of how many creditors exist
+  2. User sees the "Bestätigt" success state in the portal immediately after confirming, without any loading delay for email sending
+  3. Creditor contact emails are still sent after confirmation — they just arrive asynchronously without blocking the user response
+  4. The confirmation is persisted in the database before the response is returned — no data loss if email sending fails
+**Plans**: TBD
+
+Plans:
+- [ ] 16-01: Make confirmCreditors endpoint async — save confirmation, respond immediately, fire email sending as background task
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -236,10 +257,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Multi-Page Extraction | v3 | 2/2 | Complete | 2026-02-09 |
 | 10. Backend German Field Support | v4 | 1/1 | Complete | 2026-02-17 |
 | 11. Inline Cell Editing | v4 | 1/1 | Complete | 2026-02-17 |
-| 12. Row Management | v4 | Complete    | 2026-02-17 | - |
+| 12. Row Management | v4 | 2/2 | Complete | 2026-02-17 |
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
-| 15. Admin Trigger Button | v5 | Complete    | 2026-02-17 | - |
+| 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
+| 16. Async Confirmation | v6 | 0/1 | Not started | - |
 
 ---
 *Last updated: 2026-02-17*
