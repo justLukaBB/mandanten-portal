@@ -23,6 +23,7 @@ import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
 import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 import ManualCreditorManager from './ManualCreditorManager';
 import SevenDayReviewTrigger from './SevenDayReviewTrigger';
+import EditableCell from './EditableCell';
 import {
   Dialog,
   DialogContent,
@@ -319,6 +320,18 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Glaeubiger');
     XLSX.writeFile(workbook, `glaeubiger_tabelle_${user.aktenzeichen || user.id}.xlsx`);
+  };
+
+  const handleCreditorFieldSaved = (creditorId: string, fieldName: string, newValue: string) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        final_creditor_list: prev.final_creditor_list?.map(c =>
+          c.id === creditorId ? { ...c, [fieldName]: newValue } : c
+        )
+      };
+    });
   };
 
   const triggerAIRededup = async () => {
@@ -1472,23 +1485,108 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       const docs = c.source_documents || [];
                       return (
                         <tr key={c.id || c.reference_number || c.sender_name}>
-                          <td className="px-3 py-2 text-gray-800">
-                            {c.needs_manual_review ? 'Ja' : 'Nein'}
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.needs_manual_review ? 'Ja' : 'Nein'}
+                              fieldName="needs_manual_review"
+                              clientId={userId}
+                              creditorId={c.id}
+                              type="boolean"
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'needs_manual_review', newValue)}
+                            />
                           </td>
-                          <td className="px-3 py-2 text-gray-800">
-                            {(c.review_reasons && c.review_reasons.length > 0) ? c.review_reasons.join(', ') : 'Keine'}
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={(c.review_reasons && c.review_reasons.length > 0) ? c.review_reasons.join(', ') : 'Keine'}
+                              fieldName="review_reasons"
+                              clientId={userId}
+                              creditorId={c.id}
+                              fallbackValue="Keine"
+                              transformBeforeSend={(v) => v.split(',').map(s => s.trim()).filter(Boolean)}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'review_reasons', newValue)}
+                            />
                           </td>
-                          <td className="px-3 py-2 text-gray-800">{c.dokumenttyp || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.glaeubiger_name || c.sender_name || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.reference_number || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.glaeubiger_adresse || c.sender_address || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.glaeubigervertreter_name || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.glaeubigervertreter_adresse || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">
-                            {c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? `€${c.claim_amount}` : 'N/A')}
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.dokumenttyp || 'N/A'}
+                              fieldName="dokumenttyp"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'dokumenttyp', newValue)}
+                            />
                           </td>
-                          <td className="px-3 py-2 text-gray-800">{c.email_glaeubiger || c.sender_email || 'N/A'}</td>
-                          <td className="px-3 py-2 text-gray-800">{c.email_glaeubiger_vertreter || 'N/A'}</td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.glaeubiger_name || c.sender_name || 'N/A'}
+                              fieldName="glaeubiger_name"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubiger_name', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.reference_number || 'N/A'}
+                              fieldName="reference_number"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'reference_number', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.glaeubiger_adresse || c.sender_address || 'N/A'}
+                              fieldName="glaeubiger_adresse"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubiger_adresse', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.glaeubigervertreter_name || 'N/A'}
+                              fieldName="glaeubigervertreter_name"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubigervertreter_name', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.glaeubigervertreter_adresse || 'N/A'}
+                              fieldName="glaeubigervertreter_adresse"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubigervertreter_adresse', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? String(c.claim_amount) : 'N/A')}
+                              fieldName="forderungbetrag"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'forderungbetrag', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.email_glaeubiger || c.sender_email || 'N/A'}
+                              fieldName="email_glaeubiger"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'email_glaeubiger', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.email_glaeubiger_vertreter || 'N/A'}
+                              fieldName="email_glaeubiger_vertreter"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'email_glaeubiger_vertreter', newValue)}
+                            />
+                          </td>
                           <td className="px-3 py-2 text-gray-800 text-center">{docs.length || 0}</td>
                           <td className="px-3 py-2 text-gray-800">
                             {docs.length > 0 ? docs.join(', ') : 'N/A'}
