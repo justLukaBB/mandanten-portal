@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v5 Auto-continuation after document upload — Phase 14 complete, ready for Phase 15
+**Current focus:** v4 Inline Cell Editing — Phase 11 Plan 01 complete
 
 ## Current Position
 
@@ -19,7 +19,7 @@ Progress: [████████████░░░] 80% (12/15 phases comp
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 20 (4 v1, 7 v2, 1 v2.1, 5 v3, 1 v4, 2 v5)
+- Total plans completed: 21 (4 v1, 7 v2, 1 v2.1, 5 v3, 1 v4, 3 v4-inline)
 - Average duration: ~2m
 - Total execution time: ~0.75 hours
 
@@ -33,6 +33,7 @@ Progress: [████████████░░░] 80% (12/15 phases comp
 | v3 (8-9) | 5 | ~10m | 2.0m |
 | v4 (10) | 1 | ~3m | 3.0m |
 | v5 (13-14) | 2 | ~7m | 3.5m |
+| v4-inline (11) | 1 | ~3m | 3.0m |
 
 **Recent Trend:**
 - Stable at ~2-5m per plan
@@ -50,10 +51,12 @@ Recent decisions affecting v5 work:
 - v5 Phase 14: conditionCheckService no_documents_email_sent block placed BEFORE document_reminder_sent_via_side_conversation (mutually exclusive paths) (IMPLEMENTED)
 - v5 Phase 15: Replace/extend markPaymentReceived endpoint (currently only sets flag) to run full handler logic
 - [Phase 10-backend-german-field-support]: Undefined-guard spread pattern for German fields: each field only written to creditor document if explicitly sent in request body
+- [Phase 11-inline-cell-editing]: EditableCell boolean type converts Ja/Nein to true/false before PUT; transformBeforeSend prop supports array conversion for review_reasons; 150ms blur timeout prevents select option click race condition (IMPLEMENTED)
 
 ### Pending Todos
 
-- v4 Editable Creditor Table (phases 11-12) deferred — do not start until v5 is complete
+- v4 Phase 11 Plan 01 COMPLETE: EditableCell component + Gläubiger-Tabelle inline editing (11 editable columns)
+- v4 Phase 12 (if planned): Next inline editing phase
 - Test PDF processing with real documents in live environment
 - Verify Gemini 2.5 Pro handles multi-page PDFs correctly in practice
 
@@ -64,9 +67,9 @@ Recent decisions affecting v5 work:
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed Phase 14 Plan 01 — Auto-continuation after document upload (dedup wait + conditionCheckService recognition)
+Stopped at: Completed Phase 11 Plan 01 — Inline Cell Editing (EditableCell component + Gläubiger-Tabelle)
 Resume file: None
-Next step: `/gsd:plan-phase 15` (markPaymentReceived full handler)
+Next step: Phase 12 if planned, or continue v5 Phase 15 (markPaymentReceived full handler)
 
 ---
-*Last updated: 2026-02-17*
+*Last updated: 2026-02-17 (Phase 11 Plan 01 complete)*
