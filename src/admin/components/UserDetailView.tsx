@@ -1159,7 +1159,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
     }
 
     if (doc.processing_status === 'completed') {
-      if (doc.manual_review_required) {
+      // Use document_status as authoritative source, with manual_review_required as fallback
+      // Strict === true check to avoid truthy issues with string values like "false"
+      if (doc.document_status === 'needs_review' || (doc.manual_review_required === true && doc.document_status !== 'creditor_confirmed' && doc.document_status !== 'non_creditor_confirmed')) {
         return {
           badge: { color: 'bg-orange-100 text-orange-800', text: 'Manuelle Prüfung erforderlich' },
           showCreditorInfo: true
@@ -2540,7 +2542,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             <span className="ml-2 text-gray-900">{selectedDocument.document_status}</span>
                           </div>
                         )}
-                        {selectedDocument.manual_review_required && (
+                        {selectedDocument.manual_review_required === true && selectedDocument.document_status !== 'creditor_confirmed' && selectedDocument.document_status !== 'non_creditor_confirmed' && (
                           <div>
                             <span className="font-medium text-gray-600">Manuelle Prüfung:</span>
                             <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Erforderlich</span>
