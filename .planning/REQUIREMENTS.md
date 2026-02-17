@@ -1,64 +1,60 @@
-# Requirements: Multi-Page PDF Support
+# Requirements: Mandanten Portal — Creditor Processing
 
-**Defined:** 2026-02-09
+**Defined:** 2026-02-17
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v3 Requirements
+## v4 Requirements
 
-### PDF Processing
+Requirements for editable Gläubiger-Tabelle. Each maps to roadmap phases.
 
-- [x] **PDF-01**: FastAPI akzeptiert und verarbeitet `application/pdf` MIME-Type neben bestehenden Bildformaten
-- [x] **PDF-02**: Gemini extrahiert alle Gläubiger aus mehrseitigen PDFs (Sammel-Scans mit mehreren Briefen)
-- [x] **PDF-03**: Mehrseitige Gläubiger-Briefe (1 Gläubiger über 2-3 Seiten) werden als ein Gläubiger erkannt
+### Inline Editing
 
-### Backward Compatibility
+- [ ] **EDIT-01**: Admin can click any cell in the Gläubiger-Tabelle to edit it inline
+- [ ] **EDIT-02**: Changes auto-save when the cell loses focus (blur event)
+- [ ] **EDIT-03**: Visual feedback per cell on save (success indicator, error state)
+- [ ] **EDIT-04**: Backend controller accepts all German fields (glaeubiger_name, glaeubiger_adresse, glaeubigervertreter_name, glaeubigervertreter_adresse, forderungbetrag, email_glaeubiger, email_glaeubiger_vertreter, dokumenttyp, needs_manual_review, review_reasons)
 
-- [x] **COMPAT-01**: Bestehender Single-Image Upload-Flow funktioniert unverändert
-- [x] **COMPAT-02**: Webhook-Ergebnisse für PDFs nutzen identische Datenstruktur wie für Bilder (`creditor_index`, `creditor_count`, `source_document_id`)
+### Row Management
 
-### Error Handling
-
-- [x] **ERR-01**: Korrupte/passwortgeschützte PDFs liefern klare Fehlermeldung statt Crash
+- [ ] **ROW-01**: Admin can add a new creditor row via "Hinzufügen" button
+- [ ] **ROW-02**: Admin can delete a creditor row with confirmation dialog
+- [ ] **ROW-03**: Table updates immediately after add/delete without page reload
 
 ## Future Requirements
 
-### Page Assignment
+### Bulk Operations
 
-- **PAGE-01**: Seitenzuordnung pro Gläubiger (`pages: [1,2,3]`) in Extraction-Ergebnissen
-- **PAGE-02**: Confidence Scoring per Page Group
-
-### Scalability
-
-- **SCALE-01**: Batching/chunking for 100+ creditor lists
-- **SCALE-02**: Alert/notification on repeated dedup failures
+- **BULK-01**: Import creditors from Excel/CSV
+- **BULK-02**: Bulk delete selected creditors
+- **BULK-03**: Undo/redo for recent changes
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Physisches PDF Page-Splitting in separate Dateien | Nur Daten-Extraktion nötig, kein Seiten-Splitting |
-| PDF→Image Konvertierung vor Gemini | Gemini verarbeitet PDFs nativ |
-| OCR Preprocessing Layer | Gemini macht OCR nativ |
-| Separater Upload-Flow für PDFs | Bestehender Upload akzeptiert PDFs bereits |
-| PDF Viewer/Preview im Frontend | Bestehende Document Links reichen |
-| Page Range Assignment | Deferred to future milestone |
+| Drag-and-drop row reordering | Not needed for creditor management |
+| Undo/redo history | Auto-save with visual feedback is sufficient for v4 |
+| Excel/CSV import | XLSX export exists, import deferred to future |
+| Agent portal editing | Admin-only for now, agent portal is read-only |
+| Column resizing/hiding | Table layout is fixed, all columns relevant |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PDF-01 | Phase 8 | Complete |
-| PDF-02 | Phase 9 | Complete |
-| PDF-03 | Phase 9 | Complete |
-| COMPAT-01 | Phase 8 | Complete |
-| COMPAT-02 | Phase 9 | Complete |
-| ERR-01 | Phase 8 | Complete |
+| EDIT-01 | — | Pending |
+| EDIT-02 | — | Pending |
+| EDIT-03 | — | Pending |
+| EDIT-04 | — | Pending |
+| ROW-01 | — | Pending |
+| ROW-02 | — | Pending |
+| ROW-03 | — | Pending |
 
 **Coverage:**
-- v3 requirements: 6 total
-- Mapped to phases: 6
-- Unmapped: 0
+- v4 requirements: 7 total
+- Mapped to phases: 0
+- Unmapped: 7
 
 ---
-*Requirements defined: 2026-02-09*
-*Last updated: 2026-02-09 after v3 roadmap creation*
+*Requirements defined: 2026-02-17*
+*Last updated: 2026-02-17 after initial definition*

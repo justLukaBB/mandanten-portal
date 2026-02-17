@@ -8,15 +8,16 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v3 Multi-Page PDF Support
+## Current Milestone: v4 Editable Creditor Table
 
-**Goal:** FastAPI service can process multi-page PDF documents, extracting all creditors with correct page assignments — no manual splitting required.
+**Goal:** Admin can fully edit, add, and delete creditors inline in the Gläubiger-Tabelle — no page reload, instant auto-save.
 
 **Target features:**
-- Multi-page PDFs processed natively by FastAPI/Gemini
-- Gemini identifies which pages belong to which creditor
-- Page assignment info included in extraction results
-- All existing upload scenarios work: single images, sammel-scans, mehrseitige Briefe
+- All 13 columns of the Gläubiger-Tabelle are inline-editable
+- Auto-save on cell blur with visual feedback
+- Add new creditor rows via button
+- Delete creditor rows with confirmation dialog
+- Backend controller accepts all German field names
 
 ## Requirements
 
@@ -33,20 +34,23 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 - ✓ Aktenzeichen displays empty instead of "N/A" in first Anschreiben Word template — v2.1
 - ✓ Creditor emails sent via Resend with PDF attachments — v2.2
 - ✓ Sent emails synced to creditor-email-matcher — v2.2
+- ✓ FastAPI processes multi-page PDFs natively — v3
+- ✓ Gemini extraction handles multi-page documents with page assignments — v3
 
 ### Active
 
-- [ ] FastAPI processes multi-page PDFs natively (not just images)
-- [ ] Gemini extraction prompt handles multi-page documents with multiple creditors
-- [ ] Page assignment (which pages belong to which creditor) included in results
-- [ ] Existing single-image upload flow continues to work unchanged
+- [ ] Admin can inline-edit all cells in Gläubiger-Tabelle
+- [ ] Auto-save on blur with success/error feedback
+- [ ] Admin can add new creditor rows
+- [ ] Admin can delete creditor rows with confirmation
+- [ ] Backend accepts all German fields (glaeubiger_name, forderungbetrag, etc.)
 
 ### Out of Scope
 
-- Physical PDF page splitting into separate files — only data extraction needed
-- PDF viewer/preview in frontend — existing document links sufficient
-- OCR preprocessing — Gemini handles text extraction natively
-- Changing the upload UI — existing drag-and-drop works for PDFs already
+- Drag-and-drop row reordering — not needed for creditor management
+- Undo/redo history — auto-save is sufficient
+- Bulk import from Excel — XLSX export already exists, import deferred
+- Editing from Agent portal — admin-only for now
 
 ## Context
 
@@ -82,4 +86,4 @@ Tech stack:
 | Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
 ---
-*Last updated: 2026-02-09 after v3 milestone start*
+*Last updated: 2026-02-17 after v4 milestone start*

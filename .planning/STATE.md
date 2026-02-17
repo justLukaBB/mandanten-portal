@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-09)
+See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v3 Multi-Page PDF Support — COMPLETE
+**Current focus:** v4 Editable Creditor Table
 
 ## Current Position
 
-Phase: 9 of 9 (Multi-Page Extraction)
-Plan: 2 of 2 (complete)
-Status: Milestone v3 complete
-Last activity: 2026-02-09 — Phase 9 verified, all v3 requirements satisfied
-
-Progress: ██████████ 100% (5/5 v3 plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-17 — Milestone v4 started
 
 ## Performance Metrics
 
@@ -23,12 +21,6 @@ Progress: ██████████ 100% (5/5 v3 plans)
 - Average duration: 2m 19s
 - Total execution time: ~0.7 hours
 
-**Milestone v3:**
-- Phases defined: 2 (Phase 8-9)
-- Plans completed: 5
-- Start date: 2026-02-09
-- End date: 2026-02-09
-
 ## Accumulated Context
 
 ### Decisions
@@ -36,45 +28,22 @@ Progress: ██████████ 100% (5/5 v3 plans)
 Decisions are logged in PROJECT.md Key Decisions table.
 Carried from previous milestones — see PROJECT.md for full history.
 
-**v3 decisions:**
-- Let Gemini decide page grouping: Send whole PDF to Gemini 2.5 Pro, let it identify creditors and page assignments (simpler than pre-splitting)
-- No physical PDF splitting: Only extract data + page assignments, don't create separate PDF files per creditor
-- MIME-type-driven processing: Route logic based on `mime_type` field passed through all layers, not file extensions
-- Single prompt template: Use unified template with conditional insertion for PDF-specific fields to avoid prompt drift
-- Use ValueError for PDF validation errors: Service layer exceptions, not HTTP exceptions (08-01)
-- Skip rotation analysis for PDFs: PIL cannot open PDFs, rotation not needed for multi-page documents (08-01)
-- Validate PDFs before Gemini call: Fail fast on oversized/encrypted PDFs with clear errors (08-01)
-- Pass MIME type from FileInfo through to process_document: For observability and defense-in-depth validation (08-02)
-- Use MIME type as fallback for PDF detection: Alongside file extension for defense-in-depth (08-02)
-- Conditional prompt injection for PDFs: Append page assignment instructions only when is_pdf and page_count (09-01)
-- Normalize multiple page data formats: Handle arrays, ints, string ranges from Gemini responses (09-01)
-- Empty list default for pages field: Backward compatibility with image extraction (09-01)
-- Zero-creditor PDFs return error: EXTRACTION_ERROR status when PDF classified as creditor but 0 creditors extracted (09-02)
-- Re-read PDF for page_count: Simpler than threading through multiple function signatures (09-02)
-
 ### Pending Todos
 
-- ✅ COMPLETED: All v3 phases (8-9) complete
-- ✅ COMPLETED: Phase 9 verified (10/10 must-haves passed)
-- Test PDF processing with real documents in live environment
-- Verify Gemini 2.5 Pro handles multi-page PDFs correctly in practice
-- Verify page assignment data quality from Gemini in production
+- Test PDF processing with real documents in live environment (from v3)
+- Verify Gemini 2.5 Pro handles multi-page PDFs correctly in practice (from v3)
 
 ### Blockers/Concerns
 
-- ✅ RESOLVED: FastAPI `_load_image_as_part()` now handles PDF MIME type (08-01)
-- ✅ RESOLVED: MIME type now flows through complete processing pipeline (08-02)
-- ✅ RESOLVED: page_count threads through complete pipeline to extract_data (09-02)
-- ✅ RESOLVED: Zero-creditor PDFs return EXTRACTION_ERROR instead of silent failure (09-02)
-- End-to-end PDF processing not yet tested with real documents (deferred to live environment per user decision)
-- Need to verify Gemini 2.5 Pro handles large multi-page PDFs within token limits in practice
+- Backend PUT endpoint only accepts old field names (sender_name, etc.) — needs extension for German fields
+- UserDetailView.tsx is 1800+ lines — editable table adds complexity
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: Milestone v3 complete — all phases executed and verified
+Last session: 2026-02-17
+Stopped at: Milestone v4 initialization
 Resume file: None
-Next step: Run `/gsd:audit-milestone` to audit v3 before archiving, or proceed to live testing
+Next step: Create roadmap, then `/gsd:plan-phase [N]`
 
 ---
-*Last updated: 2026-02-09*
+*Last updated: 2026-02-17*
