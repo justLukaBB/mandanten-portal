@@ -212,11 +212,11 @@ Plans:
   3. Admin clicks the button when first_payment_received is true — a warning/confirmation dialog appears before running
   4. After confirming, the admin-triggered payment handler runs identical logic to the Zendesk webhook path (Gläubigeranalyse, Zendesk ticket, email, 7-Tage-Review)
   5. The existing markPaymentReceived endpoint is replaced or extended so the button runs full handler logic, not just the flag-set
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: Extend/replace admin payment endpoint to run full payment handler logic
-- [ ] 15-02: Add trigger button to Client-Detail React view with conditional warning dialog
+- [ ] 15-01-PLAN.md — Inject zendeskWebhookController into admin dashboard + add trigger-payment-handler endpoint
+- [ ] 15-02-PLAN.md — Add Payment Handler button to UserDetailView with conditional warning dialog
 
 ## Progress
 
