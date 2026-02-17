@@ -98,6 +98,30 @@ class ConditionCheckService {
       throw new Error(`Client ${clientId} not found`);
     }
 
+    // Special case: Documents uploaded after Phase 13 no-documents email
+    if (client.first_payment_received && client.no_documents_email_sent) {
+      console.log(`[auto-continuation] Documents uploaded after no-documents email for ${client.aktenzeichen}. Auto-continuation will be triggered by processing-complete webhook.`);
+
+      // Add status history for this specific scenario
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'documents_uploaded_after_no_documents_email',
+        changed_by: 'system',
+        metadata: {
+          payment_received_first: true,
+          no_documents_email_sent_at: client.no_documents_email_sent_at,
+          documents_uploaded_at: new Date()
+        }
+      });
+
+      await client.save();
+
+      // Continue to standard condition check (the actual auto-continuation
+      // is handled by portalWebhookController.handleDocumentProcessingComplete
+      // -> triggerProcessingCompleteWebhook -> handleProcessingComplete)
+      return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document_after_no_documents_email');
+    }
+
     // Special case: If payment was received first and documents uploaded after reminder
     if (client.first_payment_received && client.document_reminder_sent_via_side_conversation) {
       console.log(`🎯 Documents uploaded after payment + reminder for ${client.aktenzeichen}. Starting 7-day delay...`);
