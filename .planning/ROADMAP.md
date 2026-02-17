@@ -185,10 +185,10 @@ Plans:
   2. Admin confirms 1. Rate and client has no documents — no Zendesk review ticket is created
   3. Admin confirms 1. Rate and client already has documents — existing flow runs unchanged (Gläubigeranalyse, Zendesk ticket, conditional auto-approval email)
   4. The "no documents" email is sent exactly once per confirmation, not on every subsequent webhook call
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: Add document-existence check + Resend email branch to payment handler (zendeskWebhookController.js:415-738)
+- [ ] 13-01-PLAN.md — Add idempotency flag + document request email method + document-existence branch to payment handler
 
 #### Phase 14: Auto-Continuation After Document Upload
 **Goal**: After a client uploads documents and AI processing completes, the full payment flow runs automatically if 1. Rate was already confirmed — no manual re-triggering needed
