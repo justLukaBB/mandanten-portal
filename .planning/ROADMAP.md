@@ -6,7 +6,8 @@
 - ✅ **v2 Robust Dedup** - Phases 3-6 (shipped 2026-02-01)
 - ✅ **v2.1 Aktenzeichen Display Fix** - Phase 7 (shipped 2026-02-02)
 - ✅ **v3 Multi-Page PDF Support** - Phases 8-9 (shipped 2026-02-09)
-- 🚧 **v4 Editable Creditor Table** - Phases 10-12 (in progress)
+- 🚧 **v4 Editable Creditor Table** - Phases 10-12 (not started)
+- 🚧 **v5 1. Rate Bestätigung** - Phases 13-15 (in progress)
 
 ## Phases
 
@@ -135,10 +136,10 @@ Plans:
   2. Admin sends PUT request with `forderungbetrag` field and the value persists correctly
   3. All 10 German fields (glaeubiger_name, glaeubiger_adresse, glaeubigervertreter_name, glaeubigervertreter_adresse, forderungbetrag, email_glaeubiger, email_glaeubiger_vertreter, dokumenttyp, needs_manual_review, review_reasons) are accepted and saved without error
   4. Existing requests using old field names continue to work without breaking changes
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: Extend updateCreditor controller to map and persist German field names
+- [ ] 10-01-PLAN.md -- Extend updateCreditor controller to accept and persist German field names
 
 #### Phase 11: Inline Cell Editing
 **Goal**: Admin can click any cell in the Gläubiger-Tabelle, edit it inline, and changes save automatically on blur with visual feedback
@@ -171,10 +172,57 @@ Plans:
 - [ ] 12-01: Add new row button wired to POST add-creditor endpoint
 - [ ] 12-02: Delete row with confirmation dialog wired to DELETE endpoint
 
+### 🚧 v5 1. Rate Bestätigung (Phases 13-15)
+
+**Milestone Goal:** Payment handler handles the "no documents yet" case properly (Resend email instead of Zendesk ticket), auto-continues after document upload and processing, and admin can trigger the full payment flow from the dashboard.
+
+#### Phase 13: Payment Handler — No Documents Case
+**Goal**: When 1. Rate is confirmed and no documents exist, the system emails the client via Resend asking for documents instead of creating a pointless Zendesk review ticket
+**Depends on**: Phase 9 (v3 shipped)
+**Requirements**: PAY-01, PAY-02, PAY-03
+**Success Criteria** (what must be TRUE):
+  1. Admin confirms 1. Rate and client has no documents — client receives a Resend email asking to upload documents
+  2. Admin confirms 1. Rate and client has no documents — no Zendesk review ticket is created
+  3. Admin confirms 1. Rate and client already has documents — existing flow runs unchanged (Gläubigeranalyse, Zendesk ticket, conditional auto-approval email)
+  4. The "no documents" email is sent exactly once per confirmation, not on every subsequent webhook call
+**Plans**: TBD
+
+Plans:
+- [ ] 13-01: Add document-existence check + Resend email branch to payment handler (zendeskWebhookController.js:415-738)
+
+#### Phase 14: Auto-Continuation After Document Upload
+**Goal**: After a client uploads documents and AI processing completes, the full payment flow runs automatically if 1. Rate was already confirmed — no manual re-triggering needed
+**Depends on**: Phase 13
+**Requirements**: CONT-01, CONT-02
+**Success Criteria** (what must be TRUE):
+  1. Client uploads documents after 1. Rate was confirmed — payment flow (dedup wait, Gläubigeranalyse, Zendesk ticket, email) runs automatically without admin action
+  2. Auto-continuation produces identical outcome to a fresh Zendesk webhook trigger — same Zendesk ticket type, same email, same creditor analysis
+  3. Auto-continuation only fires when first_payment_received is true at the time documents finish processing — it does not fire for clients who haven't paid
+**Plans**: TBD
+
+Plans:
+- [ ] 14-01: Hook auto-continuation trigger into post-document-processing pipeline (conditionCheckService / webhook handler completion path)
+
+#### Phase 15: Admin Trigger Button
+**Goal**: Admin can trigger the full payment handler from the Client-Detail view at any time, with a warning when the client's 1. Rate is already marked received
+**Depends on**: Phase 13
+**Requirements**: ADMIN-01, ADMIN-02, ADMIN-03, ADMIN-04
+**Success Criteria** (what must be TRUE):
+  1. Admin opens Client-Detail view and sees the "Payment Handler auslösen" button regardless of the client's payment status
+  2. Admin clicks the button when first_payment_received is false — payment handler runs without a confirmation dialog
+  3. Admin clicks the button when first_payment_received is true — a warning/confirmation dialog appears before running
+  4. After confirming, the admin-triggered payment handler runs identical logic to the Zendesk webhook path (Gläubigeranalyse, Zendesk ticket, email, 7-Tage-Review)
+  5. The existing markPaymentReceived endpoint is replaced or extended so the button runs full handler logic, not just the flag-set
+**Plans**: TBD
+
+Plans:
+- [ ] 15-01: Extend/replace admin payment endpoint to run full payment handler logic
+- [ ] 15-02: Add trigger button to Client-Detail React view with conditional warning dialog
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -190,6 +238,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 10. Backend German Field Support | v4 | 0/TBD | Not started | - |
 | 11. Inline Cell Editing | v4 | 0/TBD | Not started | - |
 | 12. Row Management | v4 | 0/TBD | Not started | - |
+| 13. Payment Handler — No Documents Case | v5 | 0/TBD | Not started | - |
+| 14. Auto-Continuation After Document Upload | v5 | 0/TBD | Not started | - |
+| 15. Admin Trigger Button | v5 | 0/TBD | Not started | - |
 
 ---
 *Last updated: 2026-02-17*
