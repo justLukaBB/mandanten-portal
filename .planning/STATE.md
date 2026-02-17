@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** Phase 16 — Async Confirmation (v6)
+**Current focus:** Phase 16 complete — v6 roadmap complete
 
 ## Current Position
 
 Phase: 16 of 16 (Async Confirmation)
-Plan: 0 of 1 in current phase
-Status: Ready to plan
-Last activity: 2026-02-17 — v6 roadmap created, Phase 16 defined
+Plan: 1 of 1 in current phase
+Status: Complete
+Last activity: 2026-02-17 — Phase 16 plan 01 executed
 
-Progress: [################__] 94%
+Progress: [##################] 100%
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: ~2m
 - Total execution time: ~0.75 hours
 
@@ -33,9 +33,10 @@ Progress: [################__] 94%
 | v3 (8-9) | 5 | ~10m | 2.0m |
 | v4 (10-12) | 4 | ~13m | 3.3m |
 | v5 (13-15) | 4 | ~11m | 2.8m |
+| v6 (16) | 1 | ~1m | 1.0m |
 
 **Recent Trend:**
-- Stable at ~2-5m per plan
+- Stable at ~1-5m per plan
 
 ## Accumulated Context
 
@@ -44,6 +45,11 @@ Progress: [################__] 94%
 Decisions are logged in PROJECT.md Key Decisions table.
 
 Key decision for v6: confirmCreditors in clientCreditorController.js awaits processClientCreditorConfirmation() and startMonitoringForClient() synchronously — blocking response for minutes with many creditors. Fix: save confirmation first, respond immediately, then fire email sending as fire-and-forget (no await).
+
+16-01 decisions:
+- Respond immediately after DB save using fire-and-forget IIFE pattern — `(async () => { ... })()`
+- Remove creditor_contact from response since emails not yet sent when response returns
+- Background IIFE has independent try/catch; errors are logged but never affect the HTTP response
 
 ### Pending Todos
 
@@ -57,9 +63,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: v6 roadmap created — Phase 16 (Async Confirmation) ready to plan
+Stopped at: Completed 16-01-PLAN.md — Phase 16 complete, v6 roadmap complete
 Resume file: None
-Next step: /gsd:plan-phase 16
+Next step: All phases complete
 
 ---
-*Last updated: 2026-02-17 (v6 roadmap created)*
+*Last updated: 2026-02-17 (Phase 16 plan 01 complete — v6 roadmap done)*
