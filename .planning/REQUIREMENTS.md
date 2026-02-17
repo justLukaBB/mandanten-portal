@@ -1,60 +1,65 @@
-# Requirements: Mandanten Portal — Creditor Processing
+# Requirements: Mandanten Portal — 1. Rate Bestätigung
 
 **Defined:** 2026-02-17
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v4 Requirements
+## v5 Requirements
 
-Requirements for editable Gläubiger-Tabelle. Each maps to roadmap phases.
+### Payment Flow — No Documents Case
 
-### Inline Editing
+- [ ] **PAY-01**: When 1. Rate is confirmed and no documents exist, system sends email via Resend asking client to upload documents
+- [ ] **PAY-02**: When 1. Rate is confirmed and no documents exist, no Zendesk review ticket is created
+- [ ] **PAY-03**: When 1. Rate is confirmed and documents exist, existing flow continues unchanged (Gläubigeranalyse, Zendesk Ticket, ggf. Auto-Approval Email)
 
-- [ ] **EDIT-01**: Admin can click any cell in the Gläubiger-Tabelle to edit it inline
-- [ ] **EDIT-02**: Changes auto-save when the cell loses focus (blur event)
-- [ ] **EDIT-03**: Visual feedback per cell on save (success indicator, error state)
-- [ ] **EDIT-04**: Backend controller accepts all German fields (glaeubiger_name, glaeubiger_adresse, glaeubigervertreter_name, glaeubigervertreter_adresse, forderungbetrag, email_glaeubiger, email_glaeubiger_vertreter, dokumenttyp, needs_manual_review, review_reasons)
+### Auto-Continuation After Document Upload
 
-### Row Management
+- [ ] **CONT-01**: After client uploads documents and AI processing completes, full payment flow runs automatically if 1. Rate was already paid
+- [ ] **CONT-02**: Auto-continuation performs identical logic to webhook-triggered payment handler (dedup wait, creditor analysis, Zendesk ticket, email)
 
-- [ ] **ROW-01**: Admin can add a new creditor row via "Hinzufügen" button
-- [ ] **ROW-02**: Admin can delete a creditor row with confirmation dialog
-- [ ] **ROW-03**: Table updates immediately after add/delete without page reload
+### Admin Dashboard Button
+
+- [ ] **ADMIN-01**: Admin can trigger full payment handler from button in Client-Detail view
+- [ ] **ADMIN-02**: Button is always visible regardless of payment status
+- [ ] **ADMIN-03**: Button shows warning/confirmation if client already has first_payment_received = true
+- [ ] **ADMIN-04**: Admin-triggered payment flow runs identical logic to Zendesk webhook (Gläubigeranalyse, Zendesk Ticket, Email, 7-Tage-Review)
 
 ## Future Requirements
 
-### Bulk Operations
+### Editable Creditor Table (deferred from v4)
 
-- **BULK-01**: Import creditors from Excel/CSV
-- **BULK-02**: Bulk delete selected creditors
-- **BULK-03**: Undo/redo for recent changes
+- **EDIT-01**: Admin can inline-edit all cells in Gläubiger-Tabelle
+- **EDIT-02**: Auto-save on blur with success/error feedback
+- **EDIT-03**: Admin can add new creditor rows
+- **EDIT-04**: Admin can delete creditor rows with confirmation
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Drag-and-drop row reordering | Not needed for creditor management |
-| Undo/redo history | Auto-save with visual feedback is sufficient for v4 |
-| Excel/CSV import | XLSX export exists, import deferred to future |
-| Agent portal editing | Admin-only for now, agent portal is read-only |
-| Column resizing/hiding | Table layout is fixed, all columns relevant |
+| Changing Zendesk checkbox trigger | Existing webhook stays, admin button is additive |
+| Email template redesign | Simple "bitte Dokumente hochladen" text sufficient |
+| Multiple rate tracking | Only 1. Rate confirmation needed |
+| Payment provider integration | Rate confirmation is manual, no Stripe/etc. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-04 | Phase 10 | Pending |
-| EDIT-01 | Phase 11 | Pending |
-| EDIT-02 | Phase 11 | Pending |
-| EDIT-03 | Phase 11 | Pending |
-| ROW-01 | Phase 12 | Pending |
-| ROW-02 | Phase 12 | Pending |
-| ROW-03 | Phase 12 | Pending |
+| PAY-01 | TBD | Pending |
+| PAY-02 | TBD | Pending |
+| PAY-03 | TBD | Pending |
+| CONT-01 | TBD | Pending |
+| CONT-02 | TBD | Pending |
+| ADMIN-01 | TBD | Pending |
+| ADMIN-02 | TBD | Pending |
+| ADMIN-03 | TBD | Pending |
+| ADMIN-04 | TBD | Pending |
 
 **Coverage:**
-- v4 requirements: 7 total
-- Mapped to phases: 7
-- Unmapped: 0
+- v5 requirements: 9 total
+- Mapped to phases: 0
+- Unmapped: 9 ⚠️
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after roadmap creation*
+*Last updated: 2026-02-17 after initial definition*
