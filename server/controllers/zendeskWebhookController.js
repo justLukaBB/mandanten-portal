@@ -517,6 +517,62 @@ class ZendeskWebhookController {
             const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
             const creditors = freshClient.final_creditor_list || [];
 
+            // === PHASE 13: No-documents branch ===
+            // If no creditor documents exist, send email asking for documents instead of running Gläubigeranalyse
+            if (creditorDocs.length === 0 && creditors.length === 0) {
+                console.log(`[payment-handler] No creditor documents for ${freshClient.aktenzeichen} — sending document request email instead of Gläubigeranalyse`);
+
+                // Idempotency guard: only send email once
+                if (!freshClient.no_documents_email_sent) {
+                    try {
+                        const emailService = require('../services/emailService');
+                        const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
+                        const clientName = `${freshClient.firstName} ${freshClient.lastName}`;
+
+                        const emailResult = await emailService.sendDocumentRequestEmail(
+                            freshClient.email,
+                            clientName,
+                            portalUrl
+                        );
+
+                        if (emailResult.success) {
+                            freshClient.no_documents_email_sent = true;
+                            freshClient.no_documents_email_sent_at = new Date();
+                            console.log(`✅ Document request email sent to ${freshClient.email} for ${freshClient.aktenzeichen}`);
+                        } else {
+                            console.error(`❌ Failed to send document request email to ${freshClient.email}: ${emailResult.error}`);
+                        }
+                    } catch (emailError) {
+                        console.error(`❌ Error sending document request email:`, emailError.message);
+                    }
+                } else {
+                    console.log(`⏭️ Document request email already sent for ${freshClient.aktenzeichen} at ${freshClient.no_documents_email_sent_at}`);
+                }
+
+                // Payment confirmed but can't proceed without documents
+                freshClient.current_status = "payment_confirmed";
+                freshClient.payment_ticket_type = "document_request";
+                freshClient.payment_processed_at = new Date();
+
+                await freshClient.save({ validateModifiedOnly: true });
+
+                return res.json({
+                    success: true,
+                    message: "Payment confirmed — no documents yet, email sent to client",
+                    client_status: freshClient.current_status,
+                    payment_ticket_type: "document_request",
+                    documents_count: 0,
+                    creditor_documents: 0,
+                    extracted_creditors: 0,
+                    no_documents_email_sent: freshClient.no_documents_email_sent,
+                    no_documents_email_sent_at: freshClient.no_documents_email_sent_at,
+                    manual_review_required: false,
+                    auto_approved: false,
+                    zendesk_ticket: null,
+                });
+            }
+            // === END PHASE 13: No-documents branch ===
+
             // Helper to check if a value is missing/empty
             const isMissingValue = (val) => {
                 if (val === undefined || val === null) return true;
@@ -1181,8 +1237,28 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
+            // Log auto-continuation trigger
+            if (client.payment_ticket_type === "document_request" || client.no_documents_email_sent) {
+                console.log(`[auto-continuation] Documents processed after no-documents payment confirmation for ${client.aktenzeichen}`);
+                client.status_history.push({
+                    id: uuidv4(),
+                    status: 'auto_continuation_triggered',
+                    changed_by: 'system',
+                    metadata: {
+                        trigger: 'document_processing_complete_after_payment',
+                        payment_ticket_type: client.payment_ticket_type,
+                        no_documents_email_sent_at: client.no_documents_email_sent_at,
+                        timestamp: new Date()
+                    }
+                });
+                await client.save({ validateModifiedOnly: true });
+            }
+
+            // Wait for dedup to complete before analyzing creditors (matches handleUserPaymentConfirmed behavior)
+            const freshClient = await this.waitForDedupIfNeeded(client, Client);
+
             // Check if all documents are now processed
-            const documents = client.documents || [];
+            const documents = freshClient.documents || [];
             const completedDocs = documents.filter(
                 (d) => d.processing_status === "completed"
             );
@@ -1200,7 +1276,7 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             // All documents processed - analyze creditors
-            const creditors = client.final_creditor_list || [];
+            const creditors = freshClient.final_creditor_list || [];
 
             // Helper to check if a value is missing/empty
             const isMissingValue = (val) => {
@@ -1243,7 +1319,7 @@ Diese E-Mail wurde automatisch generiert.
             const creditorsNeedingManualReview = creditors.filter(c => creditorNeedsManualReview(c));
             const manualReviewRequired = creditorsNeedingManualReview.length > 0;
 
-            console.log(`📊 Creditor analysis for ${client.aktenzeichen}:`);
+            console.log(`📊 Creditor analysis for ${freshClient.aktenzeichen}:`);
             console.log(`   Total creditors: ${creditors.length}`);
             console.log(`   Creditors needing manual review (from doc flags): ${creditorsNeedingManualReview.length}`);
             creditorsNeedingManualReview.forEach(c => {
@@ -1261,37 +1337,37 @@ Diese E-Mail wurde automatisch generiert.
 
             if (!state.hasCreditors) {
                 ticketType = "no_creditors_found";
-                ticketContent = this.generateNoCreditorsTicket(client, documents);
+                ticketContent = this.generateNoCreditorsTicket(freshClient, documents);
                 tags = ["processing-complete", "no-creditors", "manual-check-needed"];
-                client.payment_ticket_type = "no_creditors_found";
+                freshClient.payment_ticket_type = "no_creditors_found";
             } else if (state.needsManualReview) {
                 // Some creditors need manual review - create ticket for agent
                 ticketType = "manual_review";
                 ticketContent = this.generateCreditorReviewTicketContent(
-                    client,
+                    freshClient,
                     documents,
                     creditors,
                     true
                 );
                 tags = ["processing-complete", "manual-review-needed", "creditors-found"];
-                client.payment_ticket_type = "manual_review";
+                freshClient.payment_ticket_type = "manual_review";
             } else {
                 // ALL creditors have needs_manual_review=false -> AUTO APPROVE
                 // No agent review needed - send directly to client
                 ticketType = "auto_approved";
                 ticketContent = null; // Will be handled differently below
                 tags = ["processing-complete", "auto-approved", "sent-to-client"];
-                client.payment_ticket_type = "auto_approved";
+                freshClient.payment_ticket_type = "auto_approved";
 
                 console.log(`✅ AUTO-APPROVE: All ${creditors.length} creditors have needs_manual_review=false`);
                 console.log(`   Skipping agent review, sending directly to client...`);
             }
 
             // Mark all documents processed timestamp
-            client.all_documents_processed_at = new Date();
+            freshClient.all_documents_processed_at = new Date();
 
             // Add status history
-            client.status_history.push({
+            freshClient.status_history.push({
                 id: uuidv4(),
                 status: "processing_complete",
                 changed_by: "system",
@@ -1299,16 +1375,16 @@ Diese E-Mail wurde automatisch generiert.
                     documents_processed: documents.length,
                     creditors_found: creditors.length,
                     processing_duration_ms:
-                        Date.now() - new Date(client.payment_processed_at).getTime(),
+                        Date.now() - new Date(freshClient.payment_processed_at).getTime(),
                     final_ticket_type: ticketType,
                 },
             });
 
             // Simple safe save logic
-            await client.save({ validateModifiedOnly: true });
+            await freshClient.save({ validateModifiedOnly: true });
 
             console.log(
-                `✅ Processing complete webhook saved client ${client.aktenzeichen}`
+                `✅ Processing complete webhook saved client ${freshClient.aktenzeichen}`
             );
 
             // Handle based on ticket type
@@ -1320,7 +1396,7 @@ Diese E-Mail wurde automatisch generiert.
                 // ============================================
                 // AUTO-APPROVE FLOW: Skip agent review, send directly to client
                 // ============================================
-                console.log(`🚀 AUTO-APPROVE FLOW: Sending creditors directly to client ${client.email}`);
+                console.log(`🚀 AUTO-APPROVE FLOW: Sending creditors directly to client ${freshClient.email}`);
 
                 // Auto-confirm all creditors
                 creditors.forEach(c => {
@@ -1329,13 +1405,13 @@ Diese E-Mail wurde automatisch generiert.
                     c.confirmed_at = new Date();
                     c.review_action = 'auto_confirmed_no_manual_review_needed';
                 });
-                client.final_creditor_list = creditors;
+                freshClient.final_creditor_list = creditors;
 
                 // Set client status to awaiting_client_confirmation
-                client.current_status = 'awaiting_client_confirmation';
-                client.admin_approved = true;
-                client.admin_approved_at = new Date();
-                client.admin_approved_by = 'system_auto_approve';
+                freshClient.current_status = 'awaiting_client_confirmation';
+                freshClient.admin_approved = true;
+                freshClient.admin_approved_at = new Date();
+                freshClient.admin_approved_by = 'system_auto_approve';
 
                 // Mark all documents as reviewed
                 documents.forEach(doc => {
@@ -1348,7 +1424,7 @@ Diese E-Mail wurde automatisch generiert.
                 });
 
                 // Add status history
-                client.status_history.push({
+                freshClient.status_history.push({
                     id: uuidv4(),
                     status: "auto_approved_sent_to_client",
                     changed_by: "system",
@@ -1360,7 +1436,7 @@ Diese E-Mail wurde automatisch generiert.
                     },
                 });
 
-                await client.save({ validateModifiedOnly: true });
+                await freshClient.save({ validateModifiedOnly: true });
 
                 // Send email to client with creditor list
                 if (this.zendeskService.isConfigured() && creditors.length > 0) {
@@ -1369,7 +1445,7 @@ Diese E-Mail wurde automatisch generiert.
                         const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
 
                         const emailContent = this.generateCreditorConfirmationEmailContent(
-                            client,
+                            freshClient,
                             creditors,
                             portalUrl,
                             totalDebt
@@ -1377,9 +1453,9 @@ Diese E-Mail wurde automatisch generiert.
 
                         // Create a ticket to send the email to client
                         const emailTicket = await this.zendeskService.createTicket({
-                            subject: `Ihre Gläubigerliste zur Bestätigung (${client.aktenzeichen})`,
+                            subject: `Ihre Gläubigerliste zur Bestätigung (${freshClient.aktenzeichen})`,
                             content: emailContent.plainText,
-                            requesterEmail: client.email,
+                            requesterEmail: freshClient.email,
                             tags: ["auto-approved", "creditor-list-sent", "awaiting-client-confirmation"],
                             priority: "normal",
                             type: "task",
@@ -1396,12 +1472,12 @@ Diese E-Mail wurde automatisch generiert.
                             clientEmailSent = true;
                             zendeskTicket = emailTicket;
 
-                            console.log(`✅ AUTO-APPROVE: Email sent to client ${client.email} via ticket ${emailTicket.ticket_id}`);
+                            console.log(`✅ AUTO-APPROVE: Email sent to client ${freshClient.email} via ticket ${emailTicket.ticket_id}`);
 
                             // Store ticket reference
-                            client.zendesk_review_ticket_id = emailTicket.ticket_id;
-                            client.zendesk_tickets = client.zendesk_tickets || [];
-                            client.zendesk_tickets.push({
+                            freshClient.zendesk_review_ticket_id = emailTicket.ticket_id;
+                            freshClient.zendesk_tickets = freshClient.zendesk_tickets || [];
+                            freshClient.zendesk_tickets.push({
                                 ticket_id: emailTicket.ticket_id,
                                 ticket_type: "auto_approved_client_notification",
                                 ticket_scenario: "auto_approved",
@@ -1409,7 +1485,7 @@ Diese E-Mail wurde automatisch generiert.
                                 created_at: new Date(),
                             });
 
-                            await client.save({ validateModifiedOnly: true });
+                            await freshClient.save({ validateModifiedOnly: true });
                         }
                     } catch (emailError) {
                         console.error(`❌ AUTO-APPROVE: Failed to send email to client:`, emailError.message);
@@ -1421,8 +1497,9 @@ Diese E-Mail wurde automatisch generiert.
                     success: true,
                     message: "AUTO-APPROVED: Creditor list sent directly to client",
                     scenario: ticketType,
-                    client_status: client.current_status,
+                    client_status: freshClient.current_status,
                     auto_approved: true,
+                    auto_continuation: freshClient.payment_ticket_type === "document_request" || !!freshClient.no_documents_email_sent,
                     client_email_sent: clientEmailSent,
                     creditors_confirmed: creditors.length,
                     zendesk_ticket: zendeskTicket ? {
@@ -1445,9 +1522,9 @@ Diese E-Mail wurde automatisch generiert.
                         );
 
                         zendeskTicket = await this.zendeskService.createTicket({
-                            subject: this.generateTicketSubject(client, ticketType),
+                            subject: this.generateTicketSubject(freshClient, ticketType),
                             content: ticketContent,
-                            requesterEmail: client.email,
+                            requesterEmail: freshClient.email,
                             tags: tags,
                             priority: "normal",
                             type: "task",
@@ -1459,8 +1536,8 @@ Diese E-Mail wurde automatisch generiert.
                             );
 
                             // Store the created ticket ID for reference
-                            client.zendesk_tickets = client.zendesk_tickets || [];
-                            client.zendesk_tickets.push({
+                            freshClient.zendesk_tickets = freshClient.zendesk_tickets || [];
+                            freshClient.zendesk_tickets.push({
                                 ticket_id: zendeskTicket.ticket_id,
                                 ticket_type: "creditor_review",
                                 ticket_scenario: ticketType,
@@ -1469,19 +1546,19 @@ Diese E-Mail wurde automatisch generiert.
                             });
 
                             // Add to status history
-                            client.status_history.push({
+                            freshClient.status_history.push({
                                 id: uuidv4(),
                                 status: "creditor_review_ticket_created",
                                 changed_by: "system",
                                 metadata: {
                                     zendesk_ticket_id: zendeskTicket.ticket_id,
                                     ticket_scenario: ticketType,
-                                    ticket_subject: this.generateTicketSubject(client, ticketType),
+                                    ticket_subject: this.generateTicketSubject(freshClient, ticketType),
                                     payment_first_flow: true,
                                 },
                             });
 
-                            await client.save({ validateModifiedOnly: true });
+                            await freshClient.save({ validateModifiedOnly: true });
 
                         } else {
                             ticketCreationError = zendeskTicket.error;
@@ -1510,7 +1587,8 @@ Diese E-Mail wurde automatisch generiert.
                         ? "Processing complete - No creditors found, manual check needed"
                         : "Processing complete - Agent review ticket created",
                     scenario: ticketType,
-                    client_status: client.current_status,
+                    client_status: freshClient.current_status,
+                    auto_continuation: freshClient.payment_ticket_type === "document_request" || !!freshClient.no_documents_email_sent,
                     zendesk_ticket: zendeskTicket
                         ? {
                             created: zendeskTicket.success,
@@ -1526,7 +1604,7 @@ Diese E-Mail wurde automatisch generiert.
                         ticketType === "manual_review"
                             ? `${process.env.FRONTEND_URL ||
                             "https://mandanten-portal.onrender.com"
-                            }/agent/review/${client.id}`
+                            }/agent/review/${freshClient.id}`
                             : null,
                     documents_processed: documents.length,
                     creditors_found: creditors.length,
