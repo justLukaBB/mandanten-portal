@@ -298,7 +298,18 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     claim_amount,
                     notes,
                     is_representative,
-                    actual_creditor
+                    actual_creditor,
+                    // German field names (Glaubiger-Tabelle convention)
+                    glaeubiger_name,
+                    glaeubiger_adresse,
+                    glaeubigervertreter_name,
+                    glaeubigervertreter_adresse,
+                    forderungbetrag,
+                    email_glaeubiger,
+                    email_glaeubiger_vertreter,
+                    dokumenttyp,
+                    needs_manual_review,
+                    review_reasons
                 } = req.body;
 
                 console.log(`✏️ Admin updating creditor ${creditorId} for client ${clientId}`);
@@ -351,6 +362,20 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     is_representative: is_representative !== undefined ? is_representative : originalCreditor.is_representative,
                     actual_creditor: actual_creditor?.trim() || originalCreditor.actual_creditor || '',
 
+                    // German field names (Glaubiger-Tabelle convention)
+                    // Each field is only updated if it was explicitly sent (undefined check), to avoid
+                    // overwriting existing values when only one field name convention is used.
+                    ...(glaeubiger_name !== undefined && { glaeubiger_name: glaeubiger_name?.trim() || originalCreditor.glaeubiger_name || '' }),
+                    ...(glaeubiger_adresse !== undefined && { glaeubiger_adresse: glaeubiger_adresse?.trim() || originalCreditor.glaeubiger_adresse || '' }),
+                    ...(glaeubigervertreter_name !== undefined && { glaeubigervertreter_name: glaeubigervertreter_name?.trim() || originalCreditor.glaeubigervertreter_name || '' }),
+                    ...(glaeubigervertreter_adresse !== undefined && { glaeubigervertreter_adresse: glaeubigervertreter_adresse?.trim() || originalCreditor.glaeubigervertreter_adresse || '' }),
+                    ...(forderungbetrag !== undefined && { forderungbetrag: forderungbetrag?.trim() || originalCreditor.forderungbetrag || '' }),
+                    ...(email_glaeubiger !== undefined && { email_glaeubiger: email_glaeubiger?.trim() || originalCreditor.email_glaeubiger || '' }),
+                    ...(email_glaeubiger_vertreter !== undefined && { email_glaeubiger_vertreter: email_glaeubiger_vertreter?.trim() || originalCreditor.email_glaeubiger_vertreter || '' }),
+                    ...(dokumenttyp !== undefined && { dokumenttyp: dokumenttyp?.trim() || originalCreditor.dokumenttyp || '' }),
+                    ...(needs_manual_review !== undefined && { needs_manual_review: needs_manual_review }),
+                    ...(review_reasons !== undefined && Array.isArray(review_reasons) && { review_reasons: review_reasons }),
+
                     // Update metadata
                     manually_reviewed: true,
                     reviewed_by: req.adminId || req.agentId || 'admin',
@@ -372,7 +397,12 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                         changes: {
                             name_changed: sender_name && sender_name !== originalCreditor.sender_name,
                             amount_changed: claim_amount !== undefined && claim_amount !== originalCreditor.claim_amount,
-                            email_changed: sender_email && sender_email !== originalCreditor.sender_email
+                            email_changed: sender_email && sender_email !== originalCreditor.sender_email,
+                            german_fields_updated: [
+                                glaeubiger_name, glaeubiger_adresse, glaeubigervertreter_name,
+                                glaeubigervertreter_adresse, forderungbetrag, email_glaeubiger,
+                                email_glaeubiger_vertreter, dokumenttyp, needs_manual_review, review_reasons
+                            ].some(f => f !== undefined)
                         }
                     }
                 });
