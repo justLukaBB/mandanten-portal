@@ -8,16 +8,14 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v4 Editable Creditor Table
+## Current Milestone: v5 1. Rate Bestätigung
 
-**Goal:** Admin can fully edit, add, and delete creditors inline in the Gläubiger-Tabelle — no page reload, instant auto-save.
+**Goal:** Payment handler handles the "no documents yet" case properly (email via Resend instead of pointless Zendesk ticket), auto-continues after document upload, and admin can trigger the full payment flow from the dashboard.
 
 **Target features:**
-- All 13 columns of the Gläubiger-Tabelle are inline-editable
-- Auto-save on cell blur with visual feedback
-- Add new creditor rows via button
-- Delete creditor rows with confirmation dialog
-- Backend controller accepts all German field names
+- Payment handler: wenn 1. Rate bezahlt aber keine Dokumente → Resend Email an Mandant statt Zendesk Review-Ticket
+- Auto-Continuation: nach Dokument-Upload + Verarbeitung läuft Payment Flow automatisch weiter
+- Admin Dashboard: Button im Client-Detail der den kompletten Payment Handler auslöst (immer sichtbar, Warnung wenn schon bezahlt)
 
 ## Requirements
 
@@ -39,18 +37,17 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-- [ ] Admin can inline-edit all cells in Gläubiger-Tabelle
-- [ ] Auto-save on blur with success/error feedback
-- [ ] Admin can add new creditor rows
-- [ ] Admin can delete creditor rows with confirmation
-- [ ] Backend accepts all German fields (glaeubiger_name, forderungbetrag, etc.)
+- [ ] Payment handler sends Resend email when 1. Rate paid without documents
+- [ ] No Zendesk ticket created when no documents exist
+- [ ] After document upload + processing, payment flow auto-continues
+- [ ] Admin dashboard button triggers full payment handler flow
+- [ ] Button always visible with warning if already paid
 
 ### Out of Scope
 
-- Drag-and-drop row reordering — not needed for creditor management
-- Undo/redo history — auto-save is sufficient
-- Bulk import from Excel — XLSX export already exists, import deferred
-- Editing from Agent portal — admin-only for now
+- Changing the Zendesk checkbox trigger — existing webhook stays as-is
+- Email templates redesign — simple "bitte Dokumente hochladen" Email
+- Editable Creditor Table — deferred to v6
 
 ## Context
 
@@ -86,4 +83,4 @@ Tech stack:
 | Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
 ---
-*Last updated: 2026-02-17 after v4 milestone start*
+*Last updated: 2026-02-17 after v5 milestone start*
