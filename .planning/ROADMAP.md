@@ -234,10 +234,10 @@ Plans:
   2. User sees the "Bestätigt" success state in the portal immediately after confirming, without any loading delay for email sending
   3. Creditor contact emails are still sent after confirmation — they just arrive asynchronously without blocking the user response
   4. The confirmation is persisted in the database before the response is returned — no data loss if email sending fails
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 16-01: Make confirmCreditors endpoint async — save confirmation, respond immediately, fire email sending as background task
+- [ ] 16-01-PLAN.md -- Make confirmCreditors save-then-respond with fire-and-forget email sending
 
 ## Progress
 
