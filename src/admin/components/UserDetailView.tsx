@@ -17,7 +17,8 @@ import {
   CalculatorIcon,
   CurrencyEuroIcon,
   ArrowUturnLeftIcon,
-  PlusIcon
+  PlusIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import api, { API_BASE_URL } from '../../config/api';
 import SchuldenbereinigungsplanView from './SchuldenbereinigungsplanView';
@@ -169,6 +170,10 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   // New unsaved creditor rows state
   const [newRows, setNewRows] = useState<NewCreditorRow[]>([]);
+
+  // Delete creditor row state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -422,6 +427,26 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       setNewRows(prev => prev.map(r =>
         r.tempId === tempId ? { ...r, saving: false, error: 'Speichern fehlgeschlagen' } : r
       ));
+    }
+  };
+
+  const handleDeleteCreditor = async (creditorId: string) => {
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/api/admin/clients/${userId}/creditors/${creditorId}`);
+      // Remove from local state instantly
+      setUser(prev => {
+        if (!prev) { return prev; }
+        return {
+          ...prev,
+          final_creditor_list: prev.final_creditor_list?.filter(c => c.id !== creditorId)
+        };
+      });
+      setDeleteConfirmId(null);
+    } catch (err) {
+      alert('Löschen fehlgeschlagen. Bitte erneut versuchen.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1666,6 +1691,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubigervertreter</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Anzahl Dokumente</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Quell-Dokumente</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 w-20">Aktion</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1673,7 +1699,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     user.final_creditor_list.map((c) => {
                       const docs = c.source_documents || [];
                       return (
-                        <tr key={c.id || c.reference_number || c.sender_name}>
+                        <tr key={c.id || c.reference_number || c.sender_name} className={`${deleteConfirmId === c.id ? 'bg-red-50' : 'hover:bg-gray-50'} group`}>
                           <td className="px-3 py-2">
                             <EditableCell
                               value={c.needs_manual_review ? 'Ja' : 'Nein'}
@@ -1779,6 +1805,34 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                           <td className="px-3 py-2 text-gray-800 text-center">{docs.length || 0}</td>
                           <td className="px-3 py-2 text-gray-800">
                             {docs.length > 0 ? docs.join(', ') : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {deleteConfirmId === c.id ? (
+                              <div className="flex items-center space-x-1">
+                                <button
+                                  onClick={() => handleDeleteCreditor(c.id)}
+                                  disabled={deleteLoading}
+                                  className="px-2 py-1 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                                >
+                                  {deleteLoading ? '...' : 'Bestätigen'}
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  disabled={deleteLoading}
+                                  className="px-2 py-1 text-xs font-medium rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                >
+                                  Abbrechen
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirmId(c.id)}
+                                className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Gläubiger löschen"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1924,12 +1978,14 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                         <td className="px-3 py-2 text-gray-400 text-center">0</td>
                         {/* Quell-Dokumente (read-only) */}
                         <td className="px-3 py-2 text-gray-400">N/A</td>
+                        {/* Aktion (empty for new rows — no creditorId yet) */}
+                        <td className="px-3 py-2"></td>
                       </tr>
                     );
                   })}
                   {(!user.final_creditor_list || user.final_creditor_list.length === 0) && newRows.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="px-3 py-4 text-center text-gray-500">
+                      <td colSpan={14} className="px-3 py-4 text-center text-gray-500">
                         Keine Gläubiger-Daten vorhanden.
                       </td>
                     </tr>
