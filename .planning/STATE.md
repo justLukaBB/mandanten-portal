@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Current Position
 
-Phase: 11 of 15 (Inline Cell Editing — COMPLETE)
+Phase: 15 of 15 (Admin Trigger Button — COMPLETE)
 Plan: 1 of 1 — COMPLETE
-Status: Phase 11 complete, ready for Phase 12
-Last activity: 2026-02-17 — Executed Phase 11 Plan 01
+Status: Phase 15 complete
+Last activity: 2026-02-17 — Executed Phase 15 Plan 01
 
-Progress: [█████████████░░] 87% (13/15 phases complete)
+Progress: [███████████████] 100% (15/15 phases complete)
 
 ## Performance Metrics
 
@@ -49,7 +49,7 @@ Recent decisions affecting v5 work:
 - v5 Phase 14: freshClient replaces client for ALL reads and saves after waitForDedupIfNeeded in handleProcessingComplete — matches handleUserPaymentConfirmed pattern exactly (IMPLEMENTED)
 - v5 Phase 14: auto_continuation flag added to response JSON to let callers distinguish auto-continuation from fresh webhook trigger (IMPLEMENTED)
 - v5 Phase 14: conditionCheckService no_documents_email_sent block placed BEFORE document_reminder_sent_via_side_conversation (mutually exclusive paths) (IMPLEMENTED)
-- v5 Phase 15: Replace/extend markPaymentReceived endpoint (currently only sets flag) to run full handler logic
+- v5 Phase 15: Admin trigger-payment-handler endpoint delegates to handleUserPaymentConfirmed via synthetic request — zero code duplication, agent_email='admin-dashboard' identifies admin-triggered runs in logs (IMPLEMENTED)
 - [Phase 10-backend-german-field-support]: Undefined-guard spread pattern for German fields: each field only written to creditor document if explicitly sent in request body
 - [Phase 11-inline-cell-editing]: EditableCell boolean type converts Ja/Nein to true/false before PUT; transformBeforeSend prop supports array conversion for review_reasons; 150ms blur timeout prevents select option click race condition (IMPLEMENTED)
 
@@ -62,14 +62,14 @@ Recent decisions affecting v5 work:
 
 ### Blockers/Concerns
 
-- Phase 15: Existing markPaymentReceived endpoint only sets flag — needs full handler logic wired in
+None — all phases complete.
 
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Phase 11 complete — Inline Cell Editing verified and approved
+Stopped at: Phase 15 complete — Admin Trigger Payment Handler endpoint added
 Resume file: None
-Next step: `/gsd:plan-phase 12` (Row Management — add/delete creditor rows)
+Next step: Frontend integration — call POST /api/admin/clients/:clientId/trigger-payment-handler from admin panel
 
 ---
-*Last updated: 2026-02-17 (Phase 11 complete)*
+*Last updated: 2026-02-17 (Phase 15 complete)*
