@@ -170,48 +170,43 @@ class ClientCreditorController {
 
             await this.saveClient(client);
 
-            // Auto-trigger creditor contact
-            const creditors = client.final_creditor_list || [];
-            let creditorContactResult = null;
-
-            if (creditors.length > 0) {
-                try {
-                    console.log(`🚀 Auto-triggering creditor contact for ${client.aktenzeichen}...`);
-                    creditorContactResult = await this.creditorContactService.processClientCreditorConfirmation(client.aktenzeichen);
-                    console.log(`✅ Creditor contact initiated: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
-
-                    // Start monitoring
-                    if (this.sideConversationMonitor) {
-                        // Ensure monitor has access to latest service instance if needed (usually handled via dependency injection)
-                        this.sideConversationMonitor.creditorContactService = this.creditorContactService; // Ensuring linkage
-
-                        // Small delay
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        const monitorResult = await this.sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
-                        if (monitorResult && monitorResult.success) {
-                            console.log(`✅ Started monitoring ${monitorResult.side_conversations_count} Side Conversations`);
-                        }
-                    }
-
-                    // Add internal comment to Zendesk
-                    if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {
-                        await this.addZendeskComment(client, creditors, creditorContactResult);
-                    }
-
-                } catch (creditorError) {
-                    console.error(`❌ Failed to initiate creditor contact:`, creditorError.message);
-                }
-            }
-
+            // --- Fast path: respond immediately after DB save ---
             res.json({
                 success: true,
                 message: 'Gläubigerliste erfolgreich bestätigt',
-                status: 'creditor_contact_initiated',
-                creditor_contact: creditorContactResult ? {
-                    emails_sent: creditorContactResult.emails_sent,
-                    main_ticket_id: creditorContactResult.main_ticket_id
-                } : null
+                status: 'creditor_contact_initiated'
             });
+
+            // --- Slow path: fire-and-forget email sending ---
+            const aktenzeichen = client.aktenzeichen;
+            const creditors = client.final_creditor_list || [];
+
+            if (creditors.length > 0) {
+                (async () => {
+                    try {
+                        console.log(`🔄 [Background] Starting creditor contact for ${aktenzeichen}...`);
+                        const creditorContactResult = await this.creditorContactService.processClientCreditorConfirmation(aktenzeichen);
+                        console.log(`✅ [Background] Creditor contact completed: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+
+                        if (this.sideConversationMonitor) {
+                            this.sideConversationMonitor.creditorContactService = this.creditorContactService;
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            const monitorResult = await this.sideConversationMonitor.startMonitoringForClient(aktenzeichen, 1);
+                            if (monitorResult && monitorResult.success) {
+                                console.log(`✅ [Background] Started monitoring ${monitorResult.side_conversations_count} Side Conversations`);
+                            }
+                        }
+
+                        if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {
+                            await this.addZendeskComment(client, creditors, creditorContactResult);
+                        }
+
+                        console.log(`✅ [Background] All creditor contact tasks completed for ${aktenzeichen}`);
+                    } catch (bgError) {
+                        console.error(`❌ [Background] Failed creditor contact for ${aktenzeichen}:`, bgError.message);
+                    }
+                })();
+            }
 
         } catch (error) {
             console.error('Error confirming creditors:', error);
