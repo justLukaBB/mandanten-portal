@@ -7,21 +7,21 @@
 
 ### Payment Flow — No Documents Case
 
-- [ ] **PAY-01**: When 1. Rate is confirmed and no documents exist, system sends email via Resend asking client to upload documents
-- [ ] **PAY-02**: When 1. Rate is confirmed and no documents exist, no Zendesk review ticket is created
-- [ ] **PAY-03**: When 1. Rate is confirmed and documents exist, existing flow continues unchanged (Gläubigeranalyse, Zendesk Ticket, ggf. Auto-Approval Email)
+- [x] **PAY-01**: When 1. Rate is confirmed and no documents exist, system sends email via Resend asking client to upload documents
+- [x] **PAY-02**: When 1. Rate is confirmed and no documents exist, no Zendesk review ticket is created
+- [x] **PAY-03**: When 1. Rate is confirmed and documents exist, existing flow continues unchanged (Gläubigeranalyse, Zendesk Ticket, ggf. Auto-Approval Email)
 
 ### Auto-Continuation After Document Upload
 
-- [ ] **CONT-01**: After client uploads documents and AI processing completes, full payment flow runs automatically if 1. Rate was already paid
-- [ ] **CONT-02**: Auto-continuation performs identical logic to webhook-triggered payment handler (dedup wait, creditor analysis, Zendesk ticket, email)
+- [x] **CONT-01**: After client uploads documents and AI processing completes, full payment flow runs automatically if 1. Rate was already paid
+- [x] **CONT-02**: Auto-continuation performs identical logic to webhook-triggered payment handler (dedup wait, creditor analysis, Zendesk ticket, email)
 
 ### Admin Dashboard Button
 
-- [ ] **ADMIN-01**: Admin can trigger full payment handler from button in Client-Detail view
-- [ ] **ADMIN-02**: Button is always visible regardless of payment status
-- [ ] **ADMIN-03**: Button shows warning/confirmation if client already has first_payment_received = true
-- [ ] **ADMIN-04**: Admin-triggered payment flow runs identical logic to Zendesk webhook (Gläubigeranalyse, Zendesk Ticket, Email, 7-Tage-Review)
+- [x] **ADMIN-01**: Admin can trigger full payment handler from button in Client-Detail view
+- [x] **ADMIN-02**: Button is always visible regardless of payment status
+- [x] **ADMIN-03**: Button shows warning/confirmation if client already has first_payment_received = true
+- [x] **ADMIN-04**: Admin-triggered payment flow runs identical logic to Zendesk webhook (Gläubigeranalyse, Zendesk Ticket, Email, 7-Tage-Review)
 
 ## Future Requirements
 
@@ -45,21 +45,22 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | Phase 13 | Pending |
-| PAY-02 | Phase 13 | Pending |
-| PAY-03 | Phase 13 | Pending |
-| CONT-01 | Phase 14 | Pending |
-| CONT-02 | Phase 14 | Pending |
-| ADMIN-01 | Phase 15 | Pending |
-| ADMIN-02 | Phase 15 | Pending |
-| ADMIN-03 | Phase 15 | Pending |
-| ADMIN-04 | Phase 15 | Pending |
+| PAY-01 | Phase 13 | Satisfied |
+| PAY-02 | Phase 13 | Satisfied |
+| PAY-03 | Phase 13 | Satisfied |
+| CONT-01 | Phase 14 | Satisfied |
+| CONT-02 | Phase 14 | Satisfied |
+| ADMIN-01 | Phase 15 | Satisfied |
+| ADMIN-02 | Phase 15 | Satisfied |
+| ADMIN-03 | Phase 15 | Satisfied |
+| ADMIN-04 | Phase 15 | Satisfied |
 
 **Coverage:**
 - v5 requirements: 9 total
 - Mapped to phases: 9
+- Satisfied: 9/9 ✓
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after roadmap creation*
+*Last updated: 2026-02-17 after gap closure (documentation fixes)*
