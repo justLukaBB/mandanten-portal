@@ -346,7 +346,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
   const handleCreditorFieldSaved = (creditorId: string, fieldName: string, newValue: string) => {
     setUser(prev => {
-      if (!prev) return prev;
+      if (!prev) { return prev; }
       return {
         ...prev,
         final_creditor_list: prev.final_creditor_list?.map(c =>
@@ -410,7 +410,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
 
       // Append new creditor to user's final_creditor_list
       setUser(prev => {
-        if (!prev) return prev;
+        if (!prev) { return prev; }
         return {
           ...prev,
           final_creditor_list: [...(prev.final_creditor_list || []), newCreditor]
@@ -524,12 +524,12 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         parts.push(`Status: Übersprungen (${result.message})`);
       } else {
         parts.push(`Status: ${result.client_status || 'Unbekannt'}`);
-        if (result.payment_ticket_type) parts.push(`Ticket-Typ: ${result.payment_ticket_type}`);
-        if (result.extracted_creditors !== undefined) parts.push(`Gläubiger: ${result.extracted_creditors}`);
-        if (result.manual_review_required !== undefined) parts.push(`Manuelle Prüfung: ${result.manual_review_required ? 'Ja' : 'Nein'}`);
-        if (result.auto_approved) parts.push('Auto-Freigabe: Ja');
-        if (result.zendesk_ticket?.ticket_id) parts.push(`Zendesk Ticket: ${result.zendesk_ticket.ticket_id}`);
-        if (result.no_documents_email_sent) parts.push('Dokument-Anfrage Email gesendet');
+        if (result.payment_ticket_type) { parts.push(`Ticket-Typ: ${result.payment_ticket_type}`); }
+        if (result.extracted_creditors !== undefined) { parts.push(`Gläubiger: ${result.extracted_creditors}`); }
+        if (result.manual_review_required !== undefined) { parts.push(`Manuelle Prüfung: ${result.manual_review_required ? 'Ja' : 'Nein'}`); }
+        if (result.auto_approved) { parts.push('Auto-Freigabe: Ja'); }
+        if (result.zendesk_ticket?.ticket_id) { parts.push(`Zendesk Ticket: ${result.zendesk_ticket.ticket_id}`); }
+        if (result.no_documents_email_sent) { parts.push('Dokument-Anfrage Email gesendet'); }
       }
 
       setPaymentHandlerResult(parts.join('\n'));
@@ -553,7 +553,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
         'Ein erneutes Auslösen kann zu doppelten Zendesk-Tickets führen.\n\n' +
         'Trotzdem fortfahren?'
       );
-      if (!confirmed) return;
+      if (!confirmed) { return; }
     }
     triggerPaymentHandler();
   };
