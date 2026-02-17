@@ -139,13 +139,16 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                 // Create new creditor
                 const resolvedName = sender_name || glaeubiger_name;
+                const resolvedEmail = sender_email || email_glaeubiger || '';
+                const resolvedAddress = sender_address || glaeubiger_adresse || '';
+                const resolvedAmount = claim_amount || forderungbetrag || '0';
                 const newCreditor = {
                     id: uuidv4(),
                     sender_name: resolvedName.trim(),
-                    sender_email: sender_email?.trim() || '',
-                    sender_address: sender_address?.trim() || '',
+                    sender_email: resolvedEmail.trim(),
+                    sender_address: resolvedAddress.trim(),
                     reference_number: reference_number?.trim() || '',
-                    claim_amount: claim_amount ? parseFloat(claim_amount) : 0,
+                    claim_amount: parseFloat(String(resolvedAmount).replace(/[^\d.,\-]/g, '').replace(',', '.')) || 0,
                     is_representative: is_representative === true,
                     actual_creditor: actual_creditor?.trim() || '',
 

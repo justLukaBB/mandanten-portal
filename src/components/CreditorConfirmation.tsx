@@ -23,6 +23,15 @@ interface Creditor {
   ai_confidence: number;
   status: string;
   created_at: string;
+  // German field names (manual admin entries)
+  glaeubiger_name?: string;
+  glaeubiger_adresse?: string;
+  glaeubigervertreter_name?: string;
+  glaeubigervertreter_adresse?: string;
+  forderungbetrag?: string;
+  email_glaeubiger?: string;
+  email_glaeubiger_vertreter?: string;
+  dokumenttyp?: string;
 }
 
 interface CreditorConfirmationData {
@@ -280,7 +289,7 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
                       <BuildingOfficeIcon className="w-5 h-5 text-gray-400" />
-                      <h4 className="font-semibold text-gray-900">{creditor.sender_name}</h4>
+                      <h4 className="font-semibold text-gray-900">{creditor.glaeubiger_name || creditor.sender_name}</h4>
                       {creditor.is_representative && creditor.actual_creditor && (
                         <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                           Vertreter für: {creditor.actual_creditor}
@@ -292,11 +301,11 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
                           <EnvelopeIcon className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">{creditor.sender_email || 'Keine E-Mail'}</span>
+                          <span className="text-gray-600">{creditor.email_glaeubiger || creditor.sender_email || 'Keine E-Mail'}</span>
                         </div>
                         <div className="flex items-start space-x-2">
                           <BuildingOfficeIcon className="w-4 h-4 text-gray-400 mt-0.5" />
-                          <span className="text-gray-600">{creditor.sender_address || 'Keine Adresse'}</span>
+                          <span className="text-gray-600">{creditor.glaeubiger_adresse || creditor.sender_address || 'Keine Adresse'}</span>
                         </div>
                       </div>
 
@@ -308,14 +317,26 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                         <div className="flex items-center space-x-2">
                           <CurrencyEuroIcon className="w-4 h-4 text-gray-400" />
                           <span className="text-gray-600">
-                            {creditor.claim_amount ? `${creditor.claim_amount.toFixed(2)} €` : 'Betrag unbekannt'}
+                            {creditor.forderungbetrag || (creditor.claim_amount ? `${creditor.claim_amount.toFixed(2)} €` : 'Betrag unbekannt')}
                           </span>
                         </div>
                       </div>
                     </div>
 
+                    {/* Gläubigervertreter - show if available */}
+                    {(creditor.glaeubigervertreter_name) && (
+                      <div className="mt-2 text-sm text-gray-500 border-t border-gray-100 pt-2">
+                        <span className="font-medium">Gläubigervertreter:</span> {creditor.glaeubigervertreter_name}
+                        {creditor.glaeubigervertreter_adresse && ` — ${creditor.glaeubigervertreter_adresse}`}
+                        {creditor.email_glaeubiger_vertreter && (
+                          <span className="ml-2">({creditor.email_glaeubiger_vertreter})</span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                       <span>Quelle: {creditor.source_document}</span>
+                      {creditor.dokumenttyp && <span>Typ: {creditor.dokumenttyp}</span>}
                     </div>
                   </div>
                 </div>
