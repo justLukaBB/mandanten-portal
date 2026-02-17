@@ -27,10 +27,10 @@
 
 ### Editable Creditor Table (deferred from v4)
 
-- **EDIT-01**: Admin can inline-edit all cells in Gläubiger-Tabelle
-- **EDIT-02**: Auto-save on blur with success/error feedback
-- **EDIT-03**: Admin can add new creditor rows
-- **EDIT-04**: Admin can delete creditor rows with confirmation
+- [x] **EDIT-01**: Admin can inline-edit all cells in Gläubiger-Tabelle
+- [x] **EDIT-02**: Auto-save on blur with success/error feedback
+- [x] **EDIT-03**: Admin can add new creditor rows
+- [x] **EDIT-04**: Admin can delete creditor rows with confirmation
 
 ## Out of Scope
 
@@ -54,11 +54,14 @@
 | ADMIN-02 | Phase 15 | Satisfied |
 | ADMIN-03 | Phase 15 | Satisfied |
 | ADMIN-04 | Phase 15 | Satisfied |
+| EDIT-01 | Phase 11 | Satisfied |
+| EDIT-02 | Phase 11 | Satisfied |
+| EDIT-03 | Phase 12 | Satisfied |
+| EDIT-04 | Phase 12 | Satisfied |
 
 **Coverage:**
-- v5 requirements: 9 total
-- Mapped to phases: 9
-- Satisfied: 9/9 ✓
+- v5 requirements: 9 total → Satisfied: 9/9 ✓
+- v4 requirements: 4 total → Satisfied: 4/4 ✓
 - Unmapped: 0 ✓
 
 ---

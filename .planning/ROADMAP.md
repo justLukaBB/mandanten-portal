@@ -236,7 +236,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 9. Multi-Page Extraction | v3 | 2/2 | Complete | 2026-02-09 |
 | 10. Backend German Field Support | v4 | 1/1 | Complete | 2026-02-17 |
 | 11. Inline Cell Editing | v4 | 1/1 | Complete | 2026-02-17 |
-| 12. Row Management | v4 | 0/TBD | Not started | - |
+| 12. Row Management | v4 | Complete    | 2026-02-17 | - |
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | Complete    | 2026-02-17 | - |
