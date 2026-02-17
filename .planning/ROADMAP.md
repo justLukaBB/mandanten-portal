@@ -154,7 +154,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 11-01-PLAN.md -- Create EditableCell component + replace Gläubiger-Tabelle static cells with inline-edit cells wired to PUT endpoint
+- [x] 11-01-PLAN.md -- Create EditableCell component + replace Gläubiger-Tabelle static cells with inline-edit cells wired to PUT endpoint
 
 #### Phase 12: Row Management
 **Goal**: Admin can add new creditor rows and delete existing rows, with the table reflecting changes immediately
@@ -235,7 +235,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 8. FastAPI PDF Support | v3 | 2/2 | Complete | 2026-02-09 |
 | 9. Multi-Page Extraction | v3 | 2/2 | Complete | 2026-02-09 |
 | 10. Backend German Field Support | v4 | 1/1 | Complete | 2026-02-17 |
-| 11. Inline Cell Editing | v4 | 0/TBD | Not started | - |
+| 11. Inline Cell Editing | v4 | 1/1 | Complete | 2026-02-17 |
 | 12. Row Management | v4 | 0/TBD | Not started | - |
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
