@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Admin Frontend Migration
+**Current focus:** v8 — Phase 19: Project Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-18 — Milestone v8 started
+Phase: 19 of 22 (Project Foundation)
+Plan: 0 of 3 in current phase
+Status: Ready to plan
+Last activity: 2026-02-18 — v8 roadmap created, phases 19-22 defined
+
+Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7)
 
 ## Performance Metrics
 
@@ -65,7 +67,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 **Auth-System:**
 - POST /api/admin/login → admin_token in localStorage
 - Bearer token auth via Authorization header
-- Token refresh mechanism
 
 ### Pending Todos
 
@@ -79,9 +80,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Starting v8 milestone — defining requirements
+Stopped at: v8 roadmap created — phases 19-22 defined
 Resume file: None
-Next step: Define requirements and create roadmap
+Next step: /gsd:plan-phase 19
 
 ---
-*Last updated: 2026-02-18 (v8 milestone start)*
+*Last updated: 2026-02-18 (v8 roadmap created)*

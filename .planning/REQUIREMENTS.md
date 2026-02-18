@@ -93,29 +93,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | — | Pending |
-| SETUP-02 | — | Pending |
-| SETUP-03 | — | Pending |
-| SETUP-04 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| AUTH-03 | — | Pending |
-| LIST-01 | — | Pending |
-| LIST-02 | — | Pending |
-| LIST-03 | — | Pending |
-| LIST-04 | — | Pending |
-| LIST-05 | — | Pending |
-| DETAIL-01 | — | Pending |
-| DETAIL-02 | — | Pending |
-| DETAIL-03 | — | Pending |
-| DETAIL-04 | — | Pending |
-| DETAIL-05 | — | Pending |
+| SETUP-01 | Phase 19 | Pending |
+| SETUP-02 | Phase 19 | Pending |
+| SETUP-03 | Phase 19 | Pending |
+| SETUP-04 | Phase 19 | Pending |
+| AUTH-01 | Phase 20 | Pending |
+| AUTH-02 | Phase 20 | Pending |
+| AUTH-03 | Phase 20 | Pending |
+| LIST-01 | Phase 21 | Pending |
+| LIST-02 | Phase 21 | Pending |
+| LIST-03 | Phase 21 | Pending |
+| LIST-04 | Phase 21 | Pending |
+| LIST-05 | Phase 21 | Pending |
+| DETAIL-01 | Phase 22 | Pending |
+| DETAIL-02 | Phase 22 | Pending |
+| DETAIL-03 | Phase 22 | Pending |
+| DETAIL-04 | Phase 22 | Pending |
+| DETAIL-05 | Phase 22 | Pending |
 
 **Coverage:**
 - v8 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0 (100% coverage)
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after initial definition*
+*Last updated: 2026-02-18 — traceability updated after roadmap creation*

@@ -9,7 +9,8 @@
 - ✅ **v4 Editable Creditor Table** - Phases 10-12 (shipped 2026-02-17)
 - ✅ **v5 1. Rate Bestätigung** - Phases 13-15 (shipped 2026-02-17)
 - ✅ **v6 Async Creditor Confirm** - Phase 16 (shipped 2026-02-17)
-- 🚧 **v7 FastAPI Webhook Field Integration** - Phases 17-18 (in progress)
+- ✅ **v7 FastAPI Webhook Field Integration** - Phases 17-18 (shipped 2026-02-18)
+- 🚧 **v8 Admin Frontend Migration** - Phases 19-22 (in progress)
 
 ## Phases
 
@@ -241,9 +242,8 @@ Plans:
 
 </details>
 
-### 🚧 v7 FastAPI Webhook Field Integration (Phases 17-18)
-
-**Milestone Goal:** Neue Felder aus dem FastAPI Accuracy Milestone (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags) werden im Node.js Backend gespeichert und durch Dedup/Merge geleitet — ohne Frontend-Änderungen.
+<details>
+<summary>✅ v7 FastAPI Webhook Field Integration (Phases 17-18) - SHIPPED 2026-02-18</summary>
 
 #### Phase 17: Schema and Webhook Field Mapping
 **Goal**: All 5 new FastAPI fields are stored in MongoDB — creditorSchema and documentSchema accept them, and the webhook controller maps them from FastAPI payloads into both collections
@@ -257,7 +257,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 17-01-PLAN.md — Schema fields + address_source enrichment logic
+- [x] 17-01-PLAN.md — Schema fields + address_source enrichment logic
 
 #### Phase 18: Merge Logic for New Fields
 **Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
@@ -271,42 +271,85 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 18-01-PLAN.md — Merge logic for aktenzeichen_glaeubigervertreter (longest-wins) + Postfach flags (OR-logic) + field propagation in deduplicateCreditorsFromDocuments
+- [x] 18-01-PLAN.md — Merge logic for aktenzeichen_glaeubigervertreter (longest-wins) + Postfach flags (OR-logic) + field propagation in deduplicateCreditorsFromDocuments
+
+</details>
+
+### 🚧 v8 Admin Frontend Migration (Phases 19-22)
+
+**Milestone Goal:** Das neue Design aus MandantenPortalDesign (Vite + shadcn/ui + Tailwind 4) als Admin-Frontend aufsetzen und die bestehenden Design-Views (Client-Liste + Client-Detail) an das Node.js Backend anbinden.
 
 ## Phase Details
 
-### Phase 17: Schema and Webhook Field Mapping
-**Goal**: All 5 new FastAPI fields are stored in MongoDB — creditorSchema and documentSchema accept them, and the webhook controller maps them from FastAPI payloads into both collections
-**Depends on**: Phase 16
-**Requirements**: SCHEMA-01, SCHEMA-02, HOOK-01, HOOK-02
+### Phase 19: Project Foundation
+**Goal**: The MandantenPortalDesign prototype runs as a properly configured Vite project with routing, API layer, and design system wired up — ready for auth and data integration
+**Depends on**: Phase 18 (v7 shipped)
+**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04
 **Success Criteria** (what must be TRUE):
-  1. A FastAPI webhook payload containing aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, and glaeubiger_vertreter_adresse_ist_postfach results in all 5 fields persisted on the creditor document in MongoDB
-  2. A webhook payload containing the 5 new fields results in them also being stored on the corresponding document's extracted_data.creditor_data subdocument in MongoDB
-  3. A webhook payload omitting any of the 5 new fields does not cause a validation error — fields default to null/false as appropriate
-  4. When enrichDedupedCreditorFromDb replaces a creditor's address from the local DB, the creditor's address_source field is set to "local_db"
-**Plans**: 1 plan
+  1. Running `npm run dev` starts the Vite dev server and the app loads in the browser without errors
+  2. Navigating to `/clients` and `/clients/:id` renders the correct view — the Sidebar highlights the active route
+  3. RTK Query base URL can be switched between dev (localhost) and prod via a single environment variable
+  4. All existing shadcn/ui components, DM Sans and JetBrains Mono fonts, and Tailwind 4 theme variables render correctly
+**Plans**: TBD
 
 Plans:
-- [ ] 17-01-PLAN.md — Schema fields + address_source enrichment logic
+- [ ] 19-01: Vite config, TypeScript, environment variables, and dev/prod base URL setup
+- [ ] 19-02: React Router route structure + Sidebar active-link wiring
+- [ ] 19-03: RTK Query API slice setup + design system audit (fonts, theme, shadcn/ui)
 
-### Phase 18: Merge Logic for New Fields
-**Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
-**Depends on**: Phase 17
-**Requirements**: MERGE-01, MERGE-02
+### Phase 20: Authentication
+**Goal**: Admins can log in with email and password, stay authenticated across page reloads, and are automatically redirected to the login page when not authenticated
+**Depends on**: Phase 19
+**Requirements**: AUTH-01, AUTH-02, AUTH-03
 **Success Criteria** (what must be TRUE):
-  1. When two creditors are merged and both have aktenzeichen_glaeubigervertreter values, the longer non-empty string is kept on the merged creditor
-  2. When two creditors are merged and one has aktenzeichen_glaeubigervertreter set and the other has it empty/null, the non-empty value is kept
-  3. When two creditors are merged and either has glaeubiger_adresse_ist_postfach = true, the merged creditor has glaeubiger_adresse_ist_postfach = true
-  4. When two creditors are merged and either has glaeubiger_vertreter_adresse_ist_postfach = true, the merged creditor has glaeubiger_vertreter_adresse_ist_postfach = true
-**Plans**: 1 plan
+  1. Admin navigates to the app, enters email and password on the login page, and is redirected to the client list on success
+  2. Admin reloads the page while logged in — the app does not redirect to login; the token persists in localStorage and is sent as a Bearer token on all API requests
+  3. Admin navigates to a protected route (e.g., `/clients`) without a valid token — the app redirects to `/login`
+  4. Admin clicks logout — the token is removed from localStorage and the admin is redirected to the login page
+**Plans**: TBD
 
 Plans:
-- [ ] 18-01-PLAN.md — Merge logic for aktenzeichen_glaeubigervertreter (longest-wins) + Postfach flags (OR-logic) + field propagation in deduplicateCreditorsFromDocuments
+- [ ] 20-01: Login page wired to POST /api/admin/login + token storage + logout action
+- [ ] 20-02: Protected route wrapper + redirect logic for unauthenticated navigation
+
+### Phase 21: Client List
+**Goal**: Admins see a paginated list of real clients from the backend, with working search, status filter, flow filter, and correctly rendered status and flow badges
+**Depends on**: Phase 20
+**Requirements**: LIST-01, LIST-02, LIST-03, LIST-04, LIST-05
+**Success Criteria** (what must be TRUE):
+  1. Admin opens the client list and sees real client records loaded from GET /api/admin/clients — not mock data
+  2. Admin types a name, Fall-ID, or email into the search field and the list updates to show only matching clients
+  3. Admin selects a status filter (Active, Pending, In Review, Blocked, Closed) and only clients with that status are shown
+  4. Admin selects a flow filter (e.g., "Portal zugesendet", "1. Anschreiben") and the list filters correctly
+  5. Each client row shows the correct Status-Badge and Flow-Badge using the same visual design as the prototype
+**Plans**: TBD
+
+Plans:
+- [ ] 21-01: RTK Query endpoint for GET /api/admin/clients + replace mock data in Client-Liste component
+- [ ] 21-02: Search, status filter, and flow filter wired to query parameters + pagination controls
+
+### Phase 22: Client Detail
+**Goal**: Admins can open any client and see real data across all tabs — overview with workflow timeline, profile with Stammdaten, documents with AI confidence scores, creditors with all fields including v7 fields, and activity log
+**Depends on**: Phase 21
+**Requirements**: DETAIL-01, DETAIL-02, DETAIL-03, DETAIL-04, DETAIL-05
+**Success Criteria** (what must be TRUE):
+  1. Admin clicks a client row and sees the Übersicht tab with real workflow status and phase timeline loaded from GET /api/admin/clients/:clientId/workflow-status
+  2. Admin opens the Profil tab and sees real Stammdaten (name, email, Fall-ID, address) for that client
+  3. Admin opens the Dokumente tab and sees all uploaded documents with their AI confidence scores — not mock data
+  4. Admin opens the Gläubiger tab and sees all creditors including the five v7 fields (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, glaeubiger_vertreter_adresse_ist_postfach)
+  5. Admin opens the Aktivität tab and sees the workflow event history for that client in chronological order
+**Plans**: TBD
+
+Plans:
+- [ ] 22-01: RTK Query endpoints for workflow-status + Stammdaten + wire Übersicht and Profil tabs
+- [ ] 22-02: Dokumente tab wired to real document data with confidence scores
+- [ ] 22-03: Gläubiger tab wired to real creditor data including all v7 fields
+- [ ] 22-04: Aktivität tab wired to workflow event history
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -326,8 +369,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
 | 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
-| 17. Schema and Webhook Field Mapping | v7 | Complete    | 2026-02-18 | - |
-| 18. Merge Logic for New Fields | v7 | Complete    | 2026-02-18 | - |
+| 17. Schema and Webhook Field Mapping | v7 | 1/1 | Complete | 2026-02-18 |
+| 18. Merge Logic for New Fields | v7 | 1/1 | Complete | 2026-02-18 |
+| 19. Project Foundation | v8 | 0/3 | Not started | - |
+| 20. Authentication | v8 | 0/2 | Not started | - |
+| 21. Client List | v8 | 0/2 | Not started | - |
+| 22. Client Detail | v8 | 0/4 | Not started | - |
 
 ---
 *Last updated: 2026-02-18*
