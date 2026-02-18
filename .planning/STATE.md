@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 21: Client List (complete) — All 2 plans complete
+**Current focus:** v8 — Phase 22: Client Detail — Plan 01 complete
 
 ## Current Position
 
-Phase: 21 of 22 (Client List) — COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 21 complete — ready for Phase 22 (Client Detail)
-Last activity: 2026-02-18 — Plan 21-02 complete (URL-synced filters, filter chips, page size selector, zero-results state, mock data removed from App.tsx)
+Phase: 22 of 22 (Client Detail) — IN PROGRESS
+Plan: 1 of N complete
+Status: Plan 22-01 complete — ClientDetail wired to real API, Übersicht + Profil tabs with live data
+Last activity: 2026-02-18 — Plan 22-01 complete (RTK Query endpoints, ClientDetail refactored from mock props to real API data)
 
 Progress: [████████████░░░░░░░░] 21/22 phases complete (v1-v7, v8 phases 19-21 complete)
 
@@ -44,6 +44,7 @@ Progress: [████████████░░░░░░░░] 21/22 p
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
+| Phase 22 P01 | 5 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - App.tsx ClientDetailPage shows placeholder until Phase 22 wires useGetClientQuery — mockClients.find() removed entirely
 - Sidebar recentCases={[]} for now — real recent cases data wired in Phase 22
 
+**22-01 decisions:**
+- ClientDetail props changed from client: Client to clientId: string — component now owns data fetching
+- derivePhases maps workflow_status to 3-phase timeline; Phase 1 complete when creditor_contact_active or later
+- totalAmount computed client-side via Intl.NumberFormat from final_creditor_list.claim_amount sum
+- Manuell bestätigen button removed — rate confirmation is read-only from backend (enhancement if needed later)
+- Documents/creditors/activity tabs use real data arrays even if rendering is basic — data flow established for 22-02/03/04
+
 ### v8 Context
 
 **Migration source:** MandantenPortalDesign/ (Vite + React 18.3 + Tailwind 4 + shadcn/ui)
@@ -128,9 +136,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 21-02-PLAN.md (URL-synced filters, filter chips, page size, zero-results state, mock data removed from App.tsx)
-Resume file: .planning/phases/22-client-detail/22-01-PLAN.md (or create Phase 22 plans)
-Next step: Phase 22 — Client Detail (wire ClientDetail to real API, update Sidebar recentCases)
+Stopped at: Completed 22-01-PLAN.md (RTK Query client detail endpoints, ClientDetail refactored to real API data, Übersicht + Profil tabs wired)
+Resume file: .planning/phases/22-client-detail/22-02-PLAN.md
+Next step: Phase 22 Plan 02 — Documents tab with real data
 
 ---
-*Last updated: 2026-02-18 (Plan 21-02 complete — URL-synced filters + filter chips + page size selector + App.tsx mock data removal)*
+*Last updated: 2026-02-18 (Plan 22-01 complete — clientDetailApi.ts + ClientDetail refactor with real data fetching)*
