@@ -268,7 +268,10 @@ Plans:
   2. When two creditors are merged and one has aktenzeichen_glaeubigervertreter set and the other has it empty/null, the non-empty value is kept
   3. When two creditors are merged and either has glaeubiger_adresse_ist_postfach = true, the merged creditor has glaeubiger_adresse_ist_postfach = true
   4. When two creditors are merged and either has glaeubiger_vertreter_adresse_ist_postfach = true, the merged creditor has glaeubiger_vertreter_adresse_ist_postfach = true
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 18-01-PLAN.md — Merge logic for aktenzeichen_glaeubigervertreter (longest-wins) + Postfach flags (OR-logic) + field propagation in deduplicateCreditorsFromDocuments
 
 ## Phase Details
 
@@ -295,7 +298,10 @@ Plans:
   2. When two creditors are merged and one has aktenzeichen_glaeubigervertreter set and the other has it empty/null, the non-empty value is kept
   3. When two creditors are merged and either has glaeubiger_adresse_ist_postfach = true, the merged creditor has glaeubiger_adresse_ist_postfach = true
   4. When two creditors are merged and either has glaeubiger_vertreter_adresse_ist_postfach = true, the merged creditor has glaeubiger_vertreter_adresse_ist_postfach = true
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 18-01-PLAN.md — Merge logic for aktenzeichen_glaeubigervertreter (longest-wins) + Postfach flags (OR-logic) + field propagation in deduplicateCreditorsFromDocuments
 
 ## Progress
 
