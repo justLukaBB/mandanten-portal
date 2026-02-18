@@ -8,14 +8,15 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v7 FastAPI Webhook Field Integration
+## Current Milestone: v8 Admin Frontend Migration
 
-**Goal:** Neue Felder aus dem FastAPI Accuracy Milestone (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags) werden im Node.js Backend gespeichert und durch Dedup/Merge geleitet — ohne Frontend-Änderungen.
+**Goal:** Das neue Design aus MandantenPortalDesign (Vite + shadcn/ui + Tailwind 4) als Admin-Frontend aufsetzen und die bestehenden Design-Views (Client-Liste + Client-Detail) an das Node.js Backend anbinden.
 
 **Target features:**
-- Mongoose Schema erweitert um 5 neue Felder (creditorSchema + documentSchema)
-- Webhook Controller mapped neue Felder aus dem FastAPI-Payload in MongoDB
-- Creditor Dedup/Merge erhält neue Felder (aktenzeichen_glaeubigervertreter merge, Postfach OR-Logik)
+- Vite-Projekt mit Routing, Auth und API-Layer aufsetzen
+- Admin-Login mit bestehendem Backend-Auth-System
+- Client-Liste mit Echtdaten (Suche, Filter, Pagination) via /api/admin/clients
+- Client-Detail-View mit Tabs (Übersicht, Dokumente, Gläubiger) an Backend-Endpoints
 
 ## Requirements
 
@@ -43,38 +44,42 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-- [ ] Mongoose Schema speichert alle 5 neuen FastAPI-Felder (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags)
-- [ ] Webhook Controller extrahiert neue Felder aus FastAPI-Payload und speichert sie in MongoDB
-- [ ] Creditor Merge erhält neue Felder korrekt (aktenzeichen longest-wins, Postfach OR-Logik)
+- [ ] Vite-Projekt mit React Router, Redux/RTK Query aufsetzen
+- [ ] Admin-Authentifizierung (Login, Token-Management, Protected Routes)
+- [ ] Client-Liste mit Backend-Anbindung (Suche, Filter, Pagination)
+- [ ] Client-Detail-View mit echten Daten (Übersicht, Dokumente, Gläubiger, Workflow-Status)
 
 ### Out of Scope
 
-- Changing the Zendesk checkbox trigger — existing webhook stays as-is
-- Email-Status für User sichtbar machen — Admin sieht Status, User nicht nötig
-- Email templates redesign — bestehende Templates bleiben
-- Frontend-Display der neuen Felder — v7 ist Backend-only, UI folgt später
-- Filtered-Bucket-Anzeige (DR II / M-Pattern) — wird nur in FastAPI gefiltert, nicht im Portal
+- Client Portal (Mandanten-Ansicht) — kommt in späterem Milestone
+- Agent Portal — kommt in späterem Milestone
+- Neue Admin-Features über bestehende Design-Views hinaus — nur was im Design existiert
+- Analytics Dashboard — Design existiert noch nicht
+- User-Erstellung / Settings — Design existiert noch nicht
+- Backend-Änderungen — bestehendes API bleibt unverändert
 
 ## Context
 
-Shipped v1 (payment status flow), v2 (robust dedup), v2.1 (Aktenzeichen fix), v2.2 (Resend email attachments), v3 (multi-page PDF), v4 (editable creditor table), v5 (1. Rate Bestätigung).
-FastAPI AI service repo: `github.com/justLukaBB/Creditor-process-fastAPI` (branch: `fix/over-aggressive-dedup`).
-FastAPI currently only processes images (JPG/PNG) — `_load_image_as_part()` has no PDF MIME type mapping.
-Gemini 2.5 Pro supports PDF input natively via `Part.from_data(pdf_bytes, "application/pdf")` with 1M input tokens.
-Multi-creditor splitting logic already exists in Node.js webhook handler (`creditor_index`, `creditor_count`, `source_document_id`).
-Node.js backend already accepts PDF uploads and sends them to FastAPI — FastAPI just can't process them.
+Shipped v1-v7 backend features (payment flow, dedup, PDF, creditor table, email, webhook fields).
+New frontend design exists in `MandantenPortalDesign/` — Vite + React 18.3 + Tailwind CSS 4 + shadcn/ui.
+Design has 48 UI components, Client-Liste, Client-Detail mit Tabs, Sidebar, Status/Flow-Badges.
+Design is a Figma-generated prototype with mock data — no routing, no API, no auth.
+Backend API already has all needed endpoints (admin/clients, workflow-status, documents, creditors).
 
 Tech stack:
-- **Backend**: Node.js/Express, MongoDB
+- **Backend**: Node.js/Express, MongoDB (unchanged)
 - **AI Service**: Python FastAPI, Google Vertex AI (Gemini 2.5 Pro), deployed on Render
-- **Frontend**: React
+- **Old Frontend**: React (CRA), Redux/RTK Query, Tailwind 3
+- **New Frontend**: React (Vite), shadcn/ui, Tailwind 4, DM Sans + JetBrains Mono
+
+Design repo: `MandantenPortalDesign/` (lokal geklont)
 
 ## Constraints
 
-- **Tech stack**: No new dependencies — PDF support is native in Gemini API
-- **Backward compatibility**: Single-image processing must continue to work identically
-- **Model**: Gemini 2.5 Pro for extraction (1M input tokens, handles PDFs natively)
-- **No physical splitting**: Only extract data + page assignments, don't split PDFs into files
+- **Backend unverändert**: Keine API-Änderungen — Frontend passt sich an bestehende Endpoints an
+- **Design-System**: Nur bestehende Design-Komponenten verwenden, keine neuen Designs bauen
+- **Lokal testen**: Erstmal nur lokale Entwicklung, kein Deployment
+- **Tech stack**: Vite + React + Tailwind 4 + shadcn/ui (wie im Design-Repo)
 
 ## Key Decisions
 
@@ -88,5 +93,7 @@ Tech stack:
 | Retry + flag on dedup failure | Prevents silent duplicate pass-through | ✓ Good — v2 |
 | Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
+| Use MandantenPortalDesign as new frontend base | Modern stack (Vite, Tailwind 4, shadcn/ui), professional design system | — Pending |
+
 ---
-*Last updated: 2026-02-18 after v7 milestone start*
+*Last updated: 2026-02-18 after v8 milestone start*

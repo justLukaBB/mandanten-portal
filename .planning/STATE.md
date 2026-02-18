@@ -5,16 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v7 — FastAPI Webhook Field Integration (Phase 18)
+**Current focus:** v8 — Admin Frontend Migration
 
 ## Current Position
 
-Phase: 18 — Merge Logic for New Fields
-Plan: 01 (complete)
-Status: Plan 01 done — ready for next plan
-Last activity: 2026-02-18 — 18-01 executed: merge logic for 3 new FastAPI fields in creditorDeduplication.js
-
-Progress: [##░░░░░░░░] 20% (v7, 2 of ~10 estimated plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-18 — Milestone v8 started
 
 ## Performance Metrics
 
@@ -45,42 +43,29 @@ Progress: [##░░░░░░░░] 20% (v7, 2 of ~10 estimated plans)
 
 Decisions are logged in PROJECT.md Key Decisions table.
 
-Key decision for v6: confirmCreditors in clientCreditorController.js awaits processClientCreditorConfirmation() and startMonitoringForClient() synchronously — blocking response for minutes with many creditors. Fix: save confirmation first, respond immediately, then fire email sending as fire-and-forget (no await).
+### v8 Context
 
-16-01 decisions:
-- Respond immediately after DB save using fire-and-forget IIFE pattern — `(async () => { ... })()`
-- Remove creditor_contact from response since emails not yet sent when response returns
-- Background IIFE has independent try/catch; errors are logged but never affect the HTTP response
+**Migration source:** MandantenPortalDesign/ (Vite + React 18.3 + Tailwind 4 + shadcn/ui)
+**Migration target:** Admin-Frontend mit Backend-Anbindung
 
-17-01 decisions:
-- address_source = 'local_db' set only when address was actually replaced — email-only enrichment does not set it
-- 5 new fields added to BOTH creditorSchema and documentSchema.extracted_data.creditor_data for full flow coverage
-- No additional mapping code needed in webhook handler — Mongoose schema acceptance is sufficient for fields to flow through existing spread/assign patterns
-- [Phase 18]: aktenzeichen_glaeubigervertreter uses longest-wins merge; Postfach flags use OR-logic; both dedup functions receive identical merge blocks
+**Design-Views vorhanden:**
+- Sidebar mit Navigation
+- Client-Liste (Suche, Multi-Filter, Pagination, Flow-Badges)
+- Client-Detail (Tabs: Übersicht, Profil, Dokumente, Gläubiger, Aktivität)
+- Phase-Timeline, Status-Badges, Flow-Badges
 
-### v7 Context
+**Backend-Endpoints (Admin API):**
+- GET /api/admin/clients (paginated, searchable, filterable)
+- GET /api/admin/clients/:clientId/workflow-status
+- GET /api/admin/clients/:clientId/settlement-responses
+- GET /api/admin/dashboard-stats
+- POST /api/admin/immediate-review/:userId
+- POST /api/admin/clients/:clientId/trigger-ai-dedup
 
-**New fields added (5 total) — DONE in 17-01:**
-- `aktenzeichen_glaeubigervertreter` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
-- `address_source` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
-- `llm_address_original` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
-- `glaeubiger_adresse_ist_postfach` (Boolean, default false) — creditorSchema + documentSchema.extracted_data.creditor_data
-- `glaeubiger_vertreter_adresse_ist_postfach` (Boolean, default false) — creditorSchema + documentSchema.extracted_data.creditor_data
-
-**Key files:**
-- `server/models/Client.js` — creditorSchema (lines 80-189), documentSchema (lines 4-78)
-- `server/controllers/webhookController.js` — enrichCreditorContactFromDb (sets address_source), enrichDedupedCreditorFromDb (sets address_source)
-- `server/utils/creditorDeduplication.js` — mergeCreditorLists (line 422) — Phase 18 target
-
-**Merge rules (Phase 18 — DONE in 18-01):**
-- `aktenzeichen_glaeubigervertreter`: longest-wins — IMPLEMENTED in deduplicateCreditors + deduplicateCreditorsStrict
-- `glaeubiger_adresse_ist_postfach`: OR-logic — IMPLEMENTED in both dedup functions
-- `glaeubiger_vertreter_adresse_ist_postfach`: OR-logic — IMPLEMENTED in both dedup functions
-- Field extraction: all 3 fields propagated through deduplicateCreditorsFromDocuments
-
-**address_source status:**
-- FastAPI sets `address_source` on extraction (e.g. "llm", "postfach", etc.)
-- Node.js enrichment now sets `address_source = "local_db"` in BOTH enrichment functions when address is overwritten
+**Auth-System:**
+- POST /api/admin/login → admin_token in localStorage
+- Bearer token auth via Authorization header
+- Token refresh mechanism
 
 ### Pending Todos
 
@@ -94,9 +79,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 18-01-PLAN.md — merge logic for 3 new FastAPI fields in creditorDeduplication.js
+Stopped at: Starting v8 milestone — defining requirements
 Resume file: None
-Next step: Phase 18 complete — proceed to next phase
+Next step: Define requirements and create roadmap
 
 ---
-*Last updated: 2026-02-18 (18-01 complete)*
+*Last updated: 2026-02-18 (v8 milestone start)*
