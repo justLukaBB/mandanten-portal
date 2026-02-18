@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 19: Project Foundation (COMPLETE) — next: Phase 20: Authentication
+**Current focus:** v8 — Phase 20: Authentication (in progress) — Plan 1 of 2 complete
 
 ## Current Position
 
-Phase: 19 of 22 (Project Foundation) — COMPLETE
-Plan: 3 of 3 complete
-Status: Phase 19 complete — ready for Phase 20
-Last activity: 2026-02-18 — Plan 19-03 complete (RTK Query API layer + design system audit)
+Phase: 20 of 22 (Authentication) — IN PROGRESS
+Plan: 1 of 2 complete
+Status: Phase 20 Plan 01 complete — ready for Plan 20-02 (route protection + session expiry)
+Last activity: 2026-02-18 — Plan 20-01 complete (login page, auth slice, localStorage token persistence)
 
 Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7, v8 phase 19 in progress)
 
@@ -36,6 +36,8 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v6 (16) | 1 | ~1m | 1.0m |
 | v7 (17-18) | 2 | ~5m | 2.5m |
 | v8 (19) | 3 | ~11m | 3.7m |
+
+| v8 (20) P01 | 1 | ~3m | 3.0m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -63,6 +65,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - admin_token (not auth_token/portal_session_token) — admin-only app with single token key
 - Google Fonts CDN for DM Sans and JetBrains Mono — no font file management in repo
 - Provider wraps BrowserRouter wraps App — correct hierarchy for Redux + routing
+
+**20-01 decisions:**
+- LoginPage route added outside sidebar layout so /login renders full-screen without nav
+- Cooldown via useRef+setTimeout avoids timer leaks vs setInterval
+- Token extraction handles both response.data.token and response.data.admin_token shapes
+- sonner Toaster uses theme=light directly — admin-only app, no dark mode needed
 
 ### v8 Context
 
@@ -99,9 +107,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 19-03-PLAN.md (RTK Query API layer + design system audit) — Phase 19 COMPLETE
-Resume file: .planning/phases/20-authentication/20-01-PLAN.md
-Next step: Execute plan 20-01 (Phase 20: Authentication)
+Stopped at: Completed 20-01-PLAN.md (login page, auth slice, localStorage token persistence)
+Resume file: .planning/phases/20-authentication/20-02-PLAN.md
+Next step: Execute plan 20-02 (Phase 20: Authentication — route protection + session expiry)
 
 ---
-*Last updated: 2026-02-18 (Plan 19-03 complete — Phase 19 complete)*
+*Last updated: 2026-02-18 (Plan 20-01 complete — auth slice + login page)*
