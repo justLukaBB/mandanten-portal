@@ -80,9 +80,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-project-foundation/19-CONTEXT.md
-Next step: /gsd:plan-phase 19
+Stopped at: Phase 20 context gathered
+Resume file: .planning/phases/20-authentication/20-CONTEXT.md
+Next step: /gsd:plan-phase 20
 
 ---
-*Last updated: 2026-02-18 (Phase 19 context gathered)*
+*Last updated: 2026-02-18 (Phase 20 context gathered)*
