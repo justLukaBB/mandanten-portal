@@ -290,12 +290,12 @@ Plans:
   2. Navigating to `/clients` and `/clients/:id` renders the correct view — the Sidebar highlights the active route
   3. RTK Query base URL can be switched between dev (localhost) and prod via a single environment variable
   4. All existing shadcn/ui components, DM Sans and JetBrains Mono fonts, and Tailwind 4 theme variables render correctly
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 19-01: Vite config, TypeScript, environment variables, and dev/prod base URL setup
-- [ ] 19-02: React Router route structure + Sidebar active-link wiring
-- [ ] 19-03: RTK Query API slice setup + design system audit (fonts, theme, shadcn/ui)
+- [ ] 19-01-PLAN.md -- Vite config, TypeScript, environment variables, proxy setup, Figma import fix
+- [ ] 19-02-PLAN.md -- React Router route structure + Sidebar NavLink active-link wiring
+- [ ] 19-03-PLAN.md -- RTK Query API slice + Redux store + design system audit (fonts, theme, shadcn/ui)
 
 ### Phase 20: Authentication
 **Goal**: Admins can log in with email and password, stay authenticated across page reloads, and are automatically redirected to the login page when not authenticated
