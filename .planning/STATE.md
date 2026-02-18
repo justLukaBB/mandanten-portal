@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 19: Project Foundation
+**Current focus:** v8 — Phase 19: Project Foundation (COMPLETE) — next: Phase 20: Authentication
 
 ## Current Position
 
-Phase: 19 of 22 (Project Foundation)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-18 — Plan 19-02 complete (React Router routing + NavLink sidebar)
+Phase: 19 of 22 (Project Foundation) — COMPLETE
+Plan: 3 of 3 complete
+Status: Phase 19 complete — ready for Phase 20
+Last activity: 2026-02-18 — Plan 19-03 complete (RTK Query API layer + design system audit)
 
-Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7)
+Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7, v8 phase 19 in progress)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 29
+- Total plans completed: 30
 - Average duration: ~2m
-- Total execution time: ~0.90 hours
+- Total execution time: ~0.93 hours
 
 **By Phase:**
 
@@ -35,7 +35,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v5 (13-15) | 4 | ~11m | 2.8m |
 | v6 (16) | 1 | ~1m | 1.0m |
 | v7 (17-18) | 2 | ~5m | 2.5m |
-| v8 (19) | 2 | ~9m | 4.5m |
+| v8 (19) | 3 | ~11m | 3.7m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -57,6 +57,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Mandanten NavLink uses end=false so /clients/:id also highlights the Mandanten sidebar item
 - ClientListPage and ClientDetailPage wrappers kept inline in App.tsx (thin adapters, not separate files)
 - React Router v7 imports from react-router (not react-router-dom)
+
+**19-03 decisions:**
+- RTK Query baseApi with empty endpoints — Phase 21 will inject feature endpoints via injectEndpoints
+- admin_token (not auth_token/portal_session_token) — admin-only app with single token key
+- Google Fonts CDN for DM Sans and JetBrains Mono — no font file management in repo
+- Provider wraps BrowserRouter wraps App — correct hierarchy for Redux + routing
 
 ### v8 Context
 
@@ -93,9 +99,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 19-02-PLAN.md (React Router routing + NavLink sidebar)
-Resume file: .planning/phases/19-project-foundation/19-03-PLAN.md
-Next step: Execute plan 19-03
+Stopped at: Completed 19-03-PLAN.md (RTK Query API layer + design system audit) — Phase 19 COMPLETE
+Resume file: .planning/phases/20-authentication/20-01-PLAN.md
+Next step: Execute plan 20-01 (Phase 20: Authentication)
 
 ---
-*Last updated: 2026-02-18 (Plan 19-02 complete)*
+*Last updated: 2026-02-18 (Plan 19-03 complete — Phase 19 complete)*
