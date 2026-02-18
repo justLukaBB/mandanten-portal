@@ -223,6 +223,23 @@ function deduplicateCreditors(creditors, strategy = 'highest_amount') {
       selectedCreditor.review_reasons = Array.from(allReasons);
     }
 
+    // Merge aktenzeichen_glaeubigervertreter: longest non-empty string wins
+    const allAktenzeichen = group
+      .map(c => c.aktenzeichen_glaeubigervertreter)
+      .filter(v => v && typeof v === 'string' && v.trim().length > 0);
+    if (allAktenzeichen.length > 0) {
+      selectedCreditor.aktenzeichen_glaeubigervertreter = allAktenzeichen
+        .reduce((longest, current) => current.length > longest.length ? current : longest);
+    }
+
+    // Merge Postfach flags: OR-logic (any true → merged true)
+    if (group.some(c => c.glaeubiger_adresse_ist_postfach === true)) {
+      selectedCreditor.glaeubiger_adresse_ist_postfach = true;
+    }
+    if (group.some(c => c.glaeubiger_vertreter_adresse_ist_postfach === true)) {
+      selectedCreditor.glaeubiger_vertreter_adresse_ist_postfach = true;
+    }
+
     return selectedCreditor;
   });
 
@@ -365,6 +382,23 @@ function deduplicateCreditorsStrict(creditors, strategy = 'highest_amount') {
         }
       });
       selectedCreditor.review_reasons = Array.from(allReasons);
+    }
+
+    // Merge aktenzeichen_glaeubigervertreter: longest non-empty string wins
+    const allAktenzeichen = group
+      .map(c => c.aktenzeichen_glaeubigervertreter)
+      .filter(v => v && typeof v === 'string' && v.trim().length > 0);
+    if (allAktenzeichen.length > 0) {
+      selectedCreditor.aktenzeichen_glaeubigervertreter = allAktenzeichen
+        .reduce((longest, current) => current.length > longest.length ? current : longest);
+    }
+
+    // Merge Postfach flags: OR-logic (any true → merged true)
+    if (group.some(c => c.glaeubiger_adresse_ist_postfach === true)) {
+      selectedCreditor.glaeubiger_adresse_ist_postfach = true;
+    }
+    if (group.some(c => c.glaeubiger_vertreter_adresse_ist_postfach === true)) {
+      selectedCreditor.glaeubiger_vertreter_adresse_ist_postfach = true;
     }
 
     return selectedCreditor;
