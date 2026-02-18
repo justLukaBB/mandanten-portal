@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 20: Authentication (in progress) — Plan 1 of 2 complete
+**Current focus:** v8 — Phase 21: Client List (in progress) — Plan 1 of 2 complete
 
 ## Current Position
 
-Phase: 20 of 22 (Authentication) — IN PROGRESS
+Phase: 21 of 22 (Client List) — IN PROGRESS
 Plan: 1 of 2 complete
-Status: Phase 20 Plan 01 complete — ready for Plan 20-02 (route protection + session expiry)
-Last activity: 2026-02-18 — Plan 20-01 complete (login page, auth slice, localStorage token persistence)
+Status: Phase 21 Plan 01 complete — ready for Plan 21-02 (client detail view)
+Last activity: 2026-02-18 — Plan 21-01 complete (RTK Query clientsApi, StatusBadge/FlowBadge real data, ClientList self-fetching with 30s polling)
 
 Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7, v8 phase 19 in progress)
 
@@ -38,6 +38,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v8 (19) | 3 | ~11m | 3.7m |
 
 | v8 (20) P01 | 1 | ~3m | 3.0m |
+| v8 (21) P01 | 1 | ~5m | 5.0m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -71,6 +72,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Cooldown via useRef+setTimeout avoids timer leaks vs setInterval
 - Token extraction handles both response.data.token and response.data.admin_token shapes
 - sonner Toaster uses theme=light directly — admin-only app, no dark mode needed
+
+**21-01 decisions:**
+- workflow_status typed as string (not WorkflowStatus union) in AdminClient — unknown runtime values render gray fallback badge without crashing
+- Flow badges derived client-side from workflow_status via deriveFlowBadges — backend has no separate flow field
+- Flow filter applied client-side after server-paginated data loads — backend does not support flow param
+- Legacy Client interface kept in types.ts for Sidebar and ClientDetail until those migrate in Phase 22
+- Initials avatar with deterministic color from id hash — backend provides no avatar URLs
 
 ### v8 Context
 
@@ -107,9 +115,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 20-01-PLAN.md (login page, auth slice, localStorage token persistence)
-Resume file: .planning/phases/20-authentication/20-02-PLAN.md
-Next step: Execute plan 20-02 (Phase 20: Authentication — route protection + session expiry)
+Stopped at: Completed 21-01-PLAN.md (RTK Query clientsApi, StatusBadge/FlowBadge real states, ClientList self-fetching with 30s polling)
+Resume file: .planning/phases/21-client-list/21-02-PLAN.md
+Next step: Execute plan 21-02 (Phase 21: Client List — client detail view)
 
 ---
-*Last updated: 2026-02-18 (Plan 20-01 complete — auth slice + login page)*
+*Last updated: 2026-02-18 (Plan 21-01 complete — clientsApi + badge components + ClientList real data)*
