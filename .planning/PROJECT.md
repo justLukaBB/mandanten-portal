@@ -8,14 +8,14 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v6 Async Creditor Confirm
+## Current Milestone: v7 FastAPI Webhook Field Integration
 
-**Goal:** Gläubiger-Bestätigung durch den User antwortet sofort (<2s), statt minutenlang auf den Versand aller Creditor-Emails zu warten. Emails laufen async im Hintergrund.
+**Goal:** Neue Felder aus dem FastAPI Accuracy Milestone (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags) werden im Node.js Backend gespeichert und durch Dedup/Merge geleitet — ohne Frontend-Änderungen.
 
 **Target features:**
-- Bestätigung speichert sofort und antwortet schnell
-- Creditor-Emails werden asynchron im Backend verschickt (fire-and-forget)
-- User-Portal zeigt sofort "Bestätigt" ohne auf Email-Versand zu warten
+- Mongoose Schema erweitert um 5 neue Felder (creditorSchema + documentSchema)
+- Webhook Controller mapped neue Felder aus dem FastAPI-Payload in MongoDB
+- Creditor Dedup/Merge erhält neue Felder (aktenzeichen_glaeubigervertreter merge, Postfach OR-Logik)
 
 ## Requirements
 
@@ -43,15 +43,17 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-- [ ] Gläubiger-Bestätigung speichert sofort und antwortet in <2 Sekunden
-- [ ] Creditor-Emails werden asynchron nach Bestätigung im Backend verschickt
-- [ ] User-Portal zeigt sofort "Bestätigt" ohne auf Email-Versand zu warten
+- [ ] Mongoose Schema speichert alle 5 neuen FastAPI-Felder (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags)
+- [ ] Webhook Controller extrahiert neue Felder aus FastAPI-Payload und speichert sie in MongoDB
+- [ ] Creditor Merge erhält neue Felder korrekt (aktenzeichen longest-wins, Postfach OR-Logik)
 
 ### Out of Scope
 
 - Changing the Zendesk checkbox trigger — existing webhook stays as-is
 - Email-Status für User sichtbar machen — Admin sieht Status, User nicht nötig
 - Email templates redesign — bestehende Templates bleiben
+- Frontend-Display der neuen Felder — v7 ist Backend-only, UI folgt später
+- Filtered-Bucket-Anzeige (DR II / M-Pattern) — wird nur in FastAPI gefiltert, nicht im Portal
 
 ## Context
 
@@ -87,4 +89,4 @@ Tech stack:
 | Let Gemini decide page grouping | Simpler than pre-splitting; Gemini 2.5 Pro handles PDFs natively with 1M input tokens | — Pending |
 
 ---
-*Last updated: 2026-02-17 after v6 milestone start*
+*Last updated: 2026-02-18 after v7 milestone start*
