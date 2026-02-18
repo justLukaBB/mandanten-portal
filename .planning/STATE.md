@@ -46,6 +46,7 @@ Progress: [████████████████████] 22/22 p
 - Stable at ~1-5m per plan
 | Phase 22 P01 | 5 | 2 tasks | 4 files |
 | Phase 22 P04 | 2 | 1 task | 1 file |
+| Phase 22 P02 | 6 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - formatActivityDateTime is a separate function from formatGermanDateTime — preserves " Uhr" suffix for profile tab while adding Heute/Gestern logic for activity timeline
 - sortedHistory via useMemo at component scope (not inside renderActivity) to avoid recomputation on each render
 - Unknown status values fall through to raw string via STATUS_EVENT_LABELS[status] || status — graceful fallback for future status additions
+- [Phase 22]: Confidence stored as 0-1 decimal (ML standard) — multiply by 100 for display; tries doc.confidence then doc.ai_confidence
+- [Phase 22]: Alle herunterladen removed — no bulk download endpoint; Download button links to /api/admin/clients/:id/documents/:docId/download
 
 ### v8 Context
 
@@ -142,9 +145,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 22-04-PLAN.md (Aktivität tab with real status_history, German labels, color-coded timeline dots, Heute/Gestern timestamps)
-Resume file: None — Phase 22 complete, all plans done
+Stopped at: Completed 22-02-PLAN.md (Dokumente tab with real data, confidence scores, status icons, review warnings, download links, sorted recent docs)
+Resume file: None — Phase 22 complete, all plans done (22-02 SUMMARY created)
 Next step: Project complete — all 22 phases executed
 
 ---
-*Last updated: 2026-02-18 (Plan 22-04 complete — STATUS_EVENT_LABELS, ACTOR_LABELS, formatActivityDateTime, useMemo sort)*
+*Last updated: 2026-02-18 (Plan 22-02 complete — Dokumente tab real data, confidence bars, review warnings, upload dates, download links)*
