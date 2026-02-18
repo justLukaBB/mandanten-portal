@@ -338,13 +338,13 @@ Plans:
   3. Admin opens the Dokumente tab and sees all uploaded documents with their AI confidence scores — not mock data
   4. Admin opens the Gläubiger tab and sees all creditors including the five v7 fields (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, glaeubiger_vertreter_adresse_ist_postfach)
   5. Admin opens the Aktivität tab and sees the workflow event history for that client in chronological order
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 22-01: RTK Query endpoints for workflow-status + Stammdaten + wire Übersicht and Profil tabs
-- [ ] 22-02: Dokumente tab wired to real document data with confidence scores
-- [ ] 22-03: Gläubiger tab wired to real creditor data including all v7 fields
-- [ ] 22-04: Aktivität tab wired to workflow event history
+- [ ] 22-01-PLAN.md -- RTK Query client detail endpoints + types + wire Übersicht and Profil tabs to real data
+- [ ] 22-02-PLAN.md -- Dokumente tab wired to real document data with confidence scores and review warnings
+- [ ] 22-03-PLAN.md -- Gläubiger tab wired to real creditor data including all v7 fields (13 columns)
+- [ ] 22-04-PLAN.md -- Aktivität tab wired to real status_history with German labels and actor identification
 
 ## Progress
 
@@ -373,7 +373,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 18. Merge Logic for New Fields | v7 | 1/1 | Complete | 2026-02-18 |
 | 19. Project Foundation | v8 | Complete    | 2026-02-18 | - |
 | 20. Authentication | v8 | 0/2 | Not started | - |
-| 21. Client List | v8 | 0/2 | Not started | - |
+| 21. Client List | v8 | Complete    | 2026-02-18 | - |
 | 22. Client Detail | v8 | 0/4 | Not started | - |
 
 ---
