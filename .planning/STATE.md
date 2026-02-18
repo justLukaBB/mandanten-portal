@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 19 of 22 (Project Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-18 — Plan 19-01 complete (Vite project setup)
+Last activity: 2026-02-18 — Plan 19-02 complete (React Router routing + NavLink sidebar)
 
 Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: ~2m
-- Total execution time: ~0.87 hours
+- Total execution time: ~0.90 hours
 
 **By Phase:**
 
@@ -35,7 +35,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v5 (13-15) | 4 | ~11m | 2.8m |
 | v6 (16) | 1 | ~1m | 1.0m |
 | v7 (17-18) | 2 | ~5m | 2.5m |
-| v8 (19) | 1 | ~7m | 7.0m |
+| v8 (19) | 2 | ~9m | 4.5m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -51,6 +51,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - TypeScript strict=false for Figma-generated code compatibility
 - Vite proxy /api/* -> localhost:3001 (VITE_API_BASE_URL empty in dev)
 - tsconfig.node.json uses composite=true (required for project references)
+
+**19-02 decisions:**
+- English route paths (/clients, /dashboard, /settings) to match API endpoint naming; UI labels stay German
+- Mandanten NavLink uses end=false so /clients/:id also highlights the Mandanten sidebar item
+- ClientListPage and ClientDetailPage wrappers kept inline in App.tsx (thin adapters, not separate files)
+- React Router v7 imports from react-router (not react-router-dom)
 
 ### v8 Context
 
@@ -87,9 +93,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 19-01-PLAN.md (Vite project setup)
-Resume file: .planning/phases/19-project-foundation/19-02-PLAN.md
-Next step: Execute plan 19-02
+Stopped at: Completed 19-02-PLAN.md (React Router routing + NavLink sidebar)
+Resume file: .planning/phases/19-project-foundation/19-03-PLAN.md
+Next step: Execute plan 19-03
 
 ---
-*Last updated: 2026-02-18 (Plan 19-01 complete)*
+*Last updated: 2026-02-18 (Plan 19-02 complete)*
