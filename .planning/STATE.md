@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 22: Client Detail — Plan 01 complete
+**Current focus:** v8 — Phase 22: Client Detail — COMPLETE (all 4 plans done)
 
 ## Current Position
 
-Phase: 22 of 22 (Client Detail) — IN PROGRESS
-Plan: 1 of N complete
-Status: Plan 22-01 complete — ClientDetail wired to real API, Übersicht + Profil tabs with live data
-Last activity: 2026-02-18 — Plan 22-01 complete (RTK Query endpoints, ClientDetail refactored from mock props to real API data)
+Phase: 22 of 22 (Client Detail) — COMPLETE
+Plan: 4 of 4 complete
+Status: Plan 22-04 complete — Aktivität tab wired to real status_history with German labels, color-coded timeline, Heute/Gestern timestamps
+Last activity: 2026-02-18 — Plan 22-04 complete (STATUS_EVENT_LABELS, ACTOR_LABELS, formatActivityDateTime, useMemo sort)
 
-Progress: [████████████░░░░░░░░] 21/22 phases complete (v1-v7, v8 phases 19-21 complete)
+Progress: [████████████████████] 22/22 phases complete (v1-v7, v8 phases 19-22 complete)
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Progress: [████████████░░░░░░░░] 21/22 p
 **Recent Trend:**
 - Stable at ~1-5m per plan
 | Phase 22 P01 | 5 | 2 tasks | 4 files |
+| Phase 22 P04 | 2 | 1 task | 1 file |
 
 ## Accumulated Context
 
@@ -101,6 +102,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Manuell bestätigen button removed — rate confirmation is read-only from backend (enhancement if needed later)
 - Documents/creditors/activity tabs use real data arrays even if rendering is basic — data flow established for 22-02/03/04
 
+**22-04 decisions:**
+- formatActivityDateTime is a separate function from formatGermanDateTime — preserves " Uhr" suffix for profile tab while adding Heute/Gestern logic for activity timeline
+- sortedHistory via useMemo at component scope (not inside renderActivity) to avoid recomputation on each render
+- Unknown status values fall through to raw string via STATUS_EVENT_LABELS[status] || status — graceful fallback for future status additions
+
 ### v8 Context
 
 **Migration source:** MandantenPortalDesign/ (Vite + React 18.3 + Tailwind 4 + shadcn/ui)
@@ -136,9 +142,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 22-01-PLAN.md (RTK Query client detail endpoints, ClientDetail refactored to real API data, Übersicht + Profil tabs wired)
-Resume file: .planning/phases/22-client-detail/22-02-PLAN.md
-Next step: Phase 22 Plan 02 — Documents tab with real data
+Stopped at: Completed 22-04-PLAN.md (Aktivität tab with real status_history, German labels, color-coded timeline dots, Heute/Gestern timestamps)
+Resume file: None — Phase 22 complete, all plans done
+Next step: Project complete — all 22 phases executed
 
 ---
-*Last updated: 2026-02-18 (Plan 22-01 complete — clientDetailApi.ts + ClientDetail refactor with real data fetching)*
+*Last updated: 2026-02-18 (Plan 22-04 complete — STATUS_EVENT_LABELS, ACTOR_LABELS, formatActivityDateTime, useMemo sort)*
