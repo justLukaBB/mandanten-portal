@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 17 — Schema and Webhook Field Mapping
-Plan: —
-Status: Not started
-Last activity: 2026-02-18 — v7 roadmap created (phases 17-18)
+Plan: 01 (complete)
+Status: Plan 01 done — ready for next plan
+Last activity: 2026-02-18 — 17-01 executed: 5 new fields added to schemas + address_source enrichment
 
-Progress: [░░░░░░░░░░] 0% (v7)
+Progress: [#░░░░░░░░░] 10% (v7, 1 of ~10 estimated plans)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: ~2m
 - Total execution time: ~0.75 hours
 
@@ -34,7 +34,7 @@ Progress: [░░░░░░░░░░] 0% (v7)
 | v4 (10-12) | 4 | ~13m | 3.3m |
 | v5 (13-15) | 4 | ~11m | 2.8m |
 | v6 (16) | 1 | ~1m | 1.0m |
-| v7 (17-18) | 0 | — | — |
+| v7 (17-18) | 1 | ~3m | 3.0m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -52,9 +52,14 @@ Key decision for v6: confirmCreditors in clientCreditorController.js awaits proc
 - Remove creditor_contact from response since emails not yet sent when response returns
 - Background IIFE has independent try/catch; errors are logged but never affect the HTTP response
 
+17-01 decisions:
+- address_source = 'local_db' set only when address was actually replaced — email-only enrichment does not set it
+- 5 new fields added to BOTH creditorSchema and documentSchema.extracted_data.creditor_data for full flow coverage
+- No additional mapping code needed in webhook handler — Mongoose schema acceptance is sufficient for fields to flow through existing spread/assign patterns
+
 ### v7 Context
 
-**New fields being added (5 total):**
+**New fields added (5 total) — DONE in 17-01:**
 - `aktenzeichen_glaeubigervertreter` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
 - `address_source` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
 - `llm_address_original` (String) — creditorSchema + documentSchema.extracted_data.creditor_data
@@ -62,18 +67,18 @@ Key decision for v6: confirmCreditors in clientCreditorController.js awaits proc
 - `glaeubiger_vertreter_adresse_ist_postfach` (Boolean, default false) — creditorSchema + documentSchema.extracted_data.creditor_data
 
 **Key files:**
-- `server/models/Client.js` — creditorSchema (lines 80-184), documentSchema (lines 4-78)
-- `server/controllers/webhookController.js` — webhook handler, enrichDedupedCreditorFromDb
-- `server/utils/creditorDeduplication.js` — mergeCreditorLists (line 422)
+- `server/models/Client.js` — creditorSchema (lines 80-189), documentSchema (lines 4-78)
+- `server/controllers/webhookController.js` — enrichCreditorContactFromDb (sets address_source), enrichDedupedCreditorFromDb (sets address_source)
+- `server/utils/creditorDeduplication.js` — mergeCreditorLists (line 422) — Phase 18 target
 
-**Merge rules:**
+**Merge rules (Phase 18 target):**
 - `aktenzeichen_glaeubigervertreter`: longest-wins (longer non-empty string wins)
 - `glaeubiger_adresse_ist_postfach`: OR-logic (any true → merged true)
 - `glaeubiger_vertreter_adresse_ist_postfach`: OR-logic (any true → merged true)
 
-**address_source logic:**
+**address_source status:**
 - FastAPI sets `address_source` on extraction (e.g. "llm", "postfach", etc.)
-- Node.js `enrichDedupedCreditorFromDb` must set `address_source = "local_db"` when it overwrites the LLM address with a DB address
+- Node.js enrichment now sets `address_source = "local_db"` in BOTH enrichment functions when address is overwritten
 
 ### Pending Todos
 
@@ -87,9 +92,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: v7 roadmap created — phases 17 and 18 defined
+Stopped at: Completed 17-01-PLAN.md — 5 new fields in schemas + address_source enrichment logic
 Resume file: None
-Next step: Plan Phase 17 (`/gsd:plan-phase 17`)
+Next step: Execute next plan in phase 17 (if any), or proceed to Phase 18 merge logic
 
 ---
-*Last updated: 2026-02-18 (v7 roadmap created)*
+*Last updated: 2026-02-18 (17-01 complete)*
