@@ -132,6 +132,9 @@ async function enrichCreditorContactFromDb(docResult, cache) {
         if (missingSenderAddress) {
             updatedCreditorData.sender_address = match.address;
         }
+        if ((missingAddress && match.address) || (missingSenderAddress && match.address)) {
+            updatedCreditorData.address_source = 'local_db';
+        }
     }
 
     const matchedId = match._id?.toString?.() || match.id || match._id;
@@ -212,6 +215,7 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
                     // Set BOTH field formats for compatibility
                     entry.glaeubiger_adresse = match.address;
                     entry.sender_address = match.address;
+                    entry.address_source = 'local_db';
                 }
                 if (needEmail && match.email) {
                     // Set BOTH field formats for compatibility
