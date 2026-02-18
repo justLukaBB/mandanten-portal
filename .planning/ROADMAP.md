@@ -322,11 +322,11 @@ Plans:
   3. Admin selects a status filter (Active, Pending, In Review, Blocked, Closed) and only clients with that status are shown
   4. Admin selects a flow filter (e.g., "Portal zugesendet", "1. Anschreiben") and the list filters correctly
   5. Each client row shows the correct Status-Badge and Flow-Badge using the same visual design as the prototype
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 21-01: RTK Query endpoint for GET /api/admin/clients + replace mock data in Client-Liste component
-- [ ] 21-02: Search, status filter, and flow filter wired to query parameters + pagination controls
+- [ ] 21-01-PLAN.md — RTK Query clients endpoint, updated types/badges for 10 real workflow states, ClientList wired to real data with loading/polling
+- [ ] 21-02-PLAN.md — URL-synced search/status/flow filters, filter chips, configurable page size, zero-results state
 
 ### Phase 22: Client Detail
 **Goal**: Admins can open any client and see real data across all tabs — overview with workflow timeline, profile with Stammdaten, documents with AI confidence scores, creditors with all fields including v7 fields, and activity log
