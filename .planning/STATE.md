@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v8 — Phase 21: Client List (in progress) — Plan 1 of 2 complete
+**Current focus:** v8 — Phase 21: Client List (complete) — All 2 plans complete
 
 ## Current Position
 
-Phase: 21 of 22 (Client List) — IN PROGRESS
-Plan: 1 of 2 complete
-Status: Phase 21 Plan 01 complete — ready for Plan 21-02 (client detail view)
-Last activity: 2026-02-18 — Plan 21-01 complete (RTK Query clientsApi, StatusBadge/FlowBadge real data, ClientList self-fetching with 30s polling)
+Phase: 21 of 22 (Client List) — COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 21 complete — ready for Phase 22 (Client Detail)
+Last activity: 2026-02-18 — Plan 21-02 complete (URL-synced filters, filter chips, page size selector, zero-results state, mock data removed from App.tsx)
 
-Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7, v8 phase 19 in progress)
+Progress: [████████████░░░░░░░░] 21/22 phases complete (v1-v7, v8 phases 19-21 complete)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 30
+- Total plans completed: 32
 - Average duration: ~2m
-- Total execution time: ~0.93 hours
+- Total execution time: ~0.96 hours
 
 **By Phase:**
 
@@ -40,6 +40,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v8 (20) P01 | 1 | ~3m | 3.0m |
 | v8 (20) P02 | 1 | ~4m | 4.0m |
 | v8 (21) P01 | 1 | ~5m | 5.0m |
+| v8 (21) P02 | 1 | ~3m | 3.0m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -86,6 +87,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Legacy Client interface kept in types.ts for Sidebar and ClientDetail until those migrate in Phase 22
 - Initials avatar with deterministic color from id hash — backend provides no avatar URLs
 
+**21-02 decisions:**
+- useSearchParams replaces all local useState filter state — URL is single source of truth for filter/pagination state
+- setParam helper omits defaults from URL (page=1, limit=25, status=all) for clean bookmarkable URLs
+- App.tsx ClientDetailPage shows placeholder until Phase 22 wires useGetClientQuery — mockClients.find() removed entirely
+- Sidebar recentCases={[]} for now — real recent cases data wired in Phase 22
+
 ### v8 Context
 
 **Migration source:** MandantenPortalDesign/ (Vite + React 18.3 + Tailwind 4 + shadcn/ui)
@@ -121,9 +128,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 20-02-PLAN.md (ProtectedRoute, sidebar logout, baseQuery 401 interceptor)
-Resume file: .planning/phases/21-client-list/21-02-PLAN.md
-Next step: Execute plan 21-02 (Phase 21: Client List — client detail view)
+Stopped at: Completed 21-02-PLAN.md (URL-synced filters, filter chips, page size, zero-results state, mock data removed from App.tsx)
+Resume file: .planning/phases/22-client-detail/22-01-PLAN.md (or create Phase 22 plans)
+Next step: Phase 22 — Client Detail (wire ClientDetail to real API, update Sidebar recentCases)
 
 ---
-*Last updated: 2026-02-18 (Plan 20-02 complete — ProtectedRoute + Abmelden logout + baseQueryWithReauth 401 interceptor)*
+*Last updated: 2026-02-18 (Plan 21-02 complete — URL-synced filters + filter chips + page size selector + App.tsx mock data removal)*
