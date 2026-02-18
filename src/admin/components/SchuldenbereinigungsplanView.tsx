@@ -105,7 +105,7 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [downloadingDocument, setDownloadingDocument] = useState(false);
   const [downloadingForderungsuebersicht, setDownloadingForderungsuebersicht] = useState(false);
-  
+
   // Financial input form state
   const [financialForm, setFinancialForm] = useState({
     net_income: '',
@@ -115,8 +115,17 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
   const [pfaendbarAmount, setPfaendbarAmount] = useState<number | null>(null);
   const [savingFinancial, setSavingFinancial] = useState(false);
 
+  // Phase 2: Settlement Plan generation & sending state
+  const [generatingPhase2, setGeneratingPhase2] = useState(false);
+  const [sendingPhase2, setSendingPhase2] = useState(false);
+  const [phase2Result, setPhase2Result] = useState<any>(null);
+  const [phase2SendResult, setPhase2SendResult] = useState<any>(null);
+  const [previewingCreditor, setPreviewingCreditor] = useState<number | null>(null);
+  const [phase2Status, setPhase2Status] = useState<any>(null);
+
   useEffect(() => {
     fetchClientData();
+    fetchPhase2Status();
   }, [userId]);
 
   const fetchClientData = async () => {
@@ -257,6 +266,108 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
       setSavingFinancial(false);
     }
   };
+
+  // ============ Phase 2: DOCX-Template-based plan generation & sending ============
+
+  const fetchPhase2Status = async () => {
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/settlement-plan/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setPhase2Status(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching phase 2 status:', err);
+    }
+  };
+
+  const generatePhase2Plan = async () => {
+    try {
+      setGeneratingPhase2(true);
+      setError(null);
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/settlement-plan/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Generation failed');
+      }
+      setPhase2Result(result);
+      await fetchPhase2Status();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Plan generation failed');
+    } finally {
+      setGeneratingPhase2(false);
+    }
+  };
+
+  const sendPhase2Plan = async () => {
+    try {
+      setSendingPhase2(true);
+      setError(null);
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`${API_BASE_URL}/api/clients/${userId}/settlement-plan/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Sending failed');
+      }
+      setPhase2SendResult(result);
+      await fetchPhase2Status();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Plan sending failed');
+    } finally {
+      setSendingPhase2(false);
+    }
+  };
+
+  const previewCreditorDocument = async (creditorIndex: number) => {
+    try {
+      setPreviewingCreditor(creditorIndex);
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/clients/${userId}/settlement-plan/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ creditor_index: creditorIndex })
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: 'Download failed' }));
+        throw new Error(errData.error);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `Preview_Creditor_${creditorIndex}.docx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="([^"]+)"/);
+        if (match) {
+          filename = match[1];
+        }
+      }
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Preview failed');
+    } finally {
+      setPreviewingCreditor(null);
+    }
+  };
+
+  // ============ Legacy download functions ============
 
   const downloadSchuldenbereinigungsplan = async () => {
     if (!clientData?.settlement_plan || !clientData.settlement_plan.success) {
@@ -916,6 +1027,168 @@ const SchuldenbereinigungsplanView: React.FC<SchuldenbereinigungsplanViewProps> 
               )}
             </div>
           )}
+
+          {/* Phase 2: DOCX Template Plan Generation & Sending */}
+          <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <DocumentArrowDownIcon className="w-6 h-6 mr-2 text-purple-600" />
+                <h3 className="text-lg font-semibold text-purple-800">Phase 2: Quotenplan-Dokumente (DOCX)</h3>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                onClick={generatePhase2Plan}
+                disabled={generatingPhase2}
+                className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {generatingPhase2 ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
+                    Generate DOCX Plans
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={sendPhase2Plan}
+                disabled={sendingPhase2}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {sendingPhase2 ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircleIcon className="w-4 h-4 mr-2" />
+                    Send to Creditors (Resend)
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Generation Result */}
+            {phase2Result && (
+              <div className="bg-white rounded-lg p-4 border mb-4">
+                <h4 className="font-semibold text-gray-900 mb-2">Generation Result</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Plan Type</p>
+                    <p className="font-bold capitalize">{phase2Result.plan_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Documents</p>
+                    <p className="font-bold">{phase2Result.documents_generated || '?'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Status</p>
+                    <p className="font-bold text-green-600">{phase2Result.success ? 'Success' : 'Failed'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Send Result */}
+            {phase2SendResult && (
+              <div className="bg-white rounded-lg p-4 border mb-4">
+                <h4 className="font-semibold text-gray-900 mb-2">Send Result</h4>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Sent</p>
+                    <p className="font-bold text-green-600">{phase2SendResult.sent || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Failed</p>
+                    <p className="font-bold text-red-600">{phase2SendResult.failed || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">No Email</p>
+                    <p className="font-bold text-yellow-600">{phase2SendResult.no_email || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Creditor Preview Downloads */}
+            {clientData && clientData.creditor_calculation_table.length > 0 && (
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <div className="px-4 py-3 border-b bg-gray-50">
+                  <h4 className="font-semibold text-gray-900">Preview Individual Documents</h4>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {clientData.creditor_calculation_table.map((creditor, index) => (
+                    <div key={creditor.id} className="flex items-center justify-between px-4 py-2">
+                      <div className="text-sm">
+                        <span className="text-gray-500 mr-2">{index + 1}.</span>
+                        <span className="font-medium text-gray-900">{creditor.name}</span>
+                        <span className="text-gray-500 ml-2">({creditor.email || 'no email'})</span>
+                      </div>
+                      <button
+                        onClick={() => previewCreditorDocument(index)}
+                        disabled={previewingCreditor === index}
+                        className="inline-flex items-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        {previewingCreditor === index ? (
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-700 mr-1"></div>
+                        ) : (
+                          <DocumentArrowDownIcon className="w-3 h-3 mr-1" />
+                        )}
+                        Preview DOCX
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Phase 2 Response Status */}
+            {phase2Status && phase2Status.sent_at && (
+              <div className="mt-4 bg-white rounded-lg border overflow-hidden">
+                <div className="px-4 py-3 border-b bg-gray-50">
+                  <h4 className="font-semibold text-gray-900">
+                    Response Status (Sent: {new Date(phase2Status.sent_at).toLocaleDateString('de-DE')})
+                  </h4>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-5 gap-3 text-sm text-center mb-3">
+                    <div className="bg-green-50 rounded p-2">
+                      <p className="text-green-700 font-bold text-lg">{phase2Status.response_summary.accepted}</p>
+                      <p className="text-green-600 text-xs">Accepted</p>
+                    </div>
+                    <div className="bg-red-50 rounded p-2">
+                      <p className="text-red-700 font-bold text-lg">{phase2Status.response_summary.declined}</p>
+                      <p className="text-red-600 text-xs">Declined</p>
+                    </div>
+                    <div className="bg-yellow-50 rounded p-2">
+                      <p className="text-yellow-700 font-bold text-lg">{phase2Status.response_summary.counter_offer}</p>
+                      <p className="text-yellow-600 text-xs">Counter</p>
+                    </div>
+                    <div className="bg-gray-50 rounded p-2">
+                      <p className="text-gray-700 font-bold text-lg">{phase2Status.response_summary.no_response}</p>
+                      <p className="text-gray-600 text-xs">No Response</p>
+                    </div>
+                    <div className="bg-blue-50 rounded p-2">
+                      <p className="text-blue-700 font-bold text-lg">{phase2Status.response_summary.pending}</p>
+                      <p className="text-blue-600 text-xs">Pending</p>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-600 text-center">
+                    Days remaining: <span className="font-bold">{phase2Status.days_remaining}</span> / {phase2Status.timeout_days}
+                    {' | '}Acceptance rate: <span className="font-bold">{phase2Status.response_summary.acceptance_rate}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Error Display */}
           {error && (

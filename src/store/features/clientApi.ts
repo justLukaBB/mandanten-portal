@@ -27,6 +27,48 @@ export const clientApi = baseApi.injectEndpoints({
                 body: { file_number: fileNumber, new_password: newPassword },
             }),
         }),
+
+        // === Phase 2: Extended Financial Data & Settlement Plan ===
+
+        getExtendedFinancialFormStatus: builder.query({
+            query: (clientId) => `/api/clients/${clientId}/extended-financial-form-status`,
+            providesTags: ['ExtendedFinancialForm'],
+        }),
+        getExtendedFinancialData: builder.query({
+            query: (clientId) => `/api/clients/${clientId}/financial-data-extended`,
+            providesTags: ['ExtendedFinancialForm'],
+        }),
+        submitExtendedFinancialData: builder.mutation({
+            query: ({ clientId, data }) => ({
+                url: `/api/clients/${clientId}/financial-data-extended`,
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: ['ExtendedFinancialForm', 'User', 'SettlementPlan'],
+        }),
+        getSettlementPlanStatus: builder.query({
+            query: (clientId) => `/api/clients/${clientId}/settlement-plan/status`,
+            providesTags: ['SettlementPlan'],
+        }),
+        generateSettlementPlan: builder.mutation({
+            query: ({ clientId, planTypeOverride, planlaufzeitOverride }) => ({
+                url: `/api/clients/${clientId}/settlement-plan/generate`,
+                method: 'POST',
+                body: {
+                    plan_type_override: planTypeOverride,
+                    planlaufzeit_override: planlaufzeitOverride,
+                },
+            }),
+            invalidatesTags: ['SettlementPlan'],
+        }),
+        sendSettlementPlan: builder.mutation({
+            query: ({ clientId, sendToCreditorIds }) => ({
+                url: `/api/clients/${clientId}/settlement-plan/send`,
+                method: 'POST',
+                body: { send_to_creditor_ids: sendToCreditorIds },
+            }),
+            invalidatesTags: ['SettlementPlan'],
+        }),
     }),
 });
 
@@ -35,5 +77,12 @@ export const {
     useGetClientDocumentsQuery,
     useGetCreditorConfirmationStatusQuery,
     useGetFinancialFormStatusQuery,
-    useUpdatePasswordMutation
+    useUpdatePasswordMutation,
+    // Phase 2
+    useGetExtendedFinancialFormStatusQuery,
+    useGetExtendedFinancialDataQuery,
+    useSubmitExtendedFinancialDataMutation,
+    useGetSettlementPlanStatusQuery,
+    useGenerateSettlementPlanMutation,
+    useSendSettlementPlanMutation,
 } = clientApi;

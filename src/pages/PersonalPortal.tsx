@@ -12,7 +12,8 @@ import {
   useGetClientDocumentsQuery,
   useGetCreditorConfirmationStatusQuery,
   useGetFinancialFormStatusQuery,
-  useUpdatePasswordMutation
+  useUpdatePasswordMutation,
+  useGetExtendedFinancialFormStatusQuery,
 } from '../store/features/clientApi';
 import { useDispatch } from 'react-redux';
 import { logout, clearImpersonation } from '../store/features/authSlice';
@@ -22,6 +23,8 @@ import CreditorConfirmation from '../components/CreditorConfirmation';
 import FinancialDataForm from '../components/FinancialDataForm';
 import ClientAddressForm from '../components/ClientAddressForm';
 import AddCreditorForm from '../components/AddCreditorForm';
+import ExtendedFinancialDataWizard from '../components/ExtendedFinancialDataWizard';
+import SettlementPlanStatus from '../components/SettlementPlanStatus';
 import api from '../config/api';
 
 export const PersonalPortal = ({
@@ -73,6 +76,11 @@ export const PersonalPortal = ({
     refetch: refetchFinancialStatus
   } = useGetFinancialFormStatusQuery(clientId, { skip: !clientId });
 
+  const {
+    data: extendedFormStatusData,
+    refetch: refetchExtendedFormStatus
+  } = useGetExtendedFinancialFormStatusQuery(clientId, { skip: !clientId });
+
   const [updatePassword, { isLoading: passwordLoading, error: passwordMutationError }] = useUpdatePasswordMutation();
   const [endImpersonation] = useEndImpersonationMutation();
 
@@ -82,6 +90,8 @@ export const PersonalPortal = ({
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [financialDataSubmitted, setFinancialDataSubmitted] = useState(false);
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
+  const [showingExtendedWizard, setShowingExtendedWizard] = useState(false);
+  const [extendedFormSubmitted, setExtendedFormSubmitted] = useState(false);
 
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -149,7 +159,13 @@ export const PersonalPortal = ({
       const shouldShowAddressForm = shouldShowFinancialForm || alreadySubmitted;
       setShowAddressForm(shouldShowAddressForm);
     }
-  }, [client, creditorConfirmationData, financialStatusData]);
+    if (extendedFormStatusData) {
+      const shouldShowExtended = extendedFormStatusData.should_show_extended_form === true;
+      const extAlreadySubmitted = extendedFormStatusData.extended_form_submitted === true;
+      setShowingExtendedWizard(shouldShowExtended && !extAlreadySubmitted);
+      setExtendedFormSubmitted(extAlreadySubmitted);
+    }
+  }, [client, creditorConfirmationData, financialStatusData, extendedFormStatusData]);
 
   // Handle upload complete
   const handleUploadComplete = (newDocuments: any) => {
@@ -164,6 +180,15 @@ export const PersonalPortal = ({
     setShowingFinancialForm(false);
     refetchClient();
     refetchFinancialStatus();
+    refetchExtendedFormStatus();
+  };
+
+  // Handle extended financial data wizard submission
+  const handleExtendedFormSubmitted = (data: any) => {
+    setExtendedFormSubmitted(true);
+    setShowingExtendedWizard(false);
+    refetchClient();
+    refetchExtendedFormStatus();
   };
 
   // Handle logout
@@ -544,7 +569,7 @@ export const PersonalPortal = ({
         )}
 
         {/* Financial Data Submitted Status */}
-        {financialDataSubmitted && !showingFinancialForm && (
+        {financialDataSubmitted && !showingFinancialForm && !showingExtendedWizard && !extendedFormSubmitted && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="text-center">
               <div className="mb-4">
@@ -576,6 +601,45 @@ export const PersonalPortal = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Extended Financial Data Wizard - shows after Phase 1 financial data + creditor responses/timeout */}
+        {showingExtendedWizard && (
+          <ExtendedFinancialDataWizard
+            clientId={clientId!}
+            onFormSubmitted={handleExtendedFormSubmitted}
+            customColors={customColors}
+          />
+        )}
+
+        {/* Extended Form Submitted Status */}
+        {extendedFormSubmitted && !showingExtendedWizard && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Erweiterte Finanzdaten übermittelt
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Ihre erweiterten Finanzdaten wurden erfolgreich übermittelt. Unser Team erstellt nun
+                Ihren individuellen Schuldenbereinigungsplan.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Settlement Plan Status - shows after plan has been sent to creditors */}
+        {extendedFormSubmitted && (
+          <SettlementPlanStatus
+            clientId={clientId!}
+            customColors={customColors}
+          />
         )}
 
 

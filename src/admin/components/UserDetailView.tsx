@@ -331,6 +331,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
       'Gläubiger Adresse': c.glaeubiger_adresse || c.sender_address || 'N/A',
       'Gläubigervertreter Name': c.glaeubigervertreter_name || 'N/A',
       'Gläubigervertreter Adresse': c.glaeubigervertreter_adresse || 'N/A',
+      'AZ Gläubigervertreter': c.aktenzeichen_glaeubigervertreter || 'N/A',
       'Forderungsbetrag': c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? `€${c.claim_amount}` : 'N/A'),
       'Email Gläubiger': c.email_glaeubiger || c.sender_email || 'N/A',
       'Email Gläubigervertreter': c.email_glaeubiger_vertreter || 'N/A',
@@ -1688,6 +1689,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubiger Adresse</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Name</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Adresse</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">AZ Gläubigervertreter</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Forderungsbetrag</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubiger</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubigervertreter</th>
@@ -1775,6 +1777,15 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               clientId={userId}
                               creditorId={c.id}
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubigervertreter_adresse', newValue)}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <EditableCell
+                              value={c.aktenzeichen_glaeubigervertreter || 'N/A'}
+                              fieldName="aktenzeichen_glaeubigervertreter"
+                              clientId={userId}
+                              creditorId={c.id}
+                              onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'aktenzeichen_glaeubigervertreter', newValue)}
                             />
                           </td>
                           <td className="px-3 py-2">
@@ -1940,6 +1951,17 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                             placeholder="Vertreter Adresse"
                             value={newRow.fields.glaeubigervertreter_adresse || ''}
                             onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'glaeubigervertreter_adresse', e.target.value)}
+                            onBlur={() => handleNewRowSave(newRow.tempId)}
+                          />
+                        </td>
+                        {/* AZ Gläubigervertreter */}
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            className={inputClass}
+                            placeholder="AZ Vertreter"
+                            value={newRow.fields.aktenzeichen_glaeubigervertreter || ''}
+                            onChange={(e) => handleNewRowFieldChange(newRow.tempId, 'aktenzeichen_glaeubigervertreter', e.target.value)}
                             onBlur={() => handleNewRowSave(newRow.tempId)}
                           />
                         </td>
