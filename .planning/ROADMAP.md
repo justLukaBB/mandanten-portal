@@ -254,7 +254,10 @@ Plans:
   2. A webhook payload containing the 5 new fields results in them also being stored on the corresponding document's extracted_data.creditor_data subdocument in MongoDB
   3. A webhook payload omitting any of the 5 new fields does not cause a validation error — fields default to null/false as appropriate
   4. When enrichDedupedCreditorFromDb replaces a creditor's address from the local DB, the creditor's address_source field is set to "local_db"
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 17-01-PLAN.md — Schema fields + address_source enrichment logic
 
 #### Phase 18: Merge Logic for New Fields
 **Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
@@ -278,7 +281,10 @@ Plans:
   2. A webhook payload containing the 5 new fields results in them also being stored on the corresponding document's extracted_data.creditor_data subdocument in MongoDB
   3. A webhook payload omitting any of the 5 new fields does not cause a validation error — fields default to null/false as appropriate
   4. When enrichDedupedCreditorFromDb replaces a creditor's address from the local DB, the creditor's address_source field is set to "local_db"
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 17-01-PLAN.md — Schema fields + address_source enrichment logic
 
 ### Phase 18: Merge Logic for New Fields
 **Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
@@ -314,7 +320,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
 | 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
-| 17. Schema and Webhook Field Mapping | v7 | 0/? | Not started | - |
+| 17. Schema and Webhook Field Mapping | v7 | 0/1 | Not started | - |
 | 18. Merge Logic for New Fields | v7 | 0/? | Not started | - |
 
 ---
