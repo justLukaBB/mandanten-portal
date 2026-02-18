@@ -327,7 +327,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
 | 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
 | 17. Schema and Webhook Field Mapping | v7 | Complete    | 2026-02-18 | - |
-| 18. Merge Logic for New Fields | v7 | 0/? | Not started | - |
+| 18. Merge Logic for New Fields | v7 | Complete    | 2026-02-18 | - |
 
 ---
 *Last updated: 2026-02-18*
