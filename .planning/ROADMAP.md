@@ -320,7 +320,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
 | 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
-| 17. Schema and Webhook Field Mapping | v7 | 0/1 | Not started | - |
+| 17. Schema and Webhook Field Mapping | v7 | Complete    | 2026-02-18 | - |
 | 18. Merge Logic for New Fields | v7 | 0/? | Not started | - |
 
 ---
