@@ -1,17 +1,32 @@
-# Requirements: Mandanten Portal — Async Creditor Confirm
+# Requirements: Mandanten Portal — FastAPI Webhook Field Integration
 
-**Defined:** 2026-02-17
+**Defined:** 2026-02-18
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v6 Requirements
+## v7 Requirements
 
-### Async Confirmation
+### Schema
 
-- [ ] **CONF-01**: Gläubiger-Bestätigung speichert sofort in DB und antwortet dem User in <2 Sekunden
-- [ ] **CONF-02**: Creditor-Contact-Emails werden asynchron im Hintergrund nach Bestätigung verschickt (fire-and-forget)
-- [ ] **CONF-03**: Frontend zeigt sofort "Bestätigt" Success-State ohne auf Email-Versand zu warten
+- [ ] **SCHEMA-01**: Mongoose creditorSchema enthält aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, glaeubiger_vertreter_adresse_ist_postfach mit korrekten Defaults
+- [ ] **SCHEMA-02**: Mongoose documentSchema.extracted_data.creditor_data enthält die gleichen 5 Felder
+
+### Webhook
+
+- [ ] **HOOK-01**: Webhook Controller extrahiert alle 5 neuen Felder aus dem FastAPI-Payload und speichert sie in documents[] und final_creditor_list[]
+- [ ] **HOOK-02**: Enrichment-Logik (enrichDedupedCreditorFromDb) setzt address_source="local_db" wenn sie eine Adresse ersetzt
+
+### Merge
+
+- [ ] **MERGE-01**: mergeCreditorLists() merged aktenzeichen_glaeubigervertreter mit longest-wins Logik (längster non-empty String gewinnt)
+- [ ] **MERGE-02**: mergeCreditorLists() merged Postfach-Flags mit OR-Logik (any true → merged true)
 
 ## Previous Milestone Requirements (all satisfied)
+
+### v6 — Async Creditor Confirm (Phase 16)
+
+- [x] **CONF-01**: Gläubiger-Bestätigung speichert sofort in DB und antwortet dem User in <2 Sekunden
+- [x] **CONF-02**: Creditor-Contact-Emails werden asynchron im Hintergrund nach Bestätigung verschickt (fire-and-forget)
+- [x] **CONF-03**: Frontend zeigt sofort "Bestätigt" Success-State ohne auf Email-Versand zu warten
 
 ### v5 — 1. Rate Bestätigung (Phases 13-15)
 
@@ -34,29 +49,32 @@
 
 ## Future Requirements
 
-None planned.
+- Frontend-Display der neuen Felder (Aktenzeichen Gläubigervertreter, Postfach-Warnung, Adressquelle)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Email-Status im User-Portal | Admin sieht Status, User braucht das nicht |
-| Email-Templates ändern | Bestehende Templates bleiben |
-| Retry-Logik für fehlgeschlagene Emails | Bestehendes Error-Handling reicht |
+| Frontend-Display neuer Felder | v7 ist Backend-only, UI folgt in späterem Milestone |
+| Filtered-Bucket-Anzeige (DR II / M-Pattern) | Filterung passiert nur in FastAPI, nicht im Portal |
+| Excel-Import/Parsing | Excel wird direkt aus FastAPI geliefert, Node.js verarbeitet es nicht |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | Phase 16 | Pending |
-| CONF-02 | Phase 16 | Pending |
-| CONF-03 | Phase 16 | Pending |
+| SCHEMA-01 | — | Pending |
+| SCHEMA-02 | — | Pending |
+| HOOK-01 | — | Pending |
+| HOOK-02 | — | Pending |
+| MERGE-01 | — | Pending |
+| MERGE-02 | — | Pending |
 
 **Coverage:**
-- v6 requirements: 3 total
-- Mapped to phases: 3
-- Unmapped: 0
+- v7 requirements: 6 total
+- Mapped to phases: 0
+- Unmapped: 6 ⚠️
 
 ---
-*Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after v6 roadmap creation (Phase 16 assigned)*
+*Requirements defined: 2026-02-18*
+*Last updated: 2026-02-18 after v7 requirements definition*
