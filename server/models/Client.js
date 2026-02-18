@@ -40,7 +40,12 @@ const documentSchema = new mongoose.Schema({
       reference_number: String,
       claim_amount: Number,
       is_representative: { type: Boolean, default: false },
-      actual_creditor: String
+      actual_creditor: String,
+      aktenzeichen_glaeubigervertreter: String,
+      address_source: String,
+      llm_address_original: String,
+      glaeubiger_adresse_ist_postfach: { type: Boolean, default: false },
+      glaeubiger_vertreter_adresse_ist_postfach: { type: Boolean, default: false }
     },
     confidence: Number,
     reasoning: String,
@@ -94,6 +99,11 @@ const creditorSchema = new mongoose.Schema({
   glaeubiger_adresse: String,
   glaeubigervertreter_name: String,
   glaeubigervertreter_adresse: String,
+  aktenzeichen_glaeubigervertreter: String,
+  address_source: String,
+  llm_address_original: String,
+  glaeubiger_adresse_ist_postfach: { type: Boolean, default: false },
+  glaeubiger_vertreter_adresse_ist_postfach: { type: Boolean, default: false },
   forderungbetrag: String,
   email_glaeubiger: String,
   email_glaeubiger_vertreter: String,
@@ -265,6 +275,9 @@ const clientSchema = new mongoose.Schema({
       'creditor_contact_active',
       'settlement_documents_generated',
       'settlement_plan_sent_to_creditors',
+      'extended_financial_data_submitted',
+      'settlement_plan_generating',
+      'settlement_plan_ready_for_review',
       'completed',
       'no_creditors_found'
     ],
@@ -346,6 +359,10 @@ const clientSchema = new mongoose.Schema({
   document_reminder_side_conversation_at: Date,
   document_reminder_side_conversation_id: String,
 
+  // Document request email tracking (Phase 13: no documents at payment confirmation)
+  no_documents_email_sent: { type: Boolean, default: false },
+  no_documents_email_sent_at: Date,
+
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
   admin_approved: { type: Boolean, default: false },
@@ -388,6 +405,93 @@ const clientSchema = new mongoose.Schema({
     form_filled_at: Date,
     calculation_completed_at: Date
   },
+
+  // Extended financial data for Phase 2 Schuldenbereinigungsplan
+  extended_financial_data: {
+    // Persönliche Verhältnisse
+    berufsstatus: {
+      type: String,
+      enum: ['angestellt', 'selbststaendig', 'arbeitslos', 'rentner', 'in_ausbildung']
+    },
+    arbeitgeber_name: String,
+    arbeitgeber_adresse: String,
+    anzahl_unterhaltsberechtigte: { type: Number, default: 0 },
+
+    // Einkommensverhältnisse
+    sonstige_monatliche_einkuenfte: {
+      betrag: { type: Number, default: 0 },
+      beschreibung: String
+    },
+    sozialleistungen: {
+      betrag: { type: Number, default: 0 },
+      art_der_leistung: String
+    },
+
+    // Vermögensverhältnisse
+    immobilieneigentum: {
+      vorhanden: { type: Boolean, default: false },
+      beschreibung: String
+    },
+    fahrzeuge: {
+      vorhanden: { type: Boolean, default: false },
+      beschreibung: String,
+      geschaetzter_wert: Number
+    },
+    sparkonten: {
+      vorhanden: { type: Boolean, default: false },
+      ungefaehrer_wert: Number
+    },
+    lebensversicherungen: {
+      vorhanden: { type: Boolean, default: false },
+      rueckkaufswert: Number
+    },
+    sonstiges_vermoegen: String,
+
+    // Sicherheiten
+    buergschaften: {
+      vorhanden: { type: Boolean, default: false },
+      details: String
+    },
+    pfandrechte: {
+      vorhanden: { type: Boolean, default: false },
+      details: String
+    },
+    sonstige_sicherheiten: {
+      vorhanden: { type: Boolean, default: false },
+      details: String
+    },
+
+    // Plan-Parameter
+    gewuenschte_planlaufzeit: {
+      type: Number,
+      enum: [36, 48, 60],
+      default: 36
+    },
+    drittmittel: {
+      verfuegbar: { type: Boolean, default: false },
+      betrag: Number
+    },
+    bevorzugter_plantyp: {
+      type: String,
+      enum: ['ratenzahlung', 'einmalzahlung', 'nullplan']
+    },
+
+    // Meta
+    form_filled: { type: Boolean, default: false },
+    form_filled_at: Date,
+    form_filled_by: {
+      type: String,
+      enum: ['client', 'admin'],
+      default: 'client'
+    }
+  },
+
+  // Determined plan type (set by planTypeRouter after extended_financial_data is saved)
+  determined_plan_type: {
+    type: String,
+    enum: ['nullplan', 'ratenzahlung', 'einmalzahlung']
+  },
+  determined_plan_type_reason: String,
 
   // Debt settlement plan (Schuldenbereinigungsplan)
   debt_settlement_plan: {
