@@ -38,6 +38,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v8 (19) | 3 | ~11m | 3.7m |
 
 | v8 (20) P01 | 1 | ~3m | 3.0m |
+| v8 (20) P02 | 1 | ~4m | 4.0m |
 | v8 (21) P01 | 1 | ~5m | 5.0m |
 
 **Recent Trend:**
@@ -72,6 +73,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Cooldown via useRef+setTimeout avoids timer leaks vs setInterval
 - Token extraction handles both response.data.token and response.data.admin_token shapes
 - sonner Toaster uses theme=light directly — admin-only app, no dark mode needed
+
+**20-02 decisions:**
+- baseQueryWithReauth reads loginTimestamp from localStorage (not Redux) to avoid circular import between store/index.ts and baseApi.ts
+- ProtectedRoute uses useEffect to dispatch logout() and show toast on session expiry — side effects outside render path
+- Logout button above User Profile section, styled as muted nav item — unobtrusive but findable per user decision
 
 **21-01 decisions:**
 - workflow_status typed as string (not WorkflowStatus union) in AdminClient — unknown runtime values render gray fallback badge without crashing
@@ -115,9 +121,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 21-01-PLAN.md (RTK Query clientsApi, StatusBadge/FlowBadge real states, ClientList self-fetching with 30s polling)
+Stopped at: Completed 20-02-PLAN.md (ProtectedRoute, sidebar logout, baseQuery 401 interceptor)
 Resume file: .planning/phases/21-client-list/21-02-PLAN.md
 Next step: Execute plan 21-02 (Phase 21: Client List — client detail view)
 
 ---
-*Last updated: 2026-02-18 (Plan 21-01 complete — clientsApi + badge components + ClientList real data)*
+*Last updated: 2026-02-18 (Plan 20-02 complete — ProtectedRoute + Abmelden logout + baseQueryWithReauth 401 interceptor)*
