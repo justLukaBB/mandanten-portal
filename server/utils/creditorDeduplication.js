@@ -440,6 +440,9 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
         extraction_method: 'document_upload',
         needs_manual_review: docNeedsReview,
         review_reasons: reviewReasons,
+        aktenzeichen_glaeubigervertreter: cd.aktenzeichen_glaeubigervertreter || null,
+        glaeubiger_adresse_ist_postfach: cd.glaeubiger_adresse_ist_postfach || false,
+        glaeubiger_vertreter_adresse_ist_postfach: cd.glaeubiger_vertreter_adresse_ist_postfach || false,
       });
     }
   });
