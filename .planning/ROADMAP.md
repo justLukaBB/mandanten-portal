@@ -306,11 +306,11 @@ Plans:
   2. Admin reloads the page while logged in — the app does not redirect to login; the token persists in localStorage and is sent as a Bearer token on all API requests
   3. Admin navigates to a protected route (e.g., `/clients`) without a valid token — the app redirects to `/login`
   4. Admin clicks logout — the token is removed from localStorage and the admin is redirected to the login page
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 20-01: Login page wired to POST /api/admin/login + token storage + logout action
-- [ ] 20-02: Protected route wrapper + redirect logic for unauthenticated navigation
+- [ ] 20-01-PLAN.md -- Login page (centered card, German text, error handling, cooldown) + auth slice + RTK Query login mutation + Toaster fix
+- [ ] 20-02-PLAN.md -- ProtectedRoute wrapper + route wiring + sidebar logout button + baseQuery 401 interceptor + session expiry redirect
 
 ### Phase 21: Client List
 **Goal**: Admins see a paginated list of real clients from the backend, with working search, status filter, flow filter, and correctly rendered status and flow badges
