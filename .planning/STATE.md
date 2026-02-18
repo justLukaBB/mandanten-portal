@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 19 of 22 (Project Foundation)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-02-18 — v8 roadmap created, phases 19-22 defined
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-18 — Plan 19-01 complete (Vite project setup)
 
 Progress: [████████████░░░░░░░░] 18/22 phases complete (v1-v7)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: ~2m
-- Total execution time: ~0.75 hours
+- Total execution time: ~0.87 hours
 
 **By Phase:**
 
@@ -35,6 +35,7 @@ Progress: [████████████░░░░░░░░] 18/22 p
 | v5 (13-15) | 4 | ~11m | 2.8m |
 | v6 (16) | 1 | ~1m | 1.0m |
 | v7 (17-18) | 2 | ~5m | 2.5m |
+| v8 (19) | 1 | ~7m | 7.0m |
 
 **Recent Trend:**
 - Stable at ~1-5m per plan
@@ -44,6 +45,12 @@ Progress: [████████████░░░░░░░░] 18/22 p
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+
+**19-01 decisions:**
+- Package renamed from @figma/my-make-file to rasolv-admin
+- TypeScript strict=false for Figma-generated code compatibility
+- Vite proxy /api/* -> localhost:3001 (VITE_API_BASE_URL empty in dev)
+- tsconfig.node.json uses composite=true (required for project references)
 
 ### v8 Context
 
@@ -80,9 +87,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-client-list/21-CONTEXT.md
-Next step: /gsd:plan-phase 21
+Stopped at: Completed 19-01-PLAN.md (Vite project setup)
+Resume file: .planning/phases/19-project-foundation/19-02-PLAN.md
+Next step: Execute plan 19-02
 
 ---
-*Last updated: 2026-02-18 (Phase 21 context gathered)*
+*Last updated: 2026-02-18 (Plan 19-01 complete)*
