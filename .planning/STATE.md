@@ -103,6 +103,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Manuell bestätigen button removed — rate confirmation is read-only from backend (enhancement if needed later)
 - Documents/creditors/activity tabs use real data arrays even if rendering is basic — data flow established for 22-02/03/04
 
+**22-03 decisions:**
+- CREDITOR_GRID and CREDITOR_MIN_WIDTH constants at component level — header and body rows share identical widths, constants prevent drift
+- Aktenzeichen column uses reference_number only; aktenzeichen_glaeubigervertreter is a separate v7 column
+- address_source 'local_db' shown in blue pill badge; other values as plain gray text — extensible for new source types
+- Postfach columns use simple amber/gray text (not badge) — avoids visual clutter in already wide 13-column table
+- null postfach values render as '–' to distinguish "not set" from "Nein"
+
 **22-04 decisions:**
 - formatActivityDateTime is a separate function from formatGermanDateTime — preserves " Uhr" suffix for profile tab while adding Heute/Gestern logic for activity timeline
 - sortedHistory via useMemo at component scope (not inside renderActivity) to avoid recomputation on each render
@@ -150,4 +157,4 @@ Resume file: None — Phase 22 complete, all plans done (22-02 SUMMARY created)
 Next step: Project complete — all 22 phases executed
 
 ---
-*Last updated: 2026-02-18 (Plan 22-02 complete — Dokumente tab real data, confidence bars, review warnings, upload dates, download links)*
+*Last updated: 2026-02-18 (Plan 22-03 complete — Gläubiger tab 13 columns with all v7 fields, 22-03-SUMMARY.md created retroactively)*
