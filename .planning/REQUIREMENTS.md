@@ -63,18 +63,18 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| HOOK-01 | — | Pending |
-| HOOK-02 | — | Pending |
-| MERGE-01 | — | Pending |
-| MERGE-02 | — | Pending |
+| SCHEMA-01 | Phase 17 | Pending |
+| SCHEMA-02 | Phase 17 | Pending |
+| HOOK-01 | Phase 17 | Pending |
+| HOOK-02 | Phase 17 | Pending |
+| MERGE-01 | Phase 18 | Pending |
+| MERGE-02 | Phase 18 | Pending |
 
 **Coverage:**
 - v7 requirements: 6 total
-- Mapped to phases: 0
-- Unmapped: 6 ⚠️
+- Mapped to phases: 6
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after v7 requirements definition*
+*Last updated: 2026-02-18 after v7 roadmap creation*

@@ -8,7 +8,8 @@
 - ✅ **v3 Multi-Page PDF Support** - Phases 8-9 (shipped 2026-02-09)
 - ✅ **v4 Editable Creditor Table** - Phases 10-12 (shipped 2026-02-17)
 - ✅ **v5 1. Rate Bestätigung** - Phases 13-15 (shipped 2026-02-17)
-- 🚧 **v6 Async Creditor Confirm** - Phase 16 (in progress)
+- ✅ **v6 Async Creditor Confirm** - Phase 16 (shipped 2026-02-17)
+- 🚧 **v7 FastAPI Webhook Field Integration** - Phases 17-18 (in progress)
 
 ## Phases
 
@@ -221,9 +222,8 @@ Plans:
 
 </details>
 
-### 🚧 v6 Async Creditor Confirm (Phase 16)
-
-**Milestone Goal:** Gläubiger-Bestätigung durch den User antwortet sofort (<2s), statt minutenlang auf den Versand aller Creditor-Emails zu warten. Emails laufen async im Hintergrund.
+<details>
+<summary>✅ v6 Async Creditor Confirm (Phase 16) - SHIPPED 2026-02-17</summary>
 
 #### Phase 16: Async Confirmation
 **Goal**: Creditor confirmation saves immediately and responds in <2s — email sending runs asynchronously in the background after the response is sent
@@ -237,12 +237,64 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16-01-PLAN.md -- Make confirmCreditors save-then-respond with fire-and-forget email sending
+- [x] 16-01-PLAN.md -- Make confirmCreditors save-then-respond with fire-and-forget email sending
+
+</details>
+
+### 🚧 v7 FastAPI Webhook Field Integration (Phases 17-18)
+
+**Milestone Goal:** Neue Felder aus dem FastAPI Accuracy Milestone (aktenzeichen_glaeubigervertreter, address_source, llm_address_original, Postfach-Flags) werden im Node.js Backend gespeichert und durch Dedup/Merge geleitet — ohne Frontend-Änderungen.
+
+#### Phase 17: Schema and Webhook Field Mapping
+**Goal**: All 5 new FastAPI fields are stored in MongoDB — creditorSchema and documentSchema accept them, and the webhook controller maps them from FastAPI payloads into both collections
+**Depends on**: Phase 16 (v6 shipped)
+**Requirements**: SCHEMA-01, SCHEMA-02, HOOK-01, HOOK-02
+**Success Criteria** (what must be TRUE):
+  1. A FastAPI webhook payload containing aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, and glaeubiger_vertreter_adresse_ist_postfach results in all 5 fields persisted on the creditor document in MongoDB
+  2. A webhook payload containing the 5 new fields results in them also being stored on the corresponding document's extracted_data.creditor_data subdocument in MongoDB
+  3. A webhook payload omitting any of the 5 new fields does not cause a validation error — fields default to null/false as appropriate
+  4. When enrichDedupedCreditorFromDb replaces a creditor's address from the local DB, the creditor's address_source field is set to "local_db"
+**Plans**: TBD
+
+#### Phase 18: Merge Logic for New Fields
+**Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
+**Depends on**: Phase 17
+**Requirements**: MERGE-01, MERGE-02
+**Success Criteria** (what must be TRUE):
+  1. When two creditors are merged and both have aktenzeichen_glaeubigervertreter values, the longer non-empty string is kept on the merged creditor
+  2. When two creditors are merged and one has aktenzeichen_glaeubigervertreter set and the other has it empty/null, the non-empty value is kept
+  3. When two creditors are merged and either has glaeubiger_adresse_ist_postfach = true, the merged creditor has glaeubiger_adresse_ist_postfach = true
+  4. When two creditors are merged and either has glaeubiger_vertreter_adresse_ist_postfach = true, the merged creditor has glaeubiger_vertreter_adresse_ist_postfach = true
+**Plans**: TBD
+
+## Phase Details
+
+### Phase 17: Schema and Webhook Field Mapping
+**Goal**: All 5 new FastAPI fields are stored in MongoDB — creditorSchema and documentSchema accept them, and the webhook controller maps them from FastAPI payloads into both collections
+**Depends on**: Phase 16
+**Requirements**: SCHEMA-01, SCHEMA-02, HOOK-01, HOOK-02
+**Success Criteria** (what must be TRUE):
+  1. A FastAPI webhook payload containing aktenzeichen_glaeubigervertreter, address_source, llm_address_original, glaeubiger_adresse_ist_postfach, and glaeubiger_vertreter_adresse_ist_postfach results in all 5 fields persisted on the creditor document in MongoDB
+  2. A webhook payload containing the 5 new fields results in them also being stored on the corresponding document's extracted_data.creditor_data subdocument in MongoDB
+  3. A webhook payload omitting any of the 5 new fields does not cause a validation error — fields default to null/false as appropriate
+  4. When enrichDedupedCreditorFromDb replaces a creditor's address from the local DB, the creditor's address_source field is set to "local_db"
+**Plans**: TBD
+
+### Phase 18: Merge Logic for New Fields
+**Goal**: When mergeCreditorLists() deduplicates creditors, aktenzeichen_glaeubigervertreter and the two Postfach-Flags are merged correctly — no data is silently dropped
+**Depends on**: Phase 17
+**Requirements**: MERGE-01, MERGE-02
+**Success Criteria** (what must be TRUE):
+  1. When two creditors are merged and both have aktenzeichen_glaeubigervertreter values, the longer non-empty string is kept on the merged creditor
+  2. When two creditors are merged and one has aktenzeichen_glaeubigervertreter set and the other has it empty/null, the non-empty value is kept
+  3. When two creditors are merged and either has glaeubiger_adresse_ist_postfach = true, the merged creditor has glaeubiger_adresse_ist_postfach = true
+  4. When two creditors are merged and either has glaeubiger_vertreter_adresse_ist_postfach = true, the merged creditor has glaeubiger_vertreter_adresse_ist_postfach = true
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -261,7 +313,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 13. Payment Handler — No Documents Case | v5 | 1/1 | Complete | 2026-02-17 |
 | 14. Auto-Continuation After Document Upload | v5 | 1/1 | Complete | 2026-02-17 |
 | 15. Admin Trigger Button | v5 | 2/2 | Complete | 2026-02-17 |
-| 16. Async Confirmation | v6 | Complete    | 2026-02-17 | - |
+| 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
+| 17. Schema and Webhook Field Mapping | v7 | 0/? | Not started | - |
+| 18. Merge Logic for New Fields | v7 | 0/? | Not started | - |
 
 ---
-*Last updated: 2026-02-17*
+*Last updated: 2026-02-18*
