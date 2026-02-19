@@ -490,6 +490,15 @@ app.use((error, req, res, next) => {
     });
   }
 
+  // Handle payload too large (e.g. from express.raw() or express.json())
+  if (error.type === 'entity.too.large' || error.status === 413) {
+    console.error('❌ Payload too large:', error.message);
+    return res.status(413).json({
+      error: 'Payload too large',
+      details: error.message
+    });
+  }
+
   res.status(500).json({
     error: 'Server error',
     details: error.message
