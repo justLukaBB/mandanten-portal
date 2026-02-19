@@ -310,56 +310,22 @@ class CreditorEmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Außergerichtlicher Einigungsversuch</title>
+  <title>Korrespondenz - ${clientName}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
     <tr>
       <td style="padding: 40px 20px;">
         <table role="presentation" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #eee;">
-              <img src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwälte" style="height: 40px; width: auto;">
-            </td>
-          </tr>
-
           <!-- Content -->
           <tr>
             <td style="padding: 32px;">
-              <h1 style="margin: 0 0 16px; font-size: 22px; font-weight: 600; color: #111827; text-align: center;">
-                Außergerichtlicher Einigungsversuch
-              </h1>
-
               <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
                 Sehr geehrte Damen und Herren,
               </p>
 
               <p style="margin: 0 0 20px; font-size: 15px; line-height: 1.6; color: #374151;">
-                im Auftrag unseres Mandanten <strong>${clientName}</strong> führen wir einen außergerichtlichen Einigungsversuch gemäß § 305 InsO durch.
-              </p>
-
-              <!-- Attachment Notice -->
-              <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin: 24px 0;">
-                <p style="margin: 0; font-size: 14px; color: #0369a1;">
-                  📎 <strong>Anlage:</strong> ${attachmentFilename || 'Erstschreiben'}
-                </p>
-              </div>
-
-              <!-- Action Items -->
-              <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                <h3 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #111827;">
-                  Wir bitten um Mitteilung folgender Informationen:
-                </h3>
-                <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; color: #4b5563;">
-                  <li>Aktuelle Forderungshöhe (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)</li>
-                  <li>Kopie eventuell vorliegender Titel</li>
-                  <li>Angabe bestehender Sicherheiten</li>
-                </ul>
-              </div>
-
-              <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280; text-align: center;">
-                <strong>Antwortfrist:</strong> 14 Tage
+                im Anhang erhalten Sie die heutige Korrespondenz in der Angelegenheit unseres Mandanten ${clientName} mit der Bitte um Berücksichtigung.
               </p>
 
               <p style="margin: 24px 0 0; font-size: 15px; line-height: 1.6; color: #374151;">
@@ -374,23 +340,10 @@ class CreditorEmailService {
           <!-- Footer -->
           <tr>
             <td style="padding: 24px 32px; background-color: #f9fafb; border-top: 1px solid #eee; border-radius: 0 0 12px 12px;">
-              <table style="width: 100%;">
-                <tr>
-                  <td style="font-size: 12px; color: #6b7280; line-height: 1.6;">
-                    <strong>Thomas Scuric Rechtsanwälte</strong><br>
-                    Bongardstraße 33, 44787 Bochum<br>
-                    Tel: 0234 913681-0 · E-Mail: office@scuric.de
-                  </td>
-                  <td style="font-size: 12px; color: #9ca3af; text-align: right; vertical-align: top;">
-                    Az: ${clientReference}<br>
-                    ${currentDate}
-                  </td>
-                </tr>
-              </table>
-              <p style="margin: 16px 0 0; font-size: 11px; color: #9ca3af; text-align: center;">
-                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
-                <span style="color: #d1d5db;"> · </span>
-                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
+              <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 1.6;">
+                Thomas Scuric Rechtsanwälte &middot; Bongardstraße 33, 44787 Bochum<br>
+                Tel: 0234 913681-0 &middot; E-Mail: office@scuric.de<br>
+                Az: ${clientReference} &middot; ${currentDate}
               </p>
             </td>
           </tr>
@@ -411,35 +364,16 @@ class CreditorEmailService {
     const currentDate = new Date().toLocaleDateString('de-DE');
 
     return `
-Außergerichtlicher Einigungsversuch
-====================================
-
 Sehr geehrte Damen und Herren,
 
-im Auftrag unseres Mandanten ${clientName} führen wir einen außergerichtlichen Einigungsversuch gemäß § 305 InsO durch.
-
-ANLAGE: ${attachmentFilename || 'Erstschreiben'}
-
-Wir bitten um Mitteilung folgender Informationen:
-
-- Aktuelle Forderungshöhe (aufgeschlüsselt nach Hauptforderung, Zinsen, Kosten)
-- Kopie eventuell vorliegender Titel
-- Angabe bestehender Sicherheiten
-
-Antwortfrist: 14 Tage
+im Anhang erhalten Sie die heutige Korrespondenz in der Angelegenheit unseres Mandanten ${clientName} mit der Bitte um Berücksichtigung.
 
 Mit freundlichen Grüßen
 
 Thomas Scuric Rechtsanwälte
-Bongardstraße 33
-44787 Bochum
-
-Tel: 0234 913681-0
-E-Mail: office@scuric.de
-
----
-Aktenzeichen: ${clientReference}
-Datum: ${currentDate}
+Thomas Scuric Rechtsanwälte · Bongardstraße 33, 44787 Bochum
+Tel: 0234 913681-0 · E-Mail: office@scuric.de
+Az: ${clientReference} · ${currentDate}
     `.trim();
   }
 
