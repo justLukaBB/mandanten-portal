@@ -526,18 +526,20 @@ async function startServer() {
       });
       scheduler.startScheduledTasks();
 
-      // Cleanup orphaned jobs for deleted clients before starting workers
+      // Cleanup orphaned jobs for deleted clients, then start workers
       const webhookQueueService = require('./services/webhookQueueService');
-      await webhookQueueService.cleanupOrphanedJobs();
-
-      // Start webhook worker for background processing
-      if (webhookWorker) {
-        webhookWorker.start();
-        console.log('🔄 Webhook worker started');
-      }
+      webhookQueueService.cleanupOrphanedJobs()
+        .then(() => {
+          // Start webhook worker for background processing
+          if (webhookWorker) {
+            webhookWorker.start();
+            console.log('🔄 Webhook worker started');
+          }
+        })
+        .catch(err => console.error('Webhook cleanup error:', err.message));
 
       // Start document processing queue worker (cleanup runs inside start())
-      await documentQueueService.start();
+      documentQueueService.start();
       console.log('📋 Document queue worker started');
     });
   } catch (error) {
