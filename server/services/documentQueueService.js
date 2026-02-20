@@ -409,23 +409,93 @@ class DocumentQueueService {
     });
 
     for (const job of stuckJobs) {
-      console.log(`[DocumentQueue] ⚠️ Found stuck job ${job.job_id} - resetting to retry`);
+      const newRetryCount = (job.retry_count || 0) + 1;
 
-      await DocumentProcessingJob.findOneAndUpdate(
-        { job_id: job.job_id },
-        {
-          $set: {
-            status: 'retrying',
-            next_retry_at: new Date(),
-            error_details: {
-              message: 'Job timed out (stuck in processing)',
-              error_type: 'TIMEOUT',
-              last_error_at: new Date()
+      if (newRetryCount >= (job.max_retries || MAX_RETRIES)) {
+        // Max retries exhausted - mark as permanently failed
+        console.log(`[DocumentQueue] ❌ Stuck job ${job.job_id} exceeded max retries (${newRetryCount}) - marking as failed`);
+
+        await DocumentProcessingJob.findOneAndUpdate(
+          { job_id: job.job_id },
+          {
+            $set: {
+              status: 'failed',
+              retry_count: newRetryCount,
+              completed_at: new Date(),
+              error_details: {
+                message: `Job timed out after ${newRetryCount} attempts (stuck in processing)`,
+                error_type: 'TIMEOUT_MAX_RETRIES',
+                last_error_at: new Date()
+              }
             }
-          },
-          $inc: { retry_count: 1 }
+          }
+        );
+
+        // Update the actual document status so it's no longer stuck
+        await this._updateDocumentStatus(job.client_id, job.document_id, 'failed', `Verarbeitung fehlgeschlagen nach ${newRetryCount} Versuchen (Timeout)`);
+      } else {
+        // Retry the job
+        console.log(`[DocumentQueue] ⚠️ Found stuck job ${job.job_id} - resetting to retry (attempt ${newRetryCount}/${job.max_retries || MAX_RETRIES})`);
+
+        await DocumentProcessingJob.findOneAndUpdate(
+          { job_id: job.job_id },
+          {
+            $set: {
+              status: 'retrying',
+              next_retry_at: new Date(),
+              retry_count: newRetryCount,
+              error_details: {
+                message: 'Job timed out (stuck in processing)',
+                error_type: 'TIMEOUT',
+                last_error_at: new Date()
+              }
+            }
+          }
+        );
+      }
+    }
+
+    // Also check for documents stuck in 'processing' with no matching queue job
+    await this._handleOrphanedDocuments();
+  }
+
+  /**
+   * Find and fix documents stuck in 'processing' that have no active queue job
+   * @private
+   */
+  async _handleOrphanedDocuments() {
+    try {
+      const Client = require('../models/Client');
+      const orphanThreshold = new Date(Date.now() - JOB_TIMEOUT_MS * 2); // 2x timeout
+
+      // Find clients with documents stuck in processing
+      const clientsWithStuck = await Client.find({
+        'documents.processing_status': 'processing'
+      }).select('id documents.id documents.processing_status documents.uploadedAt');
+
+      for (const client of clientsWithStuck) {
+        for (const doc of client.documents) {
+          if (doc.processing_status !== 'processing') continue;
+
+          const uploadTime = doc.uploadedAt ? new Date(doc.uploadedAt) : null;
+          if (!uploadTime || uploadTime > orphanThreshold) continue; // Not old enough
+
+          // Check if there's still an active queue job for this document
+          const activeJob = await DocumentProcessingJob.findOne({
+            document_id: doc.id,
+            status: { $in: ['pending', 'processing', 'retrying'] }
+          });
+
+          if (!activeJob) {
+            // Orphaned document - no queue job, stuck in processing
+            console.log(`[DocumentQueue] 🔧 Found orphaned document ${doc.id} for client ${client.id} - marking as failed`);
+            await this._updateDocumentStatus(client.id, doc.id, 'failed', 'Verarbeitung abgebrochen - kein aktiver Job gefunden');
+          }
         }
-      );
+      }
+    } catch (err) {
+      // Non-critical - log and continue
+      console.error('[DocumentQueue] Error checking orphaned documents:', err.message);
     }
   }
 
