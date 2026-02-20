@@ -496,7 +496,7 @@ class DocumentQueueService {
             document_id: doc.id,
             status: 'completed',
             fastapi_job_id: { $exists: true, $ne: null },
-            completed_at: { $gt: new Date(Date.now() - JOB_TIMEOUT_MS * 18) } // 3 hour grace period
+            completed_at: { $gt: new Date(Date.now() - JOB_TIMEOUT_MS * 36) } // 6 hour grace period
           });
 
           if (recentCompletedJob) {
