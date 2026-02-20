@@ -241,12 +241,6 @@ class CreditorEmailService {
    * @private
    */
   async sendEmail({ to, toName, subject, html, text, attachments = [], tags = [] }) {
-    // TEST MODE: Override recipient for all creditor emails
-    const TEST_RECIPIENT = 'justlukax@gmail.com';
-    const originalRecipient = to;
-    to = TEST_RECIPIENT;
-    console.log(`🧪 TEST MODE: Redirecting email from ${originalRecipient} → ${TEST_RECIPIENT}`);
-
     // If Resend is not configured, log to console (dev mode)
     if (!this.resend) {
       console.log('\n📧 ================================');
