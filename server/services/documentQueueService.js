@@ -243,6 +243,19 @@ class DocumentQueueService {
       console.log(`   👤 Client: ${job.client_id}`);
       console.log(`   🔄 Attempt: ${job.retry_count + 1}/${job.max_retries + 1}`);
 
+      // Verify client still exists before sending to FastAPI (avoid wasted API calls)
+      const Client = require('../models/Client');
+      let clientExists = await Client.findOne({ id: job.client_id }).select('id').lean();
+      if (!clientExists) {
+        clientExists = await Client.findOne({ aktenzeichen: job.client_id }).select('id').lean();
+      }
+      if (!clientExists) {
+        console.log(`[DocumentQueue] ⛔ Client ${job.client_id} no longer exists - skipping job ${job.job_id}`);
+        await this._markCompleted(job.job_id, null);
+        await this._updateDocumentStatus(job.client_id, job.document_id, 'failed', 'Client existiert nicht mehr');
+        return;
+      }
+
       // Call FastAPI
       const result = await createProcessingJob({
         clientId: job.client_id,
