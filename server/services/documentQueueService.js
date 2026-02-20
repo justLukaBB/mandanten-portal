@@ -40,7 +40,7 @@ class DocumentQueueService {
   /**
    * Start the queue worker
    */
-  start() {
+  async start() {
     if (this.isRunning) {
       console.log('[DocumentQueue] Worker already running');
       return;
@@ -58,7 +58,60 @@ class DocumentQueueService {
     console.log(`⏰ Job Timeout: ${JOB_TIMEOUT_MS / 1000}s`);
     console.log(`📋 ================================\n`);
 
+    // Bulk cleanup: cancel all pending jobs for deleted clients
+    await this._cleanupOrphanedJobs();
+
     this._poll();
+  }
+
+  /**
+   * Bulk cancel all pending/retrying jobs whose clients no longer exist.
+   * Runs once at startup to clear stale jobs instantly.
+   * @private
+   */
+  async _cleanupOrphanedJobs() {
+    try {
+      const Client = require('../models/Client');
+      const pendingJobs = await DocumentProcessingJob.find({
+        status: { $in: ['pending', 'retrying'] }
+      }).select('job_id client_id document_id').lean();
+
+      if (pendingJobs.length === 0) return;
+
+      // Get unique client IDs from pending jobs
+      const clientIds = [...new Set(pendingJobs.map(j => j.client_id))];
+
+      // Check which clients still exist
+      const existingClients = await Client.find({
+        $or: [
+          { id: { $in: clientIds } },
+          { aktenzeichen: { $in: clientIds } }
+        ]
+      }).select('id aktenzeichen').lean();
+
+      const existingIds = new Set();
+      for (const c of existingClients) {
+        existingIds.add(c.id);
+        existingIds.add(c.aktenzeichen);
+      }
+
+      // Find jobs for deleted clients
+      const orphanedJobs = pendingJobs.filter(j => !existingIds.has(j.client_id));
+
+      if (orphanedJobs.length === 0) return;
+
+      const orphanedJobIds = orphanedJobs.map(j => j.job_id);
+
+      // Bulk cancel
+      const result = await DocumentProcessingJob.updateMany(
+        { job_id: { $in: orphanedJobIds } },
+        { $set: { status: 'failed', error_details: { message: 'Client existiert nicht mehr (Startup-Cleanup)', last_error_at: new Date() }, completed_at: new Date() } }
+      );
+
+      console.log(`[DocumentQueue] 🧹 Startup cleanup: cancelled ${result.modifiedCount} orphaned jobs for ${[...new Set(orphanedJobs.map(j => j.client_id))].length} deleted client(s)`);
+    } catch (err) {
+      console.error('[DocumentQueue] Startup cleanup error:', err.message);
+    }
   }
 
   /**

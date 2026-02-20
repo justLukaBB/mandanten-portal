@@ -21,6 +21,52 @@ class WebhookQueueService {
   }
 
   /**
+   * Bulk cancel all pending/retrying webhook jobs whose clients no longer exist.
+   * Call once at startup to clear stale jobs instantly.
+   */
+  async cleanupOrphanedJobs() {
+    try {
+      const Client = require('../models/Client');
+      const pendingJobs = await WebhookJob.find({
+        status: { $in: ['pending', 'retrying'] }
+      }).select('job_id payload.client_id').lean();
+
+      if (pendingJobs.length === 0) return;
+
+      const clientIds = [...new Set(pendingJobs.map(j => j.payload?.client_id).filter(Boolean))];
+      if (clientIds.length === 0) return;
+
+      const existingClients = await Client.find({
+        $or: [
+          { id: { $in: clientIds } },
+          { aktenzeichen: { $in: clientIds } }
+        ]
+      }).select('id aktenzeichen').lean();
+
+      const existingIds = new Set();
+      for (const c of existingClients) {
+        existingIds.add(c.id);
+        existingIds.add(c.aktenzeichen);
+      }
+
+      const orphanedJobIds = pendingJobs
+        .filter(j => j.payload?.client_id && !existingIds.has(j.payload.client_id))
+        .map(j => j.job_id);
+
+      if (orphanedJobIds.length === 0) return;
+
+      const result = await WebhookJob.updateMany(
+        { job_id: { $in: orphanedJobIds } },
+        { $set: { status: 'failed', error_details: { message: 'Client existiert nicht mehr (Startup-Cleanup)', last_error_at: new Date() }, completed_at: new Date() } }
+      );
+
+      console.log(`[WebhookQueue] 🧹 Startup cleanup: cancelled ${result.modifiedCount} orphaned webhook jobs for deleted client(s)`);
+    } catch (err) {
+      console.error('[WebhookQueue] Startup cleanup error:', err.message);
+    }
+  }
+
+  /**
    * Enqueue a webhook job with idempotency check.
    *
    * @param {string} jobId - Unique job identifier (idempotency key)
