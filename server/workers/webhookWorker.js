@@ -144,8 +144,14 @@ class WebhookWorker {
       console.log(`[WebhookWorker] ✅ Job ${job.job_id} completed in ${processingTime}ms`);
 
     } catch (error) {
-      console.error(`[WebhookWorker] ❌ Job ${job.job_id} failed:`, error.message);
-      await webhookQueueService.markFailed(job.job_id, error, true);
+      // Don't retry permanent errors (e.g. "Client not found") - retrying won't help
+      const isPermanentError = error.message && error.message.includes('Client not found');
+      if (isPermanentError) {
+        console.error(`[WebhookWorker] ❌ Job ${job.job_id} failed permanently (no retry): ${error.message}`);
+      } else {
+        console.error(`[WebhookWorker] ❌ Job ${job.job_id} failed:`, error.message);
+      }
+      await webhookQueueService.markFailed(job.job_id, error, !isPermanentError);
       this.errorCount++;
     }
   }
