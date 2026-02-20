@@ -312,7 +312,8 @@ class CreditorContactService {
 
             // Filter confirmed creditors that have either direct creditor email OR representative email
             const confirmedCreditors = allCreditors.filter(creditor => {
-                if (creditor.status !== 'confirmed' || !creditor.sender_name) {
+                const hasName = !!(creditor.sender_name || creditor.glaeubiger_name || creditor.glaeubigervertreter_name);
+                if (creditor.status !== 'confirmed' || !hasName) {
                     return false;
                 }
 
@@ -361,20 +362,20 @@ class CreditorContactService {
             // We need to track all creditors, not just those we can email
             const allConfirmedCreditors = allCreditors.filter(creditor =>
                 creditor.status === 'confirmed' &&
-                creditor.sender_name
+                (creditor.sender_name || creditor.glaeubiger_name || creditor.glaeubigervertreter_name)
             );
 
             const creditorContactRecords = allConfirmedCreditors.map(creditor => {
                 // IMPORTANT: If is_representative is true, use representative's email, otherwise use creditor's email
                 let emailToUse = null;
-                let nameToUse = creditor.sender_name;
-                let addressToUse = creditor.sender_address || '';
+                let nameToUse = creditor.sender_name || creditor.glaeubiger_name;
+                let addressToUse = creditor.sender_address || creditor.glaeubiger_adresse || '';
 
                 if (creditor.is_representative) {
                     // Representative case: Use representative's email and name from sender fields
-                    emailToUse = creditor.email_glaeubiger_vertreter || creditor.sender_email;
-                    nameToUse = creditor.glaeubigervertreter_name || creditor.sender_name;
-                    addressToUse = creditor.glaeubigervertreter_adresse || creditor.sender_address || '';
+                    emailToUse = creditor.email_glaeubiger_vertreter || creditor.sender_email || creditor.email_glaeubiger;
+                    nameToUse = creditor.glaeubigervertreter_name || creditor.sender_name || creditor.glaeubiger_name;
+                    addressToUse = creditor.glaeubigervertreter_adresse || creditor.sender_address || creditor.glaeubiger_adresse || '';
 
                     console.log(`📧 Representative detected: ${nameToUse} representing ${creditor.actual_creditor || creditor.glaeubiger_name}`);
                     console.log(`   Using email: ${emailToUse}`);
@@ -649,12 +650,13 @@ class CreditorContactService {
             }
         }
 
+        // Deduplicate by email address - only send 1 email per unique email address
+        const sentEmails = new Set();
+
         for (let i = 0; i < emailableContacts.length; i++) {
             const contactInfo = emailableContacts[i];
 
             try {
-                console.log(`📧 Sending email via Resend ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with attachment...`);
-
                 // Get the full contact record for this creditor
                 const contactRecord = Array.from(this.creditorContacts.values())
                     .find(c => c.id === contactInfo.contact_id);
@@ -662,6 +664,23 @@ class CreditorContactService {
                 if (!contactRecord) {
                     throw new Error('Contact record not found');
                 }
+
+                // Skip true duplicates - same email AND same reference number
+                // Different AZ = different debt = separate email needed
+                const dedupeKey = `${contactRecord.creditor_email}__${contactRecord.reference_number || 'NO_REF'}`;
+                if (contactRecord.creditor_email && sentEmails.has(dedupeKey)) {
+                    console.log(`⏭️ Skipping duplicate for ${contactInfo.creditor_name} (${contactRecord.creditor_email}, Ref: ${contactRecord.reference_number || 'none'})`);
+                    sideConversationResults.push({
+                        contact_id: contactInfo.contact_id,
+                        creditor_name: contactInfo.creditor_name,
+                        creditor_email: contactRecord.creditor_email,
+                        success: true,
+                        skipped: 'duplicate'
+                    });
+                    continue;
+                }
+
+                console.log(`📧 Sending email via Resend ${i + 1}/${emailableContacts.length} for ${contactInfo.creditor_name} with attachment...`);
 
                 // Find the document for this creditor (with local file path)
                 const document = documents.find(doc =>
@@ -692,6 +711,11 @@ class CreditorContactService {
                         path: document.path
                     }
                 });
+
+                // Mark as sent for deduplication
+                if (result.success && contactRecord.creditor_email) {
+                    sentEmails.add(`${contactRecord.creditor_email}__${contactRecord.reference_number || 'NO_REF'}`);
+                }
 
                 // Add internal Zendesk comment for audit trail
                 if (result.success) {

@@ -263,8 +263,11 @@ class ClientCreditorController {
     }
 
     /**
-     * Resend creditor emails
+     * Resend creditor emails via Resend with document regeneration
      * POST /api/clients/:clientId/resend-creditor-emails
+     *
+     * Regenerates DOCX documents and sends first round emails via Resend
+     * to actual creditor email addresses. Updates MongoDB and syncs to matcher.
      */
     resendCreditorEmails = async (req, res) => {
         try {
@@ -273,45 +276,193 @@ class ClientCreditorController {
 
             if (!client) return res.status(404).json({ error: 'Client not found' });
 
-            if (!client.creditor_contact_started) {
-                return res.status(400).json({ error: 'Creditor contact process has not been started yet' });
+            const creditorEmailService = require('../services/creditorEmailService');
+            const FirstRoundDocumentGenerator = require('../services/firstRoundDocumentGenerator');
+
+            // Get all confirmed creditors with email addresses from final_creditor_list
+            const allCreditors = client.final_creditor_list || [];
+            const emailableCreditors = allCreditors.filter(creditor => {
+                if (creditor.status !== 'confirmed') return false;
+                // Check all possible email fields
+                const email = creditor.is_representative
+                    ? (creditor.email_glaeubiger_vertreter || creditor.sender_email || creditor.email_glaeubiger)
+                    : (creditor.email_glaeubiger || creditor.sender_email);
+                return !!email;
+            });
+
+            if (emailableCreditors.length === 0) {
+                return res.status(400).json({ error: 'No creditors with email addresses found' });
             }
 
-            const status = await this.creditorContactService.getClientCreditorStatus(client.aktenzeichen);
-            if (!status.creditor_contacts || status.creditor_contacts.length === 0) {
-                return res.status(400).json({ error: 'No creditor contacts found to resend' });
+            console.log(`\n🔄 RESEND: Starting for ${client.aktenzeichen} - ${emailableCreditors.length} creditors with emails`);
+
+            // Prepare client data for document generation
+            let street = client.strasse || '';
+            let houseNumber = client.hausnummer || '';
+            let zipCode = client.plz || '';
+            let city = client.ort || '';
+
+            if (!street && !zipCode && client.address) {
+                const addressParts = client.address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+                if (addressParts) {
+                    street = addressParts[1];
+                    houseNumber = addressParts[2];
+                    zipCode = addressParts[3];
+                    city = addressParts[4];
+                }
             }
 
+            const clientData = {
+                name: `${client.firstName} ${client.lastName}`,
+                reference: client.aktenzeichen,
+                address: client.address || '',
+                street, houseNumber, zipCode, city,
+                birthdate: client.geburtstag || ''
+            };
+
+            // Step 1: Regenerate documents
+            console.log(`📄 RESEND: Regenerating documents...`);
+            const documentGenerator = new FirstRoundDocumentGenerator();
+            const documentResults = await documentGenerator.generateCreditorDocuments(
+                clientData,
+                emailableCreditors,
+                client
+            );
+
+            if (!documentResults.success || documentResults.total_generated === 0) {
+                return res.status(500).json({ error: 'Document generation failed', details: documentResults.errors });
+            }
+
+            console.log(`✅ RESEND: Generated ${documentResults.total_generated} documents`);
+
+            // Step 2: Send emails via Resend and update MongoDB
             let emailsSent = 0;
             const results = [];
 
-            for (let i = 0; i < status.creditor_contacts.length; i++) {
-                const contact = status.creditor_contacts[i];
+            // Deduplicate by email address to avoid sending multiple emails to same address
+            const seenEmails = new Set();
+
+            for (let i = 0; i < emailableCreditors.length; i++) {
+                const creditor = emailableCreditors[i];
                 try {
-                    if (contact.zendesk_ticket_id) {
-                        const clientInfo = { name: `${client.firstName} ${client.lastName}`, email: client.email };
-                        await this.creditorContactService.zendesk.sendCreditorEmailViaTicket(
-                            contact.zendesk_ticket_id,
-                            contact,
-                            clientInfo
-                        );
-                        emailsSent++;
-                        results.push({ creditor_name: contact.creditor_name, success: true });
-                        if (i < status.creditor_contacts.length - 1) await new Promise(r => setTimeout(r, 3000));
+                    // Determine the correct email address
+                    const recipientEmail = creditor.is_representative
+                        ? (creditor.email_glaeubiger_vertreter || creditor.sender_email || creditor.email_glaeubiger)
+                        : (creditor.email_glaeubiger || creditor.sender_email);
+
+                    const recipientName = creditor.glaeubigervertreter_name || creditor.glaeubiger_name || creditor.sender_name || 'Gläubiger';
+                    const creditorReference = creditor.aktenzeichen_glaeubigervertreter || creditor.reference_number || '';
+
+                    // Skip true duplicates - same email AND same reference number
+                    // Different AZ = different debt = separate email needed
+                    const dedupeKey = `${recipientEmail}__${creditorReference || 'NO_REF'}`;
+                    if (seenEmails.has(dedupeKey)) {
+                        console.log(`⏭️ RESEND: Skipping duplicate for ${recipientName} (${recipientEmail}, AZ: ${creditorReference || 'none'})`);
+                        results.push({ creditor_name: recipientName, email: recipientEmail, success: true, skipped: 'duplicate' });
+                        continue;
                     }
+                    seenEmails.add(dedupeKey);
+
+                    // Find the generated document for this creditor
+                    const document = documentResults.documents.find(doc =>
+                        doc.creditor_id === creditor.id
+                    );
+
+                    if (!document) {
+                        console.warn(`⚠️ RESEND: No document found for ${recipientName}`);
+                        results.push({ creditor_name: recipientName, email: recipientEmail, success: false, error: 'No document generated' });
+                        continue;
+                    }
+
+                    console.log(`📧 RESEND ${i + 1}/${emailableCreditors.length}: Sending to ${recipientName} (${recipientEmail})...`);
+
+                    // Send via Resend
+                    const emailResult = await creditorEmailService.sendFirstRoundEmail({
+                        recipientEmail,
+                        recipientName,
+                        clientName: clientData.name,
+                        clientReference: clientData.reference,
+                        creditorReference,
+                        attachment: {
+                            filename: document.filename,
+                            path: document.path
+                        }
+                    });
+
+                    if (emailResult.success) {
+                        emailsSent++;
+
+                        // Update MongoDB for this creditor
+                        const updateResult = await this.Client.updateOne(
+                            {
+                                aktenzeichen: client.aktenzeichen,
+                                'final_creditor_list.id': creditor.id
+                            },
+                            {
+                                $set: {
+                                    'final_creditor_list.$.resend_email_id': emailResult.emailId,
+                                    'final_creditor_list.$.email_provider': 'resend',
+                                    'final_creditor_list.$.first_round_document_filename': document.filename,
+                                    'final_creditor_list.$.document_sent_at': new Date(),
+                                    'final_creditor_list.$.email_sent_at': new Date(),
+                                    'final_creditor_list.$.last_contacted_at': new Date(),
+                                    'final_creditor_list.$.contact_status': 'email_sent_with_document'
+                                }
+                            }
+                        );
+
+                        console.log(`✅ RESEND: Email sent to ${recipientName} (${recipientEmail}) - ID: ${emailResult.emailId}, DB updated: ${updateResult.modifiedCount > 0}`);
+
+                        results.push({
+                            creditor_name: recipientName,
+                            email: recipientEmail,
+                            success: true,
+                            resend_email_id: emailResult.emailId,
+                            document: document.filename,
+                            db_updated: updateResult.modifiedCount > 0
+                        });
+                    } else {
+                        console.error(`❌ RESEND: Failed for ${recipientName}: ${emailResult.error}`);
+                        results.push({ creditor_name: recipientName, email: recipientEmail, success: false, error: emailResult.error });
+                    }
+
+                    // Rate limiting delay
+                    if (i < emailableCreditors.length - 1) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+
                 } catch (e) {
-                    results.push({ creditor_name: contact.creditor_name, success: false, error: e.message });
+                    console.error(`❌ RESEND: Error for creditor ${creditor.glaeubiger_name || creditor.sender_name}:`, e.message);
+                    results.push({
+                        creditor_name: creditor.glaeubiger_name || creditor.sender_name,
+                        success: false,
+                        error: e.message
+                    });
                 }
             }
+
+            // Step 3: Update client-level flags
+            await this.Client.updateOne(
+                { aktenzeichen: client.aktenzeichen },
+                {
+                    $set: {
+                        creditor_contact_started: true,
+                        creditor_contact_started_at: client.creditor_contact_started_at || new Date()
+                    }
+                }
+            );
+
+            console.log(`\n✅ RESEND COMPLETE: ${emailsSent}/${emailableCreditors.length} emails sent for ${client.aktenzeichen}`);
 
             res.json({
                 success: true,
                 emails_sent: emailsSent,
+                total_creditors: emailableCreditors.length,
                 results
             });
 
         } catch (error) {
-            console.error('Error re-sending emails:', error);
+            console.error('Error re-sending creditor emails:', error);
             res.status(500).json({ error: error.message });
         }
     }

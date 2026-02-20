@@ -106,7 +106,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
         // Refresh status
         await fetchCreditorContactStatus();
         
-        alert(`✅ Gläubiger-Kontakt erfolgreich gestartet!\n\nErgebnisse:\n- ${response.data.tickets_created} Main-Ticket erstellt\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an justlukax@gmail.com)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n🎫 Main Ticket: ${response.data.main_ticket_subject || `ID ${response.data.main_ticket_id}`}\n🔗 Zendesk: https://scuric.zendesk.com`);
+        alert(`✅ Gläubiger-Kontakt erfolgreich gestartet!\n\nErgebnisse:\n- ${response.data.tickets_created} Main-Ticket erstellt\n- ${response.data.emails_sent} E-Mails via Resend versendet\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n🎫 Main Ticket: ${response.data.main_ticket_subject || `ID ${response.data.main_ticket_id}`}\n🔗 Zendesk: https://scuric.zendesk.com`);
       } else {
         // Handle user action required errors specially
         if (response.data.user_action_required) {
@@ -154,7 +154,10 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
         // Refresh status
         await fetchCreditorContactStatus();
         
-        alert(`✅ Gläubiger-E-Mails erneut versendet!\n\nErgebnisse:\n- ${response.data.emails_sent} Side Conversation E-Mails versendet (an justlukax@gmail.com)\n- ${response.data.total_creditors} Gläubiger insgesamt\n\n📧 Prüfen Sie Ihr E-Mail-Postfach: justlukax@gmail.com\n🎫 Main Ticket: ${response.data.main_ticket_subject || 'Siehe Zendesk'}`);
+        const resultDetails = (response.data.results || [])
+          .map((r: any) => `  ${r.success ? '✅' : '❌'} ${r.creditor_name} → ${r.email || 'N/A'}${r.resend_email_id ? ` (ID: ${r.resend_email_id})` : ''}${r.error ? ` - ${r.error}` : ''}`)
+          .join('\n');
+        alert(`✅ Gläubiger-E-Mails via Resend versendet!\n\nErgebnisse:\n- ${response.data.emails_sent}/${response.data.total_creditors} E-Mails erfolgreich gesendet\n\nDetails:\n${resultDetails}`);
       } else {
         throw new Error(response.data.error || 'Unbekannter Fehler');
       }

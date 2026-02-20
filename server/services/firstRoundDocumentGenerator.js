@@ -155,6 +155,7 @@ class FirstRoundDocumentGenerator {
       // Generate filename
       const creditorName = (
         creditor.creditor_name ||
+        creditor.glaeubiger_name ||
         creditor.sender_name ||
         "UnknownCreditor"
       )
@@ -1299,6 +1300,8 @@ class FirstRoundDocumentGenerator {
       creditor.creditor_address ||
       creditor.address ||
       creditor.sender_address ||
+      creditor.glaeubiger_adresse ||
+      creditor.glaeubigervertreter_adresse ||
       null;
 
     if (!address) {
@@ -1326,7 +1329,7 @@ class FirstRoundDocumentGenerator {
 
     return {
       // Creditor information
-      "Adresse D C": `${isUsableValue(creditor.sender_name) ? creditor.sender_name + '\n' : ''}${this.formatCreditorAddress(creditor)}`,
+      "Adresse D C": `${isUsableValue(creditor.sender_name) ? creditor.sender_name + '\n' : (isUsableValue(creditor.glaeubiger_name) ? creditor.glaeubiger_name + '\n' : '')}${this.formatCreditorAddress(creditor)}`,
 
       // Use glaeubiger_name (admin display name) as primary source — actual_creditor
       // is unreliable for multi-creditor splits where the AI can mix up names between entries
