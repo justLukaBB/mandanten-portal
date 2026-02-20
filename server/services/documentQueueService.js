@@ -461,11 +461,13 @@ class DocumentQueueService {
 
   /**
    * Find and fix documents stuck in 'processing' that have no active queue job
+   * and no pending webhook that could still update them.
    * @private
    */
   async _handleOrphanedDocuments() {
     try {
       const Client = require('../models/Client');
+      const WebhookJob = require('../models/WebhookJob');
       const orphanThreshold = new Date(Date.now() - JOB_TIMEOUT_MS * 2); // 2x timeout
 
       // Find clients with documents stuck in processing
@@ -486,11 +488,38 @@ class DocumentQueueService {
             status: { $in: ['pending', 'processing', 'retrying'] }
           });
 
-          if (!activeJob) {
-            // Orphaned document - no queue job, stuck in processing
-            console.log(`[DocumentQueue] 🔧 Found orphaned document ${doc.id} for client ${client.id} - marking as failed`);
-            await this._updateDocumentStatus(client.id, doc.id, 'failed', 'Verarbeitung abgebrochen - kein aktiver Job gefunden');
+          if (activeJob) continue; // Still being processed in queue
+
+          // Check if there's a recently completed queue job that sent to FastAPI
+          // (webhook might still be on its way back)
+          const recentCompletedJob = await DocumentProcessingJob.findOne({
+            document_id: doc.id,
+            status: 'completed',
+            fastapi_job_id: { $exists: true, $ne: null },
+            completed_at: { $gt: new Date(Date.now() - JOB_TIMEOUT_MS * 18) } // 3 hour grace period
+          });
+
+          if (recentCompletedJob) {
+            // Also check if there's a pending/processing webhook for this client
+            const pendingWebhook = await WebhookJob.findOne({
+              'payload.client_id': client.id,
+              status: { $in: ['pending', 'processing', 'retrying'] }
+            });
+
+            if (pendingWebhook) {
+              console.log(`[DocumentQueue] ⏳ Document ${doc.id} for client ${client.id} - waiting for webhook ${pendingWebhook.job_id}`);
+              continue;
+            }
+
+            // Queue job completed recently but no pending webhook - still give it time
+            const completedAge = Date.now() - new Date(recentCompletedJob.completed_at).getTime();
+            console.log(`[DocumentQueue] ⏳ Document ${doc.id} for client ${client.id} - FastAPI job ${recentCompletedJob.fastapi_job_id} completed ${Math.round(completedAge / 60000)}min ago, waiting for webhook`);
+            continue;
           }
+
+          // Truly orphaned - no active job, no recent completed job, no pending webhook
+          console.log(`[DocumentQueue] 🔧 Found orphaned document ${doc.id} for client ${client.id} - marking as failed`);
+          await this._updateDocumentStatus(client.id, doc.id, 'failed', 'Verarbeitung abgebrochen - kein aktiver Job gefunden');
         }
       }
     } catch (err) {
