@@ -996,10 +996,59 @@ class CreditorContactService {
 
     /**
      * Get client creditor contact status
+     * Reads from MongoDB (persistent) with in-memory fallback
      */
     async getClientCreditorStatus(clientReference) {
-        const contacts = Array.from(this.creditorContacts.values())
-            .filter(c => c.client_reference === clientReference);
+        // Primary: Read from MongoDB for persistence across server restarts
+        const Client = require('../models/Client');
+        const client = await Client.findOne({ aktenzeichen: clientReference });
+
+        let contacts = [];
+
+        if (client && client.final_creditor_list && client.final_creditor_list.length > 0) {
+            // Build contact records from MongoDB final_creditor_list
+            contacts = client.final_creditor_list
+                .filter(c => c.status === 'confirmed')
+                .map(creditor => {
+                    // Determine email/name based on representative status
+                    const creditorEmail = creditor.is_representative
+                        ? (creditor.email_glaeubiger_vertreter || creditor.sender_email || creditor.email_glaeubiger)
+                        : (creditor.email_glaeubiger || creditor.sender_email);
+                    const creditorName = creditor.is_representative
+                        ? (creditor.glaeubigervertreter_name || creditor.sender_name || creditor.glaeubiger_name)
+                        : (creditor.sender_name || creditor.glaeubiger_name);
+
+                    const claimAmount = creditor.claim_amount || 0;
+                    const finalAmount = creditor.current_debt_amount || claimAmount || 100;
+                    const amountSource = creditor.current_debt_amount ? 'creditor_response'
+                        : claimAmount > 0 ? 'original_document' : 'fallback';
+
+                    return {
+                        id: creditor.id,
+                        client_reference: clientReference,
+                        creditor_name: creditorName || 'Unbekannt',
+                        creditor_email: creditorEmail || '',
+                        reference_number: creditor.reference_number || creditor.aktenzeichen_glaeubigervertreter || '',
+                        original_claim_amount: claimAmount,
+                        current_debt_amount: creditor.current_debt_amount || null,
+                        final_debt_amount: finalAmount,
+                        amount_source: amountSource,
+                        contact_status: creditor.contact_status || 'no_response',
+                        ticket_status: creditor.contact_status || 'no_response',
+                        main_zendesk_ticket_id: creditor.main_zendesk_ticket_id ? Number(creditor.main_zendesk_ticket_id) : null,
+                        side_conversation_id: creditor.side_conversation_id || null,
+                        email_sent_at: creditor.email_sent_at || null,
+                        response_received_at: creditor.response_received_at || null,
+                        creditor_response_text: creditor.creditor_response_text || null,
+                        created_at: creditor.created_at || new Date().toISOString(),
+                        updated_at: creditor.last_contacted_at || creditor.email_sent_at || creditor.created_at || new Date().toISOString()
+                    };
+                });
+        } else {
+            // Fallback: Read from in-memory store (for active sessions before MongoDB update)
+            contacts = Array.from(this.creditorContacts.values())
+                .filter(c => c.client_reference === clientReference);
+        }
 
         const syncInfo = this.zendeskSync.get(clientReference);
 
@@ -1007,11 +1056,13 @@ class CreditorContactService {
         const mainTicketIds = [...new Set(contacts.map(c => c.main_zendesk_ticket_id).filter(Boolean))];
         const mainTicketId = mainTicketIds.length > 0 ? mainTicketIds[0] : null;
 
+        const emailSentStatuses = ['email_sent', 'email_sent_with_document', 'email_sent_with_attachment', 'responded'];
+
         const summary = {
             total_creditors: contacts.length,
-            main_tickets_created: mainTicketIds.length, // Should be 1 in new structure
+            main_tickets_created: mainTicketIds.length > 0 ? 1 : 0,
             side_conversations_sent: contacts.filter(c => c.side_conversation_id).length,
-            emails_sent: contacts.filter(c => c.contact_status === 'email_sent' || c.contact_status === 'responded').length,
+            emails_sent: contacts.filter(c => emailSentStatuses.includes(c.contact_status)).length,
             responses_received: contacts.filter(c => c.contact_status === 'responded').length,
             total_debt: contacts.reduce((sum, c) => sum + (c.final_debt_amount || 0), 0)
         };

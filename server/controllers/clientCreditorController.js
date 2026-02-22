@@ -484,7 +484,8 @@ class ClientCreditorController {
                     name: `${client.firstName} ${client.lastName}`,
                     email: client.email,
                     workflow_status: client.workflow_status,
-                    creditor_contact_started: client.creditor_contact_started
+                    creditor_contact_started: client.creditor_contact_started,
+                    creditor_contact_started_at: client.creditor_contact_started_at
                 }
             });
         } catch (error) {
