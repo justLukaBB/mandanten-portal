@@ -134,6 +134,7 @@ const createAdminAuthRouter = require('./routes/admin-auth');
 const createAdminSettlementRouter = require('./routes/admin-settlement');
 const createAdminClientCreditorRouter = require('./routes/admin-client-creditor');
 const createAdminFinancialRouter = require('./routes/admin-financial');
+const createAdminSettingsRouter = require('./routes/admin-settings');
 
 // Client Routes
 const createClientPortalRouter = require('./routes/client-portal');
@@ -380,6 +381,7 @@ app.use('/api/admin', createAdminClientCreditorRouter({
   aiDedupScheduler
 }));
 
+app.use('/api/admin', createAdminSettingsRouter());
 app.use('/api/admin', adminDelayedProcessingRoutes);
 app.use('/api/admin/webhook-queue', adminWebhookQueueRoutes);
 app.use('/api/admin/document-queue', adminDocumentQueueRoutes);

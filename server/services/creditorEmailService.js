@@ -241,6 +241,21 @@ class CreditorEmailService {
    * @private
    */
   async sendEmail({ to, toName, subject, html, text, attachments = [], tags = [] }) {
+    // Check email test mode - intercept recipient if enabled
+    try {
+      const SystemSettings = require('../models/SystemSettings');
+      const testModeEnabled = await SystemSettings.getValue('creditor_email_test_mode', false);
+      if (testModeEnabled) {
+        const testAddress = await SystemSettings.getValue('creditor_email_test_address', 'justlukax@gmail.com');
+        console.log(`🧪 EMAIL TEST MODE: Redirecting from ${to} → ${testAddress}`);
+        subject = `[TEST - Original: ${to}] ${subject}`;
+        to = testAddress;
+      }
+    } catch (err) {
+      // DB error → continue with real recipient (safe fallback)
+      console.warn('⚠️ Could not check email test mode, using real recipient:', err.message);
+    }
+
     // If Resend is not configured, log to console (dev mode)
     if (!this.resend) {
       console.log('\n📧 ================================');

@@ -10,7 +10,8 @@ import {
   PencilIcon,
   BeakerIcon,
   DocumentTextIcon,
-  PlayIcon
+  PlayIcon,
+  PaperAirplaneIcon
 } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '../../config/api';
 
@@ -60,6 +61,11 @@ const Settings: React.FC = () => {
     role: 'agent'
   });
 
+  // Email Test Mode State
+  const [emailTestMode, setEmailTestMode] = useState(false);
+  const [emailTestAddress, setEmailTestAddress] = useState('justlukax@gmail.com');
+  const [emailTestLoading, setEmailTestLoading] = useState(false);
+
   // Test Scenario State
   const [testScenarios, setTestScenarios] = useState<any[]>([]);
   const [testLoading, setTestLoading] = useState(false);
@@ -69,7 +75,56 @@ const Settings: React.FC = () => {
   useEffect(() => {
     loadAgents();
     loadTestScenarios();
+    loadEmailTestMode();
   }, []);
+
+  const loadEmailTestMode = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/settings/email-test-mode`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEmailTestMode(data.enabled);
+        setEmailTestAddress(data.testAddress);
+      }
+    } catch (error) {
+      console.error('Error loading email test mode:', error);
+    }
+  };
+
+  const toggleEmailTestMode = async () => {
+    setEmailTestLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/settings/email-test-mode`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({ enabled: !emailTestMode, testAddress: emailTestAddress })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to toggle email test mode');
+      }
+      const data = await response.json();
+      setEmailTestMode(data.enabled);
+      setEmailTestAddress(data.testAddress);
+      setMessage({
+        type: 'success',
+        text: data.enabled
+          ? `E-Mail Testmodus aktiviert. Alle E-Mails gehen an ${data.testAddress}`
+          : 'E-Mail Testmodus deaktiviert. E-Mails gehen an echte Empfänger.'
+      });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: `Fehler: ${error.message}` });
+    } finally {
+      setEmailTestLoading(false);
+    }
+  };
 
   const loadAgents = async () => {
     try {
@@ -292,6 +347,60 @@ const Settings: React.FC = () => {
         <p className="text-gray-600 mt-1">
           System-Konfiguration und Datenbank-Verwaltung
         </p>
+      </div>
+
+      {/* Email Test Mode Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <PaperAirplaneIcon className="w-5 h-5 mr-2" />
+            E-Mail Versand
+          </h2>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            emailTestMode
+              ? 'bg-yellow-100 text-yellow-800'
+              : 'bg-green-100 text-green-800'
+          }`}>
+            {emailTestMode ? 'Testmodus' : 'Produktionsmodus'}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div>
+            <p className="font-medium text-gray-900">E-Mail Testmodus</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {emailTestMode
+                ? 'Alle Gläubiger-E-Mails werden an die Testadresse umgeleitet'
+                : 'E-Mails werden an die echten Gläubiger-Adressen gesendet'}
+            </p>
+          </div>
+          <button
+            onClick={toggleEmailTestMode}
+            disabled={emailTestLoading}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              emailTestMode
+                ? 'bg-yellow-500 focus:ring-yellow-500'
+                : 'bg-gray-300 focus:ring-gray-400'
+            } ${emailTestLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                emailTestMode ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {emailTestMode && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              <strong>Testadresse:</strong> {emailTestAddress}
+            </p>
+            <p className="text-xs text-yellow-700 mt-1">
+              Alle Gläubiger-E-Mails (1. Anschreiben + Schuldenbereinigungspläne) werden an diese Adresse gesendet. Der originale Empfänger wird im Betreff angezeigt.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Test Agent Review Section */}
