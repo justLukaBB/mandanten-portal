@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   PaperAirplaneIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
@@ -9,7 +9,10 @@ import {
   DocumentTextIcon,
   UserGroupIcon,
   BuildingOfficeIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import api from '../../config/api';
 
@@ -56,6 +59,25 @@ interface ClientCreditorStatus {
   };
 }
 
+interface NewCreditorEntry {
+  sender_name: string;
+  sender_email: string;
+  sender_address: string;
+  reference_number: string;
+  claim_amount: string;
+}
+
+interface SendResult {
+  creditor_name: string;
+  email: string | null;
+  success: boolean;
+  added?: boolean;
+  email_sent?: boolean;
+  resend_email_id?: string;
+  error?: string;
+  reason?: string;
+}
+
 interface AdminCreditorContactManagerProps {
   clientId?: string;
 }
@@ -69,6 +91,10 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   const [error, setError] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<CreditorContact | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newCreditors, setNewCreditors] = useState<NewCreditorEntry[]>([{ sender_name: '', sender_email: '', sender_address: '', reference_number: '', claim_amount: '' }]);
+  const [sendingNew, setSendingNew] = useState(false);
+  const [sendResults, setSendResults] = useState<SendResult[] | null>(null);
 
   useEffect(() => {
     fetchCreditorContactStatus();
@@ -171,6 +197,52 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       setProcessing(false);
     }
   };
+
+  const emptyCreditor = (): NewCreditorEntry => ({ sender_name: '', sender_email: '', sender_address: '', reference_number: '', claim_amount: '' });
+
+  const updateNewCreditor = (index: number, field: keyof NewCreditorEntry, value: string) => {
+    setNewCreditors(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+  };
+
+  const removeNewCreditor = (index: number) => {
+    setNewCreditors(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddAndSend = async () => {
+    const validCreditors = newCreditors.filter(c => c.sender_name.trim());
+    if (validCreditors.length === 0) {
+      alert('Mindestens ein Gläubiger mit Name ist erforderlich.');
+      return;
+    }
+
+    try {
+      setSendingNew(true);
+      setSendResults(null);
+
+      const response = await api.post(`/api/admin/clients/${clientId}/add-and-send-creditors`, {
+        creditors: validCreditors
+      });
+
+      if (response.data.success) {
+        setSendResults(response.data.results || []);
+        // Reset form
+        setNewCreditors([emptyCreditor()]);
+        // Refresh status
+        await fetchCreditorContactStatus();
+      } else {
+        throw new Error(response.data.error || 'Unbekannter Fehler');
+      }
+    } catch (error: any) {
+      console.error('Error adding and sending creditors:', error);
+      const errorMessage = error.response?.data?.details || error.message || 'Unbekannter Fehler';
+      alert(`Fehler: ${errorMessage}`);
+    } finally {
+      setSendingNew(false);
+    }
+  };
+
+  const newCreditorsWithEmail = newCreditors.filter(c => c.sender_email.trim()).length;
+  const newCreditorsWithName = newCreditors.filter(c => c.sender_name.trim()).length;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -286,18 +358,28 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
             )}
             
             {canResendEmails && (
-              <button
-                onClick={resendCreditorEmails}
-                disabled={processing}
-                className="flex items-center px-4 py-2 bg-red-800 hover:bg-red-900 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-              >
-                {processing ? (
-                  <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <PaperAirplaneIcon className="w-4 h-4 mr-2" />
-                )}
-                {processing ? 'Wird gesendet...' : 'E-Mails erneut senden'}
-              </button>
+              <>
+                <button
+                  onClick={() => { setShowAddForm(!showAddForm); setSendResults(null); }}
+                  disabled={processing || sendingNew}
+                  className="flex items-center px-4 py-2 bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  Neue Gläubiger senden
+                </button>
+                <button
+                  onClick={resendCreditorEmails}
+                  disabled={processing}
+                  className="flex items-center px-4 py-2 bg-red-800 hover:bg-red-900 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                >
+                  {processing ? (
+                    <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <PaperAirplaneIcon className="w-4 h-4 mr-2" />
+                  )}
+                  {processing ? 'Wird gesendet...' : 'E-Mails erneut senden'}
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -341,6 +423,149 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
           </div>
         )}
       </div>
+
+      {/* Add & Send Form */}
+      {showAddForm && !sendResults && (
+        <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-md font-semibold text-gray-900">Neue Gläubiger hinzufügen und senden</h4>
+            <button onClick={() => { setShowAddForm(false); setNewCreditors([emptyCreditor()]); }} className="text-gray-400 hover:text-gray-600">
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Table header */}
+          <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-medium text-gray-500 px-1">
+            <div className="col-span-3">Name *</div>
+            <div className="col-span-3">E-Mail</div>
+            <div className="col-span-2">Adresse</div>
+            <div className="col-span-2">Aktenzeichen</div>
+            <div className="col-span-1">Betrag</div>
+            <div className="col-span-1"></div>
+          </div>
+
+          {/* Creditor rows */}
+          {newCreditors.map((creditor, index) => (
+            <div key={index} className="grid grid-cols-12 gap-2 mb-2">
+              <input
+                type="text"
+                placeholder="Gläubiger-Name"
+                value={creditor.sender_name}
+                onChange={e => updateNewCreditor(index, 'sender_name', e.target.value)}
+                className="col-span-3 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="email"
+                placeholder="email@beispiel.de"
+                value={creditor.sender_email}
+                onChange={e => updateNewCreditor(index, 'sender_email', e.target.value)}
+                className="col-span-3 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Adresse"
+                value={creditor.sender_address}
+                onChange={e => updateNewCreditor(index, 'sender_address', e.target.value)}
+                className="col-span-2 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="AZ"
+                value={creditor.reference_number}
+                onChange={e => updateNewCreditor(index, 'reference_number', e.target.value)}
+                className="col-span-2 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="0,00"
+                value={creditor.claim_amount}
+                onChange={e => updateNewCreditor(index, 'claim_amount', e.target.value)}
+                className="col-span-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="col-span-1 flex items-center justify-center">
+                {newCreditors.length > 1 && (
+                  <button onClick={() => removeNewCreditor(index)} className="text-red-400 hover:text-red-600 p-1">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Add row button */}
+          <button
+            onClick={() => setNewCreditors(prev => [...prev, emptyCreditor()])}
+            className="flex items-center text-sm text-blue-600 hover:text-blue-800 mt-2 mb-4"
+          >
+            <PlusIcon className="w-4 h-4 mr-1" />
+            Weiteren Gläubiger hinzufügen
+          </button>
+
+          {/* Preview and actions */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+            <p className="text-sm text-gray-600">
+              {newCreditorsWithName} Gläubiger, davon {newCreditorsWithEmail} mit E-Mail
+            </p>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => { setShowAddForm(false); setNewCreditors([emptyCreditor()]); }}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleAddAndSend}
+                disabled={sendingNew || newCreditorsWithName === 0}
+                className="flex items-center px-4 py-2 text-sm bg-blue-700 hover:bg-blue-800 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+              >
+                {sendingNew ? (
+                  <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <PaperAirplaneIcon className="w-4 h-4 mr-2" />
+                )}
+                {sendingNew ? 'Wird gesendet...' : 'Hinzufügen und Senden'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Results Panel */}
+      {sendResults && (
+        <div className="bg-white rounded-lg shadow-sm border border-green-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-md font-semibold text-gray-900">Ergebnis: Neue Gläubiger</h4>
+            <button onClick={() => { setSendResults(null); setShowAddForm(false); }} className="text-gray-400 hover:text-gray-600">
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {sendResults.map((result, index) => (
+              <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${result.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className="flex items-center space-x-3">
+                  {result.success ? (
+                    <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  ) : (
+                    <ExclamationTriangleIcon className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{result.creditor_name}</p>
+                    <p className="text-xs text-gray-500">
+                      {result.email || 'Keine E-Mail'}
+                      {result.email_sent && result.resend_email_id && ` — Resend-ID: ${result.resend_email_id}`}
+                      {result.reason === 'no_email' && ' — Nur hinzugefügt (kein Versand)'}
+                      {result.error && ` — Fehler: ${result.error}`}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-xs font-medium px-2 py-1 rounded-full ${result.email_sent ? 'bg-green-100 text-green-800' : result.reason === 'no_email' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-800'}`}>
+                  {result.email_sent ? 'Gesendet' : result.reason === 'no_email' ? 'Hinzugefügt' : 'Fehler'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary Statistics */}
       {creditorStatus?.summary && (

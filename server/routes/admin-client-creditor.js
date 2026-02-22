@@ -21,6 +21,13 @@ module.exports = ({ Client, safeClientUpdate, DelayedProcessingService, aiDedupS
         controller.addCreditor
     );
 
+    // Admin: Add new creditors and send first-round emails
+    router.post('/clients/:clientId/add-and-send-creditors',
+        securityRateLimits.admin,
+        authenticateAdmin,
+        controller.addAndSendCreditors
+    );
+
     // Admin: Get all creditors for a specific client
     router.get('/clients/:clientId/creditors',
         securityRateLimits.admin,

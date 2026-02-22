@@ -661,6 +661,304 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
             }
         },
 
+        // Admin: Add new creditors and immediately send first-round emails to those with email addresses
+        addAndSendCreditors: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                const { creditors } = req.body;
+
+                if (!Array.isArray(creditors) || creditors.length === 0) {
+                    return res.status(400).json({ error: 'creditors array is required and must not be empty' });
+                }
+
+                // Validate at least one creditor has a name
+                const valid = creditors.some(c => c.sender_name?.trim());
+                if (!valid) {
+                    return res.status(400).json({ error: 'At least one creditor must have a sender_name' });
+                }
+
+                console.log(`📬 Admin adding ${creditors.length} new creditors with send for client ${clientId}`);
+
+                // 1. Find client (pattern from addCreditor)
+                let client;
+                try {
+                    client = await Client.findOne({
+                        $or: [
+                            { id: clientId },
+                            { aktenzeichen: clientId }
+                        ]
+                    });
+                    if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+                        client = await Client.findOne({ _id: clientId });
+                    }
+                } catch (findError) {
+                    console.error('Error finding client:', findError);
+                    client = null;
+                }
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found', client_id: clientId });
+                }
+
+                console.log(`📋 Adding ${creditors.length} creditors to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
+
+                // 2. Create creditor objects and add to final_creditor_list
+                if (!client.final_creditor_list) {
+                    client.final_creditor_list = [];
+                }
+
+                const newCreditors = creditors.map(c => ({
+                    id: uuidv4(),
+                    sender_name: (c.sender_name || '').trim(),
+                    sender_email: (c.sender_email || '').trim(),
+                    sender_address: (c.sender_address || '').trim(),
+                    reference_number: (c.reference_number || '').trim(),
+                    claim_amount: parseFloat(String(c.claim_amount || '0').replace(/[^\d.,\-]/g, '').replace(',', '.')) || 0,
+                    is_representative: c.is_representative === true,
+                    actual_creditor: (c.actual_creditor || '').trim(),
+
+                    // German field names for compatibility
+                    glaeubiger_name: (c.sender_name || '').trim(),
+                    email_glaeubiger: (c.sender_email || '').trim(),
+                    glaeubiger_adresse: (c.sender_address || '').trim(),
+                    forderungbetrag: (c.claim_amount || '0').toString(),
+
+                    status: 'confirmed',
+                    confidence: 1.0,
+                    ai_confidence: 1.0,
+                    manually_reviewed: true,
+                    reviewed_by: req.adminId || req.agentId || 'admin',
+                    reviewed_at: new Date(),
+                    confirmed_at: new Date(),
+                    created_at: new Date(),
+                    created_via: 'admin_manual_entry',
+                    correction_notes: 'Added and sent by admin',
+                    review_action: 'manually_created',
+                    document_id: null,
+                    source_document: 'Manual Entry',
+                    source_document_id: null
+                }));
+
+                for (const nc of newCreditors) {
+                    client.final_creditor_list.push(nc);
+                }
+
+                // Add status history entry
+                client.status_history.push({
+                    id: uuidv4(),
+                    status: 'manual_creditors_added_and_sent',
+                    changed_by: 'admin',
+                    metadata: {
+                        count: newCreditors.length,
+                        added_by: req.adminId || req.agentId || 'admin',
+                        admin_action: 'add_and_send_creditors',
+                        total_creditors: client.final_creditor_list.length
+                    }
+                });
+
+                await client.save();
+
+                // 3. Filter creditors with email for sending
+                const emailableCreditors = newCreditors.filter(c => {
+                    const email = c.sender_email || c.email_glaeubiger;
+                    return !!email;
+                });
+
+                if (emailableCreditors.length === 0) {
+                    console.log(`ℹ️ No new creditors have email addresses - skipping send`);
+                    return res.json({
+                        success: true,
+                        message: `${newCreditors.length} creditors added, 0 had email addresses`,
+                        creditors_added: newCreditors.length,
+                        emails_sent: 0,
+                        total_creditors: client.final_creditor_list.length,
+                        results: newCreditors.map(c => ({
+                            creditor_name: c.sender_name,
+                            email: c.sender_email || null,
+                            success: true,
+                            added: true,
+                            email_sent: false,
+                            reason: !c.sender_email ? 'no_email' : undefined
+                        }))
+                    });
+                }
+
+                // 4. Prepare clientData (pattern from resendCreditorEmails)
+                let street = client.strasse || '';
+                let houseNumber = client.hausnummer || '';
+                let zipCode = client.plz || '';
+                let city = client.ort || '';
+
+                if (!street && !zipCode && client.address) {
+                    const addressParts = client.address.match(/^(.+?)\s+(\d+[a-zA-Z]?),?\s*(\d{5})\s+(.+)$/);
+                    if (addressParts) {
+                        street = addressParts[1];
+                        houseNumber = addressParts[2];
+                        zipCode = addressParts[3];
+                        city = addressParts[4];
+                    }
+                }
+
+                const clientData = {
+                    name: `${client.firstName} ${client.lastName}`,
+                    reference: client.aktenzeichen,
+                    address: client.address || '',
+                    street, houseNumber, zipCode, city,
+                    birthdate: client.geburtstag || ''
+                };
+
+                // 5. Generate documents only for new creditors
+                const creditorEmailService = require('../services/creditorEmailService');
+                const FirstRoundDocumentGenerator = require('../services/firstRoundDocumentGenerator');
+
+                console.log(`📄 Generating documents for ${emailableCreditors.length} new creditors...`);
+                const documentGenerator = new FirstRoundDocumentGenerator();
+                const documentResults = await documentGenerator.generateCreditorDocuments(
+                    clientData,
+                    emailableCreditors,
+                    client
+                );
+
+                if (!documentResults.success || documentResults.total_generated === 0) {
+                    return res.status(500).json({
+                        error: 'Document generation failed',
+                        details: documentResults.errors,
+                        creditors_added: newCreditors.length
+                    });
+                }
+
+                console.log(`✅ Generated ${documentResults.total_generated} documents`);
+
+                // 6. Send emails and update MongoDB
+                let emailsSent = 0;
+                const results = [];
+
+                for (let i = 0; i < emailableCreditors.length; i++) {
+                    const creditor = emailableCreditors[i];
+                    try {
+                        const recipientEmail = creditor.is_representative
+                            ? (creditor.email_glaeubiger_vertreter || creditor.sender_email || creditor.email_glaeubiger)
+                            : (creditor.email_glaeubiger || creditor.sender_email);
+                        const recipientName = creditor.glaeubigervertreter_name || creditor.glaeubiger_name || creditor.sender_name || 'Gläubiger';
+                        const creditorReference = creditor.aktenzeichen_glaeubigervertreter || creditor.reference_number || '';
+
+                        // Find document for this creditor
+                        const document = documentResults.documents.find(doc => doc.creditor_id === creditor.id);
+
+                        if (!document) {
+                            console.warn(`⚠️ No document found for ${recipientName}`);
+                            results.push({ creditor_name: recipientName, email: recipientEmail, success: false, error: 'No document generated' });
+                            continue;
+                        }
+
+                        console.log(`📧 Sending ${i + 1}/${emailableCreditors.length}: ${recipientName} (${recipientEmail})...`);
+
+                        const emailResult = await creditorEmailService.sendFirstRoundEmail({
+                            recipientEmail,
+                            recipientName,
+                            clientName: clientData.name,
+                            clientReference: clientData.reference,
+                            creditorReference,
+                            attachment: {
+                                filename: document.filename,
+                                path: document.path
+                            }
+                        });
+
+                        if (emailResult.success) {
+                            emailsSent++;
+
+                            // Update MongoDB for this creditor
+                            const updateResult = await Client.updateOne(
+                                {
+                                    aktenzeichen: client.aktenzeichen,
+                                    'final_creditor_list.id': creditor.id
+                                },
+                                {
+                                    $set: {
+                                        'final_creditor_list.$.resend_email_id': emailResult.emailId,
+                                        'final_creditor_list.$.email_provider': 'resend',
+                                        'final_creditor_list.$.first_round_document_filename': document.filename,
+                                        'final_creditor_list.$.document_sent_at': new Date(),
+                                        'final_creditor_list.$.email_sent_at': new Date(),
+                                        'final_creditor_list.$.last_contacted_at': new Date(),
+                                        'final_creditor_list.$.contact_status': 'email_sent_with_document'
+                                    }
+                                }
+                            );
+
+                            console.log(`✅ Email sent to ${recipientName} - ID: ${emailResult.emailId}`);
+
+                            results.push({
+                                creditor_name: recipientName,
+                                email: recipientEmail,
+                                success: true,
+                                added: true,
+                                email_sent: true,
+                                resend_email_id: emailResult.emailId,
+                                document: document.filename,
+                                db_updated: updateResult.modifiedCount > 0
+                            });
+                        } else {
+                            console.error(`❌ Failed for ${recipientName}: ${emailResult.error}`);
+                            results.push({ creditor_name: recipientName, email: recipientEmail, success: false, added: true, email_sent: false, error: emailResult.error });
+                        }
+
+                        // Rate limiting: 2s between emails
+                        if (i < emailableCreditors.length - 1) {
+                            await new Promise(r => setTimeout(r, 2000));
+                        }
+                    } catch (e) {
+                        console.error(`❌ Error for creditor ${creditor.sender_name}:`, e.message);
+                        results.push({ creditor_name: creditor.sender_name, success: false, added: true, email_sent: false, error: e.message });
+                    }
+                }
+
+                // Also add results for creditors without email
+                for (const nc of newCreditors) {
+                    if (!results.find(r => r.creditor_name === nc.sender_name)) {
+                        results.push({
+                            creditor_name: nc.sender_name,
+                            email: null,
+                            success: true,
+                            added: true,
+                            email_sent: false,
+                            reason: 'no_email'
+                        });
+                    }
+                }
+
+                // 7. Update client-level flags
+                await Client.updateOne(
+                    { aktenzeichen: client.aktenzeichen },
+                    {
+                        $set: {
+                            creditor_contact_started: true,
+                            creditor_contact_started_at: client.creditor_contact_started_at || new Date()
+                        }
+                    }
+                );
+
+                console.log(`✅ ADD & SEND COMPLETE: ${emailsSent}/${emailableCreditors.length} emails sent, ${newCreditors.length} creditors added for ${client.aktenzeichen}`);
+
+                res.json({
+                    success: true,
+                    message: `${newCreditors.length} creditors added, ${emailsSent} emails sent`,
+                    creditors_added: newCreditors.length,
+                    emails_sent: emailsSent,
+                    total_creditors: client.final_creditor_list.length,
+                    results
+                });
+
+            } catch (error) {
+                console.error('❌ Error in addAndSendCreditors:', error);
+                res.status(500).json({
+                    error: 'Failed to add and send creditors',
+                    details: error.message
+                });
+            }
+        },
+
         // Admin: Trigger AI Re-Deduplication for a client
         triggerAIReDedup: async (req, res) => {
             try {
