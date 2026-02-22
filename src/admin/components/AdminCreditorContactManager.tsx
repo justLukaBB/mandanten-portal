@@ -83,12 +83,13 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
     
     try {
       setLoading(true);
-      const response = await api.get(`/clients/${clientId}/creditor-contact-status`);
+      const response = await api.get(`/api/clients/${clientId}/creditor-contact-status`);
       setCreditorStatus(response.data);
       setError(null);
     } catch (error) {
       console.error('Error fetching creditor contact status:', error);
-      setError('Fehler beim Laden des Gläubiger-Kontakt-Status');
+      // Don't set error - show resend button anyway
+      setCreditorStatus(null);
     } finally {
       setLoading(false);
     }
@@ -99,7 +100,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       setProcessing(true);
       setError(null);
       
-      const response = await api.post(`/clients/${clientId}/start-creditor-contact`);
+      const response = await api.post(`/api/clients/${clientId}/start-creditor-contact`);
       
       if (response.data.success) {
         
@@ -128,7 +129,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   const processTimeoutCreditors = async () => {
     try {
       setProcessing(true);
-      const response = await api.post('/admin/process-timeout-creditors', { timeout_days: 14 });
+      const response = await api.post('/api/admin/process-timeout-creditors', { timeout_days: 14 });
       
       alert(`Timeout-Verarbeitung abgeschlossen!\n\n${response.data.processed_count} Gläubiger verarbeitet.`);
       
@@ -147,7 +148,7 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       setProcessing(true);
       setError(null);
       
-      const response = await api.post(`/clients/${clientId}/resend-creditor-emails`);
+      const response = await api.post(`/api/clients/${clientId}/resend-creditor-emails`);
       
       if (response.data.success) {
         
@@ -243,30 +244,13 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
-        <div className="text-center">
-          <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-red-900 mb-2">Fehler</h3>
-          <p className="text-red-700 mb-4">{error}</p>
-          <button
-            onClick={fetchCreditorContactStatus}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            Erneut versuchen
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const canStartProcess = creditorStatus?.client_info?.workflow_status === 'completed' && 
+  const canStartProcess = creditorStatus?.client_info?.workflow_status === 'completed' &&
                          !creditorStatus?.client_info?.creditor_contact_started;
-  
-  const canResendEmails = creditorStatus?.client_info?.creditor_contact_started && 
-                         creditorStatus?.creditor_contacts && 
-                         creditorStatus.creditor_contacts.length > 0;
+
+  // Show resend button if status loaded and contact started, OR if status failed to load (always allow resend)
+  const canResendEmails = creditorStatus
+    ? (creditorStatus.client_info?.creditor_contact_started && creditorStatus.creditor_contacts?.length > 0)
+    : true;
 
   return (
     <div className="space-y-6">
