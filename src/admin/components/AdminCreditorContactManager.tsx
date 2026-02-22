@@ -249,15 +249,21 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
       case 'responded':
         return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
       case 'email_sent':
+      case 'email_sent_with_document':
+      case 'email_sent_with_attachment':
         return <PaperAirplaneIcon className="w-5 h-5 text-red-800" />;
       case 'timeout':
         return <ClockIcon className="w-5 h-5 text-orange-600" />;
       case 'failed':
+      case 'email_failed':
         return <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />;
       case 'main_ticket_created':
-        return <DocumentTextIcon className="w-5 h-5 text-purple-600" />;
       case 'ticket_created':
         return <DocumentTextIcon className="w-5 h-5 text-purple-600" />;
+      case 'no_email_manual_contact':
+        return <UserGroupIcon className="w-5 h-5 text-yellow-600" />;
+      case 'no_response':
+        return <ClockIcon className="w-5 h-5 text-gray-400" />;
       default:
         return <ClockIcon className="w-5 h-5 text-gray-400" />;
     }
@@ -266,11 +272,16 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'responded': return 'bg-green-100 text-green-800';
-      case 'email_sent': return 'bg-blue-100 text-blue-800';
+      case 'email_sent':
+      case 'email_sent_with_document':
+      case 'email_sent_with_attachment': return 'bg-blue-100 text-blue-800';
       case 'timeout': return 'bg-orange-100 text-orange-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      case 'main_ticket_created': return 'bg-purple-100 text-purple-800';
+      case 'failed':
+      case 'email_failed': return 'bg-red-100 text-red-800';
+      case 'main_ticket_created':
       case 'ticket_created': return 'bg-purple-100 text-purple-800';
+      case 'no_email_manual_contact': return 'bg-yellow-100 text-yellow-800';
+      case 'no_response': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-600';
     }
   };
@@ -278,12 +289,17 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   const getStatusText = (status: string) => {
     switch (status) {
       case 'responded': return 'Antwort erhalten';
-      case 'email_sent': return 'E-Mail versendet';
+      case 'email_sent':
+      case 'email_sent_with_document':
+      case 'email_sent_with_attachment': return 'E-Mail versendet';
       case 'timeout': return 'Timeout';
-      case 'failed': return 'Fehler';
+      case 'failed':
+      case 'email_failed': return 'Fehler';
       case 'main_ticket_created': return 'Main Ticket erstellt';
       case 'ticket_created': return 'Ticket erstellt';
       case 'pending': return 'Ausstehend';
+      case 'no_response': return 'Keine Antwort';
+      case 'no_email_manual_contact': return 'Manueller Kontakt';
       default: return 'Unbekannt';
     }
   };
