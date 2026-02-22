@@ -53,7 +53,7 @@ async function syncInquiryToMatcher({ client, creditor, mainTicketId }) {
       reference_numbers: creditor.reference_number ? [creditor.reference_number] : [],
 
       // Zendesk tracking
-      zendesk_ticket_id: mainTicketId,
+      zendesk_ticket_id: mainTicketId != null ? String(mainTicketId) : null,
       zendesk_side_conversation_id: creditor.side_conversation_id || null,
 
       // Resend tracking (new email provider)

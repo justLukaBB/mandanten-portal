@@ -386,7 +386,7 @@ class CreditorContactService {
                 }
 
                 return {
-                    id: uuidv4(),
+                    id: creditor.id || uuidv4(),
                     client_reference: clientReference,
                     creditor_name: nameToUse,
                     creditor_email: emailToUse,
