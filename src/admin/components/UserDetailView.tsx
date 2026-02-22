@@ -26,6 +26,7 @@ import InsolvenzantragDownloadButton from './InsolvenzantragDownloadButton';
 import ManualCreditorManager from './ManualCreditorManager';
 import SevenDayReviewTrigger from './SevenDayReviewTrigger';
 import EditableCell from './EditableCell';
+import AdminCreditorContactManager from './AdminCreditorContactManager';
 import {
   Dialog,
   DialogContent,
@@ -1628,6 +1629,9 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               </div>
             </div>
           </div>
+
+          {/* Gläubiger-Kontakt Manager */}
+          <AdminCreditorContactManager clientId={user.id} />
 
           {/* Detailed Creditor Table (AI extraction) */}
           <div className="mt-6 bg-white rounded-lg border border-gray-200">
