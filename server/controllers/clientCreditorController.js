@@ -199,54 +199,75 @@ class ClientCreditorController {
                             }
                         }
 
-                        // Send confirmation email to client with Gläubigerliste PDF + DOCX attachments
+                        // Send confirmation email to client with Gläubigerliste PDF + DOCX attachments (delayed)
                         try {
-                            console.log(`📧 [Background] Preparing creditor confirmation email for ${aktenzeichen}...`);
-                            const emailService = require('../services/emailService');
-                            const { generateGlaeubigerlistePdf } = require('../services/documentConverter');
+                            const SystemSettings = require('../models/SystemSettings');
+                            const delayHours = await SystemSettings.getValue('confirmation_email_delay_hours', 3);
+                            const delayMs = delayHours * 60 * 60 * 1000;
 
-                            const attachments = [];
+                            const sendConfirmationEmail = async () => {
+                                try {
+                                    console.log(`📧 [Background] Preparing creditor confirmation email for ${aktenzeichen}...`);
+                                    const emailService = require('../services/emailService');
+                                    const { generateGlaeubigerlistePdf } = require('../services/documentConverter');
 
-                            // 1. Generate Gläubigerliste PDF
-                            const pdfBytes = await generateGlaeubigerlistePdf(client);
-                            attachments.push({
-                                filename: `Glaeubigerliste_${aktenzeichen}.pdf`,
-                                content: Buffer.from(pdfBytes)
-                            });
+                                    // Re-fetch client to get latest state
+                                    const freshClient = await this.getClient(aktenzeichen);
+                                    const clientToUse = freshClient || client;
 
-                            // 2. Collect all generated first-round DOCX files
-                            const firstRoundDir = path.join(__dirname, '..', 'generated_documents', 'first_round');
-                            if (fs.existsSync(firstRoundDir)) {
-                                const prefix = `${aktenzeichen}_`;
-                                const docxFiles = fs.readdirSync(firstRoundDir)
-                                    .filter(f => f.startsWith(prefix) && f.endsWith('_Erstschreiben.docx'));
+                                    const attachments = [];
 
-                                for (const filename of docxFiles) {
-                                    const filePath = path.join(firstRoundDir, filename);
+                                    // 1. Generate Gläubigerliste PDF
+                                    const pdfBytes = await generateGlaeubigerlistePdf(clientToUse);
                                     attachments.push({
-                                        filename,
-                                        content: fs.readFileSync(filePath)
+                                        filename: `Glaeubigerliste_${aktenzeichen}.pdf`,
+                                        content: Buffer.from(pdfBytes)
                                     });
+
+                                    // 2. Collect all generated first-round DOCX files
+                                    const firstRoundDir = path.join(__dirname, '..', 'generated_documents', 'first_round');
+                                    if (fs.existsSync(firstRoundDir)) {
+                                        const prefix = `${aktenzeichen}_`;
+                                        const docxFiles = fs.readdirSync(firstRoundDir)
+                                            .filter(f => f.startsWith(prefix) && f.endsWith('_Erstschreiben.docx'));
+
+                                        for (const filename of docxFiles) {
+                                            const filePath = path.join(firstRoundDir, filename);
+                                            attachments.push({
+                                                filename,
+                                                content: fs.readFileSync(filePath)
+                                            });
+                                        }
+                                        console.log(`📎 [Background] Found ${docxFiles.length} DOCX attachments for ${aktenzeichen}`);
+                                    }
+
+                                    // 3. Send email
+                                    const clientName = `${clientToUse.firstName} ${clientToUse.lastName}`;
+                                    const emailResult = await emailService.sendCreditorConfirmationEmail({
+                                        email: clientToUse.email,
+                                        clientName,
+                                        aktenzeichen,
+                                        attachments
+                                    });
+
+                                    if (emailResult.success) {
+                                        console.log(`✅ [Background] Creditor confirmation email sent to ${clientToUse.email}`);
+                                    } else {
+                                        console.error(`❌ [Background] Failed to send confirmation email: ${emailResult.error}`);
+                                    }
+                                } catch (emailError) {
+                                    console.error(`❌ [Background] Failed to send creditor confirmation email for ${aktenzeichen}:`, emailError.message);
                                 }
-                                console.log(`📎 [Background] Found ${docxFiles.length} DOCX attachments for ${aktenzeichen}`);
-                            }
+                            };
 
-                            // 3. Send email
-                            const clientName = `${client.firstName} ${client.lastName}`;
-                            const emailResult = await emailService.sendCreditorConfirmationEmail({
-                                email: client.email,
-                                clientName,
-                                aktenzeichen,
-                                attachments
-                            });
-
-                            if (emailResult.success) {
-                                console.log(`✅ [Background] Creditor confirmation email sent to ${client.email}`);
+                            if (delayMs > 0) {
+                                console.log(`⏰ [Background] Scheduling confirmation email for ${aktenzeichen} in ${delayHours}h`);
+                                setTimeout(sendConfirmationEmail, delayMs);
                             } else {
-                                console.error(`❌ [Background] Failed to send confirmation email: ${emailResult.error}`);
+                                await sendConfirmationEmail();
                             }
-                        } catch (emailError) {
-                            console.error(`❌ [Background] Failed to send creditor confirmation email for ${aktenzeichen}:`, emailError.message);
+                        } catch (delayError) {
+                            console.error(`❌ [Background] Failed to schedule confirmation email for ${aktenzeichen}:`, delayError.message);
                         }
 
                         if (client.zendesk_ticket_id && creditorContactResult.main_ticket_id) {

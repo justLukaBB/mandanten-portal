@@ -53,5 +53,45 @@ module.exports = () => {
     }
   );
 
+  // GET /api/admin/settings/confirmation-email-delay
+  router.get('/settings/confirmation-email-delay',
+    securityRateLimits.admin,
+    authenticateAdmin,
+    async (req, res) => {
+      try {
+        const hours = await SystemSettings.getValue('confirmation_email_delay_hours', 3);
+        res.json({ hours });
+      } catch (error) {
+        console.error('Error loading confirmation email delay settings:', error.message);
+        res.status(500).json({ error: 'Failed to load settings' });
+      }
+    }
+  );
+
+  // PUT /api/admin/settings/confirmation-email-delay
+  router.put('/settings/confirmation-email-delay',
+    securityRateLimits.admin,
+    authenticateAdmin,
+    async (req, res) => {
+      try {
+        const { hours } = req.body;
+
+        if (typeof hours !== 'number' || hours < 0 || hours > 72) {
+          return res.status(400).json({ error: 'hours must be a number between 0 and 72' });
+        }
+
+        await SystemSettings.setValue('confirmation_email_delay_hours', hours);
+
+        const current = await SystemSettings.getValue('confirmation_email_delay_hours', 3);
+        console.log(`📧 Confirmation email delay set to ${current} hours`);
+
+        res.json({ hours: current });
+      } catch (error) {
+        console.error('Error updating confirmation email delay settings:', error.message);
+        res.status(500).json({ error: 'Failed to update settings' });
+      }
+    }
+  );
+
   return router;
 };

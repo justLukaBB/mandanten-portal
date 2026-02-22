@@ -66,6 +66,10 @@ const Settings: React.FC = () => {
   const [emailTestAddress, setEmailTestAddress] = useState('justlukax@gmail.com');
   const [emailTestLoading, setEmailTestLoading] = useState(false);
 
+  // Confirmation Email Delay State
+  const [confirmationDelayHours, setConfirmationDelayHours] = useState(3);
+  const [confirmationDelayLoading, setConfirmationDelayLoading] = useState(false);
+
   // Test Scenario State
   const [testScenarios, setTestScenarios] = useState<any[]>([]);
   const [testLoading, setTestLoading] = useState(false);
@@ -76,6 +80,7 @@ const Settings: React.FC = () => {
     loadAgents();
     loadTestScenarios();
     loadEmailTestMode();
+    loadConfirmationDelay();
   }, []);
 
   const loadEmailTestMode = async () => {
@@ -92,6 +97,52 @@ const Settings: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading email test mode:', error);
+    }
+  };
+
+  const loadConfirmationDelay = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/settings/confirmation-email-delay`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConfirmationDelayHours(data.hours);
+      }
+    } catch (error) {
+      console.error('Error loading confirmation delay:', error);
+    }
+  };
+
+  const saveConfirmationDelay = async (hours: number) => {
+    setConfirmationDelayLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/settings/confirmation-email-delay`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        },
+        body: JSON.stringify({ hours })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update confirmation email delay');
+      }
+      const data = await response.json();
+      setConfirmationDelayHours(data.hours);
+      setMessage({
+        type: 'success',
+        text: data.hours === 0
+          ? 'Bestätigungsmail wird sofort nach Gläubigerbestätigung gesendet.'
+          : `Bestätigungsmail wird ${data.hours} Stunde${data.hours !== 1 ? 'n' : ''} nach Gläubigerbestätigung gesendet.`
+      });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: `Fehler: ${error.message}` });
+    } finally {
+      setConfirmationDelayLoading(false);
     }
   };
 
@@ -401,6 +452,36 @@ const Settings: React.FC = () => {
             </p>
           </div>
         )}
+
+        {/* Confirmation Email Delay */}
+        <div className="mt-4 flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div>
+            <p className="font-medium text-gray-900">Bestätigungsmail Verzögerung</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Wartezeit nach Gläubigerbestätigung, bevor die Bestätigungsmail an den Mandanten gesendet wird.
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="number"
+              min="0"
+              max="72"
+              step="0.5"
+              value={confirmationDelayHours}
+              onChange={(e) => setConfirmationDelayHours(Number(e.target.value))}
+              className="w-20 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+            />
+            <span className="text-sm text-gray-600">Stunden</span>
+            <button
+              onClick={() => saveConfirmationDelay(confirmationDelayHours)}
+              disabled={confirmationDelayLoading}
+              className="px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              style={{backgroundColor: '#9f1a1d'}}
+            >
+              {confirmationDelayLoading ? '...' : 'Speichern'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Test Agent Review Section */}
