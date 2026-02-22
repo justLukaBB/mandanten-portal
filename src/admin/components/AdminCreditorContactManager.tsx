@@ -247,9 +247,9 @@ const AdminCreditorContactManager: React.FC<AdminCreditorContactManagerProps> = 
   const canStartProcess = creditorStatus?.client_info?.workflow_status === 'completed' &&
                          !creditorStatus?.client_info?.creditor_contact_started;
 
-  // Show resend button if status loaded and contact started, OR if status failed to load (always allow resend)
+  // Show resend button if contact was started (resend endpoint uses final_creditor_list directly)
   const canResendEmails = creditorStatus
-    ? (creditorStatus.client_info?.creditor_contact_started && creditorStatus.creditor_contacts?.length > 0)
+    ? !!creditorStatus.client_info?.creditor_contact_started
     : true;
 
   return (
