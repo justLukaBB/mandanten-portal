@@ -199,11 +199,64 @@ class ClientCreditorController {
                             }
                         }
 
-                        // Send confirmation email to client with Gläubigerliste PDF + DOCX attachments (delayed)
+                        // Send confirmation email to client with Gläubigerliste PDF + DOCX attachments (delayed, business hours only)
                         try {
                             const SystemSettings = require('../models/SystemSettings');
                             const delayHours = await SystemSettings.getValue('confirmation_email_delay_hours', 3);
-                            const delayMs = delayHours * 60 * 60 * 1000;
+
+                            // Calculate send time counting only business hours (Mo-Fr 9:00-18:00)
+                            const calculateBusinessHoursSendTime = (startDate, businessHours) => {
+                                const BUSINESS_START = 9;  // 09:00
+                                const BUSINESS_END = 18;   // 18:00
+                                const HOURS_PER_DAY = BUSINESS_END - BUSINESS_START; // 9
+
+                                let remaining = businessHours;
+                                let current = new Date(startDate);
+
+                                while (remaining > 0) {
+                                    const dayOfWeek = current.getDay(); // 0=Sun, 6=Sat
+
+                                    // Skip weekends
+                                    if (dayOfWeek === 0 || dayOfWeek === 6) {
+                                        // Jump to next Monday 09:00
+                                        const daysToMonday = dayOfWeek === 0 ? 1 : 2;
+                                        current.setDate(current.getDate() + daysToMonday);
+                                        current.setHours(BUSINESS_START, 0, 0, 0);
+                                        continue;
+                                    }
+
+                                    const currentHour = current.getHours() + current.getMinutes() / 60;
+
+                                    // Before business hours → jump to 09:00
+                                    if (currentHour < BUSINESS_START) {
+                                        current.setHours(BUSINESS_START, 0, 0, 0);
+                                        continue;
+                                    }
+
+                                    // After business hours → jump to next weekday 09:00
+                                    if (currentHour >= BUSINESS_END) {
+                                        current.setDate(current.getDate() + (dayOfWeek === 5 ? 3 : 1));
+                                        current.setHours(BUSINESS_START, 0, 0, 0);
+                                        continue;
+                                    }
+
+                                    // Within business hours — count available hours today
+                                    const hoursLeftToday = BUSINESS_END - currentHour;
+
+                                    if (remaining <= hoursLeftToday) {
+                                        // Fits within today
+                                        current = new Date(current.getTime() + remaining * 60 * 60 * 1000);
+                                        remaining = 0;
+                                    } else {
+                                        // Use up rest of today, continue next business day
+                                        remaining -= hoursLeftToday;
+                                        current.setDate(current.getDate() + (dayOfWeek === 5 ? 3 : 1));
+                                        current.setHours(BUSINESS_START, 0, 0, 0);
+                                    }
+                                }
+
+                                return current;
+                            };
 
                             const sendConfirmationEmail = async () => {
                                 try {
@@ -260,8 +313,10 @@ class ClientCreditorController {
                                 }
                             };
 
-                            if (delayMs > 0) {
-                                console.log(`⏰ [Background] Scheduling confirmation email for ${aktenzeichen} in ${delayHours}h`);
+                            if (delayHours > 0) {
+                                const sendAt = calculateBusinessHoursSendTime(new Date(), delayHours);
+                                const delayMs = sendAt.getTime() - Date.now();
+                                console.log(`⏰ [Background] Scheduling confirmation email for ${aktenzeichen} in ${delayHours} business hours (send at: ${sendAt.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})`);
                                 setTimeout(sendConfirmationEmail, delayMs);
                             } else {
                                 await sendConfirmationEmail();
