@@ -10,7 +10,8 @@
 - ✅ **v5 1. Rate Bestätigung** - Phases 13-15 (shipped 2026-02-17)
 - ✅ **v6 Async Creditor Confirm** - Phase 16 (shipped 2026-02-17)
 - ✅ **v7 FastAPI Webhook Field Integration** - Phases 17-18 (shipped 2026-02-18)
-- 🚧 **v8 Admin Frontend Migration** - Phases 19-22 (in progress)
+- ✅ **v8 Admin Frontend Migration** - Phases 19-22 (shipped 2026-02-18)
+- 🚧 **v9 Review Dashboard** - Phases 23-27 (in progress)
 
 ## Phases
 
@@ -275,11 +276,11 @@ Plans:
 
 </details>
 
-### 🚧 v8 Admin Frontend Migration (Phases 19-22)
+### ✅ v8 Admin Frontend Migration (Phases 19-22) — SHIPPED 2026-02-18
 
 **Milestone Goal:** Das neue Design aus MandantenPortalDesign (Vite + shadcn/ui + Tailwind 4) als Admin-Frontend aufsetzen und die bestehenden Design-Views (Client-Liste + Client-Detail) an das Node.js Backend anbinden.
 
-## Phase Details
+## v8 Phase Details
 
 ### Phase 19: Project Foundation
 **Goal**: The MandantenPortalDesign prototype runs as a properly configured Vite project with routing, API layer, and design system wired up — ready for auth and data integration
@@ -346,10 +347,91 @@ Plans:
 - [ ] 22-03-PLAN.md -- Gläubiger tab wired to real creditor data including all v7 fields (13 columns)
 - [ ] 22-04-PLAN.md -- Aktivität tab wired to real status_history with German labels and actor identification
 
+### 🚧 v9 Review Dashboard (Phases 23-27)
+
+**Milestone Goal:** Das alte Agent-Portal Review Dashboard wird komplett neu im Admin-Portal aufgebaut — Queue-Seite, Review-Workflow mit Split-Pane, Queue-Management, Analytics und Export.
+
+## v9 Phase Details
+
+### Phase 23: Review Foundation
+**Goal**: Review Queue page with real data from existing agent-review endpoints, accessible via admin token
+**Depends on**: Phase 22 (v8 shipped)
+**Requirements**: FOUND-01, FOUND-02, FOUND-03, FOUND-04
+**Success Criteria** (what must be TRUE):
+  1. Sidebar shows "Review" nav item between "Mandanten" and "Gläubiger-DB", clicking navigates to /review
+  2. All 5 agent-review endpoints accept admin tokens (authenticateAdminOrAgent middleware)
+  3. Review Queue page loads and displays clients from GET /api/agent-review/available-clients with 3 KPI cards (Offen, Hohe Priorität, Ø Alter)
+  4. Admin can filter queue by priority level and search by name or Aktenzeichen
+  5. Clicking a queue row navigates to /review/:clientId
+
+**Key changes:**
+- Backend: `server/routes/agent-review.js` — `authenticateAgent` → `authenticateAdminOrAgent` on all routes
+- Frontend: sidebar.tsx (Review nav item), App.tsx (review routes), review types, reviewApi RTK Query slice, ReviewQueuePage with 3 subcomponents
+
+### Phase 24: Core Review Flow
+**Goal**: Admin can review creditors one-by-one with document viewer and correction form, complete review
+**Depends on**: Phase 23
+**Requirements**: FLOW-01, FLOW-02, FLOW-03, FLOW-04
+**Success Criteria** (what must be TRUE):
+  1. ReviewWorkspacePage shows ResizablePanelGroup with document viewer on the left and correction form on the right
+  2. Admin can navigate between creditors (prev/next) and form fields are pre-filled with AI-extracted data
+  3. Admin can confirm a creditor (action: confirm), correct fields and save (action: correct), or skip with a reason (action: skip)
+  4. After reviewing all creditors, a ReviewSummaryDialog shows all actions taken and admin can complete the review
+  5. Completing a review calls POST /complete, shows success toast, and redirects to /review queue
+
+**Key changes:**
+- Frontend: ReviewWorkspacePage, EnhancedDocumentViewer (fetch+Blob URL), CreditorSelector, ReviewCorrectionForm, ReviewActionBar, SkipReasonForm, ReviewSummaryDialog, reviewUiSlice
+- Store: reviewUi reducer added to store/index.ts
+
+### Phase 25: Queue Management
+**Goal**: Admin can manage review queue with assignments, batch operations, and auto-priority
+**Depends on**: Phase 24
+**Requirements**: QUEUE-01, QUEUE-02, QUEUE-03
+**Success Criteria** (what must be TRUE):
+  1. Admin can assign a review case to an agent and unassign it
+  2. Admin can select multiple queue items and perform batch operations (bulk confirm, bulk assign, bulk priority change)
+  3. Priority score is automatically calculated based on days since payment, confidence, and creditor count
+  4. BatchActionBar appears as sticky bottom bar when items are selected
+
+**Key changes:**
+- Backend: NEW `server/routes/admin-review.js` + `server/controllers/adminReviewController.js` — assign, unassign, batch endpoints
+- Backend: `server/server.js` — register admin-review routes
+- Backend: MongoDB review_assignment field on Client
+- Frontend: BatchActionBar, multi-select in ReviewQueueTable, reviewApi extended with assignment/batch mutations
+
+### Phase 26: Enhanced Viewer & Analytics
+**Goal**: PDF.js document rendering and analytics dashboard with charts
+**Depends on**: Phase 25
+**Requirements**: VIEW-01, VIEW-02, VIEW-03
+**Success Criteria** (what must be TRUE):
+  1. Documents render via PDF.js canvas instead of iframe, with zoom and pan controls
+  2. Analytics page at /review/analytics shows 4 KPI cards and 4 Recharts charts (Reviews/Day, Confidence Distribution, Outcomes Pie, Agent Performance Table)
+  3. Settings page at /review/settings allows configuring confidence threshold and auto-assignment toggle
+  4. Settings are persisted via PUT /api/admin/review/settings
+
+**Key changes:**
+- Install: pdfjs-dist
+- Backend: NEW analytics + settings endpoints in admin-review.js
+- Frontend: EnhancedDocumentViewer upgrade (PDF.js canvas), ReviewAnalyticsPage (4 charts), ReviewSettingsPage, DocumentViewerToolbar
+
+### Phase 27: Polish & Migration
+**Goal**: Export, real-time updates, and old portal deprecation
+**Depends on**: Phase 26
+**Requirements**: POLISH-01, POLISH-02, POLISH-03
+**Success Criteria** (what must be TRUE):
+  1. Admin can export the review queue as CSV or XLSX file
+  2. Queue auto-refreshes every 30 seconds and sidebar shows badge when new cases arrive
+  3. Navigating to /agent/review in the old portal redirects to /review in the admin portal
+
+**Key changes:**
+- Install: xlsx library for client-side export
+- Frontend: Export button + client-side CSV/XLSX generation, pollingInterval on getReviewQueue, sidebar badge
+- Old portal: redirect /agent/review → /review
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22
+Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 → 26 → 27
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -371,10 +453,15 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 16. Async Confirmation | v6 | 1/1 | Complete | 2026-02-17 |
 | 17. Schema and Webhook Field Mapping | v7 | 1/1 | Complete | 2026-02-18 |
 | 18. Merge Logic for New Fields | v7 | 1/1 | Complete | 2026-02-18 |
-| 19. Project Foundation | v8 | Complete    | 2026-02-18 | - |
-| 20. Authentication | v8 | Complete    | 2026-02-18 | - |
-| 21. Client List | v8 | Complete    | 2026-02-18 | - |
-| 22. Client Detail | v8 | Complete    | 2026-02-18 | - |
+| 19. Project Foundation | v8 | 3/3 | Complete | 2026-02-18 |
+| 20. Authentication | v8 | 2/2 | Complete | 2026-02-18 |
+| 21. Client List | v8 | 2/2 | Complete | 2026-02-18 |
+| 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
+| 23. Review Foundation | v9 | 0/? | Pending | - |
+| 24. Core Review Flow | v9 | 0/? | Pending | - |
+| 25. Queue Management | v9 | 0/? | Pending | - |
+| 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |
+| 27. Polish & Migration | v9 | 0/? | Pending | - |
 
 ---
-*Last updated: 2026-02-18*
+*Last updated: 2026-02-23*

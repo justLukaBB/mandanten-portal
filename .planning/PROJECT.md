@@ -8,15 +8,17 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v8 Admin Frontend Migration
+## Current Milestone: v9 Review Dashboard
 
-**Goal:** Das neue Design aus MandantenPortalDesign (Vite + shadcn/ui + Tailwind 4) als Admin-Frontend aufsetzen und die bestehenden Design-Views (Client-Liste + Client-Detail) an das Node.js Backend anbinden.
+**Goal:** Das alte Agent-Portal Review Dashboard (`src/agent/pages/ReviewDashboard.tsx`) wird komplett neu aufgebaut und ins Admin-Portal (MandantenPortalDesign) integriert. Die bestehenden agent-review Endpoints werden für Admin-Tokens geöffnet, eine Queue-Seite mit KPI-Cards und Filtern gebaut, der Review-Workflow mit Split-Pane Workspace implementiert, und Queue-Management, Analytics und Export ergänzt.
 
 **Target features:**
-- Vite-Projekt mit Routing, Auth und API-Layer aufsetzen
-- Admin-Login mit bestehendem Backend-Auth-System
-- Client-Liste mit Echtdaten (Suche, Filter, Pagination) via /api/admin/clients
-- Client-Detail-View mit Tabs (Übersicht, Dokumente, Gläubiger) an Backend-Endpoints
+- Review Queue mit paginierter Liste, KPI-Cards, Prioritäts-Filter und Suche
+- Split-Pane Review Workspace (Dokument-Viewer + Korrekturformular)
+- Gläubiger-Navigation mit Bestätigen/Korrigieren/Überspringen-Workflow
+- Queue-Management: Zuweisung, Batch-Operationen, Auto-Priorität
+- PDF.js Dokument-Rendering, Analytics mit Recharts, CSV/XLSX Export
+- Real-time Queue-Polling und altes Agent-Portal Redirect
 
 ## Requirements
 
@@ -44,42 +46,45 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-- [ ] Vite-Projekt mit React Router, Redux/RTK Query aufsetzen
-- [ ] Admin-Authentifizierung (Login, Token-Management, Protected Routes)
-- [ ] Client-Liste mit Backend-Anbindung (Suche, Filter, Pagination)
-- [ ] Client-Detail-View mit echten Daten (Übersicht, Dokumente, Gläubiger, Workflow-Status)
+- [ ] Review Nav-Item in Sidebar, Routing, Auth-Middleware auf authenticateAdminOrAgent
+- [ ] Review Queue mit KPI-Cards, paginierter Tabelle, Prioritäts-Filter und Suche
+- [ ] Split-Pane Review Workspace mit Dokument-Viewer und Korrekturformular
+- [ ] Queue-Management: Zuweisung, Batch-Operationen, Auto-Priorität
+- [ ] PDF.js Viewer, Analytics Dashboard mit Recharts, Review-Settings
+- [ ] CSV/XLSX Export, Real-time Polling, altes Agent-Portal Redirect
 
 ### Out of Scope
 
-- Client Portal (Mandanten-Ansicht) — kommt in späterem Milestone
-- Agent Portal — kommt in späterem Milestone
-- Neue Admin-Features über bestehende Design-Views hinaus — nur was im Design existiert
-- Analytics Dashboard — Design existiert noch nicht
-- User-Erstellung / Settings — Design existiert noch nicht
-- Backend-Änderungen — bestehendes API bleibt unverändert
+- Client Portal (Mandanten-Ansicht) — eigener Milestone
+- Vollständiges Agent Portal — nur Review-Funktionalität wird migriert
+- User-Erstellung / Verwaltung — eigener Milestone
+- Creditor Database (globale Suche) — eigener Milestone
 
 ## Context
 
-Shipped v1-v7 backend features (payment flow, dedup, PDF, creditor table, email, webhook fields).
-New frontend design exists in `MandantenPortalDesign/` — Vite + React 18.3 + Tailwind CSS 4 + shadcn/ui.
-Design has 48 UI components, Client-Liste, Client-Detail mit Tabs, Sidebar, Status/Flow-Badges.
-Design is a Figma-generated prototype with mock data — no routing, no API, no auth.
-Backend API already has all needed endpoints (admin/clients, workflow-status, documents, creditors).
+Shipped v1-v7 backend features and v8 admin frontend migration (22 phases total).
+Admin portal (MandantenPortalDesign) is live with login, client list with filters, and client detail with 5 tabs wired to real backend data.
+Old Agent Portal Review Dashboard exists at `src/agent/pages/ReviewDashboard.tsx` — needs rebuilding into admin portal.
+Backend has 5 agent-review endpoints under `server/routes/agent-review.js` with `authenticateAgent` middleware.
+`authenticateAdminOrAgent` middleware already exists in `server/middleware/auth.js` — single auth change unlocks all endpoints.
+Detailed spec: `.planning/REVIEW-DASHBOARD-PLAN.md`
 
 Tech stack:
-- **Backend**: Node.js/Express, MongoDB (unchanged)
+- **Backend**: Node.js/Express, MongoDB
 - **AI Service**: Python FastAPI, Google Vertex AI (Gemini 2.5 Pro), deployed on Render
 - **Old Frontend**: React (CRA), Redux/RTK Query, Tailwind 3
-- **New Frontend**: React (Vite), shadcn/ui, Tailwind 4, DM Sans + JetBrains Mono
+- **Admin Portal**: React (Vite), shadcn/ui, Tailwind 4, DM Sans + JetBrains Mono, RTK Query
+- **Available UI**: ResizablePanelGroup, Table, Form, Dialog, Skeleton, Badge, Pagination, Recharts
 
-Design repo: `MandantenPortalDesign/` (lokal geklont)
+Design guidelines: `MandantenPortalDesign/guidelines/Guidelines.md`
 
 ## Constraints
 
-- **Backend unverändert**: Keine API-Änderungen — Frontend passt sich an bestehende Endpoints an
-- **Design-System**: Nur bestehende Design-Komponenten verwenden, keine neuen Designs bauen
+- **Backend-Änderungen erlaubt**: Auth-Middleware-Änderung in Phase 23, neue Endpoints ab Phase 25
+- **Design-System**: Guidelines.md einhalten (BG #FAFAFA, keine Shadows, pill Badges, max 1 orange CTA)
 - **Lokal testen**: Erstmal nur lokale Entwicklung, kein Deployment
-- **Tech stack**: Vite + React + Tailwind 4 + shadcn/ui (wie im Design-Repo)
+- **Tech stack**: Vite + React + Tailwind 4 + shadcn/ui + Recharts + PDF.js
+- **Bestehende Patterns**: RTK Query injectEndpoints, useSearchParams, motion-utils Varianten
 
 ## Key Decisions
 
@@ -96,4 +101,4 @@ Design repo: `MandantenPortalDesign/` (lokal geklont)
 | Use MandantenPortalDesign as new frontend base | Modern stack (Vite, Tailwind 4, shadcn/ui), professional design system | — Pending |
 
 ---
-*Last updated: 2026-02-18 after v8 milestone start*
+*Last updated: 2026-02-23 after v9 milestone start*

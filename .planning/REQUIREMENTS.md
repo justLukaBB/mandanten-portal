@@ -1,42 +1,65 @@
-# Requirements: Mandanten Portal — Admin Frontend Migration
+# Requirements: Mandanten Portal — Review Dashboard
 
-**Defined:** 2026-02-18
+**Defined:** 2026-02-23
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v8 Requirements
+## v9 Requirements
 
-Requirements for Admin Frontend Migration. Each maps to roadmap phases.
+Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
 
-### Setup & Infrastruktur
+### Grundlagen (Foundation)
 
-- [ ] **SETUP-01**: Vite-Projekt mit React, TypeScript und Tailwind 4 ist konfiguriert und startet lokal
-- [ ] **SETUP-02**: React Router mit Sidebar-Navigation und Route-Struktur ist eingerichtet
-- [ ] **SETUP-03**: RTK Query API-Layer mit Base-URL-Konfiguration (dev/prod) ist aufgesetzt
-- [ ] **SETUP-04**: Design-System (shadcn/ui Komponenten, Fonts, Theme-Variablen) ist integriert
+- [ ] **FOUND-01**: Review Nav-Item in Sidebar zwischen Mandanten und Gläubiger-DB navigiert zu /review
+- [ ] **FOUND-02**: Admin-Token wird auf allen agent-review Endpoints akzeptiert (authenticateAdminOrAgent)
+- [ ] **FOUND-03**: Review-Queue-Seite zeigt paginierte Liste wartender Fälle mit 3 KPI-Cards
+- [ ] **FOUND-04**: Admin kann Queue nach Priorität filtern und nach Name/Aktenzeichen durchsuchen
 
-### Authentifizierung
+### Review-Workflow
 
-- [ ] **AUTH-01**: Admin kann sich über Login-Seite mit Email/Passwort anmelden
-- [ ] **AUTH-02**: Admin-Token wird in localStorage gespeichert und bei API-Requests als Bearer-Token gesendet
-- [ ] **AUTH-03**: Nicht-authentifizierte Nutzer werden auf Login-Seite weitergeleitet (Protected Routes)
+- [ ] **FLOW-01**: Admin sieht Split-Pane Workspace mit Dokument links und Korrekturformular rechts (ResizablePanelGroup)
+- [ ] **FLOW-02**: Admin kann zwischen Gläubigern navigieren und Formularfelder sind mit AI-Daten vorausgefüllt
+- [ ] **FLOW-03**: Admin kann Gläubiger bestätigen (confirm), korrigieren (correct) oder überspringen (skip mit Grund)
+- [ ] **FLOW-04**: Admin sieht Review-Zusammenfassung aller bearbeiteten Gläubiger und kann Review abschließen
 
-### Client-Liste
+### Queue-Management
 
-- [ ] **LIST-01**: Admin sieht paginierte Client-Liste mit Echtdaten aus /api/admin/clients
-- [ ] **LIST-02**: Admin kann Clients nach Name, Fall-ID oder Email durchsuchen
-- [ ] **LIST-03**: Admin kann Clients nach Status filtern (Active, Pending, In Review, Blocked, Closed)
-- [ ] **LIST-04**: Admin kann Clients nach Flow filtern (Portal zugesendet, 1. Anschreiben, etc.)
-- [ ] **LIST-05**: Client-Zeilen zeigen Status-Badge und Flow-Badges korrekt an
+- [ ] **QUEUE-01**: Admin kann Review-Fälle einzelnen Agents zuweisen (assign/unassign)
+- [ ] **QUEUE-02**: Admin kann Batch-Operationen ausführen (Bulk-Bestätigung, Bulk-Zuweisung, Bulk-Priorität)
+- [ ] **QUEUE-03**: Prioritäts-Score wird automatisch berechnet (Tage seit Zahlung, Confidence, Gläubiger-Anzahl)
 
-### Client-Detail
+### Viewer & Analytics
 
-- [ ] **DETAIL-01**: Admin sieht Client-Übersicht mit Workflow-Status und Phase-Timeline
-- [ ] **DETAIL-02**: Admin sieht Client-Profil mit Stammdaten
-- [ ] **DETAIL-03**: Admin sieht Dokumente-Tab mit hochgeladenen Dokumenten und AI-Confidence-Scores
-- [ ] **DETAIL-04**: Admin sieht Gläubiger-Tab mit Gläubiger-Tabelle (alle Felder inkl. neue v7-Felder)
-- [ ] **DETAIL-05**: Admin sieht Aktivitäts-Tab mit Workflow-Verlauf
+- [ ] **VIEW-01**: PDF.js rendert Dokumente mit Zoom/Pan statt iframe
+- [ ] **VIEW-02**: Analytics-Seite zeigt Review-Statistiken mit Recharts (Reviews/Tag, Confidence-Verteilung, Ergebnisse)
+- [ ] **VIEW-03**: Admin kann Review-Einstellungen konfigurieren (Confidence-Schwellenwert, Auto-Assignment)
+
+### Polish & Migration
+
+- [ ] **POLISH-01**: CSV/XLSX Export der Review-Queue-Daten
+- [ ] **POLISH-02**: Real-time Queue-Updates via 30s Polling mit Sidebar-Badge
+- [ ] **POLISH-03**: Altes Agent-Portal /agent/review redirected zu /review
 
 ## Previous Milestone Requirements (all satisfied)
+
+### v8 — Admin Frontend Migration (Phases 19-22)
+
+- [x] **SETUP-01**: Vite-Projekt mit React, TypeScript und Tailwind 4 ist konfiguriert und startet lokal
+- [x] **SETUP-02**: React Router mit Sidebar-Navigation und Route-Struktur ist eingerichtet
+- [x] **SETUP-03**: RTK Query API-Layer mit Base-URL-Konfiguration (dev/prod) ist aufgesetzt
+- [x] **SETUP-04**: Design-System (shadcn/ui Komponenten, Fonts, Theme-Variablen) ist integriert
+- [x] **AUTH-01**: Admin kann sich über Login-Seite mit Email/Passwort anmelden
+- [x] **AUTH-02**: Admin-Token wird in localStorage gespeichert und bei API-Requests als Bearer-Token gesendet
+- [x] **AUTH-03**: Nicht-authentifizierte Nutzer werden auf Login-Seite weitergeleitet (Protected Routes)
+- [x] **LIST-01**: Admin sieht paginierte Client-Liste mit Echtdaten aus /api/admin/clients
+- [x] **LIST-02**: Admin kann Clients nach Name, Fall-ID oder Email durchsuchen
+- [x] **LIST-03**: Admin kann Clients nach Status filtern (Active, Pending, In Review, Blocked, Closed)
+- [x] **LIST-04**: Admin kann Clients nach Flow filtern (Portal zugesendet, 1. Anschreiben, etc.)
+- [x] **LIST-05**: Client-Zeilen zeigen Status-Badge und Flow-Badges korrekt an
+- [x] **DETAIL-01**: Admin sieht Client-Übersicht mit Workflow-Status und Phase-Timeline
+- [x] **DETAIL-02**: Admin sieht Client-Profil mit Stammdaten
+- [x] **DETAIL-03**: Admin sieht Dokumente-Tab mit hochgeladenen Dokumenten und AI-Confidence-Scores
+- [x] **DETAIL-04**: Admin sieht Gläubiger-Tab mit Gläubiger-Tabelle (alle Felder inkl. neue v7-Felder)
+- [x] **DETAIL-05**: Admin sieht Aktivitäts-Tab mit Workflow-Verlauf
 
 ### v7 — FastAPI Webhook Field Integration (Phases 17-18)
 
@@ -63,29 +86,21 @@ Deferred to future milestones. Tracked but not in current roadmap.
 - **PORTAL-02**: Dokument-Upload und Gläubiger-Bestätigung
 - **PORTAL-03**: Finanzformular und Settlement-Plan-Status
 
-### Agent Portal
-
-- **AGENT-01**: Agent-Login und Dashboard
-- **AGENT-02**: Creditor Review mit Dokument-Viewer
-
 ### Erweiterte Admin-Features
 
-- **EADM-01**: Analytics Dashboard mit Charts
-- **EADM-02**: User-Erstellung und -Verwaltung
-- **EADM-03**: Settings und Konfiguration
-- **EADM-04**: Creditor Database (globale Suche)
-- **EADM-05**: Admin-Actions (Dedup triggern, Review triggern, etc.)
+- **EADM-01**: User-Erstellung und -Verwaltung
+- **EADM-02**: Creditor Database (globale Suche)
+- **EADM-03**: Admin-Actions (Dedup triggern, Review triggern, etc.)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Client Portal Migration | Eigener Milestone — v8 ist nur Admin |
-| Agent Portal Migration | Eigener Milestone — v8 ist nur Admin |
-| Neue Admin-Features | Nur bestehende Design-Views umsetzen |
-| Backend-Änderungen | API bleibt unverändert |
+| Client Portal Migration | Eigener Milestone |
+| Vollständiges Agent Portal | Nur Review wird migriert |
+| User-Verwaltung | Eigener Milestone |
+| Creditor Database | Eigener Milestone |
 | Deployment | Erstmal nur lokal testen |
-| Neue Design-Komponenten | Nur verwenden was im Design-Repo existiert |
 
 ## Traceability
 
@@ -93,29 +108,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | Phase 19 | Pending |
-| SETUP-02 | Phase 19 | Pending |
-| SETUP-03 | Phase 19 | Pending |
-| SETUP-04 | Phase 19 | Pending |
-| AUTH-01 | Phase 20 | Pending |
-| AUTH-02 | Phase 20 | Pending |
-| AUTH-03 | Phase 20 | Pending |
-| LIST-01 | Phase 21 | Pending |
-| LIST-02 | Phase 21 | Pending |
-| LIST-03 | Phase 21 | Pending |
-| LIST-04 | Phase 21 | Pending |
-| LIST-05 | Phase 21 | Pending |
-| DETAIL-01 | Phase 22 | Pending |
-| DETAIL-02 | Phase 22 | Pending |
-| DETAIL-03 | Phase 22 | Pending |
-| DETAIL-04 | Phase 22 | Pending |
-| DETAIL-05 | Phase 22 | Pending |
+| FOUND-01 | Phase 23 | Pending |
+| FOUND-02 | Phase 23 | Pending |
+| FOUND-03 | Phase 23 | Pending |
+| FOUND-04 | Phase 23 | Pending |
+| FLOW-01 | Phase 24 | Pending |
+| FLOW-02 | Phase 24 | Pending |
+| FLOW-03 | Phase 24 | Pending |
+| FLOW-04 | Phase 24 | Pending |
+| QUEUE-01 | Phase 25 | Pending |
+| QUEUE-02 | Phase 25 | Pending |
+| QUEUE-03 | Phase 25 | Pending |
+| VIEW-01 | Phase 26 | Pending |
+| VIEW-02 | Phase 26 | Pending |
+| VIEW-03 | Phase 26 | Pending |
+| POLISH-01 | Phase 27 | Pending |
+| POLISH-02 | Phase 27 | Pending |
+| POLISH-03 | Phase 27 | Pending |
 
 **Coverage:**
-- v8 requirements: 17 total
+- v9 requirements: 17 total
 - Mapped to phases: 17
 - Unmapped: 0 (100% coverage)
 
 ---
-*Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 — traceability updated after roadmap creation*
+*Requirements defined: 2026-02-23*
+*Last updated: 2026-02-23 — traceability updated after roadmap creation*
