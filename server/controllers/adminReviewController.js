@@ -354,13 +354,181 @@ const createAdminReviewController = ({ Client }) => {
     }
   };
 
+  /**
+   * Get analytics data for the review dashboard
+   * GET /api/admin/review/analytics
+   */
+  const getAnalytics = async (req, res) => {
+    try {
+      const dateRangeParam = req.query.dateRange || '30';
+      console.log(`🔍 Admin Review Analytics: dateRange=${dateRangeParam}`);
+
+      // Compute date filter
+      let dateFilter = null;
+      if (dateRangeParam !== 'all') {
+        const days = parseInt(dateRangeParam, 10) || 30;
+        dateFilter = new Date(Date.now() - days * 86400000);
+      }
+
+      // ── KPI: pending (uses same filter as getAvailableClients) ──────────────
+      const pendingQuery = {
+        $or: [
+          { final_creditor_list: { $elemMatch: { needs_manual_review: true } } },
+          { current_status: 'creditor_review' },
+          {
+            $and: [
+              { current_status: 'awaiting_client_confirmation' },
+              { final_creditor_list: { $elemMatch: { needs_manual_review: true } } }
+            ]
+          }
+        ]
+      };
+      const pending = await Client.countDocuments(pendingQuery);
+
+      // ── Build date-range filter for reviewed creditors ───────────────────────
+      // We need clients that have at least one creditor with review_action set
+      const reviewedClientsQuery = {
+        final_creditor_list: {
+          $elemMatch: {
+            review_action: { $exists: true, $ne: null },
+            ...(dateFilter ? { reviewed_at: { $gte: dateFilter } } : {})
+          }
+        }
+      };
+
+      // Fetch all reviewed clients for aggregation (JS-side for flexibility)
+      const reviewedClients = await Client.find(reviewedClientsQuery).lean();
+
+      // ── KPI: totalReviews ──────────────────────────────────────────────────
+      const totalReviews = reviewedClients.length;
+
+      // ── Flatten reviewed creditors (within date range) ─────────────────────
+      const reviewedCreditors = [];
+      for (const client of reviewedClients) {
+        for (const creditor of (client.final_creditor_list || [])) {
+          if (!creditor.review_action) continue;
+          if (dateFilter && creditor.reviewed_at && new Date(creditor.reviewed_at) < dateFilter) continue;
+          if (dateFilter && !creditor.reviewed_at) continue;
+          reviewedCreditors.push({ client, creditor });
+        }
+      }
+
+      // ── KPI: avgProcessingTime ─────────────────────────────────────────────
+      const processingTimes = [];
+      for (const { client, creditor } of reviewedCreditors) {
+        if (creditor.reviewed_at && client.created_at) {
+          const diffHours = (new Date(creditor.reviewed_at).getTime() - new Date(client.created_at).getTime()) / (1000 * 60 * 60);
+          if (diffHours > 0) processingTimes.push(diffHours);
+        }
+      }
+      const avgProcessingTime = processingTimes.length > 0
+        ? `${(processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length).toFixed(1)}h`
+        : '0h';
+
+      // ── KPI: autoApprovedPercent ───────────────────────────────────────────
+      const confirmedCount = reviewedCreditors.filter(({ creditor }) => creditor.review_action === 'confirm').length;
+      const autoApprovedPercent = reviewedCreditors.length > 0
+        ? parseFloat(((confirmedCount / reviewedCreditors.length) * 100).toFixed(1))
+        : 0;
+
+      // ── Chart: reviewsPerDay ───────────────────────────────────────────────
+      const reviewsByDay = {};
+      for (const { creditor } of reviewedCreditors) {
+        if (!creditor.reviewed_at) continue;
+        const dateStr = new Date(creditor.reviewed_at).toISOString().split('T')[0];
+        reviewsByDay[dateStr] = (reviewsByDay[dateStr] || 0) + 1;
+      }
+      const reviewsPerDay = Object.entries(reviewsByDay)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({ date, count }));
+
+      // ── Chart: confidenceDistribution ──────────────────────────────────────
+      const confBuckets = { '0-50%': 0, '50-80%': 0, '80-100%': 0 };
+      for (const { creditor } of reviewedCreditors) {
+        const conf = (creditor.confidence || creditor.ai_confidence || 0) * 100;
+        if (conf < 50) confBuckets['0-50%']++;
+        else if (conf < 80) confBuckets['50-80%']++;
+        else confBuckets['80-100%']++;
+      }
+      const confidenceDistribution = [
+        { range: '0-50%', count: confBuckets['0-50%'] },
+        { range: '50-80%', count: confBuckets['50-80%'] },
+        { range: '80-100%', count: confBuckets['80-100%'] },
+      ];
+
+      // ── Chart: outcomeBreakdown ────────────────────────────────────────────
+      const outcomes = { confirm: 0, correct: 0, skip: 0 };
+      for (const { creditor } of reviewedCreditors) {
+        const action = creditor.review_action;
+        if (action === 'confirm' || action === 'confirmed') outcomes.confirm++;
+        else if (action === 'correct' || action === 'corrected') outcomes.correct++;
+        else if (action === 'skip' || action === 'skipped') outcomes.skip++;
+      }
+      const outcomeBreakdown = [
+        { name: 'Bestätigt', value: outcomes.confirm },
+        { name: 'Korrigiert', value: outcomes.correct },
+        { name: 'Übersprungen', value: outcomes.skip },
+      ];
+
+      // ── Chart: agentPerformance ────────────────────────────────────────────
+      const agentMap = {};
+      for (const { client, creditor } of reviewedCreditors) {
+        const agent = creditor.reviewed_by || 'Unbekannt';
+        if (!agentMap[agent]) {
+          agentMap[agent] = { total: 0, confirmCount: 0, timings: [] };
+        }
+        agentMap[agent].total++;
+        if (creditor.review_action === 'confirm' || creditor.review_action === 'confirmed') {
+          agentMap[agent].confirmCount++;
+        }
+        if (creditor.reviewed_at && client.created_at) {
+          const diffHours = (new Date(creditor.reviewed_at).getTime() - new Date(client.created_at).getTime()) / (1000 * 60 * 60);
+          if (diffHours > 0) agentMap[agent].timings.push(diffHours);
+        }
+      }
+      const agentPerformance = Object.entries(agentMap).map(([agent, stats]) => {
+        const avgTime = stats.timings.length > 0
+          ? `${(stats.timings.reduce((a, b) => a + b, 0) / stats.timings.length).toFixed(1)}h`
+          : '0h';
+        const accuracy = stats.total > 0
+          ? parseFloat(((stats.confirmCount / stats.total) * 100).toFixed(1))
+          : 0;
+        return { agent, reviewsHandled: stats.total, avgTime, accuracy };
+      }).sort((a, b) => b.reviewsHandled - a.reviewsHandled);
+
+      console.log(`📊 Admin Review Analytics: totalReviews=${totalReviews}, pending=${pending}`);
+
+      return res.json({
+        success: true,
+        data: {
+          kpi: {
+            totalReviews,
+            pending,
+            avgProcessingTime,
+            autoApprovedPercent
+          },
+          charts: {
+            reviewsPerDay,
+            confidenceDistribution,
+            outcomeBreakdown,
+            agentPerformance
+          }
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error getting review analytics:', error);
+      return res.status(500).json({ error: 'Failed to get review analytics', details: error.message });
+    }
+  };
+
   return {
     assignReview,
     unassignReview,
     batchAssign,
     batchUpdatePriority,
     batchConfirm,
-    getQueueWithPriority
+    getQueueWithPriority,
+    getAnalytics
   };
 };
 

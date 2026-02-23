@@ -7,6 +7,9 @@ const { rateLimits } = require('../middleware/security');
 module.exports = (dependencies) => {
   const adminReviewController = createAdminReviewController(dependencies);
 
+  // Analytics
+  router.get('/analytics', rateLimits.admin, authenticateAdmin, adminReviewController.getAnalytics);
+
   // Queue with priority scores
   router.get('/queue', rateLimits.admin, authenticateAdmin, adminReviewController.getQueueWithPriority);
 
