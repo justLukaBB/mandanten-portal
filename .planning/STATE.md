@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 26 Plan 01 complete
+**Current focus:** v9 — Review Dashboard — Phase 26 Plan 02 complete
 
 ## Current Position
 
-Phase: 26-enhanced-viewer-analytics (Plan 01 complete)
+Phase: 26-enhanced-viewer-analytics (Plan 02 complete)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 26 Plan 01 complete — PDF.js canvas viewer with toolbar, image viewer, iframe fallback
-Last activity: 2026-02-23 — Phase 26 Plan 01 execution
+Status: Phase 26 Plan 02 complete — Backend analytics endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
+Last activity: 2026-02-23 — Phase 26 Plan 02 execution
 
-Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-25 in progress)
+Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-26 in progress)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 35
+- Total plans completed: 36
 - Average duration: ~2m
-- Total execution time: ~1.03 hours
+- Total execution time: ~1.10 hours
 
 **By Phase:**
 
@@ -51,7 +51,8 @@ Progress: [████████████████████░░░
 | v9 (24) P03 | 1 | ~2m | 2.0m |
 | v9 (25) P01 | 1 | ~6m | 6.0m |
 | v9 (25) P02 | 1 | ~4m | 4.0m |
-| Phase 26-enhanced-viewer-analytics P01 | 3 | 1 tasks | 3 files |
+| v9 (26) P01 | 1 | ~3m | 3.0m |
+| v9 (26) P02 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -125,7 +126,15 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - RowOverflowMenu opacity managed via JS hover handlers on motion.div rows — consistent with existing row hover background approach
 - window.confirm for batchConfirm destructive action — avoids extra Dialog dependency for simple yes/no
 
+**v9 Plan 26-02 decisions:**
+- JS-side aggregation for analytics — fetch reviewed clients, compute stats in Node.js; avoids complex MongoDB pipeline
+- Date range filter at creditor level (reviewed_at field) not client level — more precise per-creditor tracking
+- autoApprovedPercent checks both 'confirm' and 'confirmed' action variants (agentReviewController vs batchConfirm difference)
+- Agent Performance rendered as HTML table (not Recharts chart) — cleaner for multi-column tabular data
+- /review/analytics route placed before /review/:clientId in App.tsx to prevent param collision
+
 **Admin Review Queue endpoints (server/routes/admin-review.js → /api/admin/review/):**
+- GET /analytics — KPI and chart analytics with dateRange param (7/30/90/all)
 - GET /queue — Priority-sorted queue with priority_score (number), review_assignment, pagination, priority/search filters
 - POST /:clientId/assign — Assign client to agent (body: assigned_to)
 - DELETE /:clientId/assign — Unassign client ($unset review_assignment)
@@ -151,9 +160,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 26-enhanced-viewer-analytics Plan 01 — PDF.js canvas viewer with toolbar, image viewer, iframe fallback
+Stopped at: Completed 26-enhanced-viewer-analytics Plan 02 — Analytics endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
 Resume file: None
-Next step: Execute Phase 26 Plan 02 (Enhanced Viewer Analytics)
+Next step: Execute Phase 27 (CSV/XLSX export, polling + sidebar badge, agent redirect)
 
 ---
-*Last updated: 2026-02-23 (Phase 26 Plan 01 complete — PDF.js document viewer rewrite)*
+*Last updated: 2026-02-23 (Phase 26 Plan 02 complete — analytics backend + ReviewAnalyticsPage)*
