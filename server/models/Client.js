@@ -555,6 +555,24 @@ const clientSchema = new mongoose.Schema({
   // Agent review diffs (persisted so summary view survives refresh/reopen)
   review_diffs: [mongoose.Schema.Types.Mixed],
 
+  // Review assignment (Phase 25 - Queue Management)
+  review_assignment: {
+    assigned_to: String,        // Agent username or admin identifier
+    assigned_by: String,        // Who made the assignment
+    assigned_at: Date,          // When assignment was made
+    assignment_type: {          // How assignment was made
+      type: String,
+      enum: ['manual', 'batch', 'auto'],
+      default: 'manual'
+    }
+  },
+
+  // Manual priority override for review queue (Phase 25 - Queue Management)
+  manual_priority_override: {
+    type: String,
+    enum: ['high', 'medium', 'low']
+  },
+
   // Timestamps
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
