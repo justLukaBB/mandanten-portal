@@ -11,8 +11,8 @@ Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
 
 - [x] **FOUND-01**: Review Nav-Item in Sidebar zwischen Mandanten und Gläubiger-DB navigiert zu /review
 - [x] **FOUND-02**: Admin-Token wird auf allen agent-review Endpoints akzeptiert (authenticateAdminOrAgent)
-- [ ] **FOUND-03**: Review-Queue-Seite zeigt paginierte Liste wartender Fälle mit 3 KPI-Cards
-- [ ] **FOUND-04**: Admin kann Queue nach Priorität filtern und nach Name/Aktenzeichen durchsuchen
+- [x] **FOUND-03**: Review-Queue-Seite zeigt paginierte Liste wartender Fälle mit 3 KPI-Cards
+- [x] **FOUND-04**: Admin kann Queue nach Priorität filtern und nach Name/Aktenzeichen durchsuchen
 
 ### Review-Workflow
 
@@ -110,8 +110,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | FOUND-01 | Phase 23 | Complete |
 | FOUND-02 | Phase 23 | Complete |
-| FOUND-03 | Phase 23 | Pending |
-| FOUND-04 | Phase 23 | Pending |
+| FOUND-03 | Phase 23 | Complete |
+| FOUND-04 | Phase 23 | Complete |
 | FLOW-01 | Phase 24 | Pending |
 | FLOW-02 | Phase 24 | Pending |
 | FLOW-03 | Phase 24 | Pending |
