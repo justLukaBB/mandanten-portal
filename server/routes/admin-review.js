@@ -7,6 +7,10 @@ const { rateLimits } = require('../middleware/security');
 module.exports = (dependencies) => {
   const adminReviewController = createAdminReviewController(dependencies);
 
+  // Settings
+  router.get('/settings', rateLimits.admin, authenticateAdmin, adminReviewController.getSettings);
+  router.put('/settings', rateLimits.admin, authenticateAdmin, adminReviewController.updateSettings);
+
   // Analytics
   router.get('/analytics', rateLimits.admin, authenticateAdmin, adminReviewController.getAnalytics);
 

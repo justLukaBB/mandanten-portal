@@ -5,6 +5,8 @@
  * @param {Object} dependencies.Client - Client model
  */
 
+const ReviewSettings = require('../models/ReviewSettings');
+
 /**
  * Calculate a numeric priority score for a client's review urgency.
  * Higher score = more urgent.
@@ -521,6 +523,82 @@ const createAdminReviewController = ({ Client }) => {
     }
   };
 
+  /**
+   * Get current review settings
+   * GET /api/admin/review/settings
+   */
+  const getSettings = async (req, res) => {
+    try {
+      const settings = await ReviewSettings.findOne({});
+      if (!settings) {
+        return res.json({
+          success: true,
+          data: { confidence_threshold: 80, auto_assignment_enabled: false }
+        });
+      }
+      return res.json({
+        success: true,
+        data: {
+          confidence_threshold: settings.confidence_threshold,
+          auto_assignment_enabled: settings.auto_assignment_enabled
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error getting review settings:', error);
+      return res.status(500).json({ error: 'Failed to get review settings', details: error.message });
+    }
+  };
+
+  /**
+   * Update review settings
+   * PUT /api/admin/review/settings
+   */
+  const updateSettings = async (req, res) => {
+    try {
+      const { confidence_threshold, auto_assignment_enabled } = req.body;
+
+      // Validate confidence_threshold
+      if (confidence_threshold !== undefined) {
+        if (typeof confidence_threshold !== 'number' || confidence_threshold < 0 || confidence_threshold > 100) {
+          return res.status(400).json({ error: 'confidence_threshold must be a number between 0 and 100' });
+        }
+      }
+
+      // Validate auto_assignment_enabled
+      if (auto_assignment_enabled !== undefined) {
+        if (typeof auto_assignment_enabled !== 'boolean') {
+          return res.status(400).json({ error: 'auto_assignment_enabled must be a boolean' });
+        }
+      }
+
+      const updateFields = {
+        updated_at: new Date(),
+        updated_by: req.adminEmail || req.adminId || 'admin'
+      };
+      if (confidence_threshold !== undefined) updateFields.confidence_threshold = confidence_threshold;
+      if (auto_assignment_enabled !== undefined) updateFields.auto_assignment_enabled = auto_assignment_enabled;
+
+      const settings = await ReviewSettings.findOneAndUpdate(
+        {},
+        updateFields,
+        { upsert: true, new: true }
+      );
+
+      console.log(`✅ Admin Review Settings updated: confidence_threshold=${settings.confidence_threshold}, auto_assignment_enabled=${settings.auto_assignment_enabled}`);
+
+      return res.json({
+        success: true,
+        data: {
+          confidence_threshold: settings.confidence_threshold,
+          auto_assignment_enabled: settings.auto_assignment_enabled
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error updating review settings:', error);
+      return res.status(500).json({ error: 'Failed to update review settings', details: error.message });
+    }
+  };
+
   return {
     assignReview,
     unassignReview,
@@ -528,7 +606,9 @@ const createAdminReviewController = ({ Client }) => {
     batchUpdatePriority,
     batchConfirm,
     getQueueWithPriority,
-    getAnalytics
+    getAnalytics,
+    getSettings,
+    updateSettings
   };
 };
 
