@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 27 Plan 01 complete
+**Current focus:** v9 — Review Dashboard — Phase 27 Plan 02 complete (phase complete)
 
 ## Current Position
 
-Phase: 27-polish-migration (Plan 01 complete)
+Phase: 27-polish-migration (Plan 02 complete — phase complete)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 27 Plan 01 complete — CSV/XLSX export for ReviewQueuePage
-Last activity: 2026-02-23 — Phase 27 Plan 01 execution
+Status: Phase 27 Plan 02 complete — polling, sidebar badge, agent redirect
+Last activity: 2026-02-23 — Phase 27 Plan 02 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-27 in progress)
 
@@ -55,6 +55,7 @@ Progress: [████████████████████░░░
 | v9 (26) P02 | 1 | ~4m | 4.0m |
 | v9 (26) P03 | 1 | ~3m | 3.0m |
 | v9 (27) P01 | 1 | ~4m | 4.0m |
+| v9 (27) P02 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 26-enhanced-viewer-analytics]: ReviewSettings single-document upsert pattern; debounce via useRef; initialised ref prevents state overwrite after first load
 - [Phase 27-polish-migration]: useLazyGetAdminReviewQueueQuery with limit=9999 fetches full queue on export — no filters applied
 - [Phase 27-polish-migration]: Single Export dropdown button (DropdownMenu trigger) for both CSV and XLSX — simpler UI
+- [Phase 27-polish-migration]: pollingInterval: 30000 on both ReviewQueuePage and Sidebar — RTK Query deduplication prevents double-fetching
+- [Phase 27-polish-migration]: AgentRedirect handles auth internally (not ProtectedRoute) — needs custom cross-app redirect logic via window.location.href
 
 ### v9 Context
 
@@ -173,9 +176,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 27-polish-migration Plan 01 — CSV/XLSX export for ReviewQueuePage
+Stopped at: Completed 27-polish-migration Plan 02 — polling, sidebar badge, agent redirect (Phase 27 complete)
 Resume file: None
-Next step: Execute Phase 27 Plan 02 (polling + sidebar badge, agent redirect)
+Next step: Phase 27 complete — v9 Review Dashboard milestone complete (Phases 23-27)
 
 ---
-*Last updated: 2026-02-23 (Phase 27 Plan 01 complete — CSV/XLSX export for ReviewQueuePage)*
+*Last updated: 2026-02-23 (Phase 27 Plan 02 complete — polling, sidebar badge, agent redirect)*
