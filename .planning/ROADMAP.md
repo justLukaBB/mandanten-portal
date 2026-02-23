@@ -430,10 +430,17 @@ Plans:
   3. Settings page at /review/settings allows configuring confidence threshold and auto-assignment toggle
   4. Settings are persisted via PUT /api/admin/review/settings
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — PDF.js document viewer rewrite with zoom/pan toolbar, image support, iframe fallback
+- [ ] 26-02-PLAN.md — Analytics backend endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
+- [ ] 26-03-PLAN.md — Settings backend endpoints + ReviewSettingsPage with confidence threshold and auto-assignment toggle
+
 **Key changes:**
 - Install: pdfjs-dist
-- Backend: NEW analytics + settings endpoints in admin-review.js
-- Frontend: EnhancedDocumentViewer upgrade (PDF.js canvas), ReviewAnalyticsPage (4 charts), ReviewSettingsPage, DocumentViewerToolbar
+- Backend: NEW analytics + settings endpoints in admin-review.js, ReviewSettings model
+- Frontend: EnhancedDocumentViewer upgrade (PDF.js canvas), ReviewAnalyticsPage (4 charts), ReviewSettingsPage
 
 ### Phase 27: Polish & Migration
 **Goal**: Export, real-time updates, and old portal deprecation
