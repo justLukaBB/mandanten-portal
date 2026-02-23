@@ -267,6 +267,7 @@ Diese E-Mail wurde automatisch generiert.
             const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
             const perPage = Math.max(parseInt(req.query.limit, 10) || 10, 1);
             const priorityFilter = req.query.priority; // 'high', 'medium', 'low', or undefined/all
+            const searchFilter = req.query.search ? req.query.search.toLowerCase().trim() : '';
 
             const clients = await Client.find({
               $or: [
@@ -386,13 +387,21 @@ Diese E-Mail wurde automatisch generiert.
                 ? availableClients.filter(c => c.priority === priorityFilter)
                 : availableClients;
 
+            // Filter by search term (name or aktenzeichen) if specified
+            const searchedClients = searchFilter
+                ? filteredClients.filter(c =>
+                    c.name.toLowerCase().includes(searchFilter) ||
+                    (c.aktenzeichen && c.aktenzeichen.toLowerCase().includes(searchFilter))
+                  )
+                : filteredClients;
+
             // Paginate results
-            const total = filteredClients.length;
+            const total = searchedClients.length;
             const pages = Math.max(Math.ceil(total / perPage), 1);
             const safePage = Math.min(page, pages);
             const start = (safePage - 1) * perPage;
             const end = start + perPage;
-            const pagedClients = filteredClients.slice(start, end);
+            const pagedClients = searchedClients.slice(start, end);
 
             console.log(`📊 Found ${availableClients.length} clients needing review for agent ${req.agentUsername}`);
 
