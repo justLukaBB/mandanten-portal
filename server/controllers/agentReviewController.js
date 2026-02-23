@@ -266,6 +266,7 @@ Diese E-Mail wurde automatisch generiert.
 
             const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
             const perPage = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+            const priorityFilter = req.query.priority; // 'high', 'medium', 'low', or undefined/all
 
             const clients = await Client.find({
               $or: [
@@ -365,7 +366,8 @@ Diese E-Mail wurde automatisch generiert.
                         total_documents: documents.length,
                         priority: priority,
                         payment_received_at: client.payment_processed_at,
-                        days_since_payment: Math.round(daysSincePayment)
+                        days_since_payment: Math.round(daysSincePayment),
+                        avg_confidence: documentsToReview.length > 0 ? Math.round((avgConfidence || 0) * 100) : 0
                     });
                 }
             }
@@ -379,13 +381,18 @@ Diese E-Mail wurde automatisch generiert.
                 return b.days_since_payment - a.days_since_payment;
             });
 
+            // Filter by priority if specified
+            const filteredClients = priorityFilter && priorityFilter !== 'all'
+                ? availableClients.filter(c => c.priority === priorityFilter)
+                : availableClients;
+
             // Paginate results
-            const total = availableClients.length;
+            const total = filteredClients.length;
             const pages = Math.max(Math.ceil(total / perPage), 1);
             const safePage = Math.min(page, pages);
             const start = (safePage - 1) * perPage;
             const end = start + perPage;
-            const pagedClients = availableClients.slice(start, end);
+            const pagedClients = filteredClients.slice(start, end);
 
             console.log(`📊 Found ${availableClients.length} clients needing review for agent ${req.agentUsername}`);
 

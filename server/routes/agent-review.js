@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateAgent } = require('../middleware/auth');
+const { authenticateAdminOrAgent } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const createAgentReviewController = require('../controllers/agentReviewController');
 const ZendeskService = require('../services/zendeskService');
@@ -7,6 +7,17 @@ const ZendeskService = require('../services/zendeskService');
 module.exports = ({ Client, getGCSFileStream, uploadsDir }) => {
   const router = express.Router();
   const zendeskService = new ZendeskService();
+
+  // Middleware to set reviewer type after authenticateAdminOrAgent
+  // Unifies req.agentId for admins so downstream controller writes work correctly
+  const setReviewerType = (req, res, next) => {
+    req.reviewerType = req.adminId ? 'admin' : 'agent';
+    req.reviewerUsername = req.agentUsername || 'Admin';
+    // CRITICAL: For admin tokens, authenticateAdminOrAgent sets req.adminId but NOT req.agentId.
+    // All downstream controller code (reviewed_by writes) uses req.agentId, so we must unify:
+    req.agentId = req.agentId || req.adminId;
+    next();
+  };
 
   // Create controller with dependencies
   const agentReviewController = createAgentReviewController({
@@ -92,23 +103,23 @@ startxref
 
   // Get available clients for review
   // GET /api/agent-review/available-clients
-  router.get('/available-clients', authenticateAgent, rateLimits.general, agentReviewController.getAvailableClients);
+  router.get('/available-clients', authenticateAdminOrAgent, setReviewerType, rateLimits.general, agentReviewController.getAvailableClients);
 
   // Get review data for a specific client
   // GET /api/agent-review/:clientId
-  router.get('/:clientId', authenticateAgent, rateLimits.general, agentReviewController.getClientReviewData);
+  router.get('/:clientId', authenticateAdminOrAgent, setReviewerType, rateLimits.general, agentReviewController.getClientReviewData);
 
   // Save corrections for a specific document
   // POST /api/agent-review/:clientId/correct
-  router.post('/:clientId/correct', authenticateAgent, rateLimits.general, agentReviewController.saveCorrections);
+  router.post('/:clientId/correct', authenticateAdminOrAgent, setReviewerType, rateLimits.general, agentReviewController.saveCorrections);
 
   // Complete the review session
   // POST /api/agent-review/:clientId/complete
-  router.post('/:clientId/complete', authenticateAgent, rateLimits.general, agentReviewController.completeReviewSession);
+  router.post('/:clientId/complete', authenticateAdminOrAgent, setReviewerType, rateLimits.general, agentReviewController.completeReviewSession);
 
   // Get document for viewing
   // GET /api/agent-review/:clientId/document/:filename
-  router.get('/:clientId/document/:fileIdOrName', authenticateAgent, rateLimits.general, async (req, res) => {
+  router.get('/:clientId/document/:fileIdOrName', authenticateAdminOrAgent, setReviewerType, rateLimits.general, async (req, res) => {
     try {
       const { clientId, fileIdOrName } = req.params;
       const decodedFilename = decodeURIComponent(fileIdOrName);
