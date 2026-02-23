@@ -385,6 +385,13 @@ Plans:
   4. After reviewing all creditors, a ReviewSummaryDialog shows all actions taken and admin can complete the review
   5. Completing a review calls POST /complete, shows success toast, and redirects to /review queue
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — Review types, RTK Query endpoints, Redux reviewUi slice, ReviewWorkspacePage shell with ResizablePanelGroup + EnhancedDocumentViewer
+- [ ] 24-02-PLAN.md — CreditorSelector navigation, ReviewCorrectionForm (9 fields), ReviewActionBar with confirm/correct/skip actions
+- [ ] 24-03-PLAN.md — ReviewSummaryDialog with action breakdown, per-creditor revision, completion + auto-load next case
+
 **Key changes:**
 - Frontend: ReviewWorkspacePage, EnhancedDocumentViewer (fetch+Blob URL), CreditorSelector, ReviewCorrectionForm, ReviewActionBar, SkipReasonForm, ReviewSummaryDialog, reviewUiSlice
 - Store: reviewUi reducer added to store/index.ts
@@ -470,7 +477,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 21. Client List | v8 | 2/2 | Complete | 2026-02-18 |
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
 | 23. Review Foundation | v9 | 0/2 | Pending | - |
-| 24. Core Review Flow | v9 | 0/? | Pending | - |
+| 24. Core Review Flow | v9 | 0/3 | Pending | - |
 | 25. Queue Management | v9 | 0/? | Pending | - |
 | 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |
 | 27. Polish & Migration | v9 | 0/? | Pending | - |
