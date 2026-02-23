@@ -31,7 +31,7 @@ Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
 
 - [x] **VIEW-01**: PDF.js rendert Dokumente mit Zoom/Pan statt iframe
 - [x] **VIEW-02**: Analytics-Seite zeigt Review-Statistiken mit Recharts (Reviews/Tag, Confidence-Verteilung, Ergebnisse)
-- [ ] **VIEW-03**: Admin kann Review-Einstellungen konfigurieren (Confidence-Schwellenwert, Auto-Assignment)
+- [x] **VIEW-03**: Admin kann Review-Einstellungen konfigurieren (Confidence-Schwellenwert, Auto-Assignment)
 
 ### Polish & Migration
 
@@ -121,7 +121,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUEUE-03 | Phase 25 | Pending |
 | VIEW-01 | Phase 26 | Complete |
 | VIEW-02 | Phase 26 | Complete |
-| VIEW-03 | Phase 26 | Pending |
+| VIEW-03 | Phase 26 | Complete |
 | POLISH-01 | Phase 27 | Pending |
 | POLISH-02 | Phase 27 | Pending |
 | POLISH-03 | Phase 27 | Pending |

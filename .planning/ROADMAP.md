@@ -430,7 +430,7 @@ Plans:
   3. Settings page at /review/settings allows configuring confidence threshold and auto-assignment toggle
   4. Settings are persisted via PUT /api/admin/review/settings
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 26-01-PLAN.md — PDF.js document viewer rewrite with zoom/pan toolbar, image support, iframe fallback
@@ -494,7 +494,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 23. Review Foundation | 3/3 | Complete    | 2026-02-23 | - |
 | 24. Core Review Flow | 2/3 | Complete    | 2026-02-23 | 2026-02-23 |
 | 25. Queue Management | 1/2 | Complete    | 2026-02-23 | - |
-| 26. Enhanced Viewer & Analytics | 2/3 | In Progress|  | - |
+| 26. Enhanced Viewer & Analytics | 3/3 | Complete   | 2026-02-23 | - |
 | 27. Polish & Migration | v9 | 0/2 | Pending | - |
 
 ---

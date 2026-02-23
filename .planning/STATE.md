@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 26 Plan 02 complete
+**Current focus:** v9 — Review Dashboard — Phase 26 Plan 03 complete
 
 ## Current Position
 
-Phase: 26-enhanced-viewer-analytics (Plan 02 complete)
+Phase: 26-enhanced-viewer-analytics (Plan 03 complete — PHASE COMPLETE)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 26 Plan 02 complete — Backend analytics endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
-Last activity: 2026-02-23 — Phase 26 Plan 02 execution
+Status: Phase 26 Plan 03 complete — Review settings API + ReviewSettingsPage with auto-save
+Last activity: 2026-02-23 — Phase 26 Plan 03 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-26 in progress)
 
@@ -53,6 +53,7 @@ Progress: [████████████████████░░░
 | v9 (25) P02 | 1 | ~4m | 4.0m |
 | v9 (26) P01 | 1 | ~3m | 3.0m |
 | v9 (26) P02 | 1 | ~4m | 4.0m |
+| v9 (26) P03 | 1 | ~3m | 3.0m |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - sonner Toaster with theme=light (no dark mode)
 - [Phase 23-review-foundation]: search param omitted from URL when empty string (falsy spread); server filters by name/aktenzeichen case-insensitive substring; applied after priority filter so total reflects combined filtered count
 - [Phase 26-enhanced-viewer-analytics]: pdfjs-dist v5 uses canvas (HTMLCanvasElement) in RenderParameters, not canvasContext; ArrayBuffer stored for PDF to enable re-render on zoom without refetch
+- [Phase 26-enhanced-viewer-analytics]: ReviewSettings single-document upsert pattern; debounce via useRef; initialised ref prevents state overwrite after first load
 
 ### v9 Context
 
@@ -133,7 +135,15 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Agent Performance rendered as HTML table (not Recharts chart) — cleaner for multi-column tabular data
 - /review/analytics route placed before /review/:clientId in App.tsx to prevent param collision
 
+**v9 Plan 26-03 decisions:**
+- ReviewSettings model uses single-document upsert (findOneAndUpdate with {}) — one settings doc per installation
+- Debounce via useRef setTimeout/clearTimeout — no external debounce library needed
+- initialised ref flag prevents server data from overwriting in-flight user edits after first load
+- /review/settings route placed before /review/:clientId to prevent param collision
+
 **Admin Review Queue endpoints (server/routes/admin-review.js → /api/admin/review/):**
+- GET /settings — Returns confidence_threshold and auto_assignment_enabled (defaults if no doc)
+- PUT /settings — Persists settings via upsert, validates inputs
 - GET /analytics — KPI and chart analytics with dateRange param (7/30/90/all)
 - GET /queue — Priority-sorted queue with priority_score (number), review_assignment, pagination, priority/search filters
 - POST /:clientId/assign — Assign client to agent (body: assigned_to)
@@ -160,9 +170,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 26-enhanced-viewer-analytics Plan 02 — Analytics endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
+Stopped at: Completed 26-enhanced-viewer-analytics Plan 03 — Review settings API + ReviewSettingsPage with auto-save
 Resume file: None
 Next step: Execute Phase 27 (CSV/XLSX export, polling + sidebar badge, agent redirect)
 
 ---
-*Last updated: 2026-02-23 (Phase 26 Plan 02 complete — analytics backend + ReviewAnalyticsPage)*
+*Last updated: 2026-02-23 (Phase 26 Plan 03 complete — review settings API + ReviewSettingsPage)*
