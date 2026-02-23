@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 23 Plan 02 complete
+**Current focus:** v9 — Review Dashboard — Phase 24 Plan 01 complete
 
 ## Current Position
 
-Phase: 23-review-foundation (Plan 02 complete, Phase 24 next)
+Phase: 24-core-review-flow (Plan 01 complete, Plan 02 next)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 23 complete — auth wiring, reviewApi slice, sidebar nav, /review routes, ReviewQueuePage UI
-Last activity: 2026-02-23 — Phase 23 Plan 02 execution
+Status: Phase 24 Plan 01 complete — review data layer, RTK Query endpoints, reviewUiSlice, ReviewWorkspacePage with ResizablePanelGroup 60/40, EnhancedDocumentViewer
+Last activity: 2026-02-23 — Phase 24 Plan 01 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phase 23 in progress)
 
@@ -46,6 +46,7 @@ Progress: [████████████████████░░░
 | v8 (22) P04 | 1 | ~2m | 2.0m |
 | v9 (23) P01 | 1 | ~8m | 8.0m |
 | v9 (23) P02 | 1 | ~4m | 4.0m |
+| v9 (24) P01 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -82,6 +83,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 **Auth change needed:** Complete (done in Plan 01)
 
+**v9 Plan 24-01 decisions:**
+- fetch+Blob URL for document viewer (Phase 26 upgrades to PDF.js)
+- doc.id || doc.name || doc.filename priority for streaming endpoint identifier
+- needing_review_with_docs list used if non-empty, else with_documents (handles summary-phase reviews)
+- resetReviewState dispatched on clientId change to prevent stale index
+
 **v9 Plan 02 decisions:**
 - getConfidenceColor(value) returns style object for red/yellow/green pill based on 50/80 thresholds
 - highPriorityCount/avgDays computed client-side from current page (not separate API calls per CONTEXT.md discretion)
@@ -105,9 +112,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 23-review-foundation Plan 02 — ReviewQueuePage UI with KPI cards, table, filters, pagination
+Stopped at: Completed 24-core-review-flow Plan 01 — ReviewWorkspacePage data layer, layout, EnhancedDocumentViewer
 Resume file: None
-Next step: Execute Phase 24 (Review Workspace)
+Next step: Execute Phase 24 Plan 02 (Correction Form)
 
 ---
 *Last updated: 2026-02-23 (v9 milestone setup — Review Dashboard)*

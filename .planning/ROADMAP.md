@@ -387,7 +387,7 @@ Plans:
   4. After reviewing all creditors, a ReviewSummaryDialog shows all actions taken and admin can complete the review
   5. Completing a review calls POST /complete, shows success toast, and redirects to /review queue
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 24-01-PLAN.md — Review types, RTK Query endpoints, Redux reviewUi slice, ReviewWorkspacePage shell with ResizablePanelGroup + EnhancedDocumentViewer
@@ -479,7 +479,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 21. Client List | v8 | 2/2 | Complete | 2026-02-18 |
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
 | 23. Review Foundation | 2/2 | Complete   | 2026-02-23 | - |
-| 24. Core Review Flow | v9 | 0/3 | Pending | - |
+| 24. Core Review Flow | 1/3 | In Progress|  | - |
 | 25. Queue Management | v9 | 0/? | Pending | - |
 | 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |
 | 27. Polish & Migration | v9 | 0/? | Pending | - |
