@@ -19,7 +19,7 @@ Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
 - [x] **FLOW-01**: Admin sieht Split-Pane Workspace mit Dokument links und Korrekturformular rechts (ResizablePanelGroup)
 - [x] **FLOW-02**: Admin kann zwischen Gläubigern navigieren und Formularfelder sind mit AI-Daten vorausgefüllt
 - [x] **FLOW-03**: Admin kann Gläubiger bestätigen (confirm), korrigieren (correct) oder überspringen (skip mit Grund)
-- [ ] **FLOW-04**: Admin sieht Review-Zusammenfassung aller bearbeiteten Gläubiger und kann Review abschließen
+- [x] **FLOW-04**: Admin sieht Review-Zusammenfassung aller bearbeiteten Gläubiger und kann Review abschließen
 
 ### Queue-Management
 
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FLOW-01 | Phase 24 | Complete |
 | FLOW-02 | Phase 24 Plan 02 | Complete 2026-02-23 |
 | FLOW-03 | Phase 24 Plan 02 | Complete 2026-02-23 |
-| FLOW-04 | Phase 24 | Pending |
+| FLOW-04 | Phase 24 | Complete |
 | QUEUE-01 | Phase 25 | Pending |
 | QUEUE-02 | Phase 25 | Pending |
 | QUEUE-03 | Phase 25 | Pending |

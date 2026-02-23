@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 24 Plan 02 complete
+**Current focus:** v9 — Review Dashboard — Phase 24 Plan 03 complete
 
 ## Current Position
 
-Phase: 24-core-review-flow (Plan 02 complete, Plan 03 next)
+Phase: 24-core-review-flow (Plan 03 complete — phase fully done)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 24 Plan 02 complete — CreditorSelector, ReviewCorrectionForm (9 AI-prefill fields), ReviewActionBar (confirm/correct/skip + skip reasons), ReviewWorkspacePage fully wired
-Last activity: 2026-02-23 — Phase 24 Plan 02 execution
+Status: Phase 24 Plan 03 complete — ReviewSummaryDialog (stat cards, per-creditor list, completion flow) + auto-navigate to next queue case wired into ReviewWorkspacePage
+Last activity: 2026-02-23 — Phase 24 Plan 03 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phase 23 in progress)
 
@@ -48,6 +48,7 @@ Progress: [████████████████████░░░
 | v9 (23) P02 | 1 | ~4m | 4.0m |
 | v9 (24) P01 | 1 | ~4m | 4.0m |
 | v9 (24) P02 | 1 | ~4m | 4.0m |
+| v9 (24) P03 | 1 | ~2m | 2.0m |
 
 ## Accumulated Context
 
@@ -103,6 +104,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Skip reason panel is inline (renders above action bar) rather than a modal
 - CreditorSelector expandable list auto-closes after selecting a creditor
 
+**v9 Plan 24-03 decisions:**
+- ReviewSummaryDialog calls useCompleteReviewMutation directly; parent handleComplete only handles navigation after success callback
+- handleComplete does a raw fetch (not RTK Query) for fresh queue after completion to avoid stale cache
+- Cleanup useEffect in ReviewWorkspacePage dispatches resetReviewState on unmount in addition to clientId-change reset
+- Zusammenfassung header button provides early access to summary before completing all creditors
+
 **Available UI components:** ResizablePanelGroup, Table, Form, Dialog, Skeleton, Badge, Pagination, Progress, Slider, Tabs, Calendar, Tooltip, DropdownMenu
 
 **Animation patterns:** pageVariants, staggerContainer, kpiStaggerContainer, kpiCardVariants, fadeInVariants, slideUpVariants, tabContentVariants, useCountUp
@@ -121,9 +128,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 24-core-review-flow Plan 02 — CreditorSelector, ReviewCorrectionForm, ReviewActionBar, ReviewWorkspacePage wired
+Stopped at: Completed 24-core-review-flow Plan 03 — ReviewSummaryDialog, completion flow, auto-navigate to next case
 Resume file: None
-Next step: Execute Phase 24 Plan 03 (ReviewSummaryDialog + completion flow)
+Next step: Execute Phase 25 (next phase in v9 Review Dashboard)
 
 ---
-*Last updated: 2026-02-23 (Phase 24 Plan 02 complete — CreditorSelector, ReviewCorrectionForm, ReviewActionBar)*
+*Last updated: 2026-02-23 (Phase 24 Plan 03 complete — ReviewSummaryDialog + completion flow)*

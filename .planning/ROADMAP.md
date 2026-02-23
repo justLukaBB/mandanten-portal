@@ -387,12 +387,12 @@ Plans:
   4. After reviewing all creditors, a ReviewSummaryDialog shows all actions taken and admin can complete the review
   5. Completing a review calls POST /complete, shows success toast, and redirects to /review queue
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 - [x] 24-01-PLAN.md — Review types, RTK Query endpoints, Redux reviewUi slice, ReviewWorkspacePage shell with ResizablePanelGroup + EnhancedDocumentViewer
 - [x] 24-02-PLAN.md — CreditorSelector navigation, ReviewCorrectionForm (9 fields), ReviewActionBar with confirm/correct/skip actions
-- [ ] 24-03-PLAN.md — ReviewSummaryDialog with action breakdown, per-creditor revision, completion + auto-load next case
+- [x] 24-03-PLAN.md — ReviewSummaryDialog with action breakdown, per-creditor revision, completion + auto-load next case
 
 **Key changes:**
 - Frontend: ReviewWorkspacePage, EnhancedDocumentViewer (fetch+Blob URL), CreditorSelector, ReviewCorrectionForm, ReviewActionBar, SkipReasonForm, ReviewSummaryDialog, reviewUiSlice
