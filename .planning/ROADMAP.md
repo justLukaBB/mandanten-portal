@@ -364,14 +364,16 @@ Plans:
   4. Admin can filter queue by priority level and search by name or Aktenzeichen
   5. Clicking a queue row navigates to /review/:clientId
 
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete, 1 gap closure)
 
 Plans:
-- [ ] 23-01-PLAN.md — Backend auth swap + review types + RTK Query reviewApi + sidebar nav + routing
-- [ ] 23-02-PLAN.md — ReviewQueuePage with KPI cards, filterable queue table, pagination
+- [x] 23-01-PLAN.md — Backend auth swap + review types + RTK Query reviewApi + sidebar nav + routing
+- [x] 23-02-PLAN.md — ReviewQueuePage with KPI cards, filterable queue table, pagination
+- [ ] 23-03-PLAN.md — Gap closure: wire search end-to-end (reviewApi + review-queue-page + backend filter)
 
 **Key changes:**
 - Backend: `server/routes/agent-review.js` — `authenticateAgent` → `authenticateAdminOrAgent` on all routes
+- Backend: `server/controllers/agentReviewController.js` — search filter on name/aktenzeichen
 - Frontend: sidebar.tsx (Review nav item), App.tsx (review routes), review types, reviewApi RTK Query slice, ReviewQueuePage with 3 subcomponents
 
 ### Phase 24: Core Review Flow
