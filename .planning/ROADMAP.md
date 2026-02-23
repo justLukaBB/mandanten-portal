@@ -408,7 +408,7 @@ Plans:
   3. Priority score is automatically calculated based on days since payment, confidence, and creditor count
   4. BatchActionBar appears as sticky bottom bar when items are selected
 
-**Plans:** 2/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 25-01-PLAN.md — Backend: admin-review routes, controller (assign/unassign/batch endpoints), review_assignment schema field, auto-priority scoring
@@ -451,10 +451,16 @@ Plans:
   2. Queue auto-refreshes every 30 seconds and sidebar shows badge when new cases arrive
   3. Navigating to /agent/review in the old portal redirects to /review in the admin portal
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — CSV/XLSX export: install xlsx, create export utility, add export button with dropdown to ReviewQueuePage
+- [ ] 27-02-PLAN.md — Real-time polling (30s) with new-case highlight, sidebar pending count badge, old agent portal /agent/* redirect
+
 **Key changes:**
 - Install: xlsx library for client-side export
 - Frontend: Export button + client-side CSV/XLSX generation, pollingInterval on getReviewQueue, sidebar badge
-- Old portal: redirect /agent/review → /review
+- Old portal: redirect /agent/* → admin portal with notice page
 
 ## Progress
 
@@ -487,9 +493,9 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
 | 23. Review Foundation | 3/3 | Complete    | 2026-02-23 | - |
 | 24. Core Review Flow | 2/3 | Complete    | 2026-02-23 | 2026-02-23 |
-| 25. Queue Management | 1/2 | In Progress|  | - |
+| 25. Queue Management | 1/2 | Complete    | 2026-02-23 | - |
 | 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |
-| 27. Polish & Migration | v9 | 0/? | Pending | - |
+| 27. Polish & Migration | v9 | 0/2 | Pending | - |
 
 ---
 *Last updated: 2026-02-23*
