@@ -5,10 +5,10 @@ import PortalLogin from './pages/PortalLogin';
 import ConfirmCreditors from './pages/ConfirmCreditors';
 import ImpersonationAuth from './pages/ImpersonationAuth';
 import AdminApp from './admin/AdminApp';
-import AgentApp from './agent/AgentApp';
 import AgentLogin from './agent/pages/AgentLogin';
 import AdminLogin from './admin/pages/AdminLogin';
 import NotFound from './pages/NotFound';
+import AgentRedirect from './pages/AgentRedirect';
 import { Toaster } from 'sonner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement, allowedRole: string }> = ({ children, allowedRole }) => {
@@ -122,11 +122,7 @@ function App() {
 
           <Route
             path="/agent/*"
-            element={
-              <ProtectedRoute allowedRole="agent">
-                <AgentApp />
-              </ProtectedRoute>
-            }
+            element={<AgentRedirect />}
           />
 
           <Route
