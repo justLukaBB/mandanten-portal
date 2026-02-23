@@ -408,7 +408,7 @@ Plans:
   3. Priority score is automatically calculated based on days since payment, confidence, and creditor count
   4. BatchActionBar appears as sticky bottom bar when items are selected
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 25-01-PLAN.md — Backend: admin-review routes, controller (assign/unassign/batch endpoints), review_assignment schema field, auto-priority scoring
@@ -487,7 +487,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
 | 23. Review Foundation | 3/3 | Complete    | 2026-02-23 | - |
 | 24. Core Review Flow | 2/3 | Complete    | 2026-02-23 | 2026-02-23 |
-| 25. Queue Management | v9 | 0/? | Pending | - |
+| 25. Queue Management | 1/2 | In Progress|  | - |
 | 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |
 | 27. Polish & Migration | v9 | 0/? | Pending | - |
 
