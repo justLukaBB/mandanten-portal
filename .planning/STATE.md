@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 24 Plan 01 complete
+**Current focus:** v9 — Review Dashboard — Phase 24 Plan 02 complete
 
 ## Current Position
 
-Phase: 24-core-review-flow (Plan 01 complete, Plan 02 next)
+Phase: 24-core-review-flow (Plan 02 complete, Plan 03 next)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 24 Plan 01 complete — review data layer, RTK Query endpoints, reviewUiSlice, ReviewWorkspacePage with ResizablePanelGroup 60/40, EnhancedDocumentViewer
-Last activity: 2026-02-23 — Phase 24 Plan 01 execution
+Status: Phase 24 Plan 02 complete — CreditorSelector, ReviewCorrectionForm (9 AI-prefill fields), ReviewActionBar (confirm/correct/skip + skip reasons), ReviewWorkspacePage fully wired
+Last activity: 2026-02-23 — Phase 24 Plan 02 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phase 23 in progress)
 
@@ -47,7 +47,7 @@ Progress: [████████████████████░░░
 | v9 (23) P01 | 1 | ~8m | 8.0m |
 | v9 (23) P02 | 1 | ~4m | 4.0m |
 | v9 (24) P01 | 1 | ~4m | 4.0m |
-| Phase 23-review-foundation P03 | 2 | 1 tasks | 3 files |
+| v9 (24) P02 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -91,10 +91,17 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - needing_review_with_docs list used if non-empty, else with_documents (handles summary-phase reviews)
 - resetReviewState dispatched on clientId change to prevent stale index
 
-**v9 Plan 02 decisions:**
+**v9 Plan 23-02 decisions:**
 - getConfidenceColor(value) returns style object for red/yellow/green pill based on 50/80 thresholds
 - highPriorityCount/avgDays computed client-side from current page (not separate API calls per CONTEXT.md discretion)
 - flex-based table layout over CSS grid — simpler for 6-column proportional layout
+
+**v9 Plan 24-02 decisions:**
+- Parent-owned form state (ReviewWorkspacePage useState) so both ReviewCorrectionForm and ReviewActionBar share formValues without prop drilling
+- useRef for original AI values captures prefill on creditor change, enables green border detection (user-edited) without additional Redux state
+- Corrections diff on Korrigieren: only sends fields that differ from originalValues
+- Skip reason panel is inline (renders above action bar) rather than a modal
+- CreditorSelector expandable list auto-closes after selecting a creditor
 
 **Available UI components:** ResizablePanelGroup, Table, Form, Dialog, Skeleton, Badge, Pagination, Progress, Slider, Tabs, Calendar, Tooltip, DropdownMenu
 
@@ -114,9 +121,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 24-core-review-flow Plan 01 — ReviewWorkspacePage data layer, layout, EnhancedDocumentViewer
+Stopped at: Completed 24-core-review-flow Plan 02 — CreditorSelector, ReviewCorrectionForm, ReviewActionBar, ReviewWorkspacePage wired
 Resume file: None
-Next step: Execute Phase 24 Plan 02 (Correction Form)
+Next step: Execute Phase 24 Plan 03 (ReviewSummaryDialog + completion flow)
 
 ---
-*Last updated: 2026-02-23 (v9 milestone setup — Review Dashboard)*
+*Last updated: 2026-02-23 (Phase 24 Plan 02 complete — CreditorSelector, ReviewCorrectionForm, ReviewActionBar)*
