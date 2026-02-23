@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 26 Plan 03 complete
+**Current focus:** v9 — Review Dashboard — Phase 27 Plan 01 complete
 
 ## Current Position
 
-Phase: 26-enhanced-viewer-analytics (Plan 03 complete — PHASE COMPLETE)
+Phase: 27-polish-migration (Plan 01 complete)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 26 Plan 03 complete — Review settings API + ReviewSettingsPage with auto-save
-Last activity: 2026-02-23 — Phase 26 Plan 03 execution
+Status: Phase 27 Plan 01 complete — CSV/XLSX export for ReviewQueuePage
+Last activity: 2026-02-23 — Phase 27 Plan 01 execution
 
-Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-26 in progress)
+Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-27 in progress)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 36
+- Total plans completed: 37
 - Average duration: ~2m
 - Total execution time: ~1.10 hours
 
@@ -54,6 +54,7 @@ Progress: [████████████████████░░░
 | v9 (26) P01 | 1 | ~3m | 3.0m |
 | v9 (26) P02 | 1 | ~4m | 4.0m |
 | v9 (26) P03 | 1 | ~3m | 3.0m |
+| v9 (27) P01 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 23-review-foundation]: search param omitted from URL when empty string (falsy spread); server filters by name/aktenzeichen case-insensitive substring; applied after priority filter so total reflects combined filtered count
 - [Phase 26-enhanced-viewer-analytics]: pdfjs-dist v5 uses canvas (HTMLCanvasElement) in RenderParameters, not canvasContext; ArrayBuffer stored for PDF to enable re-render on zoom without refetch
 - [Phase 26-enhanced-viewer-analytics]: ReviewSettings single-document upsert pattern; debounce via useRef; initialised ref prevents state overwrite after first load
+- [Phase 27-polish-migration]: useLazyGetAdminReviewQueueQuery with limit=9999 fetches full queue on export — no filters applied
+- [Phase 27-polish-migration]: Single Export dropdown button (DropdownMenu trigger) for both CSV and XLSX — simpler UI
 
 ### v9 Context
 
@@ -170,9 +173,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 26-enhanced-viewer-analytics Plan 03 — Review settings API + ReviewSettingsPage with auto-save
+Stopped at: Completed 27-polish-migration Plan 01 — CSV/XLSX export for ReviewQueuePage
 Resume file: None
-Next step: Execute Phase 27 (CSV/XLSX export, polling + sidebar badge, agent redirect)
+Next step: Execute Phase 27 Plan 02 (polling + sidebar badge, agent redirect)
 
 ---
-*Last updated: 2026-02-23 (Phase 26 Plan 03 complete — review settings API + ReviewSettingsPage)*
+*Last updated: 2026-02-23 (Phase 27 Plan 01 complete — CSV/XLSX export for ReviewQueuePage)*

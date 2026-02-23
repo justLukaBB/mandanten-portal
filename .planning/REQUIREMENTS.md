@@ -35,7 +35,7 @@ Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
 
 ### Polish & Migration
 
-- [ ] **POLISH-01**: CSV/XLSX Export der Review-Queue-Daten
+- [x] **POLISH-01**: CSV/XLSX Export der Review-Queue-Daten
 - [ ] **POLISH-02**: Real-time Queue-Updates via 30s Polling mit Sidebar-Badge
 - [ ] **POLISH-03**: Altes Agent-Portal /agent/review redirected zu /review
 
@@ -122,7 +122,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIEW-01 | Phase 26 | Complete |
 | VIEW-02 | Phase 26 | Complete |
 | VIEW-03 | Phase 26 | Complete |
-| POLISH-01 | Phase 27 | Pending |
+| POLISH-01 | Phase 27 | Complete |
 | POLISH-02 | Phase 27 | Pending |
 | POLISH-03 | Phase 27 | Pending |
 

@@ -451,7 +451,7 @@ Plans:
   2. Queue auto-refreshes every 30 seconds and sidebar shows badge when new cases arrive
   3. Navigating to /agent/review in the old portal redirects to /review in the admin portal
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 27-01-PLAN.md — CSV/XLSX export: install xlsx, create export utility, add export button with dropdown to ReviewQueuePage
@@ -495,7 +495,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 24. Core Review Flow | 2/3 | Complete    | 2026-02-23 | 2026-02-23 |
 | 25. Queue Management | 1/2 | Complete    | 2026-02-23 | - |
 | 26. Enhanced Viewer & Analytics | 3/3 | Complete    | 2026-02-23 | - |
-| 27. Polish & Migration | v9 | 0/2 | Pending | - |
+| 27. Polish & Migration | 1/2 | In Progress|  | - |
 
 ---
 *Last updated: 2026-02-23*
