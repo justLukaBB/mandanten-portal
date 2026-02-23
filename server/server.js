@@ -134,6 +134,7 @@ const createAdminAuthRouter = require('./routes/admin-auth');
 const createAdminSettlementRouter = require('./routes/admin-settlement');
 const createAdminClientCreditorRouter = require('./routes/admin-client-creditor');
 const createAdminFinancialRouter = require('./routes/admin-financial');
+const createAdminReviewRouter = require('./routes/admin-review');
 
 // Client Routes
 const createClientPortalRouter = require('./routes/client-portal');
@@ -383,6 +384,9 @@ app.use('/api/admin', createAdminClientCreditorRouter({
 app.use('/api/admin', adminDelayedProcessingRoutes);
 app.use('/api/admin/webhook-queue', adminWebhookQueueRoutes);
 app.use('/api/admin/document-queue', adminDocumentQueueRoutes);
+app.use('/api/admin/review', createAdminReviewRouter({
+  Client
+}));
 
 // 10.7 Client Portal Global Routes
 
