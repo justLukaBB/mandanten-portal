@@ -408,11 +408,11 @@ Plans:
   3. Priority score is automatically calculated based on days since payment, confidence, and creditor count
   4. BatchActionBar appears as sticky bottom bar when items are selected
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans executed
 
 Plans:
-- [ ] 25-01-PLAN.md — Backend: admin-review routes, controller (assign/unassign/batch endpoints), review_assignment schema field, auto-priority scoring
-- [ ] 25-02-PLAN.md — Frontend: reviewApi mutations, multi-select in ReviewQueueTable, BatchActionBar sticky bottom bar
+- [x] 25-01-PLAN.md — Backend: admin-review routes, controller (assign/unassign/batch endpoints), review_assignment schema field, auto-priority scoring
+- [x] 25-02-PLAN.md — Frontend: reviewApi mutations, multi-select in ReviewQueueTable, BatchActionBar sticky bottom bar
 
 **Key changes:**
 - Backend: NEW `server/routes/admin-review.js` + `server/controllers/adminReviewController.js` — assign, unassign, batch endpoints

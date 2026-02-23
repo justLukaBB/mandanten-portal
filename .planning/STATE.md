@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 25 Plan 01 complete
+**Current focus:** v9 — Review Dashboard — Phase 25 Plan 02 complete
 
 ## Current Position
 
-Phase: 25-queue-management (Plan 01 complete)
+Phase: 25-queue-management (Plan 02 complete)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 25 Plan 01 complete — Admin review queue backend (assign/unassign, batch ops, priority scoring, GET /api/admin/review/queue)
-Last activity: 2026-02-23 — Phase 25 Plan 01 execution
+Status: Phase 25 Plan 02 complete — Multi-select ReviewQueueTable, BatchActionBar, RTK Query mutations for all admin queue operations
+Last activity: 2026-02-23 — Phase 25 Plan 02 execution
 
-Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-24 done, 25 in progress)
+Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-25 in progress)
 
 ## Performance Metrics
 
 **Velocity (cumulative):**
-- Total plans completed: 34
+- Total plans completed: 35
 - Average duration: ~2m
-- Total execution time: ~0.96 hours
+- Total execution time: ~1.03 hours
 
 **By Phase:**
 
@@ -50,6 +50,7 @@ Progress: [████████████████████░░░
 | v9 (24) P02 | 1 | ~4m | 4.0m |
 | v9 (24) P03 | 1 | ~2m | 2.0m |
 | v9 (25) P01 | 1 | ~6m | 6.0m |
+| v9 (25) P02 | 1 | ~4m | 4.0m |
 
 ## Accumulated Context
 
@@ -116,6 +117,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Priority string derived from manual_priority_override first (admin override wins), then >3 days || <0.4 confidence = high thresholds matching agentReviewController
 - batchConfirm saves per-client with client.save() (not updateMany) to respect Mongoose pre-save hooks
 
+**v9 Plan 25-02 decisions:**
+- ReviewQueuePage switched from agent endpoint to useGetAdminReviewQueueQuery — admin endpoint returns priority_score and review_assignment data needed by this plan
+- BatchActionBar placed flat at components/ level (not components/review/ subdirectory) — consistent with existing review-action-bar.tsx naming convention
+- RowOverflowMenu opacity managed via JS hover handlers on motion.div rows — consistent with existing row hover background approach
+- window.confirm for batchConfirm destructive action — avoids extra Dialog dependency for simple yes/no
+
 **Admin Review Queue endpoints (server/routes/admin-review.js → /api/admin/review/):**
 - GET /queue — Priority-sorted queue with priority_score (number), review_assignment, pagination, priority/search filters
 - POST /:clientId/assign — Assign client to agent (body: assigned_to)
@@ -142,9 +149,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 25-queue-management Plan 01 — Admin review queue backend (assign/unassign, batch ops, priority scoring)
+Stopped at: Completed 25-queue-management Plan 02 — Multi-select queue UI, BatchActionBar, admin RTK Query mutations
 Resume file: None
-Next step: Execute Phase 25 Plan 02 (queue management frontend)
+Next step: Execute Phase 25 Plan 03 (if exists) or Phase 26 (Enhanced Viewer Analytics)
 
 ---
-*Last updated: 2026-02-23 (Phase 25 Plan 01 complete — admin review queue backend)*
+*Last updated: 2026-02-23 (Phase 25 Plan 02 complete — queue management frontend)*
