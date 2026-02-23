@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
-**Current focus:** v9 — Review Dashboard — Phase 25 Plan 02 complete
+**Current focus:** v9 — Review Dashboard — Phase 26 Plan 01 complete
 
 ## Current Position
 
-Phase: 25-queue-management (Plan 02 complete)
+Phase: 26-enhanced-viewer-analytics (Plan 01 complete)
 Milestone: v9 Review Dashboard (Phases 23-27)
-Status: Phase 25 Plan 02 complete — Multi-select ReviewQueueTable, BatchActionBar, RTK Query mutations for all admin queue operations
-Last activity: 2026-02-23 — Phase 25 Plan 02 execution
+Status: Phase 26 Plan 01 complete — PDF.js canvas viewer with toolbar, image viewer, iframe fallback
+Last activity: 2026-02-23 — Phase 26 Plan 01 execution
 
 Progress: [████████████████████░░░░░] 22/27 phases complete (v1-v8 shipped, v9 phases 23-25 in progress)
 
@@ -51,6 +51,7 @@ Progress: [████████████████████░░░
 | v9 (24) P03 | 1 | ~2m | 2.0m |
 | v9 (25) P01 | 1 | ~6m | 6.0m |
 | v9 (25) P02 | 1 | ~4m | 4.0m |
+| Phase 26-enhanced-viewer-analytics P01 | 3 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - React Router v7 imports from react-router (not react-router-dom)
 - sonner Toaster with theme=light (no dark mode)
 - [Phase 23-review-foundation]: search param omitted from URL when empty string (falsy spread); server filters by name/aktenzeichen case-insensitive substring; applied after priority filter so total reflects combined filtered count
+- [Phase 26-enhanced-viewer-analytics]: pdfjs-dist v5 uses canvas (HTMLCanvasElement) in RenderParameters, not canvasContext; ArrayBuffer stored for PDF to enable re-render on zoom without refetch
 
 ### v9 Context
 
@@ -149,9 +151,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 25-queue-management Plan 02 — Multi-select queue UI, BatchActionBar, admin RTK Query mutations
+Stopped at: Completed 26-enhanced-viewer-analytics Plan 01 — PDF.js canvas viewer with toolbar, image viewer, iframe fallback
 Resume file: None
-Next step: Execute Phase 25 Plan 03 (if exists) or Phase 26 (Enhanced Viewer Analytics)
+Next step: Execute Phase 26 Plan 02 (Enhanced Viewer Analytics)
 
 ---
-*Last updated: 2026-02-23 (Phase 25 Plan 02 complete — queue management frontend)*
+*Last updated: 2026-02-23 (Phase 26 Plan 01 complete — PDF.js document viewer rewrite)*
