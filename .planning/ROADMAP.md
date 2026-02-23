@@ -364,7 +364,7 @@ Plans:
   4. Admin can filter queue by priority level and search by name or Aktenzeichen
   5. Clicking a queue row navigates to /review/:clientId
 
-**Plans:** 3 plans (2 complete, 1 gap closure)
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 23-01-PLAN.md — Backend auth swap + review types + RTK Query reviewApi + sidebar nav + routing
@@ -478,7 +478,7 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 20. Authentication | v8 | 2/2 | Complete | 2026-02-18 |
 | 21. Client List | v8 | 2/2 | Complete | 2026-02-18 |
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
-| 23. Review Foundation | 2/2 | Complete   | 2026-02-23 | - |
+| 23. Review Foundation | 3/3 | Complete   | 2026-02-23 | - |
 | 24. Core Review Flow | 1/3 | In Progress|  | - |
 | 25. Queue Management | v9 | 0/? | Pending | - |
 | 26. Enhanced Viewer & Analytics | v9 | 0/? | Pending | - |

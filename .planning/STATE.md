@@ -47,6 +47,7 @@ Progress: [████████████████████░░░
 | v9 (23) P01 | 1 | ~8m | 8.0m |
 | v9 (23) P02 | 1 | ~4m | 4.0m |
 | v9 (24) P01 | 1 | ~4m | 4.0m |
+| Phase 23-review-foundation P03 | 2 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Initials avatar with deterministic color from id hash
 - React Router v7 imports from react-router (not react-router-dom)
 - sonner Toaster with theme=light (no dark mode)
+- [Phase 23-review-foundation]: search param omitted from URL when empty string (falsy spread); server filters by name/aktenzeichen case-insensitive substring; applied after priority filter so total reflects combined filtered count
 
 ### v9 Context
 
