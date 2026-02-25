@@ -3,6 +3,43 @@ const { v4: uuidv4 } = require('uuid');
 const creditorDeduplication = require('../utils/creditorDeduplication');
 
 /**
+ * Helper function to check if a value is missing/empty
+ * @param {any} value - Value to check
+ * @returns {boolean} - true if value is missing/empty
+ */
+const isMissingValue = (value) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string' && value.trim() === '') return true;
+    return false;
+};
+
+/**
+ * Check if a creditor needs manual review based on missing contact info
+ * @param {Object} creditor - Creditor object
+ * @returns {Object} - { needsReview: boolean, reasons: string[] }
+ */
+const checkCreditorContactInfo = (creditor) => {
+    const reasons = [];
+
+    // Check email (either email or sender_email field)
+    const creditorEmail = creditor.email || creditor.sender_email;
+    if (isMissingValue(creditorEmail)) {
+        reasons.push('E-Mail-Adresse fehlt');
+    }
+
+    // Check address (either address or sender_address field)
+    const creditorAddress = creditor.address || creditor.sender_address;
+    if (isMissingValue(creditorAddress)) {
+        reasons.push('Postadresse fehlt');
+    }
+
+    return {
+        needsReview: reasons.length > 0,
+        reasons
+    };
+};
+
+/**
  * Agent Review Controller Factory
  * Handles business logic for the Agent Review Dashboard
  * @param {Object} dependencies - Dependencies injected from route

@@ -425,8 +425,11 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
       extractedCreditors.push({
         id: doc.id || uuidv4(),
         sender_name: cd.sender_name,
-        sender_address: cd.sender_address,
-        sender_email: cd.sender_email,
+        sender_address: cd.sender_address || cd.address, // Support both field names
+        sender_email: cd.sender_email || cd.email,       // Support both field names
+        // Also copy the alternate field names for compatibility
+        email: cd.email || cd.sender_email,
+        address: cd.address || cd.sender_address,
         reference_number: cd.reference_number,
         claim_amount: cd.claim_amount || 0,
         is_representative: cd.is_representative || false,
@@ -443,6 +446,9 @@ function deduplicateCreditorsFromDocuments(documents, strategy = 'highest_amount
         aktenzeichen_glaeubigervertreter: cd.aktenzeichen_glaeubigervertreter || null,
         glaeubiger_adresse_ist_postfach: cd.glaeubiger_adresse_ist_postfach || false,
         glaeubiger_vertreter_adresse_ist_postfach: cd.glaeubiger_vertreter_adresse_ist_postfach || false,
+        // Copy DB match info if present
+        creditor_database_id: cd.creditor_database_id,
+        creditor_database_match: cd.creditor_database_match,
       });
     }
   });
