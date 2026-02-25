@@ -23,12 +23,29 @@ services:
       - key: PORT
         value: 10000
 
-  # Frontend
+  # Legacy Frontend (CRA — Client Portal)
   - type: web
     name: mandanten-portal-frontend
     env: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # New Frontend (Vite — Admin Portal)
+  - type: web
+    name: app-rasolv
+    env: static
+    rootDir: MandantenPortalDesign
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://mandanten-portal-docker.onrender.com
+      - key: VITE_PORTAL_URL
+        value: https://mandanten-portal-frontend.onrender.com
     routes:
       - type: rewrite
         source: /*
