@@ -6,7 +6,8 @@ import ConfirmCreditors from './pages/ConfirmCreditors';
 import ImpersonationAuth from './pages/ImpersonationAuth';
 import AdminApp from './admin/AdminApp';
 import AgentLogin from './agent/pages/AgentLogin';
-import AgentApp from './agent/AgentApp';
+import ReviewDashboard from './agent/pages/ReviewDashboard';
+import AgentDashboard from './agent/pages/AgentDashboard';
 import AdminLogin from './admin/pages/AdminLogin';
 import NotFound from './pages/NotFound';
 import AgentRedirect from './pages/AgentRedirect';
@@ -128,12 +129,12 @@ function App() {
           } />
           <Route path="/agent/review/:clientId" element={
             <ProtectedRoute allowedRole="agent">
-              <AgentApp />
+              <ReviewDashboard />
             </ProtectedRoute>
           } />
           <Route path="/agent/dashboard" element={
             <ProtectedRoute allowedRole="agent">
-              <AgentApp />
+              <AgentDashboard />
             </ProtectedRoute>
           } />
           <Route path="/agent/*" element={<AgentRedirect />} />
