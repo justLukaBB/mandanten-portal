@@ -270,7 +270,7 @@ class CreditorEmailService {
       const emailPayload = {
         from: `${this.fromName} <${this.fromEmail}>`,
         to: to,
-        bcc: ['info@ra-scuric.de'],
+        cc: ['info@ra-scuric.de'],
         reply_to: this.replyTo,
         subject,
         html,
