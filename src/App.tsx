@@ -6,6 +6,7 @@ import ConfirmCreditors from './pages/ConfirmCreditors';
 import ImpersonationAuth from './pages/ImpersonationAuth';
 import AdminApp from './admin/AdminApp';
 import AgentLogin from './agent/pages/AgentLogin';
+import AgentApp from './agent/AgentApp';
 import AdminLogin from './admin/pages/AdminLogin';
 import NotFound from './pages/NotFound';
 import AgentRedirect from './pages/AgentRedirect';
@@ -120,10 +121,22 @@ function App() {
             }
           />
 
-          <Route
-            path="/agent/*"
-            element={<AgentRedirect />}
-          />
+          <Route path="/agent/login" element={
+            <PublicRoute allowedRole="agent">
+              <AgentLogin />
+            </PublicRoute>
+          } />
+          <Route path="/agent/review/:clientId" element={
+            <ProtectedRoute allowedRole="agent">
+              <AgentApp />
+            </ProtectedRoute>
+          } />
+          <Route path="/agent/dashboard" element={
+            <ProtectedRoute allowedRole="agent">
+              <AgentApp />
+            </ProtectedRoute>
+          } />
+          <Route path="/agent/*" element={<AgentRedirect />} />
 
           <Route
             path="/portal/:clientId"
