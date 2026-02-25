@@ -16,14 +16,17 @@ class ClientService {
                 throw new Error('Database connection not available');
             }
 
-            // Try to find by id first, then by _id (MongoDB ObjectId), then by aktenzeichen
-            let client = await Client.findOne({ id: clientId });
-            if (!client) {
-                client = await Client.findById(clientId).catch(() => null);
+            // Single query with $or to check id, _id, and aktenzeichen at once
+            const mongoose = require('mongoose');
+            const orConditions = [
+                { id: clientId },
+                { aktenzeichen: clientId }
+            ];
+            // Only add _id condition if clientId is a valid ObjectId
+            if (mongoose.Types.ObjectId.isValid(clientId)) {
+                orConditions.push({ _id: clientId });
             }
-            if (!client) {
-                client = await Client.findOne({ aktenzeichen: clientId });
-            }
+            const client = await Client.findOne({ $or: orConditions });
             return client;
         } catch (error) {
             console.error('Error getting client from MongoDB:', error);

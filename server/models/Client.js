@@ -672,5 +672,7 @@ clientSchema.index({ zendesk_ticket_id: 1 }); // For Zendesk integration
 // Compound indexes for common queries
 clientSchema.index({ workflow_status: 1, created_at: -1 }); // Admin dashboard
 clientSchema.index({ email: 1, aktenzeichen: 1 }); // Login verification
+clientSchema.index({ 'final_creditor_list.needs_manual_review': 1, current_status: 1 }); // Agent review queue
+clientSchema.index({ id: 1 }); // Fast lookup by id field
 
 module.exports = mongoose.model('Client', clientSchema);

@@ -499,7 +499,10 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             try {
                 console.log('📊 Dashboard Status: Getting enhanced client statuses');
 
-                const clients = await Client.find({}).sort({ updated_at: -1 });
+                const clients = await Client.find({})
+                    .select('id firstName lastName email aktenzeichen documents final_creditor_list first_payment_received payment_ticket_type current_status workflow_status payment_processed_at document_request_sent_at all_documents_processed_at created_at updated_at last_login portal_token')
+                    .sort({ updated_at: -1 })
+                    .lean();
                 console.log(`📊 Found ${clients.length} clients in MongoDB`);
 
                 // Debug: Log all clients with their basic info

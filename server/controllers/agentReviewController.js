@@ -325,7 +325,7 @@ Diese E-Mail wurde automatisch generiert.
                   ]
                 }
               ]
-            });
+            }).lean();
 
             clients.map(client=>{
                 if(client.id==="MAND_2026_7576"){  
