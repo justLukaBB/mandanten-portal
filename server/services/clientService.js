@@ -16,8 +16,11 @@ class ClientService {
                 throw new Error('Database connection not available');
             }
 
-            // Try to find by id first, then by aktenzeichen
+            // Try to find by id first, then by _id (MongoDB ObjectId), then by aktenzeichen
             let client = await Client.findOne({ id: clientId });
+            if (!client) {
+                client = await Client.findById(clientId).catch(() => null);
+            }
             if (!client) {
                 client = await Client.findOne({ aktenzeichen: clientId });
             }

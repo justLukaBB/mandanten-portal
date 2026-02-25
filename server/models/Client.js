@@ -190,7 +190,27 @@ const creditorSchema = new mongoose.Schema({
   nullplan_side_conversation_id: String,
   nullplan_sent_at: Date,
   nullplan_acceptance_confidence: Number, // AI confidence in acceptance/rejection detection
-  nullplan_response_metadata: mongoose.Schema.Types.Mixed
+  nullplan_response_metadata: mongoose.Schema.Types.Mixed,
+
+  // Web Enrichment fields (Creditor Enrichment Service)
+  enrichment_source: String,        // 'google_places' | 'impressum' | 'handelsregister'
+  enrichment_confidence: Number,     // 0.0–1.0, highest confidence from enrichment
+  enrichment_status: {
+    type: String,
+    enum: ['enriched', 'partial', 'not_found', 'pending'],
+  },
+  enriched_at: Date,
+  enrichment_log: [{
+    source: String,
+    fields_found: [String],
+    confidence: Number,
+    timestamp: Date,
+  }],
+  phone: String,
+  geschaeftsfuehrer: String,
+  website: String,
+  rechtsform: String,
+  hrb_nummer: String,
 }, { _id: false });
 
 // Status History Schema for tracking all status changes
@@ -219,6 +239,45 @@ const clientSchema = new mongoose.Schema({
   phone: String,
   address: String,
   geburtstag: String,
+  case_source: { type: String, enum: ['online', 'offline'], default: 'offline' },
+  leineweber_task_id: String,
+
+  // Persönliche Daten (Leineweber-Sync)
+  geburtsort: String,
+  geschlecht: String,
+  familienstand: { type: String, enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend'] },
+
+  // Strukturierte Adresse
+  strasse: String,
+  hausnummer: String,
+  plz: String,
+  wohnort: String,
+  mobiltelefon: String,
+
+  // Beschäftigung & Einkommen
+  beschaeftigungsart: String,
+  derzeitige_taetigkeit: String,
+  erlernter_beruf: String,
+  netto_einkommen: Number,
+  selbststaendig: Boolean,
+  befristet: Boolean,
+  war_selbststaendig: Boolean,
+
+  // Schulden-Übersicht
+  gesamt_schulden: Number,
+  anzahl_glaeubiger: Number,
+  aktuelle_pfaendung: Boolean,
+  schuldenart_info: String,
+  p_konto: Boolean,
+
+  // Familie
+  kinder_anzahl: Number,
+  kinder_alter: String,
+  unterhaltspflicht: Boolean,
+
+  // Leineweber Komplett-Snapshot
+  leineweber_form_data: mongoose.Schema.Types.Mixed,
+  leineweber_synced_at: Date,
 
   // Portal access
   portal_link_sent: { type: Boolean, default: false },

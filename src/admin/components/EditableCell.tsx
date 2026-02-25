@@ -188,15 +188,15 @@ const EditableCell: React.FC<EditableCellProps> = ({
   return (
     <span
       onClick={handleClick}
-      className={`inline-flex items-center hover:bg-gray-50 cursor-pointer rounded px-1 -mx-1 transition-colors ${
+      className={`inline-flex items-center hover:bg-gray-50 cursor-pointer rounded px-1 -mx-1 transition-colors max-w-full overflow-hidden text-ellipsis whitespace-nowrap ${
         isEmpty ? 'text-gray-400' : 'text-gray-800'
       }`}
-      title="Klicken zum Bearbeiten"
+      title={displayValue || fallbackValue}
     >
-      {displayValue || fallbackValue}
+      <span className="truncate">{displayValue || fallbackValue}</span>
       {showSuccess && (
         <CheckCircleIcon
-          className="text-green-500 w-3 h-3 inline ml-1 transition-opacity"
+          className="text-green-500 w-3 h-3 inline ml-1 flex-shrink-0 transition-opacity"
           style={{ opacity: showSuccess ? 1 : 0 }}
         />
       )}

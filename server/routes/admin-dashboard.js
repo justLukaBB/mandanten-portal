@@ -26,6 +26,9 @@ module.exports = (dependencies) => {
     // Clear Database (Danger Zone)
     router.delete('/clear-database', rateLimits.admin, authenticateAdmin, adminDashboardController.clearDatabase);
 
+    // Update Client Profile
+    router.patch('/clients/:clientId', rateLimits.admin, authenticateAdmin, adminDashboardController.updateClientProfile);
+
     // Payment & Status Management
     router.post('/clients/:clientId/mark-payment-received', rateLimits.admin, authenticateAdmin, adminDashboardController.markPaymentReceived);
     router.post('/clients/:clientId/trigger-payment-handler', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerPaymentHandler);

@@ -85,28 +85,13 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
       impersonationRecord._id.toString()
     );
 
-    // Construct portal URL - use env var or intelligently detect from request
+    // Construct portal URL - always point to the CLIENT portal, not the admin portal
     let frontendUrl = process.env.FRONTEND_URL;
 
     if (!frontendUrl) {
-      // Try to detect from request origin/referer
-      const origin = req.headers.origin || req.headers.referer;
-      if (origin) {
-        // Extract base URL from origin/referer
-        try {
-          const url = new URL(origin);
-          frontendUrl = `${url.protocol}//${url.host}`;
-        } catch (e) {
-          // Invalid URL, fall back to default
-        }
-      }
-
-      // Final fallback based on environment
-      if (!frontendUrl) {
-        frontendUrl = process.env.NODE_ENV === 'production'
-          ? 'https://mandanten-portal.onrender.com'
-          : 'http://localhost:3000';
-      }
+      frontendUrl = process.env.NODE_ENV === 'production'
+        ? 'https://mandanten-portal.onrender.com'
+        : 'http://localhost:3000';
     }
 
     const portalUrl = `${frontendUrl}/auth/impersonate?token=${jwtToken}`;

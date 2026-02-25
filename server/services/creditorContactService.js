@@ -16,19 +16,6 @@ class CreditorContactService {
         this.creditorContacts = new Map();
         this.zendeskSync = new Map();
 
-        // Initialize response processor (will be set after construction to avoid circular dependency)
-        this.responseProcessor = null;
-    }
-
-    /**
-     * Initialize response processor (called after construction)
-     */
-    initializeResponseProcessor() {
-        if (!this.responseProcessor) {
-            const CreditorResponseProcessor = require('./creditorResponseProcessor');
-            this.responseProcessor = new CreditorResponseProcessor(this);
-            console.log('✅ Response processor initialized');
-        }
     }
 
     /**
@@ -39,14 +26,15 @@ class CreditorContactService {
         try {
             console.log(`\n🚀 Starting creditor contact process for client: ${clientReference}`);
 
-            // If clientData not provided, fetch from database
-            let client;
+            // Always fetch client from DB (needed for document generation)
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            if (!client) {
+                throw new Error(`Client not found: ${clientReference}`);
+            }
+
+            // Build clientData from DB if not provided
             if (!clientData) {
-                const Client = require('../models/Client');
-                client = await Client.findOne({ aktenzeichen: clientReference });
-                if (!client) {
-                    throw new Error(`Client not found: ${clientReference}`);
-                }
                 // Use direct fields from client data if available, otherwise parse address string
                 let street = client.strasse || '';
                 let houseNumber = client.hausnummer || '';
@@ -142,6 +130,7 @@ class CreditorContactService {
                     const contactRecord = await this.createCreditorContactRecord(creditor, mainTicket.id, zendeskUser.id);
                     contactRecords.push({
                         creditor_id: creditor.id,
+                        original_creditor_id: creditor.creditor_id || creditor.id,
                         creditor_name: creditor.creditor_name || creditor.sender_name || 'Unknown Creditor',
                         main_ticket_id: mainTicket.id,
                         contact_id: contactRecord.id,
@@ -151,6 +140,7 @@ class CreditorContactService {
                     console.error(`❌ Failed to create contact record for ${creditor.creditor_name || creditor.sender_name || 'Unknown Creditor'}:`, error.message);
                     contactRecords.push({
                         creditor_id: creditor.id,
+                        original_creditor_id: creditor.creditor_id || creditor.id,
                         creditor_name: creditor.creditor_name || creditor.sender_name || 'Unknown Creditor',
                         success: false,
                         error: error.message
@@ -386,6 +376,7 @@ class CreditorContactService {
 
                 return {
                     id: uuidv4(),
+                    creditor_id: creditor.id, // Original ID from final_creditor_list for DB updates
                     client_reference: clientReference,
                     creditor_name: nameToUse,
                     creditor_email: emailToUse,
@@ -633,7 +624,7 @@ class CreditorContactService {
                         await Client.updateOne(
                             {
                                 aktenzeichen: fullRecord.client_reference,
-                                'final_creditor_list.id': contact.creditor_id
+                                'final_creditor_list.id': contact.original_creditor_id || contact.creditor_id
                             },
                             {
                                 $set: {
@@ -725,7 +716,7 @@ class CreditorContactService {
                         const updateResult = await Client.updateOne(
                             {
                                 aktenzeichen: contactRecord.client_reference,
-                                'final_creditor_list.id': contactInfo.creditor_id
+                                'final_creditor_list.id': contactInfo.original_creditor_id || contactInfo.creditor_id
                             },
                             {
                                 $set: {
@@ -736,7 +727,7 @@ class CreditorContactService {
                                     'final_creditor_list.$.document_sent_at': new Date(),
                                     'final_creditor_list.$.email_sent_at': new Date(),
                                     'final_creditor_list.$.last_contacted_at': new Date(),
-                                    'final_creditor_list.$.contact_status': 'email_sent_with_attachment'
+                                    'final_creditor_list.$.contact_status': 'email_sent_with_document'
                                 }
                             }
                         );
@@ -1076,103 +1067,9 @@ class CreditorContactService {
         };
     }
 
-    /**
-     * Process incoming creditor response (from email or simulation)
-     * Uses the response processor to extract amounts and update records
-     */
-    async processCreditorResponse(emailData, isSimulation = false) {
-        this.initializeResponseProcessor(); // Ensure processor is initialized
-        return await this.responseProcessor.processCreditorResponse(emailData, isSimulation);
-    }
-
-    /**
-     * Simulate creditor responses for testing
-     */
-    async simulateCreditorResponses(clientReference) {
-        this.initializeResponseProcessor();
-        return await this.responseProcessor.simulateResponsesForClient(clientReference);
-    }
-
-    /**
-     * Get response processing statistics for a client
-     */
-    getResponseStats(clientReference) {
-        this.initializeResponseProcessor();
-        return this.responseProcessor.getClientResponseStats(clientReference);
-    }
-
-    /**
-     * Process creditor response from Zendesk webhook or manual input
-     * This is the main entry point for actual creditor responses
-     */
-    async processIncomingCreditorResponse(ticketId, commentData) {
-        try {
-            // Find corresponding contact record by ticket ID (either main ticket or individual)
-            const contactRecord = Array.from(this.creditorContacts.values())
-                .find(c => c.main_zendesk_ticket_id === ticketId || c.zendesk_ticket_id === ticketId);
-
-            if (!contactRecord) {
-                console.log(`❌ No contact record found for ticket ${ticketId}`);
-                return {
-                    success: false,
-                    message: 'Contact record not found',
-                    ticket_id: ticketId
-                };
-            }
-
-            console.log(`📧 Processing response for ${contactRecord.creditor_name} (ticket: ${ticketId})`);
-
-            const responseText = commentData.body || commentData.comment || commentData;
-            const receivedAt = new Date(commentData.created_at || Date.now());
-            const sideConversationId = commentData.side_conversation_id || null;
-
-            // --- Update MongoDB ---
-            const Client = require('../models/Client');
-            const client = await Client.findOne({ aktenzeichen: contactRecord.client_reference });
-            if (client) {
-                const creditor = client.final_creditor_list.find(c =>
-                    c.sender_email === contactRecord.creditor_email
-                );
-
-                if (creditor) {
-                    // Store response metadata (status will be set by response processor)
-                    creditor.settlement_response_text = responseText;
-                    creditor.settlement_response_received_at = receivedAt;
-                    if (sideConversationId) {
-                        creditor.settlement_side_conversation_id = sideConversationId;
-                    }
-
-                    client.markModified('final_creditor_list');
-                    await client.save();
-
-                    console.log(`✅ Updated creditor ${creditor.sender_name} in DB with response metadata (status will be set by processor)`);
-                }
-            }
-
-            // Process the response using our response processor
-            const result = await this.processCreditorResponse({
-                body: commentData.body || commentData.comment || commentData,
-                subject: `Response from ${contactRecord.creditor_name}`,
-                sender_email: contactRecord.creditor_email,
-                // Pass reference number from contact record
-                reference_number: contactRecord.reference_number
-            }, false);
-
-            if (result.success) {
-                console.log(`✅ Processed response: ${result.creditor_name} - Final amount: ${result.final_amount} EUR`);
-            }
-
-            return result;
-
-        } catch (error) {
-            console.error(`❌ Error processing response for ticket ${ticketId}:`, error.message);
-            return {
-                success: false,
-                error: error.message,
-                ticket_id: ticketId
-            };
-        }
-    }
+    // NOTE: processCreditorResponse, simulateCreditorResponses, getResponseStats,
+    // and processIncomingCreditorResponse were removed in Phase D cleanup (2026-02-25).
+    // Live response processing is now handled by creditor-email-matcher-v2 + matcherWebhookController.
 
     /**
      * Send settlement plan documents to all creditors (second round of emails)

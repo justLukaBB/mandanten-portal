@@ -441,6 +441,19 @@ ${newDocsList}
                                 console.log(`👤 Client: ${client.id}`);
                                 console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
 
+                                // Set workflow_status based on whether creditors need review
+                                const hasCreditorsNeedingReview = mergedCreditors.some(c => c.needs_manual_review === true);
+                                if (hasCreditorsNeedingReview) {
+                                    client.workflow_status = 'admin_review';
+                                    console.log(`🔍 Creditors need review → workflow_status = admin_review`);
+                                } else {
+                                    client.workflow_status = 'client_confirmation';
+                                    client.admin_approved = true;
+                                    client.admin_approved_at = new Date();
+                                    client.admin_approved_by = 'system_auto';
+                                    console.log(`✅ No creditors need review → workflow_status = client_confirmation (auto-approved)`);
+                                }
+
                                 await client.save();
                             } else {
                                 console.log(`⚠️ PORTAL WEBHOOK: No creditor documents found in completed documents`);

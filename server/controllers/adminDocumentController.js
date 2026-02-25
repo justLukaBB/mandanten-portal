@@ -21,6 +21,16 @@ const createAdminDocumentController = ({
     uploadsDir
 }) => {
 
+    // Helper: find client by _id, id (UUID), or aktenzeichen
+    const findClient = (clientId) => {
+        const mongoose = require('mongoose');
+        const orConditions = [{ id: clientId }, { aktenzeichen: clientId }];
+        if (mongoose.Types.ObjectId.isValid(clientId)) {
+            orConditions.unshift({ _id: clientId });
+        }
+        return Client.findOne({ $or: orConditions });
+    };
+
     // Helper to serve mock PDF for testing
     const serveMockPDFDownload = (res, filename) => {
         const PDFDocument = require('pdfkit');
@@ -44,7 +54,7 @@ const createAdminDocumentController = ({
 
                 console.log(`📥 Admin document download request: Client ${clientId}, Document ${documentId}`);
 
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -119,7 +129,7 @@ const createAdminDocumentController = ({
         reprocessDocument: async (req, res) => {
             try {
                 const { clientId, documentId } = req.params;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -232,7 +242,7 @@ const createAdminDocumentController = ({
                     });
                 }
 
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -496,7 +506,7 @@ const createAdminDocumentController = ({
                 const { clientId, documentId } = req.params;
                 const { document_status, admin_note, reviewed_by } = req.body;
 
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -557,7 +567,7 @@ const createAdminDocumentController = ({
         deleteDocument: async (req, res) => {
             try {
                 const { clientId, documentId } = req.params;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -602,7 +612,7 @@ const createAdminDocumentController = ({
 
                 console.log(`🗑️ Deleting ALL documents for client ${clientId}`);
 
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await findClient(clientId);
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });

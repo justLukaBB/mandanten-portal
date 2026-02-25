@@ -11,6 +11,7 @@ interface FormData {
   lastName: string;
   email: string;
   aktenzeichen: string;
+  geburtstag: string;
 }
 
 const CreateUser: React.FC = () => {
@@ -18,7 +19,8 @@ const CreateUser: React.FC = () => {
     firstName: '',
     lastName: '',
     email: '',
-    aktenzeichen: ''
+    aktenzeichen: '',
+    geburtstag: ''
   });
   
   const [loading, setLoading] = useState(false);
@@ -38,8 +40,14 @@ const CreateUser: React.FC = () => {
     
     try {
       // Create user in MongoDB
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY for backend
+      const geburtstagFormatted = formData.geburtstag
+        ? formData.geburtstag.split('-').reverse().join('.')
+        : undefined;
+
       const userData = {
         ...formData,
+        geburtstag: geburtstagFormatted,
         id: formData.aktenzeichen,
         current_status: 'created',
         workflow_status: 'portal_access_sent',
@@ -80,7 +88,8 @@ const CreateUser: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
-        aktenzeichen: generateAktenzeichen()
+        aktenzeichen: generateAktenzeichen(),
+        geburtstag: ''
       });
       
     } catch (error) {
@@ -152,6 +161,20 @@ const CreateUser: React.FC = () => {
                 placeholder="Mustermann"
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="geburtstag" className="block text-sm font-medium text-gray-700 mb-2">
+              Geburtsdatum
+            </label>
+            <input
+              type="date"
+              id="geburtstag"
+              name="geburtstag"
+              value={formData.geburtstag}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-800"
+            />
           </div>
 
           <div>
@@ -242,6 +265,19 @@ const CreateUser: React.FC = () => {
               <p><strong>E-Mail:</strong> {createdUser.email}</p>
               <p><strong>Aktenzeichen:</strong> <span className="font-mono">{createdUser.aktenzeichen}</span></p>
               <p><strong>Status:</strong> Portal-Zugang gesendet</p>
+              <p>
+                <strong>Fall-Typ:</strong>{' '}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  createdUser.case_source === 'online'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {createdUser.case_source === 'online' ? 'Online-Fall' : 'Offline-Fall'}
+                </span>
+              </p>
+              {createdUser.leineweber_task_id && (
+                <p><strong>Leineweber Task-ID:</strong> <span className="font-mono">{createdUser.leineweber_task_id}</span></p>
+              )}
             </div>
             <div className="mt-4 p-3 bg-blue-50 rounded text-sm text-blue-800">
               <strong>Nächste Schritte:</strong>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 
@@ -14,8 +14,13 @@ const ImpersonationAuth: React.FC = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Authenticating...');
+  const hasRun = useRef(false);
 
   useEffect(() => {
+    // Guard against React 18 StrictMode double-mount (token is single-use)
+    if (hasRun.current) { return; }
+    hasRun.current = true;
+
     const authenticateImpersonation = async () => {
       try {
         const token = searchParams.get('token');

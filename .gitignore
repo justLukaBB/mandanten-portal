@@ -79,3 +79,14 @@ test-data/
 upload_log*.txt
 template-readable-text.txt
 startup_log.txt
+
+# Generated documents (runtime output, not source)
+server/generated_documents/
+
+# Claude Code local config
+.claude/
+
+# Temporary working files
+creditor-enrichment-blueprint.docx
+Start-Session-Design.md
+user-*.json

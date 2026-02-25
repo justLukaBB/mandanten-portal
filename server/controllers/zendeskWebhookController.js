@@ -502,6 +502,7 @@ class ZendeskWebhookController {
                 'awaiting_client_confirmation',
                 'client_confirmation',
                 'creditor_contact_initiated',
+                'creditor_contact_active',
                 'creditor_contact_failed',
                 'completed'
             ];
@@ -676,11 +677,13 @@ class ZendeskWebhookController {
             if (requiresManualReview) {
                 // Manual review needed - send to Agent Portal
                 freshClient.current_status = "creditor_review";
+                freshClient.workflow_status = "admin_review";
                 freshClient.payment_ticket_type = "manual_review";
             } else {
                 // AUTO-APPROVED: All creditors pass review flag and contact checks
                 // Skip agent review and go directly to client confirmation
                 freshClient.current_status = "awaiting_client_confirmation";
+                freshClient.workflow_status = "client_confirmation";
                 freshClient.payment_ticket_type = "auto_approved";
                 freshClient.admin_approved = true;
                 freshClient.admin_approved_at = new Date();
@@ -1367,6 +1370,7 @@ Diese E-Mail wurde automatisch generiert.
                 ticketContent = this.generateNoCreditorsTicket(freshClient, documents);
                 tags = ["processing-complete", "no-creditors", "manual-check-needed"];
                 freshClient.payment_ticket_type = "no_creditors_found";
+                freshClient.workflow_status = "admin_review";
             } else if (state.needsManualReview) {
                 // Some creditors need manual review - create ticket for agent
                 ticketType = "manual_review";
@@ -1378,6 +1382,7 @@ Diese E-Mail wurde automatisch generiert.
                 );
                 tags = ["processing-complete", "manual-review-needed", "creditors-found"];
                 freshClient.payment_ticket_type = "manual_review";
+                freshClient.workflow_status = "admin_review";
             } else {
                 // ALL creditors have needs_manual_review=false -> AUTO APPROVE
                 // No agent review needed - send directly to client
@@ -1436,6 +1441,7 @@ Diese E-Mail wurde automatisch generiert.
 
                 // Set client status to awaiting_client_confirmation
                 freshClient.current_status = 'awaiting_client_confirmation';
+                freshClient.workflow_status = 'client_confirmation';
                 freshClient.admin_approved = true;
                 freshClient.admin_approved_at = new Date();
                 freshClient.admin_approved_by = 'system_auto_approve';

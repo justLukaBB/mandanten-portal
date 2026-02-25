@@ -506,43 +506,47 @@ Diese E-Mail wurde automatisch generiert.
                 return false;
             };
 
-            // Check needs_manual_review from linked document's validation flags
-            // AND also check if email or address is missing (matches AdminCreditorDataTable.tsx logic)
+            // Use the creditor's own needs_manual_review flag from the DB (set during deduplication).
+            // This matches the queue page count (adminReviewController) which also uses this flag.
+            // Additionally, generate accurate review_reasons based on current creditor contact data.
             const creditorsWithDocuments = creditors.map(creditor => {
                 const creditorDocs = getDocumentsForCreditor(creditor, documents);
 
-                // Check if ANY linked document needs manual review (document-level flags)
-                const documentNeedsReview = creditorDocs.some(doc =>
-                    doc.manual_review_required === true ||
-                    doc.validation?.requires_manual_review === true ||
-                    doc.extracted_data?.manual_review_required === true
-                );
+                // Use the DB flag as the source of truth for whether review is needed
+                const needsManualReview = creditor.needs_manual_review === true;
 
-                // Check if email OR address is missing for ANY creditor (not just creditor documents)
-                const creditorEmail = creditor.email || creditor.sender_email;
-                const creditorAddress = creditor.address || creditor.sender_address;
+                // Generate accurate review reasons based on current creditor data
+                const creditorEmail = creditor.is_representative
+                    ? (creditor.email_glaeubiger_vertreter || creditor.sender_email)
+                    : (creditor.email_glaeubiger || creditor.sender_email);
+                const creditorAddress = creditor.is_representative
+                    ? (creditor.glaeubigervertreter_adresse || creditor.sender_address)
+                    : (creditor.glaeubiger_adresse || creditor.sender_address);
                 const missingEmail = isMissingValue(creditorEmail);
                 const missingAddress = isMissingValue(creditorAddress);
-                const missingContactInfo = missingEmail || missingAddress;
 
-                const needsManualReview = documentNeedsReview || missingContactInfo;
-
-                // Collect review reasons from documents + add reason for missing contact info
-                const allReviewReasons = [
-                    ...creditorDocs.flatMap(doc => doc.validation?.review_reasons || [])
-                ];
-                if (missingContactInfo) {
-                    if (missingEmail) allReviewReasons.push('E-Mail-Adresse fehlt');
-                    if (missingAddress) allReviewReasons.push('Postadresse fehlt');
+                // Build review reasons: start with creditor's own reasons, then add contact info hints
+                const allReviewReasons = [...(creditor.review_reasons || [])];
+                if (missingEmail && !allReviewReasons.includes('E-Mail-Adresse fehlt')) {
+                    allReviewReasons.push('E-Mail-Adresse fehlt');
                 }
+                if (missingAddress && !allReviewReasons.includes('Adresse fehlt')) {
+                    allReviewReasons.push('Adresse fehlt');
+                }
+                // Remove stale contact reasons if data now exists
+                const filteredReasons = allReviewReasons.filter(reason => {
+                    if (!missingEmail && (reason === 'E-Mail-Adresse fehlt' || reason === 'Fehlende Gläubiger-E-Mail')) return false;
+                    if (!missingAddress && (reason === 'Adresse fehlt' || reason === 'Fehlende Gläubiger-Adresse')) return false;
+                    return true;
+                });
 
-                console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (docFlag=${documentNeedsReview}, missingContact=${missingContactInfo})`);
+                console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (dbFlag=${creditor.needs_manual_review}, missingEmail=${missingEmail}, missingAddress=${missingAddress})`);
 
                 return {
                     creditor: creditor,
                     documents: creditorDocs,
                     needs_manual_review: needsManualReview,
-                    review_reasons: [...new Set(allReviewReasons)] // Remove duplicates
+                    review_reasons: [...new Set(filteredReasons)] // Remove duplicates
                 };
             });
 
@@ -1278,32 +1282,10 @@ Diese E-Mail wurde automatisch generiert.
                 return false;
             };
 
-            // Helper to check if creditor needs review (document flags OR missing contact info)
-            // Match same logic as AdminCreditorDataTable.tsx
+            // Use the creditor's own needs_manual_review flag from the DB
+            // This matches the queue page count and the getReviewData route
             const creditorNeedsManualReview = (creditor) => {
-                // Check linked document's flags (flexible matching for timestamp prefixes)
-                const linkedDocs = documents.filter(doc =>
-                    creditor.document_id === doc.id ||
-                    creditor.source_document === doc.name ||
-                    (creditor.source_documents && creditor.source_documents.some(srcDoc =>
-                        srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
-                    ))
-                );
-
-                const documentNeedsReview = linkedDocs.some(doc =>
-                    doc.manual_review_required === true ||
-                    doc.validation?.requires_manual_review === true ||
-                    doc.extracted_data?.manual_review_required === true
-                );
-
-                // Check if email OR address is missing for ANY creditor (not just creditor documents)
-                const creditorEmail = creditor.email || creditor.sender_email;
-                const creditorAddress = creditor.address || creditor.sender_address;
-                const missingEmail = isMissingValue(creditorEmail);
-                const missingAddress = isMissingValue(creditorAddress);
-                const missingContactInfo = missingEmail || missingAddress;
-
-                return documentNeedsReview || missingContactInfo;
+                return creditor.needs_manual_review === true;
             };
 
             // Find unreviewed creditors that need manual review
@@ -1371,6 +1353,7 @@ Diese E-Mail wurde automatisch generiert.
 
             // Update client status - AUTO APPROVE and set to awaiting_client_confirmation
             client.current_status = 'awaiting_client_confirmation';
+            client.workflow_status = 'client_confirmation';
             client.admin_approved = true;
             client.admin_approved_at = new Date();
             client.admin_approved_by = agentId;
@@ -1466,6 +1449,11 @@ Diese E-Mail wurde automatisch generiert.
 
             const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${client.portal_token}`;
 
+            // Count manually reviewed creditors (by the agent, not auto-confirmed)
+            const manuallyReviewedCount = creditors.filter(c =>
+                c.manually_reviewed && c.review_action !== 'auto_confirmed_no_manual_review_needed'
+            ).length;
+
             res.json({
                 success: true,
                 message: 'Review session completed - Client notified',
@@ -1475,6 +1463,8 @@ Diese E-Mail wurde automatisch generiert.
                     admin_approved: client.admin_approved
                 },
                 creditors_count: creditors.length,
+                manually_reviewed_count: manuallyReviewedCount,
+                auto_confirmed_count: autoConfirmedCount,
                 total_debt: totalDebt,
                 client_email_sent: clientEmailSent,
                 portal_url: portalUrl,

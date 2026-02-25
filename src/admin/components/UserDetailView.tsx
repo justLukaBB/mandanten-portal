@@ -1678,24 +1678,24 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
               </div>
             )}
             <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
+              <table className="min-w-[2200px] text-xs table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Manuelle Prüfung</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Prüfungsgrund</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Dokumenttyp</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubiger Name</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Aktenzeichen</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubiger Adresse</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Name</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gläubigervertreter Adresse</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">AZ Gläubigervertreter</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Forderungsbetrag</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubiger</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Email Gläubigervertreter</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Anzahl Dokumente</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Quell-Dokumente</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 w-20">Aktion</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[100px]">Manuelle Prüfung</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[130px]">Prüfungsgrund</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[180px]">Dokumenttyp</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[170px]">Gläubiger Name</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[170px]">Aktenzeichen</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[220px]">Gläubiger Adresse</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[180px]">Gläubigervertreter Name</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[220px]">Gläubigervertreter Adresse</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[160px]">AZ Gläubigervertreter</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[120px]">Forderungsbetrag</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[170px]">Email Gläubiger</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[180px]">Email Gläubigervertreter</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[80px]">Anzahl Dok.</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[160px]">Quell-Dokumente</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-[80px]">Aktion</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1704,7 +1704,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                       const docs = c.source_documents || [];
                       return (
                         <tr key={c.id || c.reference_number || c.sender_name} className={`${deleteConfirmId === c.id ? 'bg-red-50' : 'hover:bg-gray-50'} group`}>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.needs_manual_review ? 'Ja' : 'Nein'}
                               fieldName="needs_manual_review"
@@ -1714,7 +1714,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'needs_manual_review', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={(c.review_reasons && c.review_reasons.length > 0) ? c.review_reasons.join(', ') : 'Keine'}
                               fieldName="review_reasons"
@@ -1725,7 +1725,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'review_reasons', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.dokumenttyp || 'N/A'}
                               fieldName="dokumenttyp"
@@ -1734,7 +1734,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'dokumenttyp', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.glaeubiger_name || c.sender_name || 'N/A'}
                               fieldName="glaeubiger_name"
@@ -1743,7 +1743,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubiger_name', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.reference_number || 'N/A'}
                               fieldName="reference_number"
@@ -1752,7 +1752,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'reference_number', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.glaeubiger_adresse || c.sender_address || 'N/A'}
                               fieldName="glaeubiger_adresse"
@@ -1761,7 +1761,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubiger_adresse', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.glaeubigervertreter_name || 'N/A'}
                               fieldName="glaeubigervertreter_name"
@@ -1770,7 +1770,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubigervertreter_name', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.glaeubigervertreter_adresse || 'N/A'}
                               fieldName="glaeubigervertreter_adresse"
@@ -1779,7 +1779,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'glaeubigervertreter_adresse', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.aktenzeichen_glaeubigervertreter || 'N/A'}
                               fieldName="aktenzeichen_glaeubigervertreter"
@@ -1788,7 +1788,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'aktenzeichen_glaeubigervertreter', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.forderungbetrag || c.claim_amount_raw || (c.claim_amount !== undefined ? String(c.claim_amount) : 'N/A')}
                               fieldName="forderungbetrag"
@@ -1797,7 +1797,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'forderungbetrag', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.email_glaeubiger || c.sender_email || 'N/A'}
                               fieldName="email_glaeubiger"
@@ -1806,7 +1806,7 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'email_glaeubiger', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 overflow-hidden">
                             <EditableCell
                               value={c.email_glaeubiger_vertreter || 'N/A'}
                               fieldName="email_glaeubiger_vertreter"
@@ -1815,8 +1815,8 @@ const UserDetailView: React.FC<UserDetailProps> = ({ userId, onClose }) => {
                               onSaved={(newValue) => handleCreditorFieldSaved(c.id, 'email_glaeubiger_vertreter', newValue)}
                             />
                           </td>
-                          <td className="px-3 py-2 text-gray-800 text-center">{docs.length || 0}</td>
-                          <td className="px-3 py-2 text-gray-800">
+                          <td className="px-3 py-2 overflow-hidden text-gray-800 text-center">{docs.length || 0}</td>
+                          <td className="px-3 py-2 overflow-hidden text-gray-800 truncate">
                             {docs.length > 0 ? docs.join(', ') : 'N/A'}
                           </td>
                           <td className="px-3 py-2">

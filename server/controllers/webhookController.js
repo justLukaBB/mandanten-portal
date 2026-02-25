@@ -10,7 +10,11 @@ const webhookVerifier = require('../utils/webhookVerifier');
 const creditorDeduplication = require('../utils/creditorDeduplication');
 const { documentNeedsManualReview, getDocumentReviewReasons, cleanupStaleContactReviewReasons } = require('../utils/creditorDeduplication');
 const { findCreditorByName } = require('../utils/creditorLookup');
+const { callEnrichmentService } = require('../utils/enrichmentClient');
+const CreditorDatabase = require('../models/CreditorDatabase');
 const webhookQueueService = require('../services/webhookQueueService');
+const Logger = require('../utils/logger');
+const enrichLogger = new Logger('WebEnrichment');
 
 const MANUAL_REVIEW_CONFIDENCE_THRESHOLD =
     parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8;
@@ -241,6 +245,174 @@ async function enrichDedupedCreditorFromDb(entry, cache) {
     }
 }
 
+/**
+ * Web Enrichment: Call external Enrichment Service for missing creditor contact data.
+ * Runs AFTER local DB lookup — only fires if fields are still missing.
+ * Results are applied to docResult AND written back to CreditorDatabase (if confidence >= 0.8).
+ */
+function isValidEmail(val) {
+    return typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+}
+
+async function enrichCreditorFromWeb(docResult, cache) {
+    if (!docResult?.is_creditor_document) return;
+
+    const isMissing = (val) => {
+        if (val === undefined || val === null) return true;
+        if (typeof val === 'string') {
+            const t = val.trim();
+            if (!t) return true;
+            const lower = t.toLowerCase();
+            if (lower === 'n/a' || lower === 'na' || lower === 'n.a') return true;
+        }
+        return false;
+    };
+
+    const creditorData = docResult.extracted_data?.creditor_data || {};
+
+    // Determine which fields are still missing after local DB lookup
+    const missingFields = [];
+    if (isMissing(creditorData.email) && isMissing(creditorData.sender_email)) missingFields.push('email');
+    if (isMissing(creditorData.address) && isMissing(creditorData.sender_address)) missingFields.push('address');
+    if (isMissing(creditorData.phone)) missingFields.push('phone');
+
+    if (missingFields.length === 0) return;
+
+    const candidateName =
+        creditorData.sender_name ||
+        creditorData.glaeubiger_name ||
+        creditorData.creditor_name ||
+        creditorData.name ||
+        creditorData.creditor ||
+        docResult.creditor_name ||
+        docResult.sender_name ||
+        docResult.name;
+
+    if (!candidateName) return;
+
+    // Session-level cache to avoid duplicate calls for the same creditor
+    const cacheKey = `web:${candidateName.toLowerCase().trim()}`;
+    let result = cache.get(cacheKey);
+
+    if (result === undefined) {
+        const knownData = {};
+        if (creditorData.city) knownData.city = creditorData.city;
+        if (creditorData.postal_code) knownData.postal_code = creditorData.postal_code;
+        if (creditorData.sender_address && !isMissing(creditorData.sender_address)) {
+            knownData.address_hint = creditorData.sender_address;
+        }
+
+        result = await callEnrichmentService(
+            candidateName,
+            knownData,
+            missingFields,
+            docResult.case_id || 'unknown'
+        );
+        cache.set(cacheKey, result || null);
+    }
+
+    if (!result || result.status === 'not_found') return;
+
+    // Apply enriched data to docResult
+    const updatedCreditorData = { ...creditorData };
+    const enrichedData = result.enriched_data || {};
+    const confidence = result.confidence || {};
+    const sources = result.sources || {};
+
+    // Email: validate format before applying
+    if (enrichedData.email && isMissing(updatedCreditorData.email)) {
+        if (isValidEmail(enrichedData.email)) {
+            updatedCreditorData.email = enrichedData.email;
+            updatedCreditorData.sender_email = enrichedData.email;
+        } else {
+            enrichLogger.warn('invalid_email_from_enrichment', {
+                email: enrichedData.email,
+                creditor: candidateName,
+            });
+        }
+    }
+    if (enrichedData.address && isMissing(updatedCreditorData.address)) {
+        updatedCreditorData.address = enrichedData.address;
+        updatedCreditorData.sender_address = enrichedData.address;
+        updatedCreditorData.address_source = sources.address || 'web_enrichment';
+    }
+    // Phone, website, geschaeftsfuehrer: only fill if currently missing
+    if (enrichedData.phone && isMissing(updatedCreditorData.phone)) {
+        updatedCreditorData.phone = enrichedData.phone;
+    }
+    if (enrichedData.website && isMissing(updatedCreditorData.website)) {
+        updatedCreditorData.website = enrichedData.website;
+    }
+    if (enrichedData.geschaeftsfuehrer && isMissing(updatedCreditorData.geschaeftsfuehrer)) {
+        updatedCreditorData.geschaeftsfuehrer = enrichedData.geschaeftsfuehrer;
+    }
+
+    // Enrichment metadata — pick source with highest confidence
+    const bestSource = Object.entries(confidence)
+        .sort(([, a], [, b]) => b - a)[0];
+    updatedCreditorData.enrichment_source = bestSource ? (sources[bestSource[0]] || 'web_enrichment') : 'web_enrichment';
+    updatedCreditorData.enrichment_status = result.status;
+
+    // Bug-fix: Math.max() crashes with empty spread
+    const confValues = Object.values(confidence);
+    updatedCreditorData.enrichment_confidence = confValues.length > 0 ? Math.max(...confValues) : 0;
+
+    updatedCreditorData.enriched_at = new Date();
+
+    // Bound enrichment_log to max 10 entries
+    updatedCreditorData.enrichment_log = (result.enrichment_log || [])
+        .slice(0, 10)
+        .map(entry => ({
+            source: entry.source,
+            fields_found: entry.fields_found || [],
+            confidence: confidence[entry.fields_found?.[0]] || 0,
+            timestamp: new Date(entry.timestamp),
+        }));
+
+    // Write back to docResult
+    docResult.extracted_data = docResult.extracted_data || {};
+    if (!docResult.extracted_data.creditor_data) {
+        docResult.extracted_data.creditor_data = {};
+    }
+    Object.assign(docResult.extracted_data.creditor_data, updatedCreditorData);
+
+    enrichLogger.info('web_enrichment_applied', {
+        name: candidateName,
+        status: result.status,
+        fields_enriched: Object.keys(enrichedData),
+        sources,
+    });
+
+    // Self-learning: Write back to CreditorDatabase if confidence >= 0.8
+    try {
+        const highConfFields = {};
+        if (enrichedData.email && isValidEmail(enrichedData.email) && (confidence.email || 0) >= 0.8) {
+            highConfFields.email = enrichedData.email;
+        }
+        if (enrichedData.address && (confidence.address || 0) >= 0.8) highConfFields.address = enrichedData.address;
+        if (enrichedData.phone && (confidence.phone || 0) >= 0.8) highConfFields.phone = enrichedData.phone;
+
+        if (Object.keys(highConfFields).length > 0) {
+            await CreditorDatabase.findOneAndUpdate(
+                { creditor_name: new RegExp(`^${candidateName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                {
+                    $set: highConfFields,
+                    $setOnInsert: { creditor_name: candidateName, is_active: true }
+                },
+                { upsert: true }
+            );
+            enrichLogger.info('creditor_database_updated', {
+                name: candidateName,
+                fields: Object.keys(highConfFields),
+            });
+        }
+    } catch (dbError) {
+        enrichLogger.error('creditor_database_update_failed', dbError, {
+            name: candidateName,
+        });
+    }
+}
+
 const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerProcessingCompleteWebhook, getIO, aiDedupScheduler }) => {
     /**
      * Process AI Processing Webhook (called by WebhookWorker)
@@ -282,6 +454,7 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
         const creditorDocuments = [];
         const documentsNeedingReview = [];
         const creditorLookupCache = new Map();
+        const webEnrichmentCache = new Map();
 
         // Per-document status handling
         for (const docResult of results || []) {
@@ -348,6 +521,9 @@ const createWebhookController = ({ Client, safeClientUpdate, getClient, triggerP
             }
 
             await enrichCreditorContactFromDb(docResult, creditorLookupCache);
+
+            // Step 3: Web Enrichment — fetch missing data from internet sources
+            await enrichCreditorFromWeb(docResult, webEnrichmentCache);
 
             // Normalize extracted_data structure if needed
             if (docResult.creditor_data && !docResult.extracted_data?.creditor_data) {

@@ -105,26 +105,13 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
   const handleDownload = (doc: Document) => {
     try {
-      // Prefer direct GCS URL if available, otherwise use backend proxy
-      // This allows downloads to work even when GCS keys aren't configured locally
-      let downloadUrl: string;
+      // Always use backend proxy — direct GCS signed URLs expire after 24h
+      const downloadUrl = `${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`;
 
-      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
-        // Use direct GCS URL
-        downloadUrl = doc.url;
-        console.log('Using direct GCS URL for download:', downloadUrl);
-      } else {
-        // Fall back to backend proxy (for local storage or when url is not available)
-        // FIXED: Use the correct admin download route
-        downloadUrl = `${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`;
-        console.log('Using backend proxy for download:', downloadUrl);
-      }
-
-      // Open in new tab as fallback, or direct download
       const link = window.document.createElement('a');
       link.href = downloadUrl;
       link.download = doc.name;
-      link.target = '_blank'; // Fallback: open in new tab if download fails
+      link.target = '_blank';
       link.style.display = 'none';
 
       window.document.body.appendChild(link);
@@ -133,12 +120,7 @@ const AdminDocumentViewer: React.FC<AdminDocumentViewerProps> = ({
 
     } catch (error) {
       console.error('Download error:', error);
-      // Fallback: try direct GCS URL first, then backend proxy
-      if (doc.url && doc.url.startsWith('https://storage.googleapis.com')) {
-        window.open(doc.url, '_blank');
-      } else {
-        window.open(`${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`, '_blank');
-      }
+      window.open(`${API_BASE_URL}/api/admin/clients/${clientId}/documents/${doc.id}/download`, '_blank');
     }
   };
 

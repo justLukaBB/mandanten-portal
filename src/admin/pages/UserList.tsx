@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  UsersIcon, 
+import {
+  UsersIcon,
   FunnelIcon,
   CalendarIcon,
   MagnifyingGlassIcon,
@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import UserDetailView from '../components/UserDetailView';
 import { useGetClientsQuery, useTriggerImmediateReviewMutation } from '../../store/features/adminApi';
+import { Avatar } from '../../components/ui/avatar/Avatar';
 
 interface User {
   id: string;
@@ -278,7 +279,7 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900">
-            Nutzer-Liste 
+            Nutzer-Liste
           </h3>
           {totalUsers > 0 && (
             <span className="text-sm text-gray-500">
@@ -324,12 +325,15 @@ const UserList: React.FC<UserListProps> = ({ onBack }) => {
                 {users.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                        <Avatar name={`${user.firstName} ${user.lastName}`.trim()} size="md" />
                         <div>
                         <div className="text-sm font-medium text-gray-900">
                             {user.firstName} {user.lastName}
                         </div>
                         <div className="text-sm text-gray-500">{user.email}</div>
                         <div className="text-xs text-gray-400">{user.aktenzeichen}</div>
+                        </div>
                         </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

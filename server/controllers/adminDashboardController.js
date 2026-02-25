@@ -125,7 +125,7 @@ function getClientDisplayStatus(client) {
  * @param {Object} dependencies.clientsData - In-memory fallback data (optional)
  * @param {String} dependencies.uploadsDir - Path to uploads directory for cleanup
  */
-const createAdminDashboardController = ({ Client, databaseService, clientsData = {}, uploadsDir, DelayedProcessingService, zendeskWebhookController }) => {
+const createAdminDashboardController = ({ Client, databaseService, clientsData = {}, uploadsDir, DelayedProcessingService, zendeskWebhookController, leineweberService }) => {
     return {
         // Dashboard Stats Endpoint
         getDashboardStats: async (req, res) => {
@@ -306,9 +306,66 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     });
                 }
 
+                // Leineweber online case detection
+                let caseSource = 'offline';
+                let leineweberTaskId = undefined;
+                let leineweberFields = {};
+                if (leineweberService) {
+                    const form = await leineweberService.lookupQualifiedForm(
+                        clientData.firstName,
+                        clientData.lastName,
+                        clientData.geburtstag
+                    );
+                    if (form) {
+                        caseSource = 'online';
+                        leineweberTaskId = form.taskId;
+                        console.log(`[Leineweber] Online case detected for ${clientData.firstName} ${clientData.lastName} (taskId: ${form.taskId})`);
+
+                        // Sync rich form data from Leineweber
+                        const safeNum = (v) => { const n = Number(v); return isNaN(n) ? undefined : n; };
+                        leineweberFields = {
+                            geburtsort: form.geburtsort || undefined,
+                            familienstand: form.familienstand || undefined,
+                            mobiltelefon: form.phoneNumber || undefined,
+                            strasse: form.strasse || undefined,
+                            hausnummer: form.hausnummer || undefined,
+                            plz: form.plz || undefined,
+                            wohnort: form.wohnort || undefined,
+                            beschaeftigungsart: form.beschaeftigungsArt || undefined,
+                            derzeitige_taetigkeit: form.derzeitigeTaetigkeit || undefined,
+                            erlernter_beruf: form.erlernterBeruf || undefined,
+                            netto_einkommen: safeNum(form.nettoEinkommen),
+                            selbststaendig: form.selbststaendig,
+                            befristet: form.befristet,
+                            war_selbststaendig: form.warSelbststaendig,
+                            gesamt_schulden: safeNum(form.gesamtSchulden),
+                            anzahl_glaeubiger: safeNum(form.glaeubiger),
+                            aktuelle_pfaendung: form.aktuelePfaendung,
+                            schuldenart_info: form.schuldenartInfo || undefined,
+                            p_konto: form.pKonto,
+                            kinder_anzahl: safeNum(form.kinderAnzahl),
+                            kinder_alter: form.kinderAlter || undefined,
+                            unterhaltspflicht: form.unterhaltspflicht,
+                            leineweber_form_data: form,
+                            leineweber_synced_at: new Date(),
+                        };
+
+                        // Build composite address fallback
+                        if (form.strasse && form.plz && form.wohnort) {
+                            const street = form.hausnummer ? `${form.strasse} ${form.hausnummer}` : form.strasse;
+                            leineweberFields.address = `${street}, ${form.plz} ${form.wohnort}`;
+                        }
+
+                        console.log(`[Leineweber] Synced ${Object.keys(leineweberFields).filter(k => leineweberFields[k] != null).length} fields from form data`);
+                    }
+                }
+
                 // Create new client in MongoDB
                 const newClient = new Client({
                     ...clientData,
+                    case_source: caseSource,
+                    leineweber_task_id: leineweberTaskId,
+                    ...leineweberFields,
                     id: clientData.aktenzeichen, // Use aktenzeichen as ID
                     _id: undefined, // Let MongoDB generate _id
                     created_at: new Date(),
@@ -339,6 +396,8 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     aktenzeichen: newClient.aktenzeichen,
                     current_status: newClient.current_status,
                     workflow_status: newClient.workflow_status,
+                    case_source: newClient.case_source,
+                    leineweber_task_id: newClient.leineweber_task_id,
                     created_at: newClient.created_at
                 });
 
@@ -516,23 +575,68 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         markPaymentReceived: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Update client in MongoDB
-                await Client.findByIdAndUpdate(client._id, {
+                // Guard: Don't regress workflow_status if client is already past client_confirmation
+                const downstreamStatuses = [
+                    'creditor_contact_active',
+                    'completed'
+                ];
+                if (downstreamStatuses.includes(client.workflow_status)) {
+                    console.log(`⏭️ markPaymentReceived: Skipping workflow_status change for ${client.aktenzeichen} — already in '${client.workflow_status}'`);
+                    // Still mark payment as received, just don't regress the status
+                    await Client.findByIdAndUpdate(client._id, {
+                        first_payment_received: true,
+                        payment_received_at: new Date()
+                    });
+                    return res.json({
+                        success: true,
+                        message: `Payment marked as received (workflow_status kept at '${client.workflow_status}')`,
+                        workflow_status: client.workflow_status,
+                        skipped_status_change: true
+                    });
+                }
+
+                // Determine workflow_status based on creditor state
+                const creditors = client.final_creditor_list || [];
+                const hasCreditors = creditors.length > 0;
+                const hasCreditorsNeedingReview = creditors.some(c => c.needs_manual_review === true);
+
+                let newWorkflowStatus;
+                const updateFields = {
                     first_payment_received: true,
-                    payment_received_at: new Date(),
-                    workflow_status: 'admin_review'
-                });
+                    payment_received_at: new Date()
+                };
+
+                if (hasCreditors && hasCreditorsNeedingReview) {
+                    // Creditors exist but some need manual review → admin_review
+                    newWorkflowStatus = 'admin_review';
+                } else if (hasCreditors && !hasCreditorsNeedingReview) {
+                    // Creditors exist and none need review → skip to client_confirmation
+                    newWorkflowStatus = 'client_confirmation';
+                    updateFields.admin_approved = true;
+                    updateFields.admin_approved_at = new Date();
+                    updateFields.admin_approved_by = 'system_auto';
+                    console.log(`✅ Auto-approved: No creditors need review for ${client.aktenzeichen}, skipping admin_review`);
+                } else {
+                    // No creditors yet → keep current workflow_status, wait for documents
+                    newWorkflowStatus = client.workflow_status;
+                    console.log(`⏳ Payment marked but no creditors yet for ${client.aktenzeichen}, staying in ${newWorkflowStatus}`);
+                }
+
+                updateFields.workflow_status = newWorkflowStatus;
+
+                // Update client in MongoDB
+                await Client.findByIdAndUpdate(client._id, updateFields);
 
                 res.json({
                     success: true,
                     message: 'Payment marked as received',
-                    workflow_status: 'admin_review'
+                    workflow_status: newWorkflowStatus
                 });
             } catch (error) {
                 console.error('Error marking payment received:', error);
@@ -877,6 +981,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                             {
                                 $project: {
                                     _id: 1,
+                                    id: 1,
                                     firstName: 1,
                                     lastName: 1,
                                     email: 1,
@@ -890,10 +995,22 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                                     first_payment_received: 1,
                                     admin_approved: 1,
                                     client_confirmed_creditors: 1,
+                                    phone: 1,
+                                    address: 1,
+                                    total_claim_amount: 1,
                                     processing_complete_webhook_scheduled: 1,
                                     processing_complete_webhook_scheduled_at: 1,
                                     processing_complete_webhook_triggered: 1,
                                     all_documents_processed_at: 1,
+                                    case_source: 1,
+                                    leineweber_task_id: 1,
+                                    geburtstag: 1, geburtsort: 1, familienstand: 1,
+                                    strasse: 1, hausnummer: 1, plz: 1, wohnort: 1, mobiltelefon: 1,
+                                    beschaeftigungsart: 1, netto_einkommen: 1,
+                                    gesamt_schulden: 1, anzahl_glaeubiger: 1,
+                                    aktuelle_pfaendung: 1, p_konto: 1,
+                                    kinder_anzahl: 1, unterhaltspflicht: 1,
+                                    selbststaendig: 1, befristet: 1,
                                     documents_count: { $size: { $ifNull: ["$documents", []] } },
                                     creditors_count: { $size: { $ifNull: ["$final_creditor_list", []] } }
                                 }
@@ -974,6 +1091,100 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             }
         },
 
+        // Update client profile data
+        updateClientProfile: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const updates = req.body;
+
+                // Whitelist of editable fields
+                const EDITABLE_FIELDS = [
+                    'firstName', 'lastName', 'email',
+                    'geburtstag', 'geburtsort', 'familienstand',
+                    'strasse', 'hausnummer', 'plz', 'wohnort',
+                    'phone', 'mobiltelefon',
+                    'beschaeftigungsart', 'derzeitige_taetigkeit', 'erlernter_beruf',
+                    'netto_einkommen', 'selbststaendig', 'befristet',
+                    'gesamt_schulden', 'anzahl_glaeubiger',
+                    'aktuelle_pfaendung', 'p_konto',
+                    'kinder_anzahl', 'unterhaltspflicht',
+                ];
+
+                const FAMILIENSTAND_VALUES = ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend'];
+
+                // Filter to only allowed fields
+                const sanitized = {};
+                for (const key of Object.keys(updates)) {
+                    if (EDITABLE_FIELDS.includes(key)) {
+                        sanitized[key] = updates[key];
+                    }
+                }
+
+                if (Object.keys(sanitized).length === 0) {
+                    return res.status(400).json({ error: 'No valid fields to update' });
+                }
+
+                // Normalize empty strings to null for enum/optional fields
+                for (const key of Object.keys(sanitized)) {
+                    if (sanitized[key] === '') {
+                        sanitized[key] = null;
+                    }
+                }
+
+                // Validate familienstand enum
+                if (sanitized.familienstand != null && !FAMILIENSTAND_VALUES.includes(sanitized.familienstand)) {
+                    return res.status(400).json({ error: 'Invalid familienstand value' });
+                }
+
+                // Validate numeric fields
+                const numericFields = ['netto_einkommen', 'gesamt_schulden', 'anzahl_glaeubiger', 'kinder_anzahl'];
+                for (const field of numericFields) {
+                    if (sanitized[field] != null) {
+                        sanitized[field] = Number(sanitized[field]);
+                        if (isNaN(sanitized[field])) {
+                            return res.status(400).json({ error: `Invalid numeric value for ${field}` });
+                        }
+                    }
+                }
+
+                // Validate boolean fields
+                const booleanFields = ['selbststaendig', 'befristet', 'aktuelle_pfaendung', 'p_konto', 'unterhaltspflicht'];
+                for (const field of booleanFields) {
+                    if (sanitized[field] !== undefined && sanitized[field] !== null) {
+                        sanitized[field] = Boolean(sanitized[field]);
+                    }
+                }
+
+                sanitized.updated_at = new Date();
+
+                // Find and update client
+                let client;
+                if (databaseService && databaseService.isHealthy()) {
+                    client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                    if (!client) {
+                        client = await Client.findById(clientId).catch(() => null);
+                    }
+                }
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                Object.assign(client, sanitized);
+                await client.save();
+
+                console.log(`[Admin] Client profile updated: ${client.aktenzeichen} — fields: ${Object.keys(sanitized).filter(k => k !== 'updated_at').join(', ')}`);
+
+                res.json({ success: true, message: 'Client profile updated' });
+            } catch (error) {
+                console.error('Error updating client profile:', error);
+                res.status(500).json({
+                    error: 'Error updating client profile',
+                    details: error.message,
+                });
+            }
+        },
+
         // Get workflow status for a specific client
         getWorkflowStatus: async (req, res) => {
             try {
@@ -982,6 +1193,9 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 let client;
                 if (databaseService && databaseService.isHealthy()) {
                     client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                    if (!client) {
+                        client = await Client.findById(clientId).catch(() => null);
+                    }
                 } else {
                     // Fallback to in-memory if needed (legacy)
                     client = Object.values(clientsData).find(c => c.id === clientId || c.aktenzeichen === clientId);

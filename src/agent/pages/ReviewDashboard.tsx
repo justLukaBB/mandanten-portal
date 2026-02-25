@@ -1064,6 +1064,18 @@ const ReviewDashboard: React.FC = () => {
       };
     };
 
+    // Use the backend's computed needing_review_with_docs (checks document flags + missing contact info)
+    // instead of the static needs_manual_review flag on the raw creditor objects
+    const needingReview = reviewData.creditors?.needing_review_with_docs;
+    if (needingReview && needingReview.length > 0) {
+      return needingReview.map((item: any) => {
+        const cred = item.creditor;
+        const doc = item.documents?.[0] || matchDocumentForCreditor(cred);
+        return { creditor: cred, doc };
+      });
+    }
+
+    // Fallback: filter from all creditors if needing_review_with_docs is not available
     return (reviewData.creditors?.all || [])
       .filter((c: any) => c?.needs_manual_review === true || c?.needs_manual_review === 'true')
       .map((cred: any) => {

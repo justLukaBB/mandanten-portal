@@ -155,6 +155,8 @@ class ClientCreditorController {
             client.client_confirmed_creditors = true;
             client.client_confirmed_at = new Date();
             client.current_status = 'creditor_contact_initiated';
+            client.phase = 2;
+            client.workflow_status = 'creditor_contact_active';
             client.updated_at = new Date();
 
             client.status_history.push({
@@ -182,11 +184,24 @@ class ClientCreditorController {
             const creditors = client.final_creditor_list || [];
 
             if (creditors.length > 0) {
+                const Client = require('../models/Client');
                 (async () => {
                     try {
                         console.log(`🔄 [Background] Starting creditor contact for ${aktenzeichen}...`);
                         const creditorContactResult = await this.creditorContactService.processClientCreditorConfirmation(aktenzeichen);
                         console.log(`✅ [Background] Creditor contact completed: ${creditorContactResult.emails_sent}/${creditors.length} emails sent`);
+
+                        // Mark creditor contact as started after successful send
+                        await Client.updateOne(
+                            { aktenzeichen },
+                            {
+                                $set: {
+                                    creditor_contact_started: true,
+                                    creditor_contact_started_at: new Date(),
+                                }
+                            }
+                        );
+                        console.log(`✅ [Background] Set creditor_contact_started=true for ${aktenzeichen}`);
 
                         if (this.sideConversationMonitor) {
                             this.sideConversationMonitor.creditorContactService = this.creditorContactService;
@@ -204,6 +219,17 @@ class ClientCreditorController {
                         console.log(`✅ [Background] All creditor contact tasks completed for ${aktenzeichen}`);
                     } catch (bgError) {
                         console.error(`❌ [Background] Failed creditor contact for ${aktenzeichen}:`, bgError.message);
+                        // Persist failure so admin can see it and retry
+                        await Client.updateOne(
+                            { aktenzeichen },
+                            {
+                                $set: {
+                                    current_status: 'creditor_contact_failed',
+                                    creditor_contact_error: bgError.message,
+                                    creditor_contact_failed_at: new Date(),
+                                }
+                            }
+                        ).catch(dbErr => console.error(`❌ [Background] Could not persist failure status:`, dbErr.message));
                     }
                 })();
             }

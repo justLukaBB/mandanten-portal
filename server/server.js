@@ -32,6 +32,7 @@ const Agent = require('./models/Agent');
 // 3. SERVICES & UTILS initialization
 // =============================================================================
 const clientService = require('./services/clientService');
+const leineweberService = require('./services/leineweberService');
 const Scheduler = require('./scheduler');
 
 // =============================================================================
@@ -304,6 +305,11 @@ app.use('/api/portal-webhook', createPortalWebhooksRouter({
   triggerProcessingCompleteWebhook
 }));
 
+// Matcher webhook (creditor-email-matcher → portal notifications)
+const createMatcherWebhookController = require('./controllers/matcherWebhookController');
+const matcherWebhookController = createMatcherWebhookController({ Client, getIO });
+app.post('/api/webhooks/matcher-response', matcherWebhookController.handleCreditorResponse);
+
 // 10.3 Agent Routes
 app.use('/api/agent-auth', agentAuthRoutes);
 app.use('/api/agent-review', createAgentReviewRouter({
@@ -341,7 +347,8 @@ app.use('/api/admin', createAdminDashboardRouter({
   garnishmentCalculator,
   financialDataReminderService,
   safeClientUpdate: clientService.safeClientUpdate.bind(clientService),
-  zendeskWebhookController
+  zendeskWebhookController,
+  leineweberService
 }));
 
 app.use('/api/admin', createAdminDocumentsRouter({
@@ -508,6 +515,11 @@ async function startServer() {
     // Initialize database first
     await databaseService.connect();
 
+    // Connect to Leineweber DB (non-blocking)
+    leineweberService.connect().catch(err => {
+      console.warn('[Leineweber] Startup connection warning:', err.message);
+    });
+
     // Start the server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
@@ -543,6 +555,7 @@ process.on('SIGINT', async () => {
   if (webhookWorker) {
     await webhookWorker.stop();
   }
+  await leineweberService.disconnect();
   await databaseService.disconnect();
   process.exit(0);
 });
@@ -552,6 +565,7 @@ process.on('SIGTERM', async () => {
   if (webhookWorker) {
     await webhookWorker.stop();
   }
+  await leineweberService.disconnect();
   await databaseService.disconnect();
   process.exit(0);
 });

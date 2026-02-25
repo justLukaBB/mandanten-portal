@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 // In development, admin portal runs on port 5173 (Vite).
 // In production, configure this to the actual admin portal domain/path.
-const ADMIN_PORTAL_URL = import.meta.env.VITE_ADMIN_PORTAL_URL || 'http://localhost:5173';
+const ADMIN_PORTAL_URL = process.env.REACT_APP_ADMIN_PORTAL_URL || 'http://localhost:5173';
 
 function getAdminRedirectPath(pathname: string): string {
   if (pathname.startsWith('/agent/review')) {
