@@ -245,18 +245,6 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
           Basierend auf Ihren hochgeladenen Dokumenten haben wir {confirmationData.creditors.length} Gläubiger identifiziert.
           Bitte überprüfen Sie diese Liste und bestätigen Sie die Richtigkeit.
         </p>
-        {(() => {
-          const totalDebt = confirmationData.creditors.reduce((sum, c) => {
-            const amount = c.claim_amount || (c.forderungbetrag ? parseFloat(c.forderungbetrag.replace(/\./g, '').replace(',', '.')) : 0);
-            return sum + (isFinite(amount) ? amount : 0);
-          }, 0);
-          return totalDebt > 0 ? (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <span className="text-sm text-gray-700">Gesamtforderungssumme: </span>
-              <span className="text-lg font-bold text-red-700">€{totalDebt.toLocaleString('de-DE', { minimumFractionDigits: 2 })}</span>
-            </div>
-          ) : null;
-        })()}
       </div>
 
       {/* Selection Bar */}
