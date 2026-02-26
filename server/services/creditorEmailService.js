@@ -56,7 +56,11 @@ class CreditorEmailService {
         client_reference_number: clientReference,
         creditor_name: creditorName,
         creditor_email: creditorEmail,
-        reference_numbers: creditorReference ? [creditorReference] : [],
+        // Include Aktenzeichen first (creditors quote it back as "Ihr AZ ..."), then creditor's own ref
+        reference_numbers: [
+          ...(clientReference ? [clientReference] : []),
+          ...(creditorReference && creditorReference !== clientReference ? [creditorReference] : [])
+        ],
         resend_email_id: resendEmailId,
         email_provider: 'resend',
         sent_at: new Date().toISOString(),

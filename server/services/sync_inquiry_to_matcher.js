@@ -50,7 +50,11 @@ async function syncInquiryToMatcher({ client, creditor, mainTicketId }) {
 
       // Debt information
       debt_amount: creditor.claim_amount || null,
-      reference_numbers: creditor.reference_number ? [creditor.reference_number] : [],
+      // Include Aktenzeichen first (creditors quote it back as "Ihr AZ ..."), then creditor's own ref
+      reference_numbers: [
+        ...(client.aktenzeichen ? [client.aktenzeichen] : []),
+        ...(creditor.reference_number && creditor.reference_number !== client.aktenzeichen ? [creditor.reference_number] : [])
+      ],
 
       // Zendesk tracking
       zendesk_ticket_id: mainTicketId,
