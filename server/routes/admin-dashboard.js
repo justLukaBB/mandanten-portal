@@ -35,6 +35,7 @@ module.exports = (dependencies) => {
     // Payment & Status Management
     router.post('/clients/:clientId/mark-payment-received', rateLimits.admin, authenticateAdmin, adminDashboardController.markPaymentReceived);
     router.post('/clients/:clientId/trigger-payment-handler', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerPaymentHandler);
+    router.post('/clients/:clientId/send-creditor-confirmation', rateLimits.admin, authenticateAdmin, adminDashboardController.sendCreditorConfirmationEmail);
     router.post('/clients/:clientId/reset-payment', rateLimits.admin, authenticateAdmin, adminDashboardController.resetPaymentStatus);
     router.post('/clients/:clientId/trigger-seven-day-review', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerSevenDayReview);
     router.post('/clients/:clientId/generate-creditor-list', rateLimits.admin, authenticateAdmin, adminDashboardController.generateCreditorList);

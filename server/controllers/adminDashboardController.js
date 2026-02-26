@@ -625,6 +625,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 } else if (hasCreditors && !hasCreditorsNeedingReview) {
                     // Creditors exist and none need review → skip to client_confirmation
                     newWorkflowStatus = 'client_confirmation';
+                    updateFields.current_status = 'awaiting_client_confirmation';
                     updateFields.admin_approved = true;
                     updateFields.admin_approved_at = new Date();
                     updateFields.admin_approved_by = 'system_auto';
@@ -639,6 +640,31 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
 
                 // Update client in MongoDB
                 await Client.findByIdAndUpdate(client._id, updateFields);
+
+                // Send creditor confirmation email for auto-approved cases
+                if (newWorkflowStatus === 'client_confirmation' && hasCreditors) {
+                    try {
+                        const emailService = require('../services/emailService');
+                        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+                        const result = await emailService.sendCreditorConfirmationEmail(
+                            client.email,
+                            client,
+                            creditors,
+                            portalUrl,
+                            totalDebt
+                        );
+
+                        if (result.success) {
+                            console.log(`📧 Creditor confirmation email sent to ${client.email} for ${client.aktenzeichen}`);
+                        } else {
+                            console.error(`❌ Failed to send creditor confirmation email: ${result.error}`);
+                        }
+                    } catch (emailError) {
+                        console.error(`❌ Error sending creditor confirmation email:`, emailError.message);
+                    }
+                }
 
                 res.json({
                     success: true,
@@ -719,6 +745,66 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             } catch (error) {
                 console.error('Error in batch mark payment received:', error);
                 res.status(500).json({ error: 'Batch payment confirmation failed', details: error.message });
+            }
+        },
+
+        // Send creditor confirmation email and fix status for client_confirmation flow
+        sendCreditorConfirmationEmail: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                const creditors = client.final_creditor_list || [];
+                if (creditors.length === 0) {
+                    return res.status(400).json({ error: 'Client has no creditors' });
+                }
+
+                // Fix current_status if needed
+                const statusFixed = client.current_status !== 'awaiting_client_confirmation';
+                if (statusFixed) {
+                    await Client.findByIdAndUpdate(client._id, {
+                        current_status: 'awaiting_client_confirmation',
+                        workflow_status: 'client_confirmation',
+                        admin_approved: true,
+                        admin_approved_at: client.admin_approved_at || new Date(),
+                        admin_approved_by: client.admin_approved_by || 'admin_manual'
+                    });
+                    console.log(`✅ Fixed current_status to awaiting_client_confirmation for ${client.aktenzeichen}`);
+                }
+
+                // Send email
+                const emailService = require('../services/emailService');
+                const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+                const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+
+                const result = await emailService.sendCreditorConfirmationEmail(
+                    client.email,
+                    client,
+                    creditors,
+                    portalUrl,
+                    totalDebt
+                );
+
+                res.json({
+                    success: result.success,
+                    message: result.success
+                        ? `Creditor confirmation email sent to ${client.email}`
+                        : `Failed to send email: ${result.error}`,
+                    email_id: result.emailId || null,
+                    status_fixed: statusFixed,
+                    creditors_count: creditors.length,
+                    total_debt: totalDebt
+                });
+            } catch (error) {
+                console.error('Error sending creditor confirmation email:', error);
+                res.status(500).json({
+                    error: 'Error sending creditor confirmation email',
+                    details: error.message
+                });
             }
         },
 
