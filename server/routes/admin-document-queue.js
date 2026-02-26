@@ -8,6 +8,7 @@ const router = express.Router();
 const documentQueueService = require('../services/documentQueueService');
 const DocumentProcessingJob = require('../models/DocumentProcessingJob');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getCircuitBreakerState, resetCircuitBreaker } = require('../utils/fastApiClient');
 
 /**
  * Get queue statistics
@@ -225,6 +226,38 @@ router.get('/worker', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('[admin-document-queue] Failed to get worker status:', error);
     res.status(500).json({ error: 'Failed to get worker status', details: error.message });
+  }
+});
+
+/**
+ * Get circuit breaker state
+ * GET /api/admin/document-queue/circuit-breaker
+ */
+router.get('/circuit-breaker', authenticateAdmin, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      circuitBreaker: getCircuitBreakerState()
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get circuit breaker state', details: error.message });
+  }
+});
+
+/**
+ * Reset circuit breaker to CLOSED state
+ * POST /api/admin/document-queue/circuit-breaker/reset
+ */
+router.post('/circuit-breaker/reset', authenticateAdmin, async (req, res) => {
+  try {
+    resetCircuitBreaker();
+    res.json({
+      success: true,
+      message: 'Circuit breaker reset to CLOSED',
+      circuitBreaker: getCircuitBreakerState()
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset circuit breaker', details: error.message });
   }
 });
 

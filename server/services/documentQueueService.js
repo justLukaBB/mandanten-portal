@@ -156,14 +156,19 @@ class DocumentQueueService {
     try {
       // Check circuit breaker before claiming jobs
       const cbState = getCircuitBreakerState();
-      if (cbState.state === 'OPEN' || cbState.state === 'HALF_OPEN') {
-        if (!this.circuitBreakerPauseLogged) {
-          console.log(`[DocumentQueue] ⏸️  Paused — circuit breaker ${cbState.state}. Waiting for FastAPI recovery...`);
-          this.circuitBreakerPauseLogged = true;
+      if (cbState.state === 'OPEN') {
+        // Check if timeout has passed — if so, let fetchWithRetry handle OPEN→HALF_OPEN transition
+        const nextAttemptTime = cbState.nextAttemptTime ? new Date(cbState.nextAttemptTime).getTime() : 0;
+        if (Date.now() < nextAttemptTime) {
+          if (!this.circuitBreakerPauseLogged) {
+            console.log(`[DocumentQueue] ⏸️  Paused — circuit breaker OPEN. Waiting for FastAPI recovery...`);
+            this.circuitBreakerPauseLogged = true;
+          }
+          this.pollInterval = setTimeout(() => this._poll(), POLL_INTERVAL_MS);
+          return;
         }
-        // Skip this poll cycle, schedule next
-        this.pollInterval = setTimeout(() => this._poll(), POLL_INTERVAL_MS);
-        return;
+        // Timeout passed — allow one job through so fetchWithRetry can test recovery
+        console.log('[DocumentQueue] 🧪 Circuit breaker timeout elapsed — sending test request...');
       }
 
       // Circuit breaker recovered
