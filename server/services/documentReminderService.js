@@ -107,8 +107,9 @@ class DocumentReminderService {
           
           // Now send email via side conversation
           console.log(`📧 Sending reminder email via side conversation...`);
-          
-          const emailSubject = `${urgencyText} Erinnerung: Dokumente benötigt - Aktenzeichen ${client.aktenzeichen}`;
+
+          const urgencyText = reminderCount >= 3 ? 'DRINGEND - LETZTE ERINNERUNG' : reminderCount >= 2 ? 'WICHTIG' : '';
+          const emailSubject = `${urgencyText ? urgencyText + ' ' : ''}Erinnerung: Dokumente benötigt - Aktenzeichen ${client.aktenzeichen}`;
           const emailBody = this.generateReminderEmailBody(client, reminderCount, urgencyText);
           
           const sideConversationResult = await this.zendeskService.createSideConversation(
