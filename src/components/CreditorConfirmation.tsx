@@ -309,16 +309,6 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                       </div>
 
                       <div className="space-y-2">
-                        {(creditor.claim_amount || creditor.forderungbetrag) && (
-                          <div className="flex items-center space-x-2">
-                            <span className="text-gray-600 font-medium">Forderung:</span>
-                            <span className="text-red-700 font-semibold">
-                              {creditor.claim_amount
-                                ? `€${creditor.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}`
-                                : creditor.forderungbetrag}
-                            </span>
-                          </div>
-                        )}
                         <div className="flex items-center space-x-2">
                           <DocumentTextIcon className="w-4 h-4 text-gray-400" />
                           <span className="text-gray-600">Ref: {creditor.reference_number || 'N/A'}</span>
