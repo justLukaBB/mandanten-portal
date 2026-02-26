@@ -752,11 +752,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         sendCreditorConfirmationEmail: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const query = [{ id: clientId }, { aktenzeichen: clientId }];
-                if (clientId.match(/^[0-9a-fA-F]{24}$/)) {
-                    query.unshift({ _id: clientId });
-                }
-                const client = await Client.findOne({ $or: query });
+                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
