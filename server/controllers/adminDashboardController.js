@@ -623,8 +623,8 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     // Creditors exist but some need manual review → admin_review
                     newWorkflowStatus = 'admin_review';
                 } else if (hasCreditors && !hasCreditorsNeedingReview) {
-                    // Creditors exist and none need review → skip to client_confirmation
-                    newWorkflowStatus = 'client_confirmation';
+                    // Creditors exist and none need review → skip to awaiting_client_confirmation
+                    newWorkflowStatus = 'awaiting_client_confirmation';
                     updateFields.current_status = 'awaiting_client_confirmation';
                     updateFields.admin_approved = true;
                     updateFields.admin_approved_at = new Date();
@@ -642,7 +642,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 await Client.findByIdAndUpdate(client._id, updateFields);
 
                 // Send creditor confirmation email for auto-approved cases
-                if (newWorkflowStatus === 'client_confirmation' && hasCreditors) {
+                if (newWorkflowStatus === 'awaiting_client_confirmation' && hasCreditors) {
                     try {
                         const emailService = require('../services/emailService');
                         const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
@@ -728,7 +728,8 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     if (hasCreditors && hasCreditorsNeedingReview) {
                         updateFields.workflow_status = 'admin_review';
                     } else if (hasCreditors && !hasCreditorsNeedingReview) {
-                        updateFields.workflow_status = 'client_confirmation';
+                        updateFields.workflow_status = 'awaiting_client_confirmation';
+                        updateFields.current_status = 'awaiting_client_confirmation';
                         updateFields.admin_approved = true;
                         updateFields.admin_approved_at = new Date();
                         updateFields.admin_approved_by = 'system_auto';
@@ -768,7 +769,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 if (statusFixed) {
                     await Client.findByIdAndUpdate(client._id, {
                         current_status: 'awaiting_client_confirmation',
-                        workflow_status: 'client_confirmation',
+                        workflow_status: 'awaiting_client_confirmation',
                         admin_approved: true,
                         admin_approved_at: client.admin_approved_at || new Date(),
                         admin_approved_by: client.admin_approved_by || 'admin_manual'
@@ -1077,14 +1078,15 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     admin_approved: true,
                     admin_approved_at: new Date(),
                     admin_approved_by: adminName || 'Admin',
-                    workflow_status: 'client_confirmation'
+                    workflow_status: 'awaiting_client_confirmation',
+                    current_status: 'awaiting_client_confirmation'
                 });
 
                 res.json({
                     success: true,
                     message: 'Creditor list generated and approved',
                     creditors: finalCreditorList,
-                    workflow_status: 'client_confirmation'
+                    workflow_status: 'awaiting_client_confirmation'
                 });
             } catch (error) {
                 console.error('Error generating creditor list:', error);
