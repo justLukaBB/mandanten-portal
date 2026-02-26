@@ -813,7 +813,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         triggerPaymentHandler: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -854,7 +854,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         resetPaymentStatus: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -1037,7 +1037,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             try {
                 const clientId = req.params.clientId;
                 const { adminName } = req.body;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -1325,10 +1325,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 // Find and update client
                 let client;
                 if (databaseService && databaseService.isHealthy()) {
-                    client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
-                    if (!client) {
-                        client = await Client.findById(clientId).catch(() => null);
-                    }
+                    client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
                 }
 
                 if (!client) {
@@ -1357,10 +1354,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 // Use database service directly if available, or Client model
                 let client;
                 if (databaseService && databaseService.isHealthy()) {
-                    client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
-                    if (!client) {
-                        client = await Client.findById(clientId).catch(() => null);
-                    }
+                    client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
                 } else {
                     // Fallback to in-memory if needed (legacy)
                     client = Object.values(clientsData).find(c => c.id === clientId || c.aktenzeichen === clientId);
