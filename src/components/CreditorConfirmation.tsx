@@ -245,6 +245,18 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
           Basierend auf Ihren hochgeladenen Dokumenten haben wir {confirmationData.creditors.length} Gläubiger identifiziert.
           Bitte überprüfen Sie diese Liste und bestätigen Sie die Richtigkeit.
         </p>
+        {(() => {
+          const totalDebt = confirmationData.creditors.reduce((sum, c) => {
+            const amount = c.claim_amount || (c.forderungbetrag ? parseFloat(c.forderungbetrag.replace(/\./g, '').replace(',', '.')) : 0);
+            return sum + (isFinite(amount) ? amount : 0);
+          }, 0);
+          return totalDebt > 0 ? (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <span className="text-sm text-gray-700">Gesamtforderungssumme: </span>
+              <span className="text-lg font-bold text-red-700">€{totalDebt.toLocaleString('de-DE', { minimumFractionDigits: 2 })}</span>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       {/* Selection Bar */}
@@ -309,6 +321,16 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                       </div>
 
                       <div className="space-y-2">
+                        {(creditor.claim_amount || creditor.forderungbetrag) && (
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-600 font-medium">Forderung:</span>
+                            <span className="text-red-700 font-semibold">
+                              {creditor.claim_amount
+                                ? `€${creditor.claim_amount.toLocaleString('de-DE', { minimumFractionDigits: 2 })}`
+                                : creditor.forderungbetrag}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center space-x-2">
                           <DocumentTextIcon className="w-4 h-4 text-gray-400" />
                           <span className="text-gray-600">Ref: {creditor.reference_number || 'N/A'}</span>
