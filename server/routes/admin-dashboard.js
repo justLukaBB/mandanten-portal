@@ -29,6 +29,9 @@ module.exports = (dependencies) => {
     // Update Client Profile
     router.patch('/clients/:clientId', rateLimits.admin, authenticateAdmin, adminDashboardController.updateClientProfile);
 
+    // Batch Operations
+    router.post('/batch/mark-payment-received', rateLimits.admin, authenticateAdmin, adminDashboardController.batchMarkPaymentReceived);
+
     // Payment & Status Management
     router.post('/clients/:clientId/mark-payment-received', rateLimits.admin, authenticateAdmin, adminDashboardController.markPaymentReceived);
     router.post('/clients/:clientId/trigger-payment-handler', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerPaymentHandler);

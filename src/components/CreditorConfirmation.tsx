@@ -5,8 +5,7 @@ import {
   ExclamationTriangleIcon,
   BuildingOfficeIcon,
   EnvelopeIcon,
-  DocumentTextIcon,
-  CurrencyEuroIcon
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import api from '../config/api';
 
@@ -313,12 +312,6 @@ const CreditorConfirmation: React.FC<CreditorConfirmationProps> = ({ clientId, o
                         <div className="flex items-center space-x-2">
                           <DocumentTextIcon className="w-4 h-4 text-gray-400" />
                           <span className="text-gray-600">Ref: {creditor.reference_number || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <CurrencyEuroIcon className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">
-                            {creditor.forderungbetrag || (creditor.claim_amount ? `${creditor.claim_amount.toFixed(2)} €` : 'Betrag unbekannt')}
-                          </span>
                         </div>
                       </div>
                     </div>

@@ -15,7 +15,7 @@ const DocumentProcessingJob = require('../models/DocumentProcessingJob');
 const { createProcessingJob, getCircuitBreakerState } = require('../utils/fastApiClient');
 
 // Configuration
-const MAX_CONCURRENT = parseInt(process.env.DOC_QUEUE_MAX_CONCURRENT) || 2;
+const MAX_CONCURRENT = parseInt(process.env.DOC_QUEUE_MAX_CONCURRENT) || 10;
 const POLL_INTERVAL_MS = parseInt(process.env.DOC_QUEUE_POLL_INTERVAL_MS) || 2000;
 const MAX_RETRIES = parseInt(process.env.DOC_QUEUE_MAX_RETRIES) || 3;
 const BASE_RETRY_DELAY_MS = parseInt(process.env.DOC_QUEUE_BASE_RETRY_DELAY_MS) || 30000; // 30 seconds

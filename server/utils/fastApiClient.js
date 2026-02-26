@@ -38,13 +38,14 @@ const FASTAPI_429_BASE_DELAY_MS = parseInt(process.env.FASTAPI_429_BASE_DELAY_MS
 const FASTAPI_429_MAX_DELAY_MS = parseInt(process.env.FASTAPI_429_MAX_DELAY_MS) || 300000; // 5 minutes
 const FASTAPI_429_RETRY_AFTER_MULTIPLIER = parseFloat(process.env.FASTAPI_429_RETRY_AFTER_MULTIPLIER) || 1.2;
 
-// Rate Limiting Configuration (for Google AI Studio Free Tier: 15 RPM)
-const FASTAPI_MAX_CONCURRENT_REQUESTS = parseInt(process.env.FASTAPI_MAX_CONCURRENT_REQUESTS) || 2;
-const FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE = parseInt(process.env.FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE) || 12;
-const FASTAPI_ENABLE_RATE_LIMITING = process.env.FASTAPI_ENABLE_RATE_LIMITING !== 'false'; // Enabled by default
+// Rate Limiting Configuration
+// Rate limiting disabled by default — FastAPI handles its own retry logic now
+const FASTAPI_MAX_CONCURRENT_REQUESTS = parseInt(process.env.FASTAPI_MAX_CONCURRENT_REQUESTS) || 20;
+const FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE = parseInt(process.env.FASTAPI_RATE_LIMIT_REQUESTS_PER_MINUTE) || 120;
+const FASTAPI_ENABLE_RATE_LIMITING = process.env.FASTAPI_ENABLE_RATE_LIMITING === 'true'; // Disabled by default
 
 // Adaptive Throttling Configuration
-const FASTAPI_ADAPTIVE_THROTTLING_ENABLED = process.env.FASTAPI_ADAPTIVE_THROTTLING_ENABLED !== 'false'; // Enabled by default
+const FASTAPI_ADAPTIVE_THROTTLING_ENABLED = process.env.FASTAPI_ADAPTIVE_THROTTLING_ENABLED === 'true'; // Disabled by default
 const FASTAPI_429_ERROR_THRESHOLD = parseFloat(process.env.FASTAPI_429_ERROR_THRESHOLD) || 0.1; // 10%
 
 // Circuit Breaker configuration

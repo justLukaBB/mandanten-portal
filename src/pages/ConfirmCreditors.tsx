@@ -156,14 +156,6 @@ const ConfirmCreditors: React.FC = () => {
     return null;
   }
 
-  const totalDebt = data.creditors.reduce((sum, c) => {
-    if (c.claim_amount) { return sum + c.claim_amount; }
-    if (c.forderungbetrag) {
-      const parsed = parseFloat(String(c.forderungbetrag).replace(/[^\d.,-]/g, '').replace(',', '.'));
-      if (!isNaN(parsed)) { return sum + parsed; }
-    }
-    return sum;
-  }, 0);
   const confirmedCreditors = data.creditors.filter(c => c.status === 'confirmed');
 
   return (
@@ -214,11 +206,6 @@ const ConfirmCreditors: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900">
                 Ihre Gläubiger ({confirmedCreditors.length})
               </h2>
-              <p className="text-sm text-gray-500">
-                Gesamtschulden: <span className="font-semibold" style={{color: '#9f1a1d'}}>
-                  €{totalDebt.toFixed(2)}
-                </span>
-              </p>
             </div>
             
             <ul className="divide-y divide-gray-200">
@@ -226,7 +213,6 @@ const ConfirmCreditors: React.FC = () => {
                 const name = creditor.glaeubiger_name || creditor.sender_name;
                 const email = creditor.email_glaeubiger || creditor.sender_email;
                 const address = creditor.glaeubiger_adresse || creditor.sender_address;
-                const amount = creditor.forderungbetrag || (creditor.claim_amount ? `€${creditor.claim_amount.toFixed(2)}` : null);
 
                 return (
                   <li key={creditor.id} className="px-6 py-4">
@@ -236,9 +222,6 @@ const ConfirmCreditors: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-900">
                             {index + 1}. {name}
                           </h3>
-                          <p className="text-sm font-semibold" style={{color: '#9f1a1d'}}>
-                            {amount || '€0.00'}
-                          </p>
                         </div>
                         {creditor.reference_number && (
                           <p className="mt-1 text-sm text-gray-500">

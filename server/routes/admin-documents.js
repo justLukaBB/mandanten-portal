@@ -27,6 +27,13 @@ module.exports = ({ Client, documentProcessor, getGCSFileStream, getGCSFileBuffe
         adminDocumentController.downloadDocument
     );
 
+    // Download multiple documents as ZIP (per category)
+    router.post('/clients/:clientId/documents/download-zip',
+        rateLimits.admin,
+        authenticateAdmin,
+        adminDocumentController.downloadZipDocuments
+    );
+
     // Trigger reprocessing of a document
     // Using admin rate limit mostly, but client ID param is there. 
     // This action is heavy so admin rate limit is appropriate (usually higher limit but stricter access)

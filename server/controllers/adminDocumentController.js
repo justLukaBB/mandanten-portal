@@ -605,6 +605,125 @@ const createAdminDocumentController = ({
             }
         },
 
+        // Download multiple documents as ZIP
+        downloadZipDocuments: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                const { documentIds, categoryName } = req.body;
+
+                if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+                    return res.status(400).json({ error: 'documentIds array is required' });
+                }
+
+                const client = await findClient(clientId);
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                // Filter to only requested documents
+                const documents = (client.documents || []).filter(doc => documentIds.includes(doc.id));
+                if (documents.length === 0) {
+                    return res.status(404).json({ error: 'No matching documents found' });
+                }
+
+                // Disable all timeouts — ZIP creation can take minutes for many documents
+                req.setTimeout(0);
+                res.setTimeout(0);
+                if (req.socket) req.socket.setTimeout(0);
+                if (res.socket) res.socket.setTimeout(0);
+
+                const archiver = require('archiver');
+                const label = categoryName || 'Alle_Dokumente';
+                const safeLabel = label.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_');
+                const aktenzeichen = client.aktenzeichen || clientId;
+                const zipFilename = `${aktenzeichen}_${safeLabel}_Dokumente.zip`;
+                const encodedZipFilename = encodeURIComponent(zipFilename);
+                const asciiZipFilename = zipFilename.replace(/[^\x00-\x7F]/g, '_');
+
+                res.setHeader('Content-Type', 'application/zip');
+                res.setHeader('Content-Disposition', `attachment; filename="${asciiZipFilename}"; filename*=UTF-8''${encodedZipFilename}`);
+                res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+                const archive = archiver('zip', { zlib: { level: 5 } });
+                const errors = [];
+
+                archive.on('error', (err) => {
+                    console.error('❌ Archiver error:', err);
+                    if (!res.headersSent) {
+                        res.status(500).json({ error: 'Failed to create ZIP archive' });
+                    }
+                });
+
+                archive.pipe(res);
+
+                console.log(`📦 Creating ZIP for client ${aktenzeichen}: ${documents.length} documents (${label})`);
+
+                // Track filenames to handle duplicates
+                const usedNames = new Map();
+
+                for (let i = 0; i < documents.length; i++) {
+                    const doc = documents[i];
+                    const gcsFilename = doc.filename || doc.name;
+                    if (!gcsFilename) {
+                        errors.push(`⚠ "${doc.name || doc.id}" — Kein Dateiname vorhanden, übersprungen.`);
+                        continue;
+                    }
+
+                    try {
+                        const buffer = await getGCSFileBuffer(gcsFilename);
+                        // Determine a flat filename inside the ZIP (no subdirectories)
+                        let entryName = (doc.name || doc.filename || `document_${doc.id}`)
+                            .replace(/[/\\:*?"<>|]/g, '_');
+                        // Ensure file extension
+                        if (!path.extname(entryName) && doc.type) {
+                            const extMap = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png' };
+                            entryName += extMap[doc.type] || '';
+                        }
+                        // Handle duplicate names
+                        const count = usedNames.get(entryName) || 0;
+                        if (count > 0) {
+                            const ext = path.extname(entryName);
+                            const base = path.basename(entryName, ext);
+                            entryName = `${base} (${count})${ext}`;
+                        }
+                        usedNames.set(doc.name || doc.filename || `document_${doc.id}`, count + 1);
+
+                        archive.append(buffer, { name: entryName });
+                        console.log(`  ✅ [${i + 1}/${documents.length}] Added: ${entryName}`);
+                    } catch (err) {
+                        console.error(`  ❌ [${i + 1}/${documents.length}] Failed: ${gcsFilename} — ${err.message}`);
+                        errors.push(`⚠ "${doc.name || gcsFilename}" — Download fehlgeschlagen: ${err.message}`);
+                    }
+                }
+
+                // If there were errors, include a log file in the ZIP
+                if (errors.length > 0) {
+                    const logContent = [
+                        `ZIP-Download Warnungen — ${new Date().toLocaleString('de-DE')}`,
+                        `Mandant: ${client.firstName} ${client.lastName} (${aktenzeichen})`,
+                        `Kategorie: ${label}`,
+                        ``,
+                        `${errors.length} von ${documents.length} Dokumenten konnten nicht heruntergeladen werden:`,
+                        ``,
+                        ...errors,
+                        ``,
+                        `Die übrigen Dokumente wurden erfolgreich in die ZIP aufgenommen.`
+                    ].join('\n');
+                    archive.append(logContent, { name: '_Warnungen.txt' });
+                    console.log(`  ⚠ ${errors.length} errors logged to _Warnungen.txt`);
+                }
+
+                await archive.finalize();
+                console.log(`📦 ZIP finalized: ${zipFilename}`);
+
+            } catch (error) {
+                console.error('❌ Error creating ZIP:', error);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Failed to create ZIP', details: error.message });
+                }
+            }
+        },
+
         // Delete all actions
         deleteAllDocuments: async (req, res) => {
             try {

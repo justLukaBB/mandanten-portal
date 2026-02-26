@@ -584,13 +584,17 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Guard: Don't regress workflow_status if client is already past client_confirmation
+                // Guard: Don't regress workflow_status if client is already past the payment decision point
+                // This covers: creditor review done, client confirmed list, Anschreiben sent, etc.
                 const downstreamStatuses = [
+                    'admin_review',
+                    'client_confirmation',
+                    'awaiting_client_confirmation',
                     'creditor_contact_active',
                     'completed'
                 ];
-                if (downstreamStatuses.includes(client.workflow_status)) {
-                    console.log(`⏭️ markPaymentReceived: Skipping workflow_status change for ${client.aktenzeichen} — already in '${client.workflow_status}'`);
+                if (downstreamStatuses.includes(client.workflow_status) || downstreamStatuses.includes(client.current_status)) {
+                    console.log(`⏭️ markPaymentReceived: Skipping workflow_status change for ${client.aktenzeichen} — already in workflow='${client.workflow_status}', current='${client.current_status}'`);
                     // Still mark payment as received, just don't regress the status
                     await Client.findByIdAndUpdate(client._id, {
                         first_payment_received: true,
@@ -647,6 +651,74 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     error: 'Error marking payment received',
                     details: error.message
                 });
+            }
+        },
+
+        // Batch Mark Payment Received — confirm 1. Rate for multiple clients at once
+        batchMarkPaymentReceived: async (req, res) => {
+            try {
+                const { client_ids } = req.body;
+                if (!Array.isArray(client_ids) || client_ids.length === 0) {
+                    return res.status(400).json({ error: 'client_ids array is required' });
+                }
+
+                let updatedCount = 0;
+                let skippedCount = 0;
+
+                for (const clientId of client_ids) {
+                    const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                    if (!client) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Already paid — skip
+                    if (client.first_payment_received) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Guard: Don't regress workflow_status if client is already past the payment decision point
+                    const downstreamStatuses = ['admin_review', 'client_confirmation', 'awaiting_client_confirmation', 'creditor_contact_active', 'completed'];
+                    if (downstreamStatuses.includes(client.workflow_status) || downstreamStatuses.includes(client.current_status)) {
+                        await Client.findByIdAndUpdate(client._id, {
+                            first_payment_received: true,
+                            payment_received_at: new Date()
+                        });
+                        updatedCount++;
+                        continue;
+                    }
+
+                    // Determine workflow_status based on creditor state
+                    const creditors = client.final_creditor_list || [];
+                    const hasCreditors = creditors.length > 0;
+                    const hasCreditorsNeedingReview = creditors.some(c => c.needs_manual_review === true);
+
+                    const updateFields = {
+                        first_payment_received: true,
+                        payment_received_at: new Date()
+                    };
+
+                    if (hasCreditors && hasCreditorsNeedingReview) {
+                        updateFields.workflow_status = 'admin_review';
+                    } else if (hasCreditors && !hasCreditorsNeedingReview) {
+                        updateFields.workflow_status = 'client_confirmation';
+                        updateFields.admin_approved = true;
+                        updateFields.admin_approved_at = new Date();
+                        updateFields.admin_approved_by = 'system_auto';
+                    } else {
+                        updateFields.workflow_status = client.workflow_status;
+                    }
+
+                    await Client.findByIdAndUpdate(client._id, updateFields);
+                    updatedCount++;
+                }
+
+                console.log(`✅ Batch payment confirmed: ${updatedCount} updated, ${skippedCount} skipped`);
+                res.json({ success: true, updated_count: updatedCount, skipped_count: skippedCount });
+            } catch (error) {
+                console.error('Error in batch mark payment received:', error);
+                res.status(500).json({ error: 'Batch payment confirmation failed', details: error.message });
             }
         },
 
@@ -995,6 +1067,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                                     updated_at: 1,
                                     last_login: 1,
                                     zendesk_ticket_id: 1,
+                                    zendesk_user_id: 1,
                                     first_payment_received: 1,
                                     admin_approved: 1,
                                     client_confirmed_creditors: 1,
@@ -1052,6 +1125,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                         updated_at: client.updated_at,
                         last_login: client.last_login,
                         zendesk_ticket_id: client.zendesk_ticket_id,
+                        zendesk_user_id: client.zendesk_user_id,
                         first_payment_received: client.first_payment_received,
                         admin_approved: client.admin_approved,
                         client_confirmed_creditors: client.client_confirmed_creditors

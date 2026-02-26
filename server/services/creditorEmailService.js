@@ -145,6 +145,7 @@ class CreditorEmailService {
       html,
       text,
       attachments,
+      cc: ['insolvenz@ra-scuric.de'],
       tags: [
         { name: 'type', value: 'first_round' },
         { name: 'client_reference', value: clientReference }
@@ -245,7 +246,7 @@ class CreditorEmailService {
    * Core email sending function
    * @private
    */
-  async sendEmail({ to, toName, subject, html, text, attachments = [], tags = [] }) {
+  async sendEmail({ to, toName, subject, html, text, attachments = [], cc = [], tags = [] }) {
     // DEMO MODE: If enabled in settings, redirect all emails to test address
     const settings = await ReviewSettings.findOne({});
     if (settings?.demo_mode_enabled) {
@@ -274,7 +275,7 @@ class CreditorEmailService {
       const emailPayload = {
         from: `${this.fromName} <${this.fromEmail}>`,
         to: to,
-        cc: ['info@ra-scuric.de'],
+        cc,
         reply_to: this.replyTo,
         subject,
         html,
