@@ -568,7 +568,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 34-01-PLAN.md — Types + RTK Query mutations + backend plan-type endpoint + Client List projection
+- [x] 34-01-PLAN.md — Types + RTK Query mutations + backend plan-type endpoint + Client List projection
 - [ ] 34-02-PLAN.md — Client Detail 2. Anschreiben section (trigger button, status badge, plan override, send button)
 - [ ] 34-03-PLAN.md — Client List badge column + TrackingCanvas 3rd column (SecondLetterNode)
 
@@ -612,7 +612,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 31. Financial Calculation Engine | 2/2 | Complete    | 2026-03-02 | - |
 | 32. DOCX Generation | 1/1 | Complete    | 2026-03-02 | - |
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
-| 34. Admin UI & Tracking | v10 | 0/3 | Not started | - |
+| 34. Admin UI & Tracking | v10 | 1/3 | In progress | - |
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created)*

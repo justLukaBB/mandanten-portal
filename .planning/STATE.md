@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 33 — Email Dispatch Workflow Completion
+Phase: 34 — Admin UI & Tracking
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-02 — Phase 33 Plan 01 complete: SecondLetterService dispatch orchestrator and send-second-letter endpoint created
+Last activity: 2026-03-02 — Phase 34 Plan 01 complete: TypeScript types extended, RTK Query mutations added, plan-type override endpoint created
 
 Progress: [██████████████████████████░░░░░░] 28/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -66,6 +66,8 @@ Progress: [███████████████████████
 | Phase 31 P02 | 3 | 2 tasks | 4 files |
 | Phase 32-docx-generation P01 | 3 | 2 tasks | 1 files |
 | Phase 33-email-dispatch-workflow-completion P01 | 122 | 2 tasks | 2 files |
+| Phase 34-admin-ui-tracking P01 | 2 | 2 tasks | 4 files |
+| Phase 34-admin-ui-tracking P01 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -131,6 +133,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 32-docx-generation]: formatEuro uses toLocaleString('de-DE') not toFixed — avoids rounding bugs, produces correct German thousand separator + comma decimal format
 - [Phase 32-docx-generation]: SecondLetterDocumentGenerator DB persistence happens post-loop not inside generateForSingleCreditor — file write confirmed before MongoDB update (Pitfall 5)
 - [Phase 33-email-dispatch-workflow-completion]: SecondLetterService class replaces Phase 28 stub; route endpoint added to existing admin-second-letter.js factory; creditorEmailService required locally not injected; 409/422/207/200 HTTP response codes for status/eligibility/partial/full outcomes
+- [Phase 34-admin-ui-tracking]: [Phase 34-01]: overrideSecondLetterPlanType invalidates only Client tag (not WorkflowStatus) — plan_type is snapshot data; SENT guard returns 400 for plan-type override; second_letter_status typed as string on AdminClient for runtime safety
 
 ### v9 Context
 
@@ -214,9 +217,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 33-01-PLAN.md — SecondLetterService dispatch orchestrator and send-second-letter endpoint created
+Stopped at: Completed 34-01-PLAN.md — TypeScript types extended with second_letter_* fields, RTK Query mutations added, plan-type override endpoint created
 Resume file: None
-Next step: Phase 34 — Admin UI for 2. Anschreiben workflow (trigger button, status display, dispatch action)
+Next step: Phase 34 Plan 02 — Client Detail trigger button + status badge + plan override UI
 
 ---
-*Last updated: 2026-03-02 (Phase 33 Plan 01 complete)*
+*Last updated: 2026-03-02 (Phase 34 Plan 01 complete)*
