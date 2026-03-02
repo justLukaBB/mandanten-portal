@@ -126,5 +126,37 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
     }
   );
 
+  // Phase 34: PATCH /api/admin/clients/:clientId/second-letter-plan-type
+  // Override plan_type in snapshot before sending (admin correction).
+  // Guard: return 400 if status is SENT (immutable after dispatch) or no snapshot exists.
+  router.patch('/clients/:clientId/second-letter-plan-type', authenticateAdmin, async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const { plan_type } = req.body;
+
+      if (!['RATENPLAN', 'NULLPLAN'].includes(plan_type)) {
+        return res.status(400).json({ error: 'plan_type must be RATENPLAN or NULLPLAN' });
+      }
+
+      const client = await Client.findById(clientId);
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+      if (client.second_letter_status === 'SENT') {
+        return res.status(400).json({ error: 'Cannot override plan_type after letters are sent' });
+      }
+      if (!client.second_letter_financial_snapshot) {
+        return res.status(400).json({ error: 'No snapshot exists — client must submit form first' });
+      }
+
+      await Client.findByIdAndUpdate(client._id, {
+        $set: { 'second_letter_financial_snapshot.plan_type': plan_type }
+      });
+
+      res.json({ success: true, plan_type });
+    } catch (error) {
+      console.error('[SecondLetter] Plan type override error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   return router;
 };

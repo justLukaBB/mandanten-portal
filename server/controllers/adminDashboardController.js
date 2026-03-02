@@ -1167,6 +1167,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                                     processing_complete_webhook_triggered: 1,
                                     all_documents_processed_at: 1,
                                     case_source: 1,
+                                    second_letter_status: 1,
                                     leineweber_task_id: 1,
                                     geburtstag: 1, geburtsort: 1, familienstand: 1,
                                     strasse: 1, hausnummer: 1, plz: 1, wohnort: 1, mobiltelefon: 1,
