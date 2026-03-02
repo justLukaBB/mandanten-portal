@@ -474,7 +474,11 @@ Plans:
   2. Client document has `second_letter_financial_snapshot` subdocument with all required financial fields (income, marital status, dependents, income source, garnishment, new creditors, plan type, garnishable amount, monthly rate)
   3. Client document has three timestamp fields: `second_letter_triggered_at`, `second_letter_form_submitted_at`, `second_letter_sent_at`
   4. Creditor subdocuments have `second_letter_sent_at`, `second_letter_email_sent_at`, and `second_letter_document_filename` fields
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 28-01-PLAN.md — Schema extension (clientSchema + creditorSchema second_letter fields) + secondLetterService.js atomic state guard
+- [ ] 28-02-PLAN.md — Migration script (init-second-letter-status.js) + deprecation comments on old second-round files
 
 ### Phase 29: Trigger, Scheduler & Client Notification
 **Goal**: Admin can manually trigger the 2. Anschreiben workflow and the scheduler auto-triggers after 30 days — both paths are idempotent and notify the client via Resend
@@ -512,7 +516,11 @@ Plans:
   2. Plan type is determined as RATENPLAN when garnishable amount is greater than zero, NULLPLAN when it equals zero — stored in snapshot
   3. Pro-rata quota for each creditor is calculated as (claim_amount / total_debt) * garnishable_amount with a zero-division guard when total_debt is zero or when claim_amount is null
   4. Tilgungsangebot (monthly settlement offer) per creditor is calculated and stored in the snapshot's creditor_calculations array — all values are finite numbers (no NaN, no Infinity)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 31-01-PLAN.md -- Pure calculation service: secondLetterCalculationService.js with garnishable amount, plan type, per-creditor quota and Tilgungsangebot
+- [ ] 31-02-PLAN.md -- Wire calculation into form-submit handler + admin recalculate endpoint
 
 ### Phase 32: DOCX Generation
 **Goal**: One DOCX letter per creditor is generated using the correct template (Ratenplan or Nullplan) based on plan type, with all template variables populated from snapshot data
@@ -589,7 +597,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 28. State Machine Foundation | v10 | 0/TBD | Not started | - |
 | 29. Trigger, Scheduler & Client Notification | v10 | 0/TBD | Not started | - |
 | 30. Client Portal Form | v10 | 0/TBD | Not started | - |
-| 31. Financial Calculation Engine | v10 | 0/TBD | Not started | - |
+| 31. Financial Calculation Engine | v10 | 0/2 | Not started | - |
 | 32. DOCX Generation | v10 | 0/TBD | Not started | - |
 | 33. Email Dispatch & Workflow Completion | v10 | 0/1 | Not started | - |
 | 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
