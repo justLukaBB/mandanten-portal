@@ -144,7 +144,7 @@ class SecondLetterService {
           if (result.success) {
             // Per-creditor tracking in MongoDB (SEND-02)
             await Client.updateOne(
-              { _id: client._id, 'final_creditor_list._id': creditor._id },
+              { _id: client._id, 'final_creditor_list.id': creditor.id },
               {
                 $set: {
                   'final_creditor_list.$.second_letter_sent_at': new Date(),
