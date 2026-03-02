@@ -136,6 +136,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 33-email-dispatch-workflow-completion]: SecondLetterService class replaces Phase 28 stub; route endpoint added to existing admin-second-letter.js factory; creditorEmailService required locally not injected; 409/422/207/200 HTTP response codes for status/eligibility/partial/full outcomes
 - [Phase 34-admin-ui-tracking]: [Phase 34-01]: overrideSecondLetterPlanType invalidates only Client tag (not WorkflowStatus) — plan_type is snapshot data; SENT guard returns 400 for plan-type override; second_letter_status typed as string on AdminClient for runtime safety
 - [Phase 34-admin-ui-tracking]: [Phase 34-02]: IIFE pattern for SecondLetterSection keeps local derived state scoped in renderOverview(); SendSecondLetterResponse.failed > 0 used for partial failure detection (not a boolean partial field)
+- [Phase 34-admin-ui-tracking]: [Phase 34-03]: SecondLetterNode dashed border for not-sent — mirrors ResponseNode waiting pattern; x-clamp minX = -(3 * COL_WIDTH * v.zoom) for 3-column reach; secondLetterStatus renders plain dash for IDLE (no badge when no workflow started)
 
 ### v9 Context
 
@@ -219,9 +220,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 34-02-PLAN.md — SecondLetterSection added to Client Detail overview with trigger button, status badge, plan type override, and send button
+Stopped at: Completed 34-03-PLAN.md — SecondLetterNode created, TrackingCanvas extended with 3rd column, secondLetterStatus column added to Client List
 Resume file: None
-Next step: Phase 34 Plan 03 — TrackingCanvas 3rd column and Client List second_letter_status badge
+Next step: Phase 34 complete — all 3 plans shipped
 
 ---
-*Last updated: 2026-03-02 (Phase 34 Plan 02 complete)*
+*Last updated: 2026-03-02 (Phase 34 Plan 03 complete)*
