@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 28 — State Machine Foundation
 Milestone: v10 2. Anschreiben Automatisierung
-Status: In progress (Plan 01 complete)
-Last activity: 2026-03-02 — Phase 28 Plan 01 complete: schema fields + service stub
+Status: Complete (Plans 01 + 02 complete)
+Last activity: 2026-03-02 — Phase 28 Plan 02 complete: migration script + deprecation comments
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -57,6 +57,7 @@ Progress: [███████████████████████
 | v9 (27) P01 | 1 | ~4m | 4.0m |
 | v9 (27) P02 | 1 | ~4m | 4.0m |
 | v10 (28) P01 | 1 | ~2m | 2.0m |
+| Phase 28 P02 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Email: reuse creditorEmailService.sendSecondRoundEmail() without modification (already implemented with demo mode, CC, matcher sync)
 - Portal form: in /src/ (CRA) — NOT new Vite portal (separate milestone per PROJECT.md)
 - Old second-round routes (second-round-api.js, secondRoundManager.js): deprecate with comment — not the pattern for new work
+- [Phase 28]: Uses $or [$exists:false, null] to catch both missing and explicitly-null second_letter_status fields — per RESEARCH.md Pitfall 1
+- [Phase 28]: Migration script uses single updateMany (not per-doc loop) — single DB round-trip, consistent with backfill-contact-status.js pattern
 
 ### v9 Context
 
@@ -188,7 +191,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 28-01-PLAN.md — second_letter_* schema fields + secondLetterService.js
+Stopped at: Completed 28-02-PLAN.md — migration script + deprecation comments
 Resume file: None
 Next step: Phase 29 — Trigger and Scheduler
 
