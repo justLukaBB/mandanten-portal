@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 34 — Admin UI & Tracking
+Phase: 35 — Bug Fixes (URL, _id, Field Names)
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Plan 03 complete
-Last activity: 2026-03-02 — Phase 34 Plan 03 complete: SecondLetterNode created, TrackingCanvas extended with 3rd column, secondLetterStatus column added to Client List
+Status: Plan 01 complete
+Last activity: 2026-03-02 — Phase 35 Plan 01 complete: six 2. Anschreiben bugs fixed — portal deep-link URL, _id-to-id refs, positional update filters, field name fallbacks, creditor_id storage
 
-Progress: [██████████████████████████░░░░░░] 28/34 phases complete (v1-v9 shipped, v10 pending)
+Progress: [███████████████████████████░░░░░] 29/34 phases complete (v1-v9 shipped, v10 pending)
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [███████████████████████
 | Phase 34-admin-ui-tracking P01 | 2 | 2 tasks | 4 files |
 | Phase 34-admin-ui-tracking P02 | 2 | 1 tasks | 1 files |
 | Phase 34-admin-ui-tracking P03 | 3 | 2 tasks | 4 files |
+| Phase 35-bug-fixes-url-id-field-names P01 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 34-admin-ui-tracking]: [Phase 34-01]: overrideSecondLetterPlanType invalidates only Client tag (not WorkflowStatus) — plan_type is snapshot data; SENT guard returns 400 for plan-type override; second_letter_status typed as string on AdminClient for runtime safety
 - [Phase 34-admin-ui-tracking]: [Phase 34-02]: IIFE pattern for SecondLetterSection keeps local derived state scoped in renderOverview(); SendSecondLetterResponse.failed > 0 used for partial failure detection (not a boolean partial field)
 - [Phase 34-admin-ui-tracking]: [Phase 34-03]: SecondLetterNode dashed border for not-sent — mirrors ResponseNode waiting pattern; x-clamp minX = -(3 * COL_WIDTH * v.zoom) for 3-column reach; secondLetterStatus renders plain dash for IDLE (no badge when no workflow started)
+- [Phase 35-bug-fixes-url-id-field-names]: [Phase 35-01]: creditorSchema { _id: false } — use creditor.id throughout (never creditor._id); final_creditor_list.id filter key for positional updates; ?? for number_of_dependents fallback; SEND-02 already correct in secondLetterService.js
 
 ### v9 Context
 
@@ -220,9 +222,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 34-03-PLAN.md — SecondLetterNode created, TrackingCanvas extended with 3rd column, secondLetterStatus column added to Client List
+Stopped at: Completed 35-01-PLAN.md — six 2. Anschreiben bugs fixed: portal URL, _id-to-id, positional update filters, field name fallbacks, creditor_id storage
 Resume file: None
-Next step: Phase 34 complete — all 3 plans shipped
+Next step: Phase 35 complete — all v10 audit bugs fixed. Ready for end-to-end integration testing.
 
 ---
-*Last updated: 2026-03-02 (Phase 34 Plan 03 complete)*
+*Last updated: 2026-03-02 (Phase 35 Plan 01 complete)*
