@@ -1,106 +1,90 @@
-# Requirements: Mandanten Portal — Review Dashboard
+# Requirements: Mandanten Portal — 2. Anschreiben Automatisierung
 
-**Defined:** 2026-02-23
+**Defined:** 2026-03-02
 **Core Value:** Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## v9 Requirements
+## v10 Requirements
 
-Requirements for Review Dashboard rebuild. Each maps to roadmap phases.
+Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
-### Grundlagen (Foundation)
+### Schema & State Machine
 
-- [x] **FOUND-01**: Review Nav-Item in Sidebar zwischen Mandanten und Gläubiger-DB navigiert zu /review
-- [x] **FOUND-02**: Admin-Token wird auf allen agent-review Endpoints akzeptiert (authenticateAdminOrAgent)
-- [x] **FOUND-03**: Review-Queue-Seite zeigt paginierte Liste wartender Fälle mit 3 KPI-Cards
-- [x] **FOUND-04**: Admin kann Queue nach Priorität filtern und nach Name/Aktenzeichen durchsuchen
+- [ ] **SCHEMA-01**: Client Model hat `second_letter_status` Enum (IDLE, PENDING, FORM_SUBMITTED, SENT) mit Default IDLE
+- [ ] **SCHEMA-02**: Client Model hat `second_letter_financial_snapshot` Subdokument (Einkommen, Familienstand, Unterhaltspflichten, Einkommensquelle, Lohnpfändungen, neue Gläubiger, Plan-Typ, pfändbarer Betrag, monatliche Rate)
+- [ ] **SCHEMA-03**: Client Model hat `second_letter_triggered_at`, `second_letter_form_submitted_at`, `second_letter_sent_at` Timestamps
+- [ ] **SCHEMA-04**: Creditor-Schema hat `second_letter_sent_at`, `second_letter_email_sent_at`, `second_letter_document_filename` Felder
 
-### Review-Workflow
+### Trigger & Scheduler
 
-- [x] **FLOW-01**: Admin sieht Split-Pane Workspace mit Dokument links und Korrekturformular rechts (ResizablePanelGroup)
-- [x] **FLOW-02**: Admin kann zwischen Gläubigern navigieren und Formularfelder sind mit AI-Daten vorausgefüllt
-- [x] **FLOW-03**: Admin kann Gläubiger bestätigen (confirm), korrigieren (correct) oder überspringen (skip mit Grund)
-- [x] **FLOW-04**: Admin sieht Review-Zusammenfassung aller bearbeiteten Gläubiger und kann Review abschließen
+- [ ] **TRIG-01**: Scheduler prüft täglich: Clients mit MAX(email_sent_at) + 30 Tage <= heute AND second_letter_status == IDLE → setzt PENDING
+- [ ] **TRIG-02**: Admin kann manuell 2. Anschreiben triggern (Button im Dashboard) → setzt PENDING + sendet Client-Notification
+- [ ] **TRIG-03**: Trigger ist idempotent — atomic findOneAndUpdate mit Status-Guard verhindert Doppelversand
+- [ ] **TRIG-04**: Jede Trigger-Aktion wird mit User/System + Timestamp im Audit-Log erfasst
 
-### Queue-Management
+### Client Notification
 
-- [ ] **QUEUE-01**: Admin kann Review-Fälle einzelnen Agents zuweisen (assign/unassign)
-- [ ] **QUEUE-02**: Admin kann Batch-Operationen ausführen (Bulk-Bestätigung, Bulk-Zuweisung, Bulk-Priorität)
-- [ ] **QUEUE-03**: Prioritäts-Score wird automatisch berechnet (Tage seit Zahlung, Confidence, Gläubiger-Anzahl)
+- [ ] **NOTIF-01**: Client bekommt Email via Resend: "Bitte bestätigen Sie Ihre Daten für das 2. Anschreiben"
+- [ ] **NOTIF-02**: Email enthält Deep-Link zum Portal-Formular (mit Token für Authentifizierung)
+- [ ] **NOTIF-03**: Keine doppelten Notifications — Guard prüft ob bereits PENDING
 
-### Viewer & Analytics
+### Client Portal Formular
 
-- [x] **VIEW-01**: PDF.js rendert Dokumente mit Zoom/Pan statt iframe
-- [x] **VIEW-02**: Analytics-Seite zeigt Review-Statistiken mit Recharts (Reviews/Tag, Confidence-Verteilung, Ergebnisse)
-- [x] **VIEW-03**: Admin kann Review-Einstellungen konfigurieren (Confidence-Schwellenwert, Auto-Assignment)
+- [ ] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
+- [ ] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
+- [ ] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
+- [ ] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
+- [ ] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
 
-### Polish & Migration
+### Berechnung
 
-- [x] **POLISH-01**: CSV/XLSX Export der Review-Queue-Daten
-- [x] **POLISH-02**: Real-time Queue-Updates via 30s Polling mit Sidebar-Badge
-- [x] **POLISH-03**: Altes Agent-Portal /agent/review redirected zu /review
+- [ ] **CALC-01**: Pfändbarer Betrag nach § 850c ZPO berechnet aus Snapshot-Daten (existierende garnishable_amount Logik)
+- [ ] **CALC-02**: Plan-Typ bestimmt: RATENPLAN (pfändbarer Betrag > 0) oder NULLPLAN (pfändbarer Betrag == 0)
+- [ ] **CALC-03**: Quote pro Gläubiger berechnet: (claim_amount / total_debt) * pfändbarer Betrag — mit Zero-Division-Guard
+- [ ] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
 
-## Previous Milestone Requirements (all satisfied)
+### Dokument-Generierung
 
-### v8 — Admin Frontend Migration (Phases 19-22)
+- [ ] **DOC-01**: SecondLetterDocumentGenerator erstellt (spiegelt FirstRoundDocumentGenerator — docxtemplater + pizzip)
+- [ ] **DOC-02**: Template-Branching: plan_type == RATENPLAN → Ratenplan-Template, sonst → Nullplan-Template
+- [ ] **DOC-03**: Template-Variablen befüllt: Gläubiger-Daten (Name, Adresse, Aktenzeichen, Forderung, Quote, Auszahlung), Schuldner-Daten (Name, Geburtsdatum, Familienstand, Unterhaltspflichtige, Einkommen), Plan-Daten (Plan-Typ, monatliche Rate, Startdatum, Frist), Kanzlei-Daten (Aktenzeichen)
+- [ ] **DOC-04**: Ein DOCX pro Gläubiger generiert, gespeichert in generated_documents/second_round/
 
-- [x] **SETUP-01**: Vite-Projekt mit React, TypeScript und Tailwind 4 ist konfiguriert und startet lokal
-- [x] **SETUP-02**: React Router mit Sidebar-Navigation und Route-Struktur ist eingerichtet
-- [x] **SETUP-03**: RTK Query API-Layer mit Base-URL-Konfiguration (dev/prod) ist aufgesetzt
-- [x] **SETUP-04**: Design-System (shadcn/ui Komponenten, Fonts, Theme-Variablen) ist integriert
-- [x] **AUTH-01**: Admin kann sich über Login-Seite mit Email/Passwort anmelden
-- [x] **AUTH-02**: Admin-Token wird in localStorage gespeichert und bei API-Requests als Bearer-Token gesendet
-- [x] **AUTH-03**: Nicht-authentifizierte Nutzer werden auf Login-Seite weitergeleitet (Protected Routes)
-- [x] **LIST-01**: Admin sieht paginierte Client-Liste mit Echtdaten aus /api/admin/clients
-- [x] **LIST-02**: Admin kann Clients nach Name, Fall-ID oder Email durchsuchen
-- [x] **LIST-03**: Admin kann Clients nach Status filtern (Active, Pending, In Review, Blocked, Closed)
-- [x] **LIST-04**: Admin kann Clients nach Flow filtern (Portal zugesendet, 1. Anschreiben, etc.)
-- [x] **LIST-05**: Client-Zeilen zeigen Status-Badge und Flow-Badges korrekt an
-- [x] **DETAIL-01**: Admin sieht Client-Übersicht mit Workflow-Status und Phase-Timeline
-- [x] **DETAIL-02**: Admin sieht Client-Profil mit Stammdaten
-- [x] **DETAIL-03**: Admin sieht Dokumente-Tab mit hochgeladenen Dokumenten und AI-Confidence-Scores
-- [x] **DETAIL-04**: Admin sieht Gläubiger-Tab mit Gläubiger-Tabelle (alle Felder inkl. neue v7-Felder)
-- [x] **DETAIL-05**: Admin sieht Aktivitäts-Tab mit Workflow-Verlauf
+### Versand
 
-### v7 — FastAPI Webhook Field Integration (Phases 17-18)
+- [ ] **SEND-01**: Resend Email pro Gläubiger mit DOCX Attachment — identische Pipeline wie 1. Anschreiben (creditorEmailService.sendSecondRoundEmail)
+- [ ] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
+- [ ] **SEND-03**: Zendesk Audit-Comment pro erfolgreichem Versand an Haupt-Ticket
+- [ ] **SEND-04**: Status-Übergang FORM_SUBMITTED → SENT nach erfolgreichem Versand aller Gläubiger-Emails
+- [ ] **SEND-05**: Error Handling: Retry 3x bei Fehler, dann Admin-Alert + Status bleibt FORM_SUBMITTED
+- [ ] **SEND-06**: Demo-Mode respektiert — Emails gehen an Test-Adresse statt echte Gläubiger
 
-- [x] **SCHEMA-01**: Mongoose creditorSchema enthält 5 neue FastAPI-Felder
-- [x] **SCHEMA-02**: Mongoose documentSchema enthält die gleichen 5 Felder
-- [x] **HOOK-01**: Webhook Controller extrahiert neue Felder aus FastAPI-Payload
-- [x] **HOOK-02**: Enrichment-Logik setzt address_source="local_db"
-- [x] **MERGE-01**: mergeCreditorLists() merged aktenzeichen_glaeubigervertreter mit longest-wins
-- [x] **MERGE-02**: mergeCreditorLists() merged Postfach-Flags mit OR-Logik
+### Admin UI
 
-### v6 — Async Creditor Confirm (Phase 16)
-
-- [x] **CONF-01**: Gläubiger-Bestätigung speichert sofort in DB und antwortet in <2 Sekunden
-- [x] **CONF-02**: Creditor-Contact-Emails werden asynchron im Hintergrund verschickt
-- [x] **CONF-03**: Frontend zeigt sofort "Bestätigt" Success-State
+- [ ] **UI-01**: Trigger-Button "2. Anschreiben starten" in Client Detail — visible wenn IDLE, disabled wenn PENDING/FORM_SUBMITTED/SENT — mit Bestätigungs-Modal
+- [ ] **UI-02**: Status-Badge für second_letter_status im Client Detail und Client-Liste (Countdown bei IDLE nach 1. Anschreiben, Wartet bei PENDING, In Bearbeitung bei FORM_SUBMITTED, Gesendet bei SENT)
+- [ ] **UI-03**: TrackingCanvas erweitert um 3. Spalte für 2. Anschreiben Status pro Gläubiger
+- [ ] **UI-04**: Plan-Typ Admin-Override Möglichkeit in Client Detail vor Versand-Trigger
 
 ## Future Requirements
 
-Deferred to future milestones. Tracked but not in current roadmap.
+### Extended Tracking
 
-### Client Portal
+- **TRACK-01**: Snapshot-Diff Anzeige im Admin — Vergleich original vs. bestätigte Finanzdaten
+- **TRACK-02**: Gläubiger-Antwort-Tracking für 2. Anschreiben (analog zu 1. Anschreiben)
 
-- **PORTAL-01**: Mandanten-Login und persönliches Portal
-- **PORTAL-02**: Dokument-Upload und Gläubiger-Bestätigung
-- **PORTAL-03**: Finanzformular und Settlement-Plan-Status
+### Client Portal Redesign
 
-### Erweiterte Admin-Features
-
-- **EADM-01**: User-Erstellung und -Verwaltung
-- **EADM-02**: Creditor Database (globale Suche)
-- **EADM-03**: Admin-Actions (Dedup triggern, Review triggern, etc.)
+- **PORT-01**: Mandanten-Formular im neuen Vite Design-System (MandantenPortalDesign) — eigener Milestone
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Client Portal Migration | Eigener Milestone |
-| Vollständiges Agent Portal | Nur Review wird migriert |
-| User-Verwaltung | Eigener Milestone |
-| Creditor Database | Eigener Milestone |
-| Deployment | Erstmal nur lokal testen |
+| 3. Anschreiben oder weitere Runden | Nicht im v10 Scope — ggf. separater Milestone |
+| Client Portal Redesign (Vite) | Eigener Milestone per PROJECT.md |
+| Admin Approval Gate | User hat direkt-senden gewählt — kein IN_REVIEW Status |
+| Snapshot-Diff Anzeige | v2+ Feature — nicht für MVP nötig |
+| Automatischer Versand ohne Admin-Trigger | Scheduler setzt nur PENDING, Versand nach Client-Bestätigung |
 
 ## Traceability
 
@@ -108,29 +92,46 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 23 | Complete |
-| FOUND-02 | Phase 23 | Complete |
-| FOUND-03 | Phase 23 | Complete |
-| FOUND-04 | Phase 23 | Complete |
-| FLOW-01 | Phase 24 | Complete |
-| FLOW-02 | Phase 24 Plan 02 | Complete 2026-02-23 |
-| FLOW-03 | Phase 24 Plan 02 | Complete 2026-02-23 |
-| FLOW-04 | Phase 24 | Complete |
-| QUEUE-01 | Phase 25 | Pending |
-| QUEUE-02 | Phase 25 | Pending |
-| QUEUE-03 | Phase 25 | Pending |
-| VIEW-01 | Phase 26 | Complete |
-| VIEW-02 | Phase 26 | Complete |
-| VIEW-03 | Phase 26 | Complete |
-| POLISH-01 | Phase 27 | Complete |
-| POLISH-02 | Phase 27 | Complete |
-| POLISH-03 | Phase 27 | Complete |
+| SCHEMA-01 | — | Pending |
+| SCHEMA-02 | — | Pending |
+| SCHEMA-03 | — | Pending |
+| SCHEMA-04 | — | Pending |
+| TRIG-01 | — | Pending |
+| TRIG-02 | — | Pending |
+| TRIG-03 | — | Pending |
+| TRIG-04 | — | Pending |
+| NOTIF-01 | — | Pending |
+| NOTIF-02 | — | Pending |
+| NOTIF-03 | — | Pending |
+| FORM-01 | — | Pending |
+| FORM-02 | — | Pending |
+| FORM-03 | — | Pending |
+| FORM-04 | — | Pending |
+| FORM-05 | — | Pending |
+| CALC-01 | — | Pending |
+| CALC-02 | — | Pending |
+| CALC-03 | — | Pending |
+| CALC-04 | — | Pending |
+| DOC-01 | — | Pending |
+| DOC-02 | — | Pending |
+| DOC-03 | — | Pending |
+| DOC-04 | — | Pending |
+| SEND-01 | — | Pending |
+| SEND-02 | — | Pending |
+| SEND-03 | — | Pending |
+| SEND-04 | — | Pending |
+| SEND-05 | — | Pending |
+| SEND-06 | — | Pending |
+| UI-01 | — | Pending |
+| UI-02 | — | Pending |
+| UI-03 | — | Pending |
+| UI-04 | — | Pending |
 
 **Coverage:**
-- v9 requirements: 17 total
-- Mapped to phases: 17
-- Unmapped: 0 (100% coverage)
+- v10 requirements: 34 total
+- Mapped to phases: 0
+- Unmapped: 34 ⚠️
 
 ---
-*Requirements defined: 2026-02-23*
-*Last updated: 2026-02-23 — traceability updated after roadmap creation*
+*Requirements defined: 2026-03-02*
+*Last updated: 2026-03-02 after initial definition*
