@@ -57,6 +57,8 @@ const DocumentReminderService = require('./services/documentReminderService');
 const LoginReminderService = require('./services/loginReminderService');
 const FinancialDataReminderService = require('./services/financialDataReminderService');
 const aiDedupScheduler = require('./services/aiDedupScheduler');
+const EmailService = require('./services/emailService');
+const SecondLetterTriggerService = require('./services/secondLetterTriggerService');
 
 // Webhook Queue System
 const WebhookWorker = require('./workers/webhookWorker');
@@ -88,6 +90,10 @@ const financialDataReminderService = new FinancialDataReminderService();
 // Reminder Services (for Scheduler & Routes)
 const documentReminderService = new DocumentReminderService();
 const loginReminderService = new LoginReminderService();
+
+// 2. Anschreiben Services
+const emailService = EmailService; // EmailService is a singleton (module.exports = new EmailService())
+const secondLetterTriggerService = new SecondLetterTriggerService({ emailService });
 
 // Zendesk Services
 const zendeskService = new ZendeskService();
@@ -136,6 +142,7 @@ const createAdminSettlementRouter = require('./routes/admin-settlement');
 const createAdminClientCreditorRouter = require('./routes/admin-client-creditor');
 const createAdminFinancialRouter = require('./routes/admin-financial');
 const createAdminReviewRouter = require('./routes/admin-review');
+const createAdminSecondLetterRouter = require('./routes/admin-second-letter');
 
 // Client Routes
 const createClientPortalRouter = require('./routes/client-portal');
@@ -395,6 +402,8 @@ app.use('/api/admin/review', createAdminReviewRouter({
   Client
 }));
 
+app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService }));
+
 // 10.7 Client Portal Global Routes
 
 app.use('/api', createClientPortalRouter({
@@ -529,7 +538,8 @@ async function startServer() {
       // Start scheduled tasks (using Scheduler module)
       const scheduler = new Scheduler({
         documentReminderService,
-        loginReminderService
+        loginReminderService,
+        secondLetterTriggerService
       });
       scheduler.startScheduledTasks();
 

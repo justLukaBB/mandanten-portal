@@ -4,6 +4,7 @@ class Scheduler {
     constructor(dependencies) {
         this.documentReminderService = dependencies.documentReminderService;
         this.loginReminderService = dependencies.loginReminderService;
+        this.secondLetterTriggerService = dependencies.secondLetterTriggerService;
     }
 
     startScheduledTasks() {
@@ -120,6 +121,35 @@ class Scheduler {
                 console.error('❌ Error in initial auto-confirmation check:', error);
             }
         }, 300000); // 5 minutes (PRODUCTION MODE)
+
+        // === 2. Anschreiben Daily Eligibility Check ===
+        const SECOND_LETTER_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+        if (this.secondLetterTriggerService) {
+            // Initial check after 10 minutes (soft start, consistent with other initial checks)
+            setTimeout(async () => {
+                try {
+                    console.log('\n⏰ Running initial 2. Anschreiben eligibility check...');
+                    const result = await this.secondLetterTriggerService.checkAndTriggerEligible();
+                    console.log(`✅ Initial 2. Anschreiben check: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors} errors`);
+                } catch (error) {
+                    console.error('❌ Error in initial 2. Anschreiben check:', error);
+                }
+            }, 10 * 60 * 1000);
+
+            // Recurring check every 24 hours
+            setInterval(async () => {
+                try {
+                    console.log('\n⏰ Running scheduled 2. Anschreiben eligibility check...');
+                    const result = await this.secondLetterTriggerService.checkAndTriggerEligible();
+                    console.log(`✅ 2. Anschreiben check: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors} errors`);
+                } catch (error) {
+                    console.error('❌ Error in scheduled 2. Anschreiben check:', error);
+                }
+            }, SECOND_LETTER_CHECK_INTERVAL);
+
+            console.log('📅 2. Anschreiben scheduler: initial check in 10 minutes, then every 24 hours');
+        }
 
         console.log('📅 Scheduled tasks started:');
         console.log('  • Document reminders: every hour');
