@@ -68,6 +68,15 @@ body:
     validations:
       required: false
 
+  - type: input
+    id: related
+    attributes:
+      label: Related Past Issues
+      description: Check LEARNINGS.md or past issues — has this bug (or something similar) happened before?
+      placeholder: "e.g. #42, or 'similar to upload timeout in LEARNINGS.md'"
+    validations:
+      required: false
+
   - type: dropdown
     id: environment
     attributes:

@@ -89,6 +89,12 @@ When asked to create a plan, design spec, or feature:
 1. Produce the planning document FIRST — no implementation until it's reviewed
 2. Do not start coding until the plan is explicitly approved
 
+## Learnings — Read Before Debugging
+
+Before fixing any bug, read `LEARNINGS.md` — it contains past bugs, root causes, and fixes. Check if the current bug is related to a known pattern.
+
+After fixing a bug, add an entry to `LEARNINGS.md` with: date, area, bug, root cause, fix, issue number.
+
 ## Debugging Rules
 
 ### Trace before fixing
