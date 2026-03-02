@@ -498,20 +498,37 @@ class ZendeskWebhookController {
             }
 
             // Guard: Don't overwrite downstream statuses (e.g., after agent review completed)
-            const downstreamStatuses = [
+            // Check both current_status AND workflow_status to prevent regression
+            const downstreamCurrentStatuses = [
+                'creditor_review',
+                'manual_review_complete',
                 'awaiting_client_confirmation',
-                'client_confirmation',
                 'creditor_contact_initiated',
                 'creditor_contact_active',
                 'creditor_contact_failed',
                 'completed'
             ];
-            if (downstreamStatuses.includes(client.current_status)) {
-                console.log(`⏭️ Payment webhook skipped for ${client.aktenzeichen}: already in status '${client.current_status}'`);
+            const downstreamWorkflowStatuses = [
+                'admin_review',
+                'client_confirmation',
+                'awaiting_client_confirmation',
+                'creditor_contact_active',
+                'completed'
+            ];
+            if (downstreamCurrentStatuses.includes(client.current_status) || downstreamWorkflowStatuses.includes(client.workflow_status)) {
+                console.log(`⏭️ Payment webhook skipped for ${client.aktenzeichen}: already in downstream status (current='${client.current_status}', workflow='${client.workflow_status}')`);
+                // Still mark payment as received if not yet set, just don't regress the status
+                if (!client.first_payment_received) {
+                    client.first_payment_received = true;
+                    client.payment_received_at = new Date();
+                    await client.save({ validateModifiedOnly: true });
+                    console.log(`💰 Marked first_payment_received=true for ${client.aktenzeichen} (status preserved)`);
+                }
                 return res.json({
                     success: true,
                     message: `Client already in downstream status: ${client.current_status}`,
                     client_status: client.current_status,
+                    workflow_status: client.workflow_status,
                     skipped: true
                 });
             }

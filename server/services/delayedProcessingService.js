@@ -337,9 +337,11 @@ class DelayedProcessingService {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       // Find clients who have been awaiting confirmation for 7+ days
+      // Guard: first_payment_received must be true to prevent creditor contact without payment
       const pendingClients = await Client.find({
         current_status: 'awaiting_client_confirmation',
         admin_approved: true,
+        first_payment_received: true,
         client_confirmed_creditors: { $ne: true },
         admin_approved_at: { $lte: sevenDaysAgo }
       });

@@ -124,6 +124,13 @@ class ClientCreditorController {
                 return res.status(404).json({ error: 'Client not found' });
             }
 
+            if (!client.first_payment_received) {
+                return res.status(400).json({
+                    error: 'Payment required',
+                    message: 'Die erste Rate muss bezahlt sein, bevor die Gläubigerliste bestätigt werden kann.'
+                });
+            }
+
             if (!client.admin_approved) {
                 return res.status(400).json({
                     error: 'Admin approval required',
@@ -251,6 +258,13 @@ class ClientCreditorController {
 
             if (!client) {
                 return res.status(404).json({ error: 'Client not found' });
+            }
+
+            if (!client.first_payment_received) {
+                return res.status(400).json({
+                    error: 'Payment required',
+                    message: 'Die erste Rate muss bezahlt sein, bevor Gläubiger kontaktiert werden können.'
+                });
             }
 
             // Only allow if client has confirmed creditors or process is completed
