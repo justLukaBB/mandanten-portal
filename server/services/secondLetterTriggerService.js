@@ -90,7 +90,7 @@ class SecondLetterTriggerService {
 
       // 3. Build portal deep-link with the freshly generated token.
       const baseUrl = process.env.PORTAL_BASE_URL || 'https://mandanten-portal.onrender.com';
-      const portalUrl = `${baseUrl}/second-letter?token=${client.second_letter_form_token}`;
+      const portalUrl = `${baseUrl}/portal/second-letter-form?token=${client.second_letter_form_token}`;
 
       // 4. Send client notification email after successful state write.
       //    If email fails the client is left in PENDING (recoverable by admin re-send).

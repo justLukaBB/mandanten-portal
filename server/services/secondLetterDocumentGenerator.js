@@ -232,8 +232,8 @@ class SecondLetterDocumentGenerator {
       'Name': client.name,
       'Geburtstag': client.birthdate || client.dateOfBirth || 'Nicht verfügbar',
       'Adresse': this.formatClientAddress(client),
-      'Familienstand': snapshot.familienstand || '',
-      'Unterhaltsberechtigte': String(snapshot.anzahl_unterhaltsberechtigte || 0),
+      'Familienstand': snapshot.familienstand || snapshot.marital_status || '',
+      'Unterhaltsberechtigte': String(snapshot.anzahl_unterhaltsberechtigte ?? snapshot.number_of_dependents ?? 0),
       'Einkommen': formatEuro(snapshot.monthly_net_income),
 
       // --- Plan block ---
@@ -297,7 +297,7 @@ class SecondLetterDocumentGenerator {
 
     return {
       success: true,
-      creditor_id: creditor._id?.toString(),
+      creditor_id: creditor.id,
       creditor_name: creditor.sender_name || creditor.creditor_name,
       filename,
       path: outputPath,
@@ -338,7 +338,7 @@ class SecondLetterDocumentGenerator {
       } catch (error) {
         console.error(`❌ Failed to generate document for ${creditor.sender_name || creditor.creditor_name}: ${error.message}`);
         errors.push({
-          creditor_id: creditor._id?.toString(),
+          creditor_id: creditor.id,
           creditor_name: creditor.sender_name || creditor.creditor_name,
           error: error.message,
         });
@@ -355,7 +355,7 @@ class SecondLetterDocumentGenerator {
     const Client = require('../models/Client');
     for (const result of results) {
       await Client.findOneAndUpdate(
-        { _id: client._id, 'final_creditor_list._id': result.creditor_id },
+        { _id: client._id, 'final_creditor_list.id': result.creditor_id },
         { $set: { 'final_creditor_list.$.second_letter_document_filename': result.filename } }
       );
     }
@@ -395,7 +395,7 @@ class SecondLetterDocumentGenerator {
     }
 
     const creditor = (client.final_creditor_list || [])
-      .find(c => c._id.toString() === creditorId);
+      .find(c => c.id === creditorId);
     if (!creditor) {
       throw new Error(`Creditor ${creditorId} not found in client.final_creditor_list`);
     }
@@ -407,7 +407,7 @@ class SecondLetterDocumentGenerator {
 
     // Persist filename after successful file write
     await Client.findOneAndUpdate(
-      { _id: client._id, 'final_creditor_list._id': creditor._id },
+      { _id: client._id, 'final_creditor_list.id': creditor.id },
       { $set: { 'final_creditor_list.$.second_letter_document_filename': result.filename } }
     );
 
