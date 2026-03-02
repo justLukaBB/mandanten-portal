@@ -535,7 +535,10 @@ Plans:
   2. When plan_type is RATENPLAN the Ratenplan template is used; when NULLPLAN the Nullplan template is used — no other template selection logic exists
   3. Each generated DOCX contains all required variables populated: creditor data (name, address, Aktenzeichen, claim amount, quota, Auszahlung), debtor data (name, birthdate, marital status, dependents, income), plan data (plan type, monthly rate, start date, deadline), and law firm Aktenzeichen
   4. Generated files are saved to the generated_documents/second_round/ directory with one file per creditor — the filename is stored on the creditor document
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 32-01-PLAN.md — SecondLetterDocumentGenerator class (docxtemplater + pizzip, two-template branching, snapshot-only data, per-client output, DB filename persistence)
 
 ### Phase 33: Email Dispatch & Workflow Completion
 **Goal**: Admin triggers the send — each creditor receives a Resend email with the DOCX attachment, per-creditor tracking is updated, and status transitions to SENT
@@ -602,7 +605,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 29. Trigger, Scheduler & Client Notification | v10 | 0/TBD | Not started | - |
 | 30. Client Portal Form | v10 | 0/TBD | Not started | - |
 | 31. Financial Calculation Engine | v10 | 0/2 | Not started | - |
-| 32. DOCX Generation | v10 | 0/TBD | Not started | - |
+| 32. DOCX Generation | v10 | 0/1 | Planned | - |
 | 33. Email Dispatch & Workflow Completion | v10 | 0/1 | Not started | - |
 | 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
 
