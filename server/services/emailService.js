@@ -332,6 +332,167 @@ https://www.schuldnerberatung-anwalt.de
   }
 
   /**
+   * Generate HTML email template for second letter notification
+   * @param {string} clientName - Client's full name
+   * @param {string} portalUrl - Deep-link URL with second_letter_form_token
+   * @param {string} aktenzeichen - Client's case reference number
+   * @returns {string} HTML content
+   */
+  generateSecondLetterNotificationHtml(clientName, portalUrl, aktenzeichen) {
+    return `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitte bestätigen Sie Ihre Daten für das 2. Anschreiben</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); padding: 40px;">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 0 0 32px; text-align: center; border-bottom: 1px solid #eee;">
+              <img src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" alt="RA T. Scuric" style="height: 40px; width: auto;">
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px 0 0;">
+              <h1 style="margin: 0 0 24px; font-size: 22px; font-weight: 600; color: #111827;">
+                2. Gläubigeranschreiben — Ihre Daten werden benötigt
+              </h1>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Sehr geehrte/r ${clientName},
+              </p>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                im Rahmen Ihres Insolvenzverfahrens (Aktenzeichen: <strong>${aktenzeichen}</strong>) wurde das erste Gläubigeranschreiben bereits erfolgreich versandt. Wir bereiten nun das 2. Gläubigeranschreiben vor.
+              </p>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Damit wir die Anschreiben korrekt und aktuell erstellen können, benötigen wir Ihre bestätigten finanziellen Daten. Bitte nehmen Sie sich einen Moment Zeit, Ihre aktuellen Angaben zu überprüfen und zu bestätigen.
+              </p>
+              <p style="margin: 0 0 32px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Nach Ihrer Bestätigung werden wir die erforderlichen Unterlagen erstellen und an Ihre Gläubiger versenden. Sie müssen nach dem Ausfüllen des Formulars nichts weiter unternehmen.
+              </p>
+
+              <!-- CTA Button -->
+              <div style="text-align: center; margin: 0 0 32px;">
+                <a href="${portalUrl}" style="display: inline-block; padding: 14px 28px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                  Daten bestätigen
+                </a>
+              </div>
+
+              <p style="margin: 0; font-size: 14px; color: #9ca3af; text-align: center;">
+                Der Link ist 14 Tage gültig. Falls Sie Fragen haben, antworten Sie einfach auf diese E-Mail.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 0 0; border-top: 1px solid #eee; margin-top: 32px;">
+              <p style="margin: 0 0 8px; font-size: 12px; color: #9ca3af; text-align: center;">
+                Aktenzeichen: <strong>${aktenzeichen}</strong>
+              </p>
+              <p style="margin: 0 0 8px; font-size: 12px; color: #9ca3af; text-align: center;">
+                © ${new Date().getFullYear()} Kanzlei RA T. Scuric. Alle Rechte vorbehalten.
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center;">
+                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
+                <span style="color: #9ca3af;"> • </span>
+                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
+   * Generate plain text email for second letter notification
+   * @param {string} clientName - Client's full name
+   * @param {string} portalUrl - Deep-link URL with second_letter_form_token
+   * @param {string} aktenzeichen - Client's case reference number
+   * @returns {string} Plain text content
+   */
+  generateSecondLetterNotificationText(clientName, portalUrl, aktenzeichen) {
+    return `
+Sehr geehrte/r ${clientName},
+
+im Rahmen Ihres Insolvenzverfahrens (Aktenzeichen: ${aktenzeichen}) wurde das erste Gläubigeranschreiben bereits versandt. Wir bereiten nun das 2. Gläubigeranschreiben vor.
+
+Bitte bestätigen Sie Ihre aktuellen finanziellen Daten unter folgendem Link:
+
+${portalUrl}
+
+Nach Ihrer Bestätigung werden die Anschreiben erstellt und an Ihre Gläubiger versandt.
+
+Der Link ist 14 Tage gültig.
+
+Mit freundlichen Grüßen
+Kanzlei RA T. Scuric
+
+Aktenzeichen: ${aktenzeichen}
+    `.trim();
+  }
+
+  /**
+   * Send second letter notification email to client
+   * Called by SecondLetterTriggerService after successful IDLE → PENDING transition.
+   * @param {string} email - Recipient email address
+   * @param {string} clientName - Client's full name
+   * @param {string} portalUrl - Deep-link URL containing second_letter_form_token
+   * @param {string} aktenzeichen - Client's case reference number
+   * @returns {Promise<{ success: boolean, emailId?: string, devMode?: boolean, error?: string }>}
+   */
+  async sendSecondLetterNotification(email, clientName, portalUrl, aktenzeichen) {
+    const subject = 'Bitte bestätigen Sie Ihre Daten für das 2. Anschreiben';
+    const html = this.generateSecondLetterNotificationHtml(clientName, portalUrl, aktenzeichen);
+    const text = this.generateSecondLetterNotificationText(clientName, portalUrl, aktenzeichen);
+
+    // Dev mode: no Resend API key configured — log to console instead of sending.
+    if (!this.resend) {
+      console.log('\n📧 ================================');
+      console.log('📧 SECOND LETTER NOTIFICATION (DEV MODE)');
+      console.log('📧 ================================');
+      console.log(`📧 To: ${email}`);
+      console.log(`📧 Subject: ${subject}`);
+      console.log(`📧 Portal URL: ${portalUrl}`);
+      console.log(`📧 Aktenzeichen: ${aktenzeichen}`);
+      console.log('📧 ================================\n');
+
+      return { success: true, devMode: true };
+    }
+
+    try {
+      const response = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: email,
+        subject,
+        html,
+        text
+      });
+
+      const emailId = response.data?.id || response.id;
+      console.log(`✅ Second letter notification sent to ${email} (ID: ${emailId})`);
+
+      return { success: true, emailId };
+    } catch (error) {
+      console.error(`❌ Failed to send second letter notification to ${email}:`, error.message);
+
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Send creditor confirmation email to client
    * Asks the client to review and confirm their creditor list in the portal
    */
