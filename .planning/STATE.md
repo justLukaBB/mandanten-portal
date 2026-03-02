@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 34 — Admin UI & Tracking
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Plan 01 complete
-Last activity: 2026-03-02 — Phase 34 Plan 01 complete: TypeScript types extended, RTK Query mutations added, plan-type override endpoint created
+Status: Plan 03 complete
+Last activity: 2026-03-02 — Phase 34 Plan 03 complete: SecondLetterNode created, TrackingCanvas extended with 3rd column, secondLetterStatus column added to Client List
 
 Progress: [██████████████████████████░░░░░░] 28/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -67,7 +67,8 @@ Progress: [███████████████████████
 | Phase 32-docx-generation P01 | 3 | 2 tasks | 1 files |
 | Phase 33-email-dispatch-workflow-completion P01 | 122 | 2 tasks | 2 files |
 | Phase 34-admin-ui-tracking P01 | 2 | 2 tasks | 4 files |
-| Phase 34-admin-ui-tracking P01 | 2 | 2 tasks | 4 files |
+| Phase 34-admin-ui-tracking P02 | 2 | 1 tasks | 1 files |
+| Phase 34-admin-ui-tracking P03 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 32-docx-generation]: SecondLetterDocumentGenerator DB persistence happens post-loop not inside generateForSingleCreditor — file write confirmed before MongoDB update (Pitfall 5)
 - [Phase 33-email-dispatch-workflow-completion]: SecondLetterService class replaces Phase 28 stub; route endpoint added to existing admin-second-letter.js factory; creditorEmailService required locally not injected; 409/422/207/200 HTTP response codes for status/eligibility/partial/full outcomes
 - [Phase 34-admin-ui-tracking]: [Phase 34-01]: overrideSecondLetterPlanType invalidates only Client tag (not WorkflowStatus) — plan_type is snapshot data; SENT guard returns 400 for plan-type override; second_letter_status typed as string on AdminClient for runtime safety
+- [Phase 34-admin-ui-tracking]: [Phase 34-02]: IIFE pattern for SecondLetterSection keeps local derived state scoped in renderOverview(); SendSecondLetterResponse.failed > 0 used for partial failure detection (not a boolean partial field)
 
 ### v9 Context
 
@@ -217,9 +219,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 34-01-PLAN.md — TypeScript types extended with second_letter_* fields, RTK Query mutations added, plan-type override endpoint created
+Stopped at: Completed 34-02-PLAN.md — SecondLetterSection added to Client Detail overview with trigger button, status badge, plan type override, and send button
 Resume file: None
-Next step: Phase 34 Plan 02 — Client Detail trigger button + status badge + plan override UI
+Next step: Phase 34 Plan 03 — TrackingCanvas 3rd column and Client List second_letter_status badge
 
 ---
-*Last updated: 2026-03-02 (Phase 34 Plan 01 complete)*
+*Last updated: 2026-03-02 (Phase 34 Plan 02 complete)*
