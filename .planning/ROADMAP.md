@@ -12,7 +12,7 @@
 - ✅ **v7 FastAPI Webhook Field Integration** - Phases 17-18 (shipped 2026-02-18)
 - ✅ **v8 Admin Frontend Migration** - Phases 19-22 (shipped 2026-02-18)
 - ✅ **v9 Review Dashboard** - Phases 23-27 (shipped 2026-03-02)
-- 🚧 **v10 2. Anschreiben Automatisierung** - Phases 28-34 (in progress)
+- 🚧 **v10 2. Anschreiben Automatisierung** - Phases 28-37 (in progress)
 
 ## Phases
 
@@ -572,6 +572,33 @@ Plans:
 - [x] 34-02-PLAN.md — Client Detail 2. Anschreiben section (trigger button, status badge, plan override, send button)
 - [ ] 34-03-PLAN.md — Client List badge column + TrackingCanvas 3rd column (SecondLetterNode)
 
+### Phase 35: Bug Fixes — URL, _id, and Field Name Mismatches
+**Goal**: Fix all data-level bugs identified by milestone audit — URL mismatch in email deep-link, _id vs id in MongoDB positional updates, and field name mismatch in template data preparation
+**Requirements**: NOTIF-02, SEND-02, DOC-03, DOC-04
+**Gap Closure**: Closes gaps from v10 audit
+**Depends on**: Phase 34
+
+Plans:
+- [ ] 35-01-PLAN.md — Fix email deep-link URL, _id→id bugs in secondLetterService + secondLetterDocumentGenerator, field name fallbacks in prepareTemplateData
+
+### Phase 36: Wire Document Generator into Send Workflow
+**Goal**: Connect SecondLetterDocumentGenerator (Phase 32) to the send-second-letter endpoint (Phase 33) so DOCX files are generated before email dispatch — completing the E2E admin-trigger→send flow
+**Requirements**: DOC-01, DOC-02, SEND-01, SEND-03, SEND-04
+**Gap Closure**: Closes gaps from v10 audit
+**Depends on**: Phase 35
+
+Plans:
+- [ ] 36-01-PLAN.md — Import + call SecondLetterDocumentGenerator in send workflow before dispatchSecondLetterEmails, E2E verification
+
+### Phase 37: Phase 30 Verification & Requirements Cleanup
+**Goal**: Formally verify Phase 30 (FORM-03 snapshot write) and update REQUIREMENTS.md checkboxes to reflect actual completion state
+**Requirements**: FORM-03
+**Gap Closure**: Closes gaps from v10 audit
+**Depends on**: Phase 36
+
+Plans:
+- [ ] 37-01-PLAN.md — Phase 30 VERIFICATION.md + REQUIREMENTS.md checkbox and traceability updates
+
 ## Progress
 
 **Execution Order:**
@@ -613,6 +640,9 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 32. DOCX Generation | 1/1 | Complete    | 2026-03-02 | - |
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
 | 34. Admin UI & Tracking | v10 | Complete    | 2026-03-02 | - |
+| 35. Bug Fixes — URL, _id, Field Names | v10 | Pending | — | — |
+| 36. Wire Document Generator | v10 | Pending | — | — |
+| 37. Phase 30 Verification & Cleanup | v10 | Pending | — | — |
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created)*

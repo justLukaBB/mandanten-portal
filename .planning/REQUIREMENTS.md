@@ -24,14 +24,14 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Client Notification
 
 - [x] **NOTIF-01**: Client bekommt Email via Resend: "Bitte bestätigen Sie Ihre Daten für das 2. Anschreiben"
-- [x] **NOTIF-02**: Email enthält Deep-Link zum Portal-Formular (mit Token für Authentifizierung)
+- [ ] **NOTIF-02**: Email enthält Deep-Link zum Portal-Formular (mit Token für Authentifizierung)
 - [x] **NOTIF-03**: Keine doppelten Notifications — Guard prüft ob bereits PENDING
 
 ### Client Portal Formular
 
 - [x] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
 - [x] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
-- [x] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
+- [ ] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
 - [x] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
 - [x] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
 
@@ -52,7 +52,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Versand
 
 - [x] **SEND-01**: Resend Email pro Gläubiger mit DOCX Attachment — identische Pipeline wie 1. Anschreiben (creditorEmailService.sendSecondRoundEmail)
-- [x] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
+- [ ] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
 - [x] **SEND-03**: Zendesk Audit-Comment pro erfolgreichem Versand an Haupt-Ticket
 - [x] **SEND-04**: Status-Übergang FORM_SUBMITTED → SENT nach erfolgreichem Versand aller Gläubiger-Emails
 - [x] **SEND-05**: Error Handling: Retry 3x bei Fehler, dann Admin-Alert + Status bleibt FORM_SUBMITTED
@@ -101,25 +101,25 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRIG-03 | Phase 29 | Complete |
 | TRIG-04 | Phase 29 | Complete |
 | NOTIF-01 | Phase 29 | Complete |
-| NOTIF-02 | Phase 29 | Complete |
+| NOTIF-02 | Phase 35 | Pending |
 | NOTIF-03 | Phase 29 | Complete |
 | FORM-01 | Phase 30 | Complete |
 | FORM-02 | Phase 30 | Complete |
-| FORM-03 | Phase 30 | Complete |
+| FORM-03 | Phase 37 | Pending |
 | FORM-04 | Phase 30 | Complete |
 | FORM-05 | Phase 30 | Complete |
 | CALC-01 | Phase 31 | Complete |
 | CALC-02 | Phase 31 | Complete |
 | CALC-03 | Phase 31 | Complete |
 | CALC-04 | Phase 31 | Complete |
-| DOC-01 | Phase 32 | Pending |
-| DOC-02 | Phase 32 | Pending |
-| DOC-03 | Phase 32 | Pending |
-| DOC-04 | Phase 32 | Pending |
-| SEND-01 | Phase 33 | Complete |
-| SEND-02 | Phase 33 | Complete |
-| SEND-03 | Phase 33 | Complete |
-| SEND-04 | Phase 33 | Complete |
+| DOC-01 | Phase 36 | Pending |
+| DOC-02 | Phase 36 | Pending |
+| DOC-03 | Phase 35 | Pending |
+| DOC-04 | Phase 35 | Pending |
+| SEND-01 | Phase 36 | Pending |
+| SEND-02 | Phase 35 | Pending |
+| SEND-03 | Phase 36 | Pending |
+| SEND-04 | Phase 36 | Pending |
 | SEND-05 | Phase 33 | Complete |
 | SEND-06 | Phase 33 | Complete |
 | UI-01 | Phase 34 | Pending |
