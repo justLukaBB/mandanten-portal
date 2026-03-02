@@ -17,7 +17,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Trigger & Scheduler
 
 - [x] **TRIG-01**: Scheduler prüft täglich: Clients mit MAX(email_sent_at) + 30 Tage <= heute AND second_letter_status == IDLE → setzt PENDING
-- [ ] **TRIG-02**: Admin kann manuell 2. Anschreiben triggern (Button im Dashboard) → setzt PENDING + sendet Client-Notification
+- [x] **TRIG-02**: Admin kann manuell 2. Anschreiben triggern (Button im Dashboard) → setzt PENDING + sendet Client-Notification
 - [x] **TRIG-03**: Trigger ist idempotent — atomic findOneAndUpdate mit Status-Guard verhindert Doppelversand
 - [x] **TRIG-04**: Jede Trigger-Aktion wird mit User/System + Timestamp im Audit-Log erfasst
 
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHEMA-03 | Phase 28 | Complete |
 | SCHEMA-04 | Phase 28 | Complete |
 | TRIG-01 | Phase 29 | Complete |
-| TRIG-02 | Phase 29 | Pending |
+| TRIG-02 | Phase 29 | Complete |
 | TRIG-03 | Phase 29 | Complete |
 | TRIG-04 | Phase 29 | Complete |
 | NOTIF-01 | Phase 29 | Complete |
