@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 31 — Financial Calculation Engine
 Milestone: v10 2. Anschreiben Automatisierung
-Status: In Progress (Plan 01 complete)
-Last activity: 2026-03-02 — Phase 31 Plan 01 complete: secondLetterCalculationService.js pure calculation function
+Status: Complete (both plans done)
+Last activity: 2026-03-02 — Phase 31 Plan 02 complete: calculation wired into form-submit handler and admin recalculate endpoint
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -63,6 +63,7 @@ Progress: [███████████████████████
 | Phase 30-client-portal-form P01 | 2 | 2 tasks | 3 files |
 | Phase 30 P02 | 3m | 1 tasks | 2 files |
 | Phase 31-financial-calculation-engine P01 | 5 | 1 tasks | 1 files |
+| Phase 31 P02 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 30]: CSS max-height transition for conditional new creditors reveal: maxHeight 0px/600px with overflow-hidden, no JS height measurement
 - [Phase 31-financial-calculation-engine]: Use calculator.calculate() not calculateGarnishableAmount() — the latter does not exist (latent bug in adminFinancialController)
 - [Phase 31-financial-calculation-engine]: NULLPLAN creditors get tilgungsangebot = 0 explicitly — uniform data structure for Phase 32 template
+- [Phase 31]: Recalculate endpoint placed in admin-second-letter.js — semantically correct, Client passed via DI
+- [Phase 31]: Fixed snapshot field name mismatch in secondLetterCalculationService: marital_status/number_of_dependents fallback to familienstand/anzahl_unterhaltsberechtigte
 
 ### v9 Context
 
@@ -206,9 +209,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 31-01-PLAN.md — calculateSecondLetterFinancials pure function created and committed
+Stopped at: Completed 31-02-PLAN.md — calculation wired into form-submit handler and admin recalculate endpoint added
 Resume file: None
-Next step: Phase 31 Plan 02 — integrate calculateSecondLetterFinancials into form-submit handler and admin recalculate endpoint
+Next step: Phase 32 — DOCX generation (blocked: awaiting DOCX template files from user)
 
 ---
-*Last updated: 2026-03-02 (Phase 31 Plan 01 complete)*
+*Last updated: 2026-03-02 (Phase 31 Plan 02 complete)*
