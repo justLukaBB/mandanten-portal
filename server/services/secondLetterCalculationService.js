@@ -54,11 +54,20 @@ const calculator = new GermanGarnishmentCalculator();
 function calculateSecondLetterFinancials(snapshot, creditors) {
     // -------------------------------------------------------------------------
     // CALC-01: Garnishable amount from snapshot via §850c ZPO
+    // Phase 30 snapshot stores marital_status + number_of_dependents;
+    // older snapshots may use familienstand + anzahl_unterhaltsberechtigte.
+    // Support both field name conventions.
     // -------------------------------------------------------------------------
+    const familienstand = snapshot.familienstand || snapshot.marital_status;
+    const anzahlUnterhaltsberechtigte =
+        snapshot.anzahl_unterhaltsberechtigte != null
+            ? snapshot.anzahl_unterhaltsberechtigte
+            : (snapshot.number_of_dependents || 0);
+
     const garnishmentResult = calculator.calculate(
         snapshot.monthly_net_income,
-        snapshot.familienstand,
-        snapshot.anzahl_unterhaltsberechtigte || 0
+        familienstand,
+        anzahlUnterhaltsberechtigte
     );
 
     if (!garnishmentResult.success) {

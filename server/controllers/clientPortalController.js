@@ -10,6 +10,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const verificationCodeService = require('../services/verificationCodeService');
 const emailService = require('../services/emailService');
+// Phase 31: Financial calculation service
+const { calculateSecondLetterFinancials } = require('../services/secondLetterCalculationService');
 
 // Helper function definitions (moved from server.js)
 
@@ -1449,7 +1451,39 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 });
 
                 console.log('[SecondLetterForm] Form submitted for client:', req.clientId);
-                return res.json({ success: true, submitted_at: updatedClient.second_letter_form_submitted_at });
+
+                // Phase 31: Run financial calculation synchronously after snapshot write
+                const snapshot = updatedClient.second_letter_financial_snapshot;
+                const calcResult = calculateSecondLetterFinancials(
+                    snapshot,
+                    updatedClient.final_creditor_list || []
+                );
+
+                // Persist calculation results into the snapshot (single atomic update)
+                const calcUpdate = {};
+                if (calcResult.success) {
+                    calcUpdate['second_letter_financial_snapshot.garnishable_amount'] = calcResult.garnishableAmount;
+                    calcUpdate['second_letter_financial_snapshot.plan_type'] = calcResult.planType;
+                    calcUpdate['second_letter_financial_snapshot.total_debt'] = calcResult.totalDebt;
+                    calcUpdate['second_letter_financial_snapshot.creditor_calculations'] = calcResult.creditorCalculations;
+                    calcUpdate['second_letter_financial_snapshot.calculation_status'] = 'completed';
+                    calcUpdate['second_letter_financial_snapshot.calculation_error'] = null;
+                    calcUpdate['second_letter_financial_snapshot.calculated_at'] = new Date();
+                } else {
+                    // Locked decision: save form data, mark calculation as failed — data is NOT lost
+                    calcUpdate['second_letter_financial_snapshot.calculation_status'] = 'failed';
+                    calcUpdate['second_letter_financial_snapshot.calculation_error'] = calcResult.error;
+                    console.warn(`[SecondLetter] Calculation failed for client ${req.clientId}: ${calcResult.error}`);
+                }
+
+                await Client.findByIdAndUpdate(updatedClient._id, { $set: calcUpdate });
+
+                return res.json({
+                    success: true,
+                    submitted_at: updatedClient.second_letter_form_submitted_at,
+                    calculation_status: calcResult.success ? 'completed' : 'failed',
+                    ...(calcResult.success ? {} : { calculation_error: calcResult.error })
+                });
             } catch (error) {
                 console.error('[SecondLetterForm] Error in handleSubmitSecondLetterForm:', error);
                 return res.status(500).json({ error: 'Interner Serverfehler' });
