@@ -565,7 +565,12 @@ Plans:
   2. Client List and Client Detail both show a second_letter_status badge: countdown display when IDLE after 1. Anschreiben was sent, "Wartet auf Formular" when PENDING, "Formular eingereicht" when FORM_SUBMITTED, "Gesendet" when SENT
   3. TrackingCanvas has a third column showing per-creditor 2. Anschreiben status — indicating whether the letter has been sent and when
   4. Admin can override the plan type (Ratenplan/Nullplan) via a select control in Client Detail before triggering the send — the override persists in the snapshot
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 34-01-PLAN.md — Types + RTK Query mutations + backend plan-type endpoint + Client List projection
+- [ ] 34-02-PLAN.md — Client Detail 2. Anschreiben section (trigger button, status badge, plan override, send button)
+- [ ] 34-03-PLAN.md — Client List badge column + TrackingCanvas 3rd column (SecondLetterNode)
 
 ## Progress
 
@@ -607,7 +612,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 31. Financial Calculation Engine | 2/2 | Complete    | 2026-03-02 | - |
 | 32. DOCX Generation | 1/1 | Complete    | 2026-03-02 | - |
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
-| 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
+| 34. Admin UI & Tracking | v10 | 0/3 | Not started | - |
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created)*
