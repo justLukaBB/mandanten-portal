@@ -505,7 +505,11 @@ Plans:
   3. On submit, the backend writes an immutable second_letter_financial_snapshot to MongoDB and updates financial_data with any corrections the client made
   4. After successful submit, second_letter_status transitions from PENDING to FORM_SUBMITTED — subsequent form loads show a "bereits eingereicht" state instead of the editable form
   5. The form is only accessible (not a 404/redirect) when second_letter_status is PENDING — clients with other statuses cannot re-submit
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 30-01-PLAN.md — Backend: authenticateSecondLetterToken middleware + GET/POST second-letter-form endpoints with pre-fill mapping, validation, snapshot write, status transition
+- [ ] 30-02-PLAN.md — Frontend: SecondLetterForm.tsx standalone page with pre-fill, 7 required fields, conditional new-creditor fields, confirmation dialog, success/submitted/unavailable states + App.tsx route
 
 ### Phase 31: Financial Calculation Engine
 **Goal**: After form submission, the system calculates garnishable amount, determines plan type, and computes pro-rata quota and Tilgungsangebot per creditor — all from snapshot data only
