@@ -402,7 +402,7 @@ app.use('/api/admin/review', createAdminReviewRouter({
   Client
 }));
 
-app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService }));
+app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService, Client }));
 
 // 10.7 Client Portal Global Routes
 
