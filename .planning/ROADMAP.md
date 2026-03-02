@@ -577,9 +577,10 @@ Plans:
 **Requirements**: NOTIF-02, SEND-02, DOC-03, DOC-04
 **Gap Closure**: Closes gaps from v10 audit
 **Depends on**: Phase 34
+**Plans**: 1 plan
 
 Plans:
-- [ ] 35-01-PLAN.md — Fix email deep-link URL, _id→id bugs in secondLetterService + secondLetterDocumentGenerator, field name fallbacks in prepareTemplateData
+- [ ] 35-01-PLAN.md — Fix email deep-link URL, _id→id bugs in documentGenerator + calculationService, field name fallbacks in prepareTemplateData, verify SEND-02
 
 ### Phase 36: Wire Document Generator into Send Workflow
 **Goal**: Connect SecondLetterDocumentGenerator (Phase 32) to the send-second-letter endpoint (Phase 33) so DOCX files are generated before email dispatch — completing the E2E admin-trigger→send flow
