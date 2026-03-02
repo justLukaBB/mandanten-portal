@@ -211,6 +211,11 @@ const creditorSchema = new mongoose.Schema({
   website: String,
   rechtsform: String,
   hrb_nummer: String,
+
+  // Second Letter Tracking
+  second_letter_sent_at: Date,
+  second_letter_email_sent_at: Date,
+  second_letter_document_filename: String,
 }, { _id: false });
 
 // Status History Schema for tracking all status changes
@@ -630,6 +635,46 @@ const clientSchema = new mongoose.Schema({
   manual_priority_override: {
     type: String,
     enum: ['high', 'medium', 'low']
+  },
+
+  // 2. Anschreiben State Machine
+  second_letter_status: {
+    type: String,
+    enum: ['IDLE', 'PENDING', 'FORM_SUBMITTED', 'SENT'],
+    default: 'IDLE'
+  },
+  second_letter_triggered_at: Date,
+  second_letter_form_submitted_at: Date,
+  second_letter_sent_at: Date,
+
+  // Second letter form token (dedicated, short-lived — NOT the onboarding portal_token)
+  second_letter_form_token: String,
+  second_letter_form_token_expires_at: Date,
+
+  // Financial snapshot frozen at form submission — DOCX generation reads from this, not live data
+  second_letter_financial_snapshot: {
+    monthly_net_income: Number,
+    marital_status: {
+      type: String,
+      enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend']
+    },
+    number_of_dependents: { type: Number, default: 0 },
+    income_source: {
+      type: String,
+      enum: ['angestellt', 'selbststaendig', 'arbeitslos', 'rentner', 'in_ausbildung']
+    },
+    has_garnishment: { type: Boolean, default: false },
+    new_creditors: [{
+      name: String,
+      amount: Number
+    }],
+    plan_type: {
+      type: String,
+      enum: ['RATENPLAN', 'NULLPLAN']
+    },
+    garnishable_amount: Number,
+    monthly_rate: Number,
+    snapshot_created_at: Date
   },
 
   // Timestamps
