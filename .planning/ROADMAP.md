@@ -532,7 +532,10 @@ Plans:
   4. When all creditor emails have been sent without error, second_letter_status transitions from FORM_SUBMITTED to SENT and second_letter_sent_at is recorded
   5. If sending fails, the system retries up to 3 times — after 3 failures an admin alert is triggered and status remains FORM_SUBMITTED (not SENT), preventing partial-send state from being marked complete
   6. Demo mode is respected — when the client has demo mode active, all emails are directed to the test address instead of real creditor email addresses
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 33-01-PLAN.md — SecondLetterService dispatch orchestrator + admin send-second-letter endpoint
 
 ### Phase 34: Admin UI & Tracking
 **Goal**: Admin has full visibility and control of the 2. Anschreiben workflow in the admin portal — trigger button, status badges on list and detail views, TrackingCanvas 3rd column, and plan type override
@@ -584,7 +587,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 30. Client Portal Form | v10 | 0/TBD | Not started | - |
 | 31. Financial Calculation Engine | v10 | 0/TBD | Not started | - |
 | 32. DOCX Generation | v10 | 0/TBD | Not started | - |
-| 33. Email Dispatch & Workflow Completion | v10 | 0/TBD | Not started | - |
+| 33. Email Dispatch & Workflow Completion | v10 | 0/1 | Not started | - |
 | 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
 
 ---
