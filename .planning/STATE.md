@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 31 — Financial Calculation Engine
+Phase: 32 — DOCX Generation
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Complete (both plans done)
-Last activity: 2026-03-02 — Phase 31 Plan 02 complete: calculation wired into form-submit handler and admin recalculate endpoint
+Status: Plan 01 complete
+Last activity: 2026-03-02 — Phase 32 Plan 01 complete: SecondLetterDocumentGenerator created with two-template branching and snapshot-only data source
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -64,6 +64,7 @@ Progress: [███████████████████████
 | Phase 30 P02 | 3m | 1 tasks | 2 files |
 | Phase 31-financial-calculation-engine P01 | 5 | 1 tasks | 1 files |
 | Phase 31 P02 | 3 | 2 tasks | 4 files |
+| Phase 32-docx-generation P01 | 3 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 31-financial-calculation-engine]: NULLPLAN creditors get tilgungsangebot = 0 explicitly — uniform data structure for Phase 32 template
 - [Phase 31]: Recalculate endpoint placed in admin-second-letter.js — semantically correct, Client passed via DI
 - [Phase 31]: Fixed snapshot field name mismatch in secondLetterCalculationService: marital_status/number_of_dependents fallback to familienstand/anzahl_unterhaltsberechtigte
+- [Phase 32-docx-generation]: formatEuro uses toLocaleString('de-DE') not toFixed — avoids rounding bugs, produces correct German thousand separator + comma decimal format
+- [Phase 32-docx-generation]: SecondLetterDocumentGenerator DB persistence happens post-loop not inside generateForSingleCreditor — file write confirmed before MongoDB update (Pitfall 5)
 
 ### v9 Context
 
@@ -209,9 +212,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 31-02-PLAN.md — calculation wired into form-submit handler and admin recalculate endpoint added
+Stopped at: Completed 32-01-PLAN.md — SecondLetterDocumentGenerator created with two-template branching and snapshot-only data source
 Resume file: None
-Next step: Phase 32 — DOCX generation (blocked: awaiting DOCX template files from user)
+Next step: Phase 33 — Email dispatch (requires DOCX template files 2.Schreiben_Ratenplan.docx + 2.Schreiben_Nullplan.docx in server/templates/)
 
 ---
-*Last updated: 2026-03-02 (Phase 31 Plan 02 complete)*
+*Last updated: 2026-03-02 (Phase 32 Plan 01 complete)*
