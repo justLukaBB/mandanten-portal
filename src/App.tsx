@@ -4,6 +4,7 @@ import PersonalPortal from './pages/PersonalPortal';
 import PortalLogin from './pages/PortalLogin';
 import ConfirmCreditors from './pages/ConfirmCreditors';
 import ImpersonationAuth from './pages/ImpersonationAuth';
+import SecondLetterForm from './pages/SecondLetterForm';
 import AdminApp from './admin/AdminApp';
 import AgentLogin from './agent/pages/AgentLogin';
 import ReviewDashboard from './agent/pages/ReviewDashboard';
@@ -111,6 +112,11 @@ function App() {
             element={
               <ConfirmCreditors />
             }
+          />
+
+          <Route
+            path="/portal/second-letter-form"
+            element={<SecondLetterForm />}
           />
 
           <Route
