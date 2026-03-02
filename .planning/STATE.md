@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 29 — Trigger, Scheduler & Client Notification
 Milestone: v10 2. Anschreiben Automatisierung
-Status: In Progress (Plan 01 of 02 complete)
-Last activity: 2026-03-02 — Phase 29 Plan 01 complete: trigger service + email notification
+Status: Complete (Plan 02 of 02 complete)
+Last activity: 2026-03-02 — Phase 29 Plan 02 complete: admin route + scheduler wiring
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -59,6 +59,7 @@ Progress: [███████████████████████
 | v10 (28) P01 | 1 | ~2m | 2.0m |
 | Phase 28 P02 | 2 | 2 tasks | 3 files |
 | Phase 29-trigger-scheduler-client-notification P01 | 2 | 2 tasks | 2 files |
+| Phase 29 P02 | 2m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 29]: SecondLetterTriggerService exported as CLASS (not singleton) for emailService dependency injection from server.js
 - [Phase 29]: Two-step 30-day eligibility: DB elemMatch pre-filter + JS MAX(email_sent_at) — avoids complex aggregation pipeline
 - [Phase 29]: Sequential for-loop in checkAndTriggerEligible (not Promise.all) for Resend rate limit safety
+- [Phase 29]: EmailService is a singleton (module.exports = new EmailService()) — used directly via require in server.js, not re-instantiated
+- [Phase 29]: alreadyTriggered admin endpoint returns 200 (not 409) — idempotent by design, matching research pitfall #5
 
 ### v9 Context
 
@@ -195,9 +198,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 29-01-PLAN.md — trigger service + email notification
+Stopped at: Completed 29-02-PLAN.md — admin route + scheduler wiring
 Resume file: None
-Next step: Phase 29 Plan 02 — Scheduler integration + Admin route
+Next step: Phase 30 — Client form portal for 2. Anschreiben
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created, Phases 28-34)*
