@@ -9,10 +9,10 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
 ### Schema & State Machine
 
-- [ ] **SCHEMA-01**: Client Model hat `second_letter_status` Enum (IDLE, PENDING, FORM_SUBMITTED, SENT) mit Default IDLE
-- [ ] **SCHEMA-02**: Client Model hat `second_letter_financial_snapshot` Subdokument (Einkommen, Familienstand, Unterhaltspflichten, Einkommensquelle, Lohnpfändungen, neue Gläubiger, Plan-Typ, pfändbarer Betrag, monatliche Rate)
-- [ ] **SCHEMA-03**: Client Model hat `second_letter_triggered_at`, `second_letter_form_submitted_at`, `second_letter_sent_at` Timestamps
-- [ ] **SCHEMA-04**: Creditor-Schema hat `second_letter_sent_at`, `second_letter_email_sent_at`, `second_letter_document_filename` Felder
+- [x] **SCHEMA-01**: Client Model hat `second_letter_status` Enum (IDLE, PENDING, FORM_SUBMITTED, SENT) mit Default IDLE
+- [x] **SCHEMA-02**: Client Model hat `second_letter_financial_snapshot` Subdokument (Einkommen, Familienstand, Unterhaltspflichten, Einkommensquelle, Lohnpfändungen, neue Gläubiger, Plan-Typ, pfändbarer Betrag, monatliche Rate)
+- [x] **SCHEMA-03**: Client Model hat `second_letter_triggered_at`, `second_letter_form_submitted_at`, `second_letter_sent_at` Timestamps
+- [x] **SCHEMA-04**: Creditor-Schema hat `second_letter_sent_at`, `second_letter_email_sent_at`, `second_letter_document_filename` Felder
 
 ### Trigger & Scheduler
 
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | Phase 28 | Pending |
-| SCHEMA-02 | Phase 28 | Pending |
-| SCHEMA-03 | Phase 28 | Pending |
-| SCHEMA-04 | Phase 28 | Pending |
+| SCHEMA-01 | Phase 28 | Complete |
+| SCHEMA-02 | Phase 28 | Complete |
+| SCHEMA-03 | Phase 28 | Complete |
+| SCHEMA-04 | Phase 28 | Complete |
 | TRIG-01 | Phase 29 | Pending |
 | TRIG-02 | Phase 29 | Pending |
 | TRIG-03 | Phase 29 | Pending |

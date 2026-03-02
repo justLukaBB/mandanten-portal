@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 28 — State Machine Foundation
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Not started
-Last activity: 2026-03-02 — Roadmap created for v10
+Status: In progress (Plan 01 complete)
+Last activity: 2026-03-02 — Phase 28 Plan 01 complete: schema fields + service stub
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -56,6 +56,7 @@ Progress: [███████████████████████
 | v9 (26) P03 | 1 | ~3m | 3.0m |
 | v9 (27) P01 | 1 | ~4m | 4.0m |
 | v9 (27) P02 | 1 | ~4m | 4.0m |
+| v10 (28) P01 | 1 | ~2m | 2.0m |
 
 ## Accumulated Context
 
@@ -85,6 +86,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 27-polish-migration]: Single Export dropdown button (DropdownMenu trigger) for both CSV and XLSX — simpler UI
 - [Phase 27-polish-migration]: pollingInterval: 30000 on both ReviewQueuePage and Sidebar — RTK Query deduplication prevents double-fetching
 - [Phase 27-polish-migration]: AgentRedirect handles auth internally (not ProtectedRoute) — needs custom cross-app redirect logic via window.location.href
+
+**v10 Phase 28 Decisions:**
+- UPPERCASE enum for second_letter_status (IDLE/PENDING/FORM_SUBMITTED/SENT) — differentiated from existing lowercase status fields
+- UPPERCASE plan_type in snapshot (RATENPLAN/NULLPLAN) — not lowercase quotenplan/nullplan from financial_data
+- new_creditors as simple array [{name, amount}] — multiple new creditors per client supported
+- Uses id field (not _id) in service findOneAndUpdate filters — consistent with Client model convention
+- Atomic state guard via findOneAndUpdate with status filter — null return = guard blocked, no error thrown
 
 **v10 Key Decisions (established at roadmap creation):**
 - State machine: 4 states IDLE/PENDING/FORM_SUBMITTED/SENT — no IN_REVIEW gate in v10 (deferred to v2+)
@@ -180,9 +188,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: v10 roadmap created — Phases 28-34 defined
+Stopped at: Completed 28-01-PLAN.md — second_letter_* schema fields + secondLetterService.js
 Resume file: None
-Next step: `/gsd:plan-phase 28` — State Machine Foundation
+Next step: Phase 29 — Trigger and Scheduler
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created, Phases 28-34)*
