@@ -1,234 +1,218 @@
 # Project Research Summary
 
-**Project:** Multi-Page PDF Support for Creditor Extraction
-**Domain:** Document AI / Multi-modal Processing with Gemini
-**Researched:** 2026-02-09
-**Confidence:** MEDIUM-HIGH
+**Project:** 2. Anschreiben Automatisierung (v10 milestone)
+**Domain:** German insolvency case management — automated second creditor letter workflow
+**Researched:** 2026-03-02
+**Confidence:** HIGH
 
 ## Executive Summary
 
-This project extends an existing image-based creditor extraction system to support multi-page PDFs. Research confirms that Gemini 2.5 Pro natively processes PDFs through its multimodal API without requiring conversion libraries or page splitting. The architecture is well-designed for this extension—the existing two-service architecture (Node.js + FastAPI) already handles multi-creditor splitting, deduplication, and webhook-based results processing. The critical change is a single function in FastAPI that needs to accept PDF MIME types.
+The 2. Anschreiben (second creditor letter) is a legal obligation under §305 InsO: after the 30-day response window following the first creditor contact round, the debt settlement plan must be formally presented to each creditor with up-to-date financial data. The workflow is a multi-step, two-actor process — the system (or admin) triggers it, the client confirms financial data via a portal form, and the admin dispatches DOCX letters to creditors via email. The codebase already contains substantial scaffolding: document generators, email senders, the garnishment calculator, and even partial second-round services. The central design challenge is not building from scratch but wiring existing pieces together behind a proper state machine that prevents double-sends and captures an immutable financial snapshot.
 
-The recommended approach is to leverage Gemini's native PDF capabilities by passing entire PDFs directly to the API via `Part.from_data(pdf_bytes, mime_type='application/pdf')`. The prompt must be enhanced to instruct Gemini to identify page boundaries and return page assignments as structured arrays. This preserves backward compatibility with the existing image-processing flow while extending it to handle three PDF scenarios: multi-page single creditor letters, sammel-scans (multiple creditor letters in one PDF), and mixed documents.
+The recommended approach is to treat `second_letter_status` as the single source of truth for the entire workflow. Every service, route, and UI component reads from and writes to this field. The 4-state machine (`IDLE → PENDING → FORM_SUBMITTED → SENT`, with optional `IN_REVIEW`) gates each step atomically via MongoDB `findOneAndUpdate`, preventing race conditions between the 30-day scheduler and manual admin triggers. The financial data snapshot pattern — capturing calculation inputs at form-submission time rather than reading live data at send time — is the other critical design decision. It ensures DOCX letters reflect what the client confirmed, not a later agent edit.
 
-Key risks center on integration rather than technology: the system has existing multi-creditor logic (`creditor_index`, `creditor_count`, `source_document_id`) that must remain intact. The most critical pitfall is silent backward compatibility breach where PDF processing inadvertently breaks image uploads. Secondary risks include page-to-creditor assignment ambiguity, token limit miscalculation for large PDFs, and rate limiting cascade. All are mitigatable through dual-path testing, explicit prompt schemas, conservative token limits, and page count validation.
+The top risk is double-sending: creditors receiving the 2. Anschreiben twice. This is unrecoverable by automated means once emails are delivered. The idempotency guard (atomic status claim) must be the very first line of the trigger path, before any document generation or email dispatch. The secondary risk is incorrect plan type (Nullplan vs. Ratenplan) reaching creditors — prevented by capturing the snapshot before generation and giving the admin a review step before final send. Both risks are fully mitigatable with disciplined build order: schema first, snapshot second, calculation third, generation fourth, send last.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-**No new dependencies required for MVP.** Gemini 2.5 Pro via Vertex AI SDK already supports native PDF processing through the same API pattern used for images. The existing FastAPI integration uses `Part.from_data()` which accepts `application/pdf` MIME types alongside image MIME types.
+No new packages are required for MVP. The full feature set is achievable with already-installed dependencies: `docxtemplater` + `pizzip` for DOCX generation (direct mirror of the 1. Anschreiben pipeline), `resend` v6 for email dispatch, `mongoose` for the state machine and snapshot subdocument, and `express` for new routes. The existing `scheduler.js` `setInterval` pattern is sufficient for the 30-day check — `node-cron` is optional if the team prefers cron syntax but adds no capability. Heavy-weight alternatives (Agenda.js, BullMQ, xstate) are explicitly ruled out: the state machine has 4 linear states, there are no distributed requirements, and all jobs are idempotent against MongoDB.
 
 **Core technologies:**
-- **Vertex AI SDK (existing)**: Native PDF processing — Gemini 2.5 Pro handles multi-page PDFs without preprocessing, OCR, or conversion libraries
-- **No additional libraries needed**: PDF extraction/conversion — Eliminates complexity, maintenance burden, and quality loss from image conversion
-- **Same API pattern**: `Part.from_data(pdf_bytes, mime_type='application/pdf')` — Identical to current image handling, just different MIME type
+- `docxtemplater@3.66.4` + `pizzip@3.2.0`: DOCX generation — identical to `firstRoundDocumentGenerator.js`, already installed
+- `resend@6.8.0`: Email delivery — `creditorEmailService.sendSecondRoundEmail()` is already implemented, demo-mode-aware, CC-aware
+- `mongoose@8.16.5`: State machine enum field + immutable snapshot subdocument on Client model
+- `setInterval` in `scheduler.js`: 30-day eligibility polling, stateless against MongoDB (restart-safe)
+- `node-cron@^3.0.3` (optional): Cleaner cron syntax; install only if preferred over setInterval
 
-**Alternative stack explicitly NOT recommended:**
-- `pypdf`, `pdf2image`, `poppler-utils` — Only if Gemini API proves insufficient (which is unlikely based on documented capabilities)
-- These add complexity without proven benefit and risk image quality degradation
-
-**Critical version constraint:**
-- Gemini 2.5 Pro required for 1M token context window and reliable PDF processing
-- Token costs: ~$0.005 per PDF page (5x-10x current per-image cost for multi-page docs)
-- Context limit: 1M input tokens = ~100-200 PDF pages theoretical, recommend limiting to 50 pages practical
+See: `.planning/research/STACK.md`
 
 ### Expected Features
 
-**Must have (table stakes):**
-- **Native PDF input** — PDFs are standard document format; users expect direct upload
-- **Multi-creditor detection in single PDF** — Sammel-scans (bulk scans) are common in insolvency workflows; existing system already does this for images
-- **Page range assignment per creditor** — Users need to know which pages belong to which creditor; return `pages: [1,2,3]` for each creditor
-- **Multi-page single creditor handling** — Creditor letters often span 2-3 pages; prompt must group consecutive pages
-- **Backward compatibility with single images** — Existing upload flow cannot break; same webhook schema, same result structure
-- **Extraction result schema consistency** — Node.js webhook expects `results[]` array; must include `pages` field without changing other fields
-- **Error handling for corrupted PDFs** — Return `processing_status: 'error'` with reason, same as current image error flow
+The workflow has a clear P1/P2/P3 split. Everything in P1 is required for the workflow to function at all — missing any P1 item means the 2. Anschreiben cannot be sent. P2 items improve correctness and visibility without blocking the happy path.
 
-**Should have (competitive):**
-- **Intelligent page boundary detection** — Automatically detect where one letter ends and another begins based on letterheads, signatures, greetings
-- **Mixed document type detection** — Handle PDFs containing both creditor letters and non-creditor documents (invoices, contracts) using existing `is_creditor_document` classification
-- **Confidence scoring per page group** — Extend existing `confidence` field to work per-creditor in multi-creditor PDFs
+**Must have (P1 — table stakes):**
+- `second_letter_status` state machine on Client model — prerequisite for every other feature
+- 30-day scheduler trigger — auto-sets `PENDING` after 30 days post last `email_sent_at`
+- Manual admin trigger button in MandantenPortalDesign — needed for exceptions and testing
+- Client notification email via Resend with portal deep-link — client must be informed to confirm data
+- Pre-filled client portal form in `/src/` (CRA) — confirm/correct `financial_data` + `extended_financial_data`
+- `second_letter_financial_snapshot` subdocument — immutable record of confirmed calculation inputs
+- Pfändungsberechnung (§850c ZPO) + plan type determination (Ratenplan vs. Nullplan)
+- Pro-rata quota per creditor using snapshot data
+- DOCX generation (Ratenplan + Nullplan templates) — one letter per creditor
+- Resend email dispatch to all creditors with DOCX attachment
+- Admin status badge for `second_letter_status`
+- Idempotency guard on trigger (atomic MongoDB update)
+
+**Should have (P2 — correctness and visibility):**
+- Admin approval gate: `FORM_SUBMITTED → IN_REVIEW` → admin approves → `SENT` (prevents wrong plan type from shipping)
+- Plan type admin override (edge case handling before send)
+- Per-creditor `second_letter_sent_at` + `second_letter_email_sent_at` tracking fields
+- TrackingCanvas 3rd column for 2. Anschreiben (comment at line 59 already exists in codebase)
 
 **Defer (v2+):**
-- OCR quality assessment and flagging
-- Table extraction from multi-page invoices
-- Page orientation auto-correction (Gemini likely handles this natively)
-- PDF thumbnail generation for previews
+- Snapshot diff display in admin (compare original vs. confirmed financial data)
+- Client portal redesign in Vite for the confirmation form (separate milestone per PROJECT.md)
+- 3. Anschreiben or multi-round loop (explicitly out of scope for v10)
 
-**Explicit anti-features (DO NOT BUILD):**
-- Physical PDF page splitting into separate files — Adds storage complexity; page assignments as metadata suffice
-- Pre-processing PDF to images before Gemini — Wastes tokens, loses native text extraction, slower
-- Separate upload flow for PDFs vs images — Confusing UX; single endpoint with MIME type routing
+See: `.planning/research/FEATURES.md`
 
 ### Architecture Approach
 
-The existing two-service architecture supports PDF processing with minimal changes. The system already handles the complete flow: upload → GCS storage → queue → FastAPI processing → Gemini extraction → webhook → MongoDB persistence. All layers except one are MIME-agnostic and pass-through.
+The architecture is a thin orchestration layer on top of existing services. A new `secondLetterService.js` orchestrator (following the pattern of `creditorContactService.js`) coordinates state machine transitions, calls the document generator, and dispatches via the existing email service. The document generator (`secondRoundDocumentGenerator.js`) mirrors `firstRoundDocumentGenerator.js` exactly — same class structure, different template paths and variable names. The existing `secondRoundManager.js` and `second-round-api.js` are Zendesk-centric exploratory scaffolding and must NOT be used as the pattern for new work.
 
 **Major components:**
-1. **Node.js Upload Handler** — Already accepts PDFs, validates MIME types, uses multer memory storage (no changes needed)
-2. **GCS Service** — Stores PDFs identically to images, generates signed URLs (no changes needed)
-3. **Document Queue** — Passes `mime_type` field to FastAPI (no changes needed)
-4. **FastAPI Document Processor** — **CHANGE REQUIRED**: `_load_image_as_part()` must accept PDF MIME type and create `genai.Part` with PDF bytes
-5. **Processing Pipeline** — Orchestrates classification → extraction → verification; format-agnostic (no changes needed)
-6. **Webhook Handler** — Already handles multi-creditor splits via `creditor_index`, `creditor_count`, `source_document_id` (no changes needed)
+1. `Client.js` (MODIFIED) — add `second_letter_status` enum, date fields, `second_letter_snapshot` subdocument, per-creditor tracking fields
+2. `secondLetterService.js` (NEW) — main orchestrator: atomic trigger, client notification, snapshot write, document generation, email dispatch
+3. `secondRoundDocumentGenerator.js` (NEW) — docxtemplater pipeline for Ratenplan and Nullplan templates; mirrors firstRound generator class
+4. `secondLetterSchedulerService.js` (NEW) — MongoDB query for eligible clients (30-day threshold); stateless, restart-safe
+5. `admin-second-letter.js` route (NEW) — admin trigger, send, and status endpoints; fire-and-forget pattern for send (202 response)
+6. `client-portal.js` (MODIFIED) — add GET + POST for second-letter-form
+7. `SecondLetterPanel.tsx` (NEW, admin, MandantenPortalDesign) — status badge, trigger + send actions, plugs into existing ClientDetail
+8. `SecondLetterForm.tsx` (NEW, client, `/src/`) — pre-filled CRA wizard for financial data confirmation
 
-**Key pattern:** MIME-type-driven processing. Route logic based on `mime_type` field, not file extensions or content sniffing. This field is captured at upload, validated by multer, stored in DB, and passed through all layers.
-
-**Critical integration point:** Single function change in FastAPI:
-```python
-def _load_image_as_part(file_data):
-    mime_type = file_data['mime_type']
-    file_bytes = download_file(file_data['gcs_path'])
-
-    if mime_type == 'application/pdf':
-        return genai.Part.from_data(data=file_bytes, mime_type='application/pdf')
-    elif mime_type in IMAGE_MIME_TYPES:
-        return genai.Part.from_data(data=file_bytes, mime_type=mime_type)
-    else:
-        raise UnsupportedFormatError(mime_type)
+State transitions:
+```
+IDLE → PENDING (scheduler or admin trigger, atomic)
+PENDING → FORM_SUBMITTED (client submits portal form, snapshot written)
+FORM_SUBMITTED → SENT (admin sends — or via IN_REVIEW approval gate in P2)
 ```
 
-**Blast radius:** 1 function in FastAPI. Everything else is pass-through or already format-agnostic.
+See: `.planning/research/ARCHITECTURE.md`
 
 ### Critical Pitfalls
 
-1. **Backward Compatibility Breach** — PDF processing changes break existing single-image upload flow. Happens when shared code paths diverge, return structures change, or testing focuses only on PDFs. **Prevention:** Dual-path testing (every change tested with images AND PDFs), feature flags, explicit MIME type routing, structure compatibility (PDF results must produce identical fields as images plus optional page data).
+1. **Double-send via scheduler + manual trigger** — Use `findOneAndUpdate` with `{ second_letter_status: 'IDLE' }` as the filter for every trigger entry point. If the return is null, another process already claimed the lock — abort immediately. The idempotency guard must exist before any document or email logic. Recovery from double-send is manual, permanent, and reputationally damaging.
 
-2. **Page-to-Creditor Assignment Ambiguity** — Gemini extracts creditors correctly but page assignments are unreliable (strings vs arrays, 0-indexed vs 1-indexed, empty arrays). **Prevention:** Explicit format specification in prompt with example JSON structure, 1-indexed convention (matches PDF viewers), array requirement (no string ranges), schema validation before webhook handler, test with edge cases (1-page PDFs, single creditor spanning all pages, non-sequential pages).
+2. **Schema enum mismatch (undefined field passes every eligibility check)** — Add `second_letter_status` to `Client.js` as the absolute first implementation step. Without it, `client.second_letter_status === undefined` passes every scheduler filter and every guard. Also write a migration script to initialize existing clients with `creditor_contact_started: true` to `IDLE`.
 
-3. **Token Limit Miscalculation** — Large PDFs fail unpredictably despite being "under" 1M token limit. Problem: page count ≠ token count (scanned PDFs with images = 4x-16x tokens per page), and output token limit (8K) can be hit before input limit with 50+ creditor extractions. **Prevention:** Conservative limits (500K tokens = 50% of max), token estimation before processing, chunking strategy for >50 pages, output compression (minimal JSON, no explanations), page count limits (reject >100 pages at upload).
+3. **NaN/Infinity in quota calculation from missing claim amounts** — Guard against `totalDebt === 0` before division. Filter creditors with null `claim_amount`. Use `Math.round()` not `toFixed()` (toFixed returns a string, causing downstream type bugs). Assert all template variables are finite numbers before calling docxtemplater.
 
-4. **Rate Limiting Cascade** — PDF processing (10-50x tokens per request) exhausts quota, blocking ALL document processing including images. **Prevention:** Separate queues (priority for images, background for PDFs), token-aware throttling, PDF page limit at upload validation, async processing notifications, quota reservation (20% reserved for images).
+4. **Wrong plan type from TOCTOU race (snapshot not used at generation time)** — The scheduler must only set `PENDING`, never generate documents. Document generation reads exclusively from `second_letter_snapshot`, written at form submission. Snapshot must be written to MongoDB before document generation begins.
 
-5. **Prompt Drift Between File Types** — PDF prompt diverges from image prompt over time, causing inconsistent extraction results for the same creditor letter. **Prevention:** Single prompt template with conditional insertion for PDF-specific fields, shared field schema, format-agnostic testing (same creditor as image AND PDF), prompt versioning in git.
+5. **Template variable mismatch causes silent empty fields** — docxtemplater's default `nullGetter` returns empty string on missing tags with no error thrown. Extract all `{VariableName}` placeholders from the user-supplied DOCX templates before writing generation code. Enable `errorLogging: true` in dev. Visually inspect every generated DOCX output.
+
+6. **Dead client notification link** — Do not reuse the onboarding `portal_token`. Generate a short-lived (14-day), single-use `second_letter_form_token`. Test the link in a browser before marking the feature complete.
+
+See: `.planning/research/PITFALLS.md`
+
+---
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+The dependency chain is strict and linear: the state machine schema must exist before any service code; the client form and snapshot must exist before calculations; calculations must exist before DOCX generation; DOCX generation must exist before email dispatch. This dictates a phase structure where each phase has a verifiable output that unblocks the next. No phase can be safely skipped or reordered.
 
-### Phase 1: Core PDF Support (FastAPI MIME Type)
-**Rationale:** Smallest change with highest risk—if this breaks images, everything downstream fails. Isolate and validate first.
-**Delivers:** FastAPI accepts PDFs, creates Gemini Parts, processes end-to-end
-**Addresses:** Native PDF input (table stakes), backward compatibility requirement
-**Avoids:** Pitfall #1 (backward compatibility breach) through feature flag and dual testing
-**Research flag:** NO deeper research needed—well-documented API pattern
+### Phase 1: State Machine Foundation
+**Rationale:** Every downstream feature depends on `second_letter_status` existing in the schema. The scheduler and all service guards are inert without it. This is also where the hardest-to-recover-from pitfall (double-send) is permanently prevented.
+**Delivers:** Updated `Client.js` schema with all `second_letter_*` fields and creditor tracking fields; migration for existing clients; working `secondLetterSchedulerService.js` with idempotency guard; admin trigger endpoint (202 fire-and-forget); client notification email via Resend with dedicated token
+**Addresses:** `second_letter_status` state machine, 30-day scheduler trigger, manual admin trigger, client notification email, idempotency guard
+**Avoids:** Pitfall 1 (double-send) and Pitfall 2 (schema mismatch)
 
-### Phase 2: Prompt Engineering for Page Assignment
-**Rationale:** Page-to-creditor mapping is the novel complexity. Prompt must specify exact output schema to avoid ambiguity.
-**Delivers:** Gemini returns `pages: [int]` arrays per creditor with consistent 1-indexed format
-**Addresses:** Page range assignment per creditor, multi-creditor detection, multi-page single creditor handling
-**Avoids:** Pitfall #2 (page assignment ambiguity) through explicit schema in prompt, Pitfall #5 (prompt drift) through unified template
-**Research flag:** YES—prompt engineering for page detection needs testing and iteration; suggest `/gsd:research-phase` with few-shot examples
+### Phase 2: Client Portal Form
+**Rationale:** The client form is the only input path for the financial data snapshot. Nothing downstream can run until the client submits confirmed data. The form must also be reachable via a fresh, non-expired, dedicated token.
+**Delivers:** `SecondLetterForm.tsx` in CRA portal with pre-fill from `financial_data` + `extended_financial_data`; form submission writing `second_letter_snapshot` and transitioning to `FORM_SUBMITTED`; dedicated short-lived `second_letter_form_token`; loading skeleton pattern preventing race conditions
+**Addresses:** Client portal form (pre-fill + confirm), financial data snapshot, token-guarded portal route
+**Avoids:** Pitfall 6 (dead link), Pitfall 8 (prefill race condition), Pitfall 4 (TOCTOU — snapshot is written here before generation can start)
 
-### Phase 3: Response Schema Validation
-**Rationale:** Validate Gemini output structure before passing to webhook handler to catch format issues early.
-**Delivers:** Schema validation, page array normalization, default handling for edge cases
-**Addresses:** Extraction result schema consistency
-**Avoids:** Pitfall #2 (ambiguity) through validation, Pitfall #9 (empty page arrays) through defaults
-**Research flag:** NO deeper research needed—standard Pydantic/JSON schema validation
+### Phase 3: Financial Calculation and Plan Determination
+**Rationale:** Calculation reads from the snapshot written in Phase 2. Plan type determination must precede document template selection. This phase can be built and unit-tested in isolation before DOCX generation exists.
+**Delivers:** Quota calculation service using snapshot data; Ratenplan/Nullplan determination; all calculation results written into `second_letter_snapshot.creditor_calculations[]`; guards against zero total debt and NaN values
+**Addresses:** Pfändungsberechnung (§850c ZPO), plan type determination, pro-rata quota per creditor
+**Avoids:** Pitfall 3 (NaN/Infinity), Pitfall 4 (wrong plan type from stale data)
 
-### Phase 4: Integration Testing (Multi-Creditor & Backward Compat)
-**Rationale:** Validate end-to-end flow works for PDFs without breaking images. Test with real-world messy documents.
-**Delivers:** Test suite covering: single image, single PDF, multi-page single creditor, sammel-scan PDF, mixed uploads, scanned PDFs
-**Addresses:** All table stakes features, backward compatibility validation
-**Avoids:** Pitfall #1 (compat breach) through explicit dual testing, Pitfall #7 (rendering assumption) through scanned PDF tests
-**Research flag:** NO deeper research needed—testing patterns
+### Phase 4: DOCX Template Integration
+**Rationale:** Template variable mapping must be established before generation code is written, not after. Build the generator to match the templates, not the other way around. Requires actual DOCX files from user.
+**Delivers:** `secondRoundDocumentGenerator.js` producing correct Ratenplan and Nullplan DOCX files per creditor; variable manifest extracted from templates; development-mode error logging enabled; dry-run output verified visually
+**Addresses:** DOCX generation (both plan types)
+**Avoids:** Pitfall 5 (template variable mismatch causing silent empty fields)
+**Dependency:** User must supply 2. Anschreiben DOCX template files before this phase can begin
 
-### Phase 5: Error Handling & Limits
-**Rationale:** Production-ready handling for edge cases (large PDFs, corrupted files, rate limits).
-**Delivers:** Page count validation, file size limits, timeout adjustments, graceful error responses
-**Addresses:** Error handling for corrupted PDFs, token limit safety
-**Avoids:** Pitfall #3 (token limits) through conservative limits, Pitfall #4 (rate cascade) through upload validation
-**Research flag:** NO deeper research needed—standard error handling patterns
+### Phase 5: Email Dispatch and Workflow Completion
+**Rationale:** Email sends are the point of no return — once sent to creditors there is no automated rollback. This phase must only run after all prior phases are verified. Reuses the fully-implemented `creditorEmailService.sendSecondRoundEmail()` with no modifications.
+**Delivers:** Admin "2. Anschreiben senden" action in SecondLetterPanel; fire-and-forget background send; per-creditor `second_letter_email_sent_at` tracking; final `second_letter_status = SENT`; demo mode respected; insolvenz@ra-scuric.de CC included
+**Addresses:** Resend email dispatch, per-creditor tracking fields, admin status badge
+**Avoids:** Re-entrancy on send; accidental real sends in demo mode
 
-### Phase 6: Edge Cases & Polish
-**Rationale:** Handle low-probability scenarios discovered during testing.
-**Delivers:** Handling for 100+ page PDFs, MIME type edge cases, logging improvements
-**Addresses:** Production readiness
-**Avoids:** Pitfall #10 (logging inadequacy) through structured logs with page metadata
-**Research flag:** NO deeper research needed—reactive to findings from Phase 4
+### Phase 6: Admin UI and Tracking (P2 polish)
+**Rationale:** The admin panel wires existing status data into visible controls. Admin approval gate (`IN_REVIEW`) and plan type override improve correctness for edge cases. TrackingCanvas extension is lower priority but already scaffolded with a comment.
+**Delivers:** Full `SecondLetterPanel.tsx` with status badge, trigger/send controls, admin approval gate, plan type override select; TrackingCanvas 3rd column; RTK Query mutations for all admin actions
+**Addresses:** Admin approval gate, plan type admin override, TrackingCanvas extension
+**Notes:** Basic panel (status badge + trigger button) can be partially delivered alongside Phase 5; approval gate added in this dedicated phase
 
 ### Phase Ordering Rationale
 
-- **Phase 1 first** because it's the highest-risk change (single point of failure, touches integration layer)
-- **Phase 2 before Phase 3** because prompt design determines what schema to validate
-- **Phase 4 after Phases 1-3** because integration tests need working PDF processing + prompt + validation
-- **Phase 5 before Phase 6** because error handling is higher priority than edge cases
-- Architecture naturally isolates PDF changes from image processing (same code paths, MIME type routing)
-- Existing multi-creditor splitting logic means no new components needed—just extending existing patterns
+- Phases 1-5 are strictly sequenced due to hard data dependencies (schema → snapshot → calculation → DOCX → email)
+- Phase 6 can begin in parallel with Phase 5 for basic UI elements, but the approval gate needs the Phase 5 state transition logic to be stable first
+- The 10-step build order in ARCHITECTURE.md maps cleanly onto these 6 phases
+- Each phase ends with a verifiable artifact: schema diff, working form submission, unit-tested calculation, generated DOCX file, email delivery confirmed, admin panel functional
+- Pitfalls map directly onto phases: Pitfalls 1-2 to Phase 1, Pitfalls 6+8 to Phase 2, Pitfalls 3-4 to Phase 3, Pitfall 5 to Phase 4
 
 ### Research Flags
 
-**Phases likely needing deeper research during planning:**
-- **Phase 2 (Prompt Engineering):** Complex—requires understanding how Gemini interprets page boundaries, needs few-shot examples for sammel-scans, must iterate on output schema. Suggest `/gsd:research-phase` focused on "Gemini multi-page PDF page boundary detection prompts" with test documents.
+**Phases with well-documented patterns (skip `/gsd:research-phase`):**
+- **Phase 1:** setInterval scheduler and Mongoose enum fields are established codebase patterns; atomic `findOneAndUpdate` guard already used for dedup
+- **Phase 3:** `germanGarnishmentCalculator.js` already implements §850c ZPO; quota formula is straightforward arithmetic; patterns are fully researched
+- **Phase 5:** `creditorEmailService.sendSecondRoundEmail()` is already implemented; reuse without modification
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1:** Well-documented Vertex AI SDK API pattern (`Part.from_data`)
-- **Phase 3:** Standard schema validation (Pydantic)
-- **Phase 4:** Standard integration testing patterns
-- **Phase 5:** Standard error handling (timeouts, validation, retries)
-- **Phase 6:** Reactive to findings, no pre-research needed
+**Phases needing careful attention during planning (not full research but read before coding):**
+- **Phase 2:** Read the `authenticateClient` middleware and existing `portal_token` handling in `client-portal.js` before designing the `second_letter_form_token` flow. The token generation mechanism must be compatible with the existing CRA portal auth pattern.
+- **Phase 4:** DOCX template files must be received and inspected before a single line of generation code is written. Extract all `{VariableName}` placeholders programmatically first, build the variable data contract, then write the generator.
+- **Phase 6:** Confirm with product owner whether admin approval gate (`IN_REVIEW`) is in v1 or deferred, before wiring the Phase 5 send endpoint. This affects which state transitions are valid.
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | **MEDIUM-HIGH** | Gemini 2.5 Pro PDF support confirmed in Jan 2025 training data; API pattern well-documented; pricing may have changed by Feb 2026 |
-| Features | **HIGH** | Table stakes based on existing system analysis; existing multi-creditor logic well-understood from codebase |
-| Architecture | **HIGH** | Codebase analysis confirms all integration points; single-function change with clear boundaries |
-| Pitfalls | **HIGH** | Integration pitfalls based on code analysis (existing multi-creditor logic); Gemini behavior pitfalls based on LLM patterns |
+| Stack | HIGH | All packages confirmed installed via direct `package.json` inspection; versions verified; no new dependencies required for MVP |
+| Features | HIGH | Derived from direct codebase inspection + §305 InsO / §850c ZPO legal requirements; P1/P2 split validated against existing pipeline as reference |
+| Architecture | HIGH | All integration points confirmed by reading actual service files; build order dependency-ordered and verified against existing patterns in the codebase |
+| Pitfalls | HIGH | Pitfalls derived from reading actual code (division-by-zero in adminFinancialController.js, existing scheduler idempotency pattern, FinancialDataForm.tsx empty initial state) — not theoretical risks |
 
-**Overall confidence:** **MEDIUM-HIGH**
-
-Confidence is high on architecture, features, and integration pitfalls (based on codebase analysis). Confidence is medium on Gemini API specifics (based on Jan 2025 training data, not verified with Feb 2026 current API docs).
+**Overall confidence: HIGH**
 
 ### Gaps to Address
 
-**Verification needed during implementation:**
+- **DOCX template variables (Phase 4 blocker):** The actual template files for 2. Anschreiben (Ratenplan + Nullplan) must be received from the user before Phase 4 can begin. Template variable names drive the entire generator data contract. Do not write generation code without the templates in hand.
 
-1. **Gemini 2.5 Pro still supports native PDFs in Feb 2026** — Verify current Vertex AI documentation confirms `application/pdf` MIME type accepted by `Part.from_data()`. If API changed, may need fallback to pdf2image conversion.
+- **Client notification token design (Phase 2):** The exact mechanism for generating and validating `second_letter_form_token` needs to be designed against the existing `authenticateClient` middleware in `client-portal.js`. Read the token validation logic before designing the Phase 2 route — do not assume it matches `portal_token` from onboarding.
 
-2. **Token costs and pricing current as of Feb 2026** — Jan 2025 estimates may be outdated. Check Google Cloud Billing for actual PDF page costs; adjust budget forecasts.
+- **Admin approval gate scope (Phase 5/6 boundary):** FEATURES.md marks `IN_REVIEW` as P2 and notes "can start with auto-approve on snapshot submit for speed." This decision must be confirmed before Phase 5 implementation to avoid rework on the `FORM_SUBMITTED → SENT` state transition.
 
-3. **Page limits acceptable** — Unknown max pages before timeout/rejection. Test with 10, 20, 50, 100-page PDFs empirically. If limit < 20 pages, must implement splitting (scope increase).
+- **Existing second-round routes (deprecation decision):** `server/routes/second-round-api.js` and `server/services/secondRoundManager.js` exist and are architecturally incompatible with the new design. A decision is needed: deprecate/remove vs. leave in place unused. Leaving them active risks confusion about which route frontend should call. Recommend explicit deprecation comment or removal before Phase 6 ships.
 
-4. **Processing times fit within timeouts** — Current FastAPI timeout: 20 minutes. Benchmark 10-page PDF processing time; increase timeout if needed.
-
-5. **Gemini page numbering convention** — Assumed 1-indexed (page 1 = first page). Verify in prompt testing; if 0-indexed, adjust schema and prompt examples.
-
-6. **Output token limits for large PDFs** — Assumed 8K output tokens based on training data. If 50 creditors × 150 tokens = 7.5K tokens, may hit output limit before input limit. Test with sammel-scan containing 30+ creditors.
-
-**How to handle gaps:**
-- All gaps addressable during Phase 1-2 implementation through testing with sample PDFs
-- No architectural changes needed if gaps require adjustments—only prompt tuning or limits
-- If Gemini native PDF support removed (unlikely), fallback to pdf2image pattern documented in STACK.md
+---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- **Codebase analysis:**
-  - `/Users/luka.s/Mandanten-Portal.9.2/server/middleware/upload.js` — Upload handling confirms PDF acceptance
-  - `/Users/luka.s/Mandanten-Portal.9.2/server/utils/fastApiClient.js` — Integration pattern confirms MIME type passing
-  - `/Users/luka.s/Mandanten-Portal.9.2/server/controllers/webhookController.js` — Multi-creditor logic confirms `creditor_index`/`creditor_count` handling
-  - `/Users/luka.s/Mandanten-Portal.9.2/.planning/codebase/INTEGRATIONS.md` — Architecture documentation
-  - `/Users/luka.s/Mandanten-Portal.9.2/.planning/PROJECT.md` — Current milestone definition
+### Primary (HIGH confidence — direct codebase inspection)
+- `server/services/firstRoundDocumentGenerator.js` — DOCX generation pattern (docxtemplater + pizzip class structure)
+- `server/services/creditorEmailService.js` — `sendSecondRoundEmail()` confirmed implemented with demo mode, CC, matcher sync
+- `server/services/germanGarnishmentCalculator.js` — §850c ZPO Pfändungstabelle 2025-2026, quota formula
+- `server/services/creditorContactService.js` — orchestrator pattern to follow for new secondLetterService
+- `server/services/secondRoundManager.js` — Zendesk-centric; confirmed NOT the pattern to follow for new work
+- `server/services/secondRoundDocumentService.js` — partial implementation; document generation reusable, orchestration to replace
+- `server/models/Client.js` — full schema; confirmed `second_letter_status` does not yet exist
+- `server/scheduler.js` — setInterval pattern, idempotency flags, DelayedProcessingService pattern
+- `server/controllers/adminFinancialController.js` — division-by-zero risk in quota calculation (lines 130-141)
+- `server/routes/client-portal.js`, `admin-client-creditor.js`, `second-round-api.js` — route patterns
+- `src/components/FinancialDataForm.tsx`, `ExtendedFinancialDataWizard.tsx` — CRA portal form patterns
+- `MandantenPortalDesign/src/store/api/clientDetailApi.ts` — RTK Query mutation + invalidatesTags pattern
+- `MandantenPortalDesign/src/app/types.ts` — ClientDetailData interface to extend
+- `MandantenPortalDesign/src/app/components/tracking/TrackingCanvas.tsx` (line 59) — 3rd column scaffold comment
+- `server/package.json`, `MandantenPortalDesign/package.json` — confirmed installed package versions
+- `.planning/PROJECT.md` — milestone scope, two-frontend architecture confirmation
 
 ### Secondary (MEDIUM confidence)
-- **Gemini 2.5 Pro capabilities** (January 2025 training data):
-  - Native PDF processing via Vertex AI SDK
-  - `Part.from_data()` API pattern for multimodal content
-  - 1M input token context window
-  - Pricing estimates (~$0.005 per PDF page)
-
-### Tertiary (LOW confidence)
-- **Gemini API limits** (not documented in training data, requires verification):
-  - Maximum PDF page count before rejection
-  - Output token limits for structured extraction (assumed 8K)
-  - PDF tokenization behavior with embedded images
-  - Processing time per page
-
-**IMPORTANT:** This research is based on Jan 2025 training data. The Gemini API may have changed by Feb 2026. Verify native PDF support, MIME types, token limits, and pricing against current Vertex AI documentation before implementation.
+- §305 InsO (out-of-court settlement attempt requirement) — legal basis for 30-day trigger timing
+- §850c ZPO Pfändungsfreigrenze 2025-2026 — garnishment table; already implemented, secondary source for threshold validation
+- betterstack.com scheduler comparison (node-cron vs. setInterval) — confirms setInterval is appropriate for poll-and-check idempotent tasks on single-server deployments
 
 ---
-*Research completed: 2026-02-09*
+*Research completed: 2026-03-02*
 *Ready for roadmap: yes*

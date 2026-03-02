@@ -1,600 +1,534 @@
-# Architecture Patterns: Multi-Page PDF Support
+# Architecture Research
 
-**Domain:** Document processing with Gemini AI (creditor extraction)
-**Research Date:** 2026-02-09
-**Confidence:** HIGH (based on existing codebase analysis)
+**Domain:** Insolvency case management — automated 2. Anschreiben workflow integration
+**Researched:** 2026-03-02
+**Confidence:** HIGH — based on direct codebase inspection of all integration points
 
-## Executive Summary
+## Standard Architecture
 
-Multi-page PDF support requires minimal architectural changes. The existing two-service architecture (Node.js backend + FastAPI processor) already handles the end-to-end flow. The key integration point is the FastAPI `_load_image_as_part()` function, which needs to accept PDF MIME types and pass them to Gemini's multimodal API. The Node.js backend already accepts PDFs, stores them in GCS, and creates processing jobs with MIME type metadata.
-
-**Critical insight:** Gemini AI natively supports multi-page PDF processing via the `genai.Part` API. No page splitting, no OCR preprocessing, no new services needed. This is a focused function-level change, not an architectural redesign.
-
----
-
-## Current Architecture
+### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       CLIENT UPLOAD FLOW                         │
-└─────────────────────────────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    NODE.JS BACKEND (Express)                     │
+┌──────────────────────────────────────────────────────────────────┐
+│                        FRONTEND LAYER                             │
+├───────────────────────────────┬──────────────────────────────────┤
+│  Admin Portal (Vite/React)    │  Client Portal (CRA/React)       │
+│  MandantenPortalDesign/src/   │  src/                            │
+│                               │                                  │
+│  ┌──────────────────────┐     │  ┌──────────────────────┐        │
+│  │ ClientDetail         │     │  │ FinancialDataForm     │        │
+│  │  + SecondLetterPanel │ NEW │  │ ExtendedFinancialWiz  │        │
+│  └──────────────────────┘     │  │ SecondLetterForm  NEW │        │
+│                               │  └──────────────────────┘        │
+│  ┌──────────────────────┐     │                                  │
+│  │ LetterTrackingPage   │     │  Pattern: axios + /api proxy     │
+│  │  (existing 1. round) │     │  Auth: cookie/session token      │
+│  └──────────────────────┘     │                                  │
+│                               │                                  │
+│  RTK Query: clientDetailApi   │                                  │
+│  baseApi → /api proxy → :10000│                                  │
+└───────────────────────────────┴──────────────────────────────────┘
+                        │ /api/* → :10000
+┌──────────────────────────────────────────────────────────────────┐
+│                     BACKEND (Express :10000)                      │
+├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│  1. Upload Handler (server/middleware/upload.js)                │
-│     - Accepts: PDF, JPEG, PNG, DOC, DOCX                        │
-│     - multer → memoryStorage (file.buffer)                       │
-│     - fileFilter: validates MIME types                           │
+│  ROUTES (new for 2. Anschreiben)                                  │
+│  ┌─────────────────────────────────────────────────────────┐     │
+│  │ POST /api/admin/clients/:id/trigger-second-letter   NEW  │     │
+│  │ POST /api/admin/clients/:id/send-second-letter      NEW  │     │
+│  │ GET  /api/admin/clients/:id/second-letter-status    NEW  │     │
+│  │ GET  /api/clients/:id/second-letter-form            NEW  │     │
+│  │ POST /api/clients/:id/second-letter-form            NEW  │     │
+│  └─────────────────────────────────────────────────────────┘     │
 │                                                                   │
-│  2. GCS Service (server/services/gcs-service.js)                │
-│     - uploadToGCS(file) → stores in Cloud Storage               │
-│     - Generates signed URL (24h expiry)                          │
-│     - Returns: GCS path for FastAPI                              │
+│  SERVICES (new for 2. Anschreiben)                                │
+│  ┌──────────────────────┐  ┌──────────────────────────────┐      │
+│  │ secondLetterService  │  │ secondRoundDocumentGenerator  │      │
+│  │ (orchestrator)   NEW │  │ (mirrors firstRound*)     NEW │      │
+│  └──────────────────────┘  └──────────────────────────────┘      │
+│  ┌──────────────────────────────────────────────────────┐        │
+│  │ secondLetterSchedulerService (30-day check)      NEW │        │
+│  └──────────────────────────────────────────────────────┘        │
 │                                                                   │
-│  3. Queue Service (server/services/documentQueueService.js)     │
-│     - Creates DocumentProcessingJob in MongoDB                   │
-│     - Job includes: {filename, gcs_path, mime_type, size}       │
-│     - Polls queue (2s interval, max 2 concurrent)                │
+│  SERVICES (existing, reused as-is)                                │
+│  ┌────────────────────┐  ┌──────────────────────────────────┐    │
+│  │ creditorEmailService│  │ firstRoundDocumentGenerator      │    │
+│  │ .sendSecondRound() │  │ (reference template only)        │    │
+│  └────────────────────┘  └──────────────────────────────────┘    │
 │                                                                   │
-│  4. FastAPI Client (server/utils/fastApiClient.js)              │
-│     - POST /processing/jobs to FastAPI                           │
-│     - Payload: {client_id, files[], webhook_url}                 │
-│     - Each file: {filename, gcs_path, mime_type, document_id}   │
-│     - Rate limiting: 12 RPM, 2 concurrent                        │
-└─────────────────────────────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  FASTAPI SERVICE (Python)                        │
+│  SCHEDULER                                                        │
+│  ┌────────────────────────────────────────────────────────┐      │
+│  │ scheduler.js — add setInterval for 30-day check    MOD │      │
+│  └────────────────────────────────────────────────────────┘      │
 │                                                                   │
-│  1. Job Endpoint (/processing/jobs)                              │
-│     - Receives job with files[] array                            │
-│     - Downloads from GCS signed URL                              │
+└──────────────────────────────────────────────────────────────────┘
+                        │
+┌──────────────────────────────────────────────────────────────────┐
+│                     DATA LAYER (MongoDB)                          │
+├──────────────────────────────────────────────────────────────────┤
+│  Client model additions:                                          │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │ second_letter_status: String (enum state machine)    NEW  │    │
+│  │ second_letter_triggered_at: Date                     NEW  │    │
+│  │ second_letter_client_notified_at: Date               NEW  │    │
+│  │ second_letter_sent_at: Date                          NEW  │    │
+│  │ second_letter_snapshot: { subdocument }              NEW  │    │
+│  └──────────────────────────────────────────────────────────┘    │
 │                                                                   │
-│  2. Document Processor (document_processor.py)                   │
-│     - _load_image_as_part(file_data) → Creates Gemini Part      │
-│     - CURRENT: Only handles image MIME types                     │
-│     - ⚠️ CHANGE NEEDED: Add PDF MIME type support               │
-│                                                                   │
-│  3. Processing Pipeline (processing.py)                          │
-│     - Classification → Rotation → Extraction → Verification      │
-│     - Multi-creditor splitting (if multiple creditors detected)  │
-│     - Creates child entries with creditor_index/count            │
-│                                                                   │
-│  4. Webhook Response                                              │
-│     - POST webhook_url with results                              │
-│     - Format: {job_id, client_id, status, results[]}            │
-└─────────────────────────────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              NODE.JS WEBHOOK HANDLER                             │
-│                                                                   │
-│  1. Webhook Controller (server/controllers/webhookController.js)│
-│     - Acknowledge-first pattern (200 OK immediately)             │
-│     - Queues job in WebhookJob for background processing         │
-│                                                                   │
-│  2. Document Results Processing                                  │
-│     - Updates Client.documents[] with processing results         │
-│     - Handles multi-creditor splits (creates child entries)      │
-│     - Enriches with DB lookup (creditor contact info)            │
-│     - Duplicate detection (reference number matching)            │
-│                                                                   │
-│  3. Creditor Deduplication                                       │
-│     - Merges FastAPI-deduped creditors into final_creditor_list │
-│     - Runs AI-based rededup after all documents processed        │
-│     - Creates Zendesk tickets for manual review if needed        │
-└─────────────────────────────────────────────────────────────────┘
+│  creditorSchema additions (per-creditor tracking):               │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │ second_letter_sent_at: Date                          NEW  │    │
+│  │ second_letter_document_filename: String              NEW  │    │
+│  │ second_letter_email_sent_at: Date                    NEW  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
+                        │
+┌──────────────────────────────────────────────────────────────────┐
+│               EXTERNAL SERVICES (existing, reused)                │
+│  Resend SDK → sendSecondRoundEmail() already implemented          │
+│  Creditor-email-matcher sync → syncToMatcher() already wired      │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Component Responsibilities
 
-## Integration Points for PDF Support
+| Component | Responsibility | New vs Modified |
+|-----------|----------------|-----------------|
+| `second_letter_status` on Client | State machine driving all eligibility and UI | NEW field on existing model |
+| `second_letter_snapshot` on Client | Immutable audit record of calculation at time of send | NEW subdocument |
+| `secondLetterService.js` | Main orchestrator: eligibility, client notification, generate DOCX, send emails | NEW service |
+| `secondRoundDocumentGenerator.js` | docxtemplater pipeline for Ratenplan + Nullplan templates | NEW service |
+| `secondLetterSchedulerService.js` | MongoDB query for clients where MAX(email_sent_at) >= 30 days, batch trigger | NEW service |
+| `scheduler.js` | Register new scheduled check every 6 hours | MODIFIED |
+| `creditorEmailService.sendSecondRoundEmail()` | Send 2nd round email to creditor with DOCX attachment | EXISTING — no changes |
+| `admin-second-letter.js` (route) | Admin trigger, manual send, status check endpoints | NEW route file |
+| `client-portal.js` (route) | Add GET + POST for second-letter-form | MODIFIED |
+| `SecondLetterPanel` (admin component) | Status badge, trigger/send actions inside ClientDetail | NEW component |
+| `SecondLetterForm.tsx` (client component) | Pre-filled form in CRA portal — confirm/correct financial data | NEW component |
+| `clientDetailApi.ts` | Add `triggerSecondLetter`, `sendSecondLetter`, `getSecondLetterStatus` mutations | MODIFIED |
+| `types.ts` | Add `second_letter_status` and `second_letter_snapshot` to `ClientDetailData` | MODIFIED |
 
-### 1. **Node.js Upload Handler** ✅ ALREADY WORKS
-
-**Location:** `server/middleware/upload.js`
-
-**Current State:**
-- Already accepts `'application/pdf'` in `fileFilter.allowedTypes`
-- Uses `multer.memoryStorage()` (works for PDFs)
-- No changes needed
-
-**Why it works:**
-- PDFs are binary files like images
-- Memory buffer works identically for PDF bytes
-- GCS upload via `uploadToGCS(file)` is MIME-agnostic
-
-### 2. **GCS Storage** ✅ ALREADY WORKS
-
-**Location:** `server/services/gcs-service.js`
-
-**Current State:**
-- `uploadToGCS(file)` stores any MIME type
-- Generates signed URL with `blob.getSignedUrl()` (24h expiry)
-- FastAPI downloads via signed URL
-
-**Why it works:**
-- GCS stores PDFs identically to images
-- Signed URLs work for any file type
-- FastAPI retrieves via HTTP (MIME-agnostic)
-
-### 3. **Document Queue** ✅ ALREADY WORKS
-
-**Location:** `server/services/documentQueueService.js`, `server/models/DocumentProcessingJob.js`
-
-**Current State:**
-- Job schema includes `mime_type` field
-- Queue passes `mime_type` to FastAPI
-- No validation restricts to images only
-
-**Why it works:**
-- Queue is a pass-through layer
-- `mime_type` field already exists
-- FastAPI receives the MIME type
-
-### 4. **FastAPI Client** ✅ ALREADY WORKS
-
-**Location:** `server/utils/fastApiClient.js`
-
-**Current State:**
-- `createProcessingJob()` sends files with `mime_type`
-- No validation restricts MIME types
-- Rate limiting is MIME-agnostic
-
-**Why it works:**
-- Client just sends JSON payload
-- MIME type is metadata, not processed by client
-- FastAPI handles the actual file
-
-### 5. **FastAPI Document Processor** ⚠️ CHANGE NEEDED
-
-**Location:** `/tmp/creditor-fastapi/document_processor.py`
-
-**Current Issue:**
-```python
-def _load_image_as_part(file_data):
-    # ONLY handles image MIME types
-    if mime_type not in ['image/jpeg', 'image/png', ...]:
-        raise ValueError("Unsupported MIME type")
-```
-
-**Required Change:**
-```python
-def _load_image_as_part(file_data):
-    mime_type = file_data.get('mime_type', 'image/png')
-
-    # Download file bytes (works for both images and PDFs)
-    response = requests.get(gcs_signed_url)
-    file_bytes = response.content
-
-    # Add PDF support
-    if mime_type == 'application/pdf':
-        return genai.Part.from_data(
-            data=file_bytes,
-            mime_type='application/pdf'
-        )
-    elif mime_type in IMAGE_MIME_TYPES:
-        return genai.Part.from_data(
-            data=file_bytes,
-            mime_type=mime_type
-        )
-    else:
-        raise ValueError(f"Unsupported MIME type: {mime_type}")
-```
-
-**Why this works:**
-- Gemini AI accepts `application/pdf` as a valid MIME type
-- `genai.Part.from_data()` handles multi-page PDFs natively
-- No page splitting needed (Gemini processes all pages internally)
-
-**Impact:** Isolated to one function. No changes to pipeline orchestration.
-
-### 6. **Processing Pipeline** ✅ ALREADY WORKS
-
-**Location:** `/tmp/creditor-fastapi/processing.py`
-
-**Current State:**
-- Orchestrates: classification → rotation → extraction → verification
-- Passes `genai.Part` objects to Gemini prompts
-- Multi-creditor splitting logic is file-format agnostic
-
-**Why it works:**
-- Gemini AI treats PDF Parts identically to image Parts
-- Prompt engineering works across formats
-- Multi-creditor detection is content-based, not format-based
-
-### 7. **Webhook Handler** ✅ ALREADY WORKS
-
-**Location:** `server/controllers/webhookController.js`
-
-**Current State:**
-- Processes results array from FastAPI
-- Creates/updates documents in MongoDB
-- Handles multi-creditor splits via `source_document_id`
-
-**Why it works:**
-- Results format is identical for images and PDFs
-- Document metadata includes MIME type (stored, not processed)
-- Multi-creditor logic is format-agnostic
-
----
-
-## Data Flow Changes: Images vs PDFs
-
-### **Current: Single-Page Image**
+## Recommended Project Structure
 
 ```
-1. Upload: image/jpeg → multer buffer
-2. GCS: uploadToGCS() → signed URL
-3. Queue: {mime_type: 'image/jpeg', gcs_path: '...'}
-4. FastAPI: _load_image_as_part() → genai.Part (image bytes)
-5. Gemini: Processes single-page image
-6. Result: {id, is_creditor_document, extracted_data, ...}
-7. Webhook: Updates client.documents[]
+server/
+├── services/
+│   ├── firstRoundDocumentGenerator.js        # existing — reference template only
+│   ├── secondRoundDocumentGenerator.js       # NEW — mirrors firstRound class pattern
+│   ├── secondLetterService.js                # NEW — main orchestrator
+│   └── secondLetterSchedulerService.js       # NEW — 30-day eligibility checker
+├── routes/
+│   ├── admin-second-letter.js                # NEW — admin trigger + status + send
+│   └── client-portal.js                      # MODIFIED — add 2 second-letter-form routes
+├── models/
+│   └── Client.js                             # MODIFIED — add second_letter_* fields
+└── scheduler.js                              # MODIFIED — add 6-hour setInterval block
+
+MandantenPortalDesign/src/
+├── app/
+│   └── components/
+│       └── second-letter-panel.tsx           # NEW — admin UI, plugs into ClientDetail
+└── store/api/
+    └── clientDetailApi.ts                    # MODIFIED — add 3 RTK Query endpoints
+
+src/  (CRA — client portal)
+└── components/
+    └── SecondLetterForm.tsx                  # NEW — financial data confirmation form
 ```
 
-### **New: Multi-Page PDF**
+### Structure Rationale
 
+- **secondRoundDocumentGenerator.js:** New file that mirrors the class structure of `firstRoundDocumentGenerator.js` (same constructor shape, same method names). The two generators stay independently testable and make template variable differences explicit. Do not extend or import firstRoundDocumentGenerator.
+- **secondLetterService.js:** Single orchestrator, following the pattern of `creditorContactService.js`. Business logic lives here, not scattered across routes.
+- **secondLetterSchedulerService.js:** Separate file, consistent with `DelayedProcessingService` pattern already used in scheduler.js. Scheduler itself stays thin.
+- **admin-second-letter.js:** New route file rather than extending admin-client-creditor.js. Keeps concerns separated, follows existing one-file-per-domain route convention.
+- **SecondLetterPanel:** Panel inside ClientDetail rather than a separate page. The 2. Anschreiben is client-scoped; it belongs alongside existing tabs in the detail view.
+
+## Architectural Patterns
+
+### Pattern 1: State Machine on Client Model
+
+**What:** `second_letter_status` enum on Client drives eligibility checks, UI state, and guards against double-triggering.
+**When to use:** Any multi-step async workflow where re-entrancy must be prevented.
+**Trade-offs:** Simple to query and display as badge. No extra collections. MongoDB atomic update provides the guard.
+
+State transitions:
 ```
-1. Upload: application/pdf → multer buffer
-2. GCS: uploadToGCS() → signed URL
-3. Queue: {mime_type: 'application/pdf', gcs_path: '...'}
-4. FastAPI: _load_image_as_part() → genai.Part (PDF bytes) ← CHANGE HERE
-5. Gemini: Processes ALL pages in PDF (native multi-page support)
-6. Result: {id, is_creditor_document, extracted_data, ...}
-   - If multiple creditors: Creates child entries with creditor_index
-7. Webhook: Updates client.documents[], handles multi-creditor splits
-```
-
-**Key Difference:** Step 4 (FastAPI) accepts PDF MIME type. Everything else identical.
-
----
-
-## Component Boundaries
-
-| Component | Responsibility | PDF Changes Needed |
-|-----------|---------------|-------------------|
-| **Upload Middleware** | Validate file type, create buffer | None (already accepts PDFs) |
-| **GCS Service** | Store file, generate signed URL | None (MIME-agnostic) |
-| **Document Queue** | Queue jobs, rate limit | None (passes MIME type) |
-| **FastAPI Client** | HTTP → FastAPI | None (sends MIME type) |
-| **Document Processor** | Convert file → Gemini Part | **ADD PDF MIME TYPE** |
-| **Processing Pipeline** | Orchestrate AI calls | None (format-agnostic) |
-| **Webhook Handler** | Store results in MongoDB | None (format-agnostic) |
-
-**Blast Radius:** 1 function in FastAPI service.
-
----
-
-## Architecture Patterns to Follow
-
-### Pattern 1: MIME-Type-Driven Processing
-
-**What:** Route processing logic based on `mime_type` field, not file extension or content sniffing.
-
-**When:** Any file processing function that needs format-specific handling.
-
-**Example:**
-```python
-def _load_document_as_part(file_data):
-    mime_type = file_data['mime_type']
-    file_bytes = download_file(file_data['gcs_path'])
-
-    if mime_type == 'application/pdf':
-        return genai.Part.from_data(data=file_bytes, mime_type='application/pdf')
-    elif mime_type in IMAGE_MIME_TYPES:
-        return genai.Part.from_data(data=file_bytes, mime_type=mime_type)
-    else:
-        raise UnsupportedFormatError(mime_type)
+IDLE           (default — not yet triggered)
+  → PENDING       (scheduler or admin triggered; notification email sent to client)
+  → FORM_SUBMITTED (client completes SecondLetterForm)
+  → IN_REVIEW     (admin has the snapshot, reviewing before send)
+  → SENT          (DOCX generated, emailed to all creditors)
+  → SKIPPED       (admin decides not to send this round)
 ```
 
-**Why:** MIME type is already captured at upload, validated by multer, stored in DB, and passed through all layers.
-
-### Pattern 2: Native API Capabilities Over Preprocessing
-
-**What:** Use Gemini's native multi-page PDF support instead of splitting PDFs into images.
-
-**Why:**
-- Preserves page relationships (Gemini sees the document as a whole)
-- Avoids image quality loss from PDF → image conversion
-- Simpler architecture (no PDF splitting service)
-- Faster processing (one API call vs N calls for N pages)
-
-**Anti-Pattern:** Don't split PDF into page images unless Gemini API doesn't support PDFs (it does).
-
-### Pattern 3: Format-Agnostic Result Processing
-
-**What:** Webhook handler processes results without caring whether source was image or PDF.
-
-**Why:** Result structure is identical. Multi-creditor splitting is content-based, not format-based.
-
-**Example:**
+Guard implementation (mirrors dedup guard in existing codebase):
 ```javascript
-// Works for both images and PDFs
-for (const docResult of results) {
-    if (docResult.source_document_id) {
-        // Multi-creditor split (child entry)
-        createCreditorEntry(docResult);
-    } else {
-        // Standard document update
-        updateDocument(docResult);
-    }
+// secondLetterService.js — atomic state transition, prevents double-trigger
+async triggerSecondLetter(clientId) {
+  const client = await Client.findOneAndUpdate(
+    { _id: clientId, second_letter_status: 'IDLE' },
+    { $set: {
+        second_letter_status: 'PENDING',
+        second_letter_triggered_at: new Date()
+      }
+    },
+    { new: true }
+  );
+  if (!client) throw new Error('Client not eligible or already triggered');
+  // Continue to send notification email to client...
 }
 ```
 
-### Pattern 4: Signed URL as Abstraction Layer
+### Pattern 2: Snapshot Subdocument for Audit
 
-**What:** FastAPI downloads files via signed URLs, not direct GCS access.
+**What:** Before generating the DOCX and sending emails, capture an immutable copy of the financial calculation on the Client document.
+**When to use:** Any time a business decision is communicated externally and must be auditable (amount agreed to, plan sent).
+**Trade-offs:** Denormalized but intentional — the letter reflects data *at time of sending*, not current data which may change.
 
-**Why:**
-- Decouples storage from processing
-- Works for GCS, local storage, or any HTTP-accessible file
-- 24h expiry provides security without credential sharing
-
-**Current Implementation:**
+Schema addition to Client.js:
 ```javascript
-// Node.js generates signed URL
-const signedUrl = await blob.getSignedUrl({
-    version: 'v4',
-    action: 'read',
-    expires: Date.now() + 24 * 60 * 60 * 1000
-});
-
-// FastAPI downloads via HTTP
-response = requests.get(signed_url)
-file_bytes = response.content
+second_letter_snapshot: {
+  captured_at: Date,
+  determined_plan_type: { type: String, enum: ['nullplan', 'ratenzahlung'] },
+  pfaendbar_amount: Number,
+  plan_duration_months: Number,
+  financial_data: mongoose.Schema.Types.Mixed,      // deep copy
+  extended_financial_data: mongoose.Schema.Types.Mixed,
+  creditor_calculations: [{
+    creditor_id: String,
+    creditor_name: String,
+    claim_amount: Number,
+    monthly_quota: Number,   // for ratenzahlung only
+    percentage: Number
+  }]
+}
 ```
 
----
+### Pattern 3: Fire-and-Forget Background Execution
+
+**What:** Admin trigger endpoint returns immediately (202); document generation and email sending happen asynchronously. Status is tracked via `second_letter_status` field.
+**When to use:** The 1. Anschreiben pipeline uses this exact pattern (`confirm-creditors` returns immediately, processing is background).
+**Trade-offs:** Admin gets fast UI response; long operations don't block the HTTP response. Status visible on reload or via existing RTK Query cache invalidation.
+
+```javascript
+// admin-second-letter.js route handler
+router.post('/clients/:clientId/send-second-letter', authenticateAdmin, async (req, res) => {
+  // Respond immediately
+  res.json({ success: true, message: 'Second letter send initiated' });
+  // Fire-and-forget
+  secondLetterService.sendSecondLetter(clientId).catch(err => {
+    console.error(`Second letter send failed for ${clientId}:`, err.message);
+  });
+});
+```
+
+## Data Flow
+
+### Flow 1: Automated 30-Day Scheduler Trigger
+
+```
+scheduler.js (every 6 hours)
+  → secondLetterSchedulerService.checkEligibleClients()
+      MongoDB query:
+        {
+          second_letter_status: 'IDLE',
+          creditor_contact_started: true,
+          'final_creditor_list': {
+            $elemMatch: {
+              contact_status: 'email_sent_with_document',
+              email_sent_at: { $lte: <30 days ago> }
+            }
+          }
+        }
+      JS-side filter: MAX(email_sent_at) across all creditors <= 30 days ago
+      (avoids complex $group aggregation on subdocument array)
+  → For each eligible client:
+      secondLetterService.triggerSecondLetter(client._id)
+        → Atomic update: IDLE → PENDING (guard)
+        → Send client notification email via Resend with portal link
+        → Update second_letter_client_notified_at
+```
+
+### Flow 2: Admin Manual Trigger
+
+```
+Admin Portal — SecondLetterPanel
+  → Admin clicks "Jetzt triggern" (bypasses 30-day date check)
+  → POST /api/admin/clients/:id/trigger-second-letter  { force: true }
+      secondLetterService.triggerSecondLetter(clientId, { force: true })
+        → Atomic update: IDLE → PENDING (still guards against re-trigger)
+        → Send client notification email
+  → RTK Query invalidates Client tag → UI refetches → badge shows PENDING
+```
+
+### Flow 3: Client Submits Financial Data Form
+
+```
+Client receives email → clicks portal link → opens SecondLetterForm.tsx
+
+SecondLetterForm.tsx
+  → GET /api/clients/:id/second-letter-form
+      Server: return { financial_data, extended_financial_data } from Client doc
+      (pre-filled with existing data)
+  → Client reviews fields, corrects if needed
+  → POST /api/clients/:id/second-letter-form
+      Body: { financial_data, extended_financial_data }
+      Server:
+        → validate
+        → save to client.financial_data + client.extended_financial_data
+        → update second_letter_status: FORM_SUBMITTED
+  → Client sees confirmation screen
+```
+
+### Flow 4: Admin Sends 2. Anschreiben
+
+```
+Admin Portal — SecondLetterPanel (status: FORM_SUBMITTED)
+  → Admin clicks "2. Anschreiben senden"
+  → POST /api/admin/clients/:id/send-second-letter
+      Server responds 202 immediately
+      Background (secondLetterService.sendSecondLetter):
+        1. Read client.financial_data + extended_financial_data + determined_plan_type
+        2. Calculate pfaendbar_amount (existing §850c ZPO logic)
+        3. Determine plan type: nullplan vs ratenzahlung
+           (use client.determined_plan_type, already set by planTypeRouter)
+        4. Calculate per-creditor quota (% of total debt × pfaendbar_amount)
+        5. Write second_letter_snapshot to Client (before any sends)
+        6. secondRoundDocumentGenerator.generateCreditorDocuments()
+             → Load template:
+               if nullplan   → server/templates/2.Schreiben-Nullplan.docx
+               if ratenzahlung → server/templates/2.Schreiben-Ratenplan.docx
+             → Fill variables per creditor:
+               {Name} {Adresse} {Creditor} {Datum}
+               {Pfaendbarer_Betrag} {Rate} {Laufzeit} {Quote}
+             → Output: server/generated_documents/second_round/
+        7. For each creditor with email:
+             creditorEmailService.sendSecondRoundEmail()  ← already implemented
+             Update creditor: second_letter_sent_at, second_letter_email_sent_at
+             2s delay between creditors (matches 1. Anschreiben pattern)
+        8. Update client: second_letter_status: SENT, second_letter_sent_at
+  → RTK Query cache invalidated → SecondLetterPanel shows SENT badge
+```
+
+### State Management (Admin Frontend)
+
+```
+RTK Query (clientDetailApi.ts)
+  useGetClientDetailQuery(clientId)
+    → returns ClientDetailData including second_letter_status + second_letter_snapshot
+    → poll interval: 30s (already set on LetterTrackingPage, replicate pattern)
+
+  triggerSecondLetter mutation (NEW)
+    → POST /api/admin/clients/:id/trigger-second-letter
+    → invalidatesTags: [{ type: 'Client', id: clientId }]
+
+  sendSecondLetter mutation (NEW)
+    → POST /api/admin/clients/:id/send-second-letter
+    → invalidatesTags: [{ type: 'Client', id: clientId }]
+
+SecondLetterPanel reads:
+  client.second_letter_status    → drives badge + button visibility
+  client.second_letter_snapshot  → shows calculation summary
+  client.second_letter_sent_at   → shows sent timestamp
+```
+
+## Integration Points
+
+### Existing Services — Reuse As-Is
+
+| Service | How to Reuse | Notes |
+|---------|-------------|-------|
+| `creditorEmailService.sendSecondRoundEmail()` | Import singleton, call directly | Already implemented with correct German subject line, DOCX attachment support, matcher sync, demo mode |
+| §850c ZPO calculation | Read existing `client.financial_data.garnishable_amount` or call the calculation function in adminFinancialController | Do not rewrite; the calculation is already in the DB on clients that went through FinancialDataForm |
+| `client.determined_plan_type` | Read this field to branch nullplan vs ratenzahlung document template | Already set by planTypeRouter after ExtendedFinancialDataWizard |
+| `creditorContactService.js` | Reference only — use as pattern for orchestrator structure | Do not modify |
+| `firstRoundDocumentGenerator.js` | Reference only — copy class structure, change templatePath and variables | Do not import or extend |
+
+### Existing Routes — What to Add
+
+| Route File | Addition |
+|------------|----------|
+| `server/routes/client-portal.js` | `GET /clients/:id/second-letter-form` and `POST /clients/:id/second-letter-form` following existing authenticateClient pattern |
+| `server/scheduler.js` | One new setInterval block calling `secondLetterSchedulerService.checkEligibleClients()`, every 6 hours |
+| `server.js` | Mount `admin-second-letter.js` router at `/api/admin` alongside existing admin routes |
+
+### Client Portal Pattern (client-portal.js additions)
+
+```javascript
+// GET — return pre-filled financial data for the form
+router.get('/clients/:clientId/second-letter-form',
+    authenticateClient,
+    controller.handleGetSecondLetterForm   // returns financial_data + extended_financial_data
+);
+
+// POST — save client's confirmed/corrected data
+router.post('/clients/:clientId/second-letter-form',
+    authenticateClient,
+    controller.handleSubmitSecondLetterForm  // updates data, sets status FORM_SUBMITTED
+);
+```
+
+### MongoDB Query for 30-Day Check
+
+```javascript
+// secondLetterSchedulerService.js
+async checkEligibleClients() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const candidates = await Client.find({
+    second_letter_status: 'IDLE',
+    creditor_contact_started: true,
+    'final_creditor_list': {
+      $elemMatch: {
+        contact_status: 'email_sent_with_document',
+        email_sent_at: { $lte: thirtyDaysAgo }
+      }
+    }
+  }).select('_id aktenzeichen firstName lastName final_creditor_list');
+
+  // JS-side: only trigger if ALL sent emails are >= 30 days old
+  // (ensures the full 30-day response window has passed)
+  const eligible = candidates.filter(client => {
+    const sentEmails = client.final_creditor_list
+      .filter(c => c.email_sent_at)
+      .map(c => new Date(c.email_sent_at));
+    if (sentEmails.length === 0) return false;
+    const maxSentAt = new Date(Math.max(...sentEmails));
+    return maxSentAt <= thirtyDaysAgo;
+  });
+
+  return eligible;
+}
+```
 
-## Anti-Patterns to Avoid
+This approach uses the existing pattern in DelayedProcessingService (simple $find + JS filter) rather than a complex $group aggregation.
+
+### Admin Frontend Integration
 
-### Anti-Pattern 1: PDF Splitting Before Processing
+`SecondLetterPanel` is a new component in `MandantenPortalDesign/src/app/components/`. It plugs into the existing `ClientDetail` component tab structure. The recommended placement is as a section within the `overview` tab (or a dedicated `second-letter` tab if the overview becomes crowded).
 
-**What:** Converting multi-page PDF into separate page images before sending to Gemini.
+The panel uses `useGetClientDetailQuery` which already fetches the full client — no extra API call for initial render. After mutations, the Client cache tag invalidation triggers a refetch.
 
-**Why bad:**
-- Loses page context (Gemini can't see relationships between pages)
-- Image quality degradation (PDF → PNG conversion)
-- Increased API costs (N API calls for N pages)
-- Increased latency (sequential processing)
-- More complex architecture (needs PDF splitting service)
+TypeScript additions required in `types.ts`:
+```typescript
+// Add to ClientDetailData interface
+second_letter_status?: 'IDLE' | 'PENDING' | 'FORM_SUBMITTED' | 'IN_REVIEW' | 'SENT' | 'SKIPPED';
+second_letter_triggered_at?: string;
+second_letter_client_notified_at?: string;
+second_letter_sent_at?: string;
+second_letter_snapshot?: {
+  captured_at: string;
+  determined_plan_type: 'nullplan' | 'ratenzahlung';
+  pfaendbar_amount: number;
+  plan_duration_months?: number;
+};
+```
 
-**Instead:** Pass entire PDF to Gemini via `application/pdf` MIME type.
+### Client Portal Integration
 
-### Anti-Pattern 2: Format-Specific Result Processing
+`SecondLetterForm.tsx` is a new component in `/src/components/` (CRA portal). It follows the exact same pattern as `ExtendedFinancialDataWizard.tsx`:
+- Uses `api` (axios instance from `/src/config/api`)
+- Receives `clientId` as prop
+- Calls GET endpoint on mount to pre-fill
+- Multi-step wizard structure (berufsstatus, einkommen, vermögen sections already exist in ExtendedFinancialDataWizard — reuse the UI structure, just add a confirmation step)
+- Calls POST on submit
 
-**What:** Different webhook handlers for images vs PDFs.
+The client reaches this form via the link in the notification email. The portal URL pattern matches existing portal auth (session token or verification code).
 
-**Why bad:**
-- Duplicates logic
-- Harder to maintain
-- Breaks when adding new formats (DOCX, TIFF, etc.)
+## Anti-Patterns
 
-**Instead:** Single webhook handler that processes results based on content (is_creditor_document, creditor_count), not source format.
+### Anti-Pattern 1: Re-implementing Email Sending
 
-### Anti-Pattern 3: Client-Side Format Conversion
+**What people do:** Write new email sending logic inside secondLetterService.js.
+**Why it's wrong:** `creditorEmailService.sendSecondRoundEmail()` is already fully implemented: correct German subject line ("Schuldenbereinigungsplan..."), DOCX attachment support, demo mode (redirects to test address), matcher sync, Resend SDK initialization. Re-implementing duplicates all this.
+**Do this instead:** Import the singleton `require('./creditorEmailService')` and call `sendSecondRoundEmail()` directly. Only new work is generating the DOCX file passed as the attachment.
 
-**What:** Having the browser or client app convert PDFs to images before upload.
+### Anti-Pattern 2: Scheduler Without Idempotency Guard
 
-**Why bad:**
-- Pushes processing to client (bad UX)
-- Unreliable (varies by browser/device)
-- Wastes bandwidth (larger images)
-- Loses metadata (embedded text, annotations)
+**What people do:** Add a setInterval that triggers second letters but relies only on the date check for idempotency.
+**Why it's wrong:** The scheduler runs every 6 hours. If secondLetterService.triggerSecondLetter fails partway through (client notified but status not saved), the next scheduler run will re-trigger the same client, sending duplicate notification emails.
+**Do this instead:** The atomic `findOneAndUpdate` matching on `second_letter_status: 'IDLE'` is the idempotency guard. This is the same pattern used for `dedup_in_progress` and payment guards throughout the existing codebase. Without it, double-sends are guaranteed under failure conditions.
 
-**Instead:** Accept PDF uploads, let server-side handle format requirements.
+### Anti-Pattern 3: Skipping the Snapshot Before Sending
 
-### Anti-Pattern 4: MIME Type Validation in Multiple Layers
+**What people do:** Calculate pfändbar amount and per-creditor quotas on the fly when generating documents, without persisting the calculation.
+**Why it's wrong:** financial_data can be edited after the letter is sent. Without a snapshot, there is no way to reconstruct what was actually in the DOCX that went to creditors. This breaks audit requirements and causes confusion if creditors dispute amounts.
+**Do this instead:** Write `second_letter_snapshot` to MongoDB *before* calling the document generator. If document generation fails, the snapshot still records what was calculated. This matches the existing pattern of `debt_settlement_plan` on the Client model.
 
-**What:** Checking MIME type in upload handler, queue service, FastAPI client, and processor.
+### Anti-Pattern 4: Using secondRoundManager.js as the Model
 
-**Why bad:**
-- Hard to add new formats (must update N places)
-- Inconsistent validation (one layer might reject, others accept)
-- Violates single responsibility
+**What people do:** Look at the existing `server/services/secondRoundManager.js` and follow its patterns for the new 2. Anschreiben workflow.
+**Why it's wrong:** `secondRoundManager.js` was built for a different concept (Zendesk-based second round with the old `second_round_api.js` route). It uses Zendesk uploader, in-memory state maps, and the old creditor calculation approach. It does not align with the new requirements (state machine, client form, snapshot, admin-controlled send).
+**Do this instead:** Follow the pattern of `creditorContactService.js` (orchestrator pattern) and `firstRoundDocumentGenerator.js` (document generation pattern). Use `creditorEmailService.sendSecondRoundEmail()` which was already built for the new approach.
 
-**Instead:** Validate once at upload (multer fileFilter), pass MIME type through, validate again only at processing (where format matters).
+### Anti-Pattern 5: New Polling Endpoint for Status
 
----
+**What people do:** Add a dedicated `getSecondLetterStatus` polling endpoint and a separate RTK Query query that polls every 10 seconds.
+**Why it's wrong:** `useGetClientDetailQuery` already returns the full client including `second_letter_status`. Adding a separate poll doubles requests. The existing LetterTrackingPage already polls `getClientDetail` every 30 seconds.
+**Do this instead:** Return `second_letter_status` and `second_letter_snapshot` as part of the existing GET `/api/clients/:id` response. Mutations invalidate the `Client` RTK tag, causing immediate refetch.
 
-## Scalability Considerations
+## Scaling Considerations
 
-| Concern | At 100 PDFs/day | At 1K PDFs/day | At 10K PDFs/day |
-|---------|----------------|----------------|-----------------|
-| **GCS Storage** | ~10GB/month (negligible cost) | ~100GB/month (~$2/mo) | ~1TB/month (~$20/mo) |
-| **Processing Time** | 2-5min per PDF (Gemini latency) | Need queue with 2-5 workers | Need autoscaling FastAPI instances |
-| **Queue Depth** | MongoDB queue sufficient | MongoDB queue sufficient | Consider Redis queue or Cloud Tasks |
-| **Signed URL Expiry** | 24h works (processed within hours) | 24h works | Consider shorter expiry (6h) + cleanup |
-| **Multi-Page Complexity** | Most PDFs < 10 pages | Need timeout increases for 50+ page PDFs | Consider page limit (e.g., max 100 pages) |
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| Current (< 100 active clients) | setInterval in scheduler.js is sufficient. No queue needed. |
+| If > 50 clients trigger simultaneously | Document generation is CPU-bound. Add a concurrency limit (already done in creditorContactService with 2s delays between emails — replicate). |
+| Email volume | Resend handles rate limiting internally. No changes needed within current plan limits. |
 
-**Current Bottleneck:** Gemini API rate limits (15 RPM free tier, 60 RPM paid). Node.js queue already implements rate limiting (12 RPM).
+The 2. Anschreiben workflow triggers at most once per client and has a 30-day cadence. Simultaneous processing of more than 10-15 clients is unlikely given the business model. Scaling is not a concern for this milestone.
 
-**PDF-Specific Concern:** Multi-page PDFs take longer to process (Gemini must analyze all pages). Current timeout: 10 minutes per job. For 100-page PDFs, may need to increase to 20-30 minutes.
+## Build Order (Dependency-Ordered)
 
----
+Build in this order to respect data and code dependencies:
 
-## New vs Modified Components
+**1. Client.js model changes**
+Add `second_letter_status`, `second_letter_triggered_at`, `second_letter_client_notified_at`, `second_letter_sent_at`, `second_letter_snapshot` to clientSchema. Add `second_letter_*` fields to creditorSchema.
+Everything downstream reads from the model.
 
-### Modified Components
+**2. secondRoundDocumentGenerator.js**
+Pure file-in/file-out service. No DB dependency except reading client data. Can be built and manually tested in isolation with placeholder DOCX templates. Depends on model (step 1) for the client data shape it receives.
 
-| Component | File | Change Type | Complexity |
-|-----------|------|-------------|------------|
-| **Document Processor** | `document_processor.py` | Add PDF MIME type to `_load_image_as_part()` | **LOW** - 5 line change |
+**3. secondLetterService.js**
+Main orchestrator. Depends on model (step 1), document generator (step 2), and existing `creditorEmailService.sendSecondRoundEmail()` (no changes to that service).
 
-### New Components
+**4. secondLetterSchedulerService.js**
+Eligibility checker. Depends on model (step 1) and secondLetterService (step 3).
 
-**NONE.** All required infrastructure exists.
+**5. scheduler.js modification**
+Add one setInterval block calling secondLetterSchedulerService. Depends on step 4.
 
-### Optional Enhancements (Post-MVP)
+**6. admin-second-letter.js route**
+Admin endpoints: trigger, send, status. Depends on secondLetterService (step 3). Wire into server.js.
 
-| Enhancement | Why Consider | Complexity |
-|-------------|--------------|------------|
-| **Page Count Validator** | Reject 500-page PDFs to avoid timeouts | LOW - Add in upload handler |
-| **PDF Metadata Extractor** | Extract page count, creation date, author | LOW - Use PyPDF2 in FastAPI |
-| **PDF Thumbnail Generator** | Show preview in UI | MEDIUM - Needs pdf2image + frontend |
-| **Page Range Selector** | Let user select specific pages to process | HIGH - Requires PDF splitting |
+**7. client-portal.js route additions**
+GET + POST for second-letter-form. Depends on model (step 1) and a handler in clientPortalController. Does not require secondLetterService — the controller only reads/writes financial_data and updates status.
 
----
+**8. SecondLetterForm.tsx (client portal)**
+CRA component. Depends on backend routes (step 7). Client-facing form with pre-fill and submission.
 
-## Build Order (Considering Dependencies)
+**9. types.ts + clientDetailApi.ts extensions**
+TypeScript types for `second_letter_*` fields. Add 2-3 RTK Query mutations. Depends on backend routes being stable (steps 6, 7).
 
-### Phase 1: Core PDF Support (Milestone 1)
-**Goal:** Process multi-page PDFs end-to-end
-
-1. **FastAPI: Modify `_load_image_as_part()`**
-   - Add `application/pdf` to supported MIME types
-   - Create `genai.Part` with PDF bytes
-   - Test with sample multi-page PDF
-   - Dependencies: None (isolated function)
-
-2. **Integration Test: Upload → Process → Webhook**
-   - Upload multi-page PDF via Node.js
-   - Verify FastAPI processes without errors
-   - Verify webhook receives results
-   - Dependencies: Step 1 complete
-
-3. **Multi-Creditor Verification**
-   - Upload PDF with 2+ creditors
-   - Verify child entries created with `creditor_index`
-   - Verify `final_creditor_list` merge
-   - Dependencies: Step 2 complete
-
-### Phase 2: Validation & Error Handling (Milestone 2)
-**Goal:** Production-ready PDF processing
-
-4. **Upload Validation**
-   - Add page count check (reject > 100 pages)
-   - Add file size check (reject > 50MB)
-   - Return user-friendly errors
-   - Dependencies: None (parallel to Phase 1)
-
-5. **Timeout Adjustment**
-   - Increase job timeout from 10min → 20min
-   - Add monitoring for long-running jobs
-   - Dependencies: Phase 1 complete (need metrics)
-
-6. **Error Handling**
-   - Handle corrupted PDFs gracefully
-   - Retry logic for Gemini API errors
-   - Zendesk ticket creation for failures
-   - Dependencies: Phase 1 complete
-
-### Phase 3: User Experience (Milestone 3)
-**Goal:** Polish & observability
-
-7. **Frontend Display**
-   - Show PDF icon in document list
-   - Display page count if available
-   - Preview PDF in modal (browser native)
-   - Dependencies: None (frontend-only)
-
-8. **Monitoring & Metrics**
-   - Track PDF processing time vs images
-   - Alert on timeout rate > 5%
-   - Dashboard for PDF-specific metrics
-   - Dependencies: Phase 1 complete (need data)
-
----
-
-## Integration Testing Strategy
-
-### Test Case 1: Single-Page PDF
-**Input:** 1-page PDF with 1 creditor
-**Expected:** Identical behavior to JPEG upload
-**Verifies:** Basic PDF support works
-
-### Test Case 2: Multi-Page PDF (Same Creditor)
-**Input:** 5-page PDF, all pages same creditor
-**Expected:** Single creditor entry, all data extracted
-**Verifies:** Multi-page processing works
-
-### Test Case 3: Multi-Page PDF (Multiple Creditors)
-**Input:** 10-page PDF, 3 different creditors
-**Expected:** Source document + 3 child entries with `creditor_index`
-**Verifies:** Multi-creditor splitting works for PDFs
-
-### Test Case 4: Mixed Upload Batch
-**Input:** Upload 2 JPEGs + 1 PDF simultaneously
-**Expected:** All 3 processed independently, results merged in `final_creditor_list`
-**Verifies:** Format-agnostic queue and webhook handling
-
-### Test Case 5: Large PDF
-**Input:** 50-page PDF (edge case)
-**Expected:** Processes successfully or graceful timeout
-**Verifies:** Timeout handling works
-
-### Test Case 6: Corrupted PDF
-**Input:** Invalid/corrupted PDF file
-**Expected:** Processing fails, document marked as error, Zendesk ticket created
-**Verifies:** Error handling works
-
----
-
-## Migration Path
-
-### Step 1: Deploy FastAPI Changes
-- Update `document_processor.py` with PDF support
-- Deploy to staging environment
-- Test with sample PDFs
-
-### Step 2: Enable in Production (Gradual Rollout)
-- Update upload handler to show "PDF supported" in UI
-- Monitor processing queue for errors
-- Keep image processing unchanged (stable baseline)
-
-### Step 3: Monitor & Iterate
-- Track PDF processing success rate
-- Adjust timeouts based on observed latency
-- Add page count limits if needed
-
-**Rollback Plan:** If PDF processing breaks, FastAPI can revert to image-only MIME type check. Node.js backend unchanged, so existing image uploads unaffected.
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Reason |
-|------|-----------|--------|
-| Node.js Backend | **HIGH** | Already accepts PDFs, no changes needed |
-| GCS Storage | **HIGH** | MIME-agnostic, already handles PDFs |
-| Queue System | **HIGH** | Passes MIME type, no format-specific logic |
-| FastAPI Integration Point | **HIGH** | Single function, well-defined change |
-| Gemini API Support | **MEDIUM** | Training data confirms PDF support, but need to verify current API version |
-| Multi-Creditor Logic | **HIGH** | Format-agnostic, content-based detection |
-| Webhook Processing | **HIGH** | Format-agnostic, result structure unchanged |
-
-**Overall Confidence:** **HIGH** - Architecture supports PDFs with minimal changes.
-
-**Risk Factor:** Gemini API behavior with multi-page PDFs. Need to verify:
-- Does Gemini analyze all pages or just first page?
-- How does page context affect extraction accuracy?
-- Are there token limits for large PDFs?
-
-**Mitigation:** Prototype with 10-page PDF before full implementation.
-
----
+**10. SecondLetterPanel.tsx (admin portal)**
+Admin UI component. Depends on RTK Query mutations (step 9). Plugs into existing ClientDetail tab structure.
 
 ## Sources
 
-**Codebase Analysis:**
-- `/Users/luka.s/Mandanten-Portal.9.2/server/middleware/upload.js` - Upload handling
-- `/Users/luka.s/Mandanten-Portal.9.2/server/services/gcs-service.js` - GCS integration
-- `/Users/luka.s/Mandanten-Portal.9.2/server/services/documentQueueService.js` - Queue system
-- `/Users/luka.s/Mandanten-Portal.9.2/server/utils/fastApiClient.js` - FastAPI client
-- `/Users/luka.s/Mandanten-Portal.9.2/server/controllers/webhookController.js` - Webhook handler
-- `/Users/luka.s/Mandanten-Portal.9.2/server/models/DocumentProcessingJob.js` - Job schema
+- Direct inspection: `server/services/firstRoundDocumentGenerator.js` — document generator pattern
+- Direct inspection: `server/services/creditorEmailService.js` — `sendSecondRoundEmail()` confirmed implemented
+- Direct inspection: `server/services/secondRoundManager.js` — old Zendesk-based approach; do NOT follow for new work
+- Direct inspection: `server/services/creditorContactService.js` — orchestrator pattern to follow
+- Direct inspection: `server/scheduler.js` — setInterval patterns, dependency injection structure
+- Direct inspection: `server/models/Client.js` — full schema including financial_data, extended_financial_data, determined_plan_type, existing settlement plan fields
+- Direct inspection: `server/routes/client-portal.js`, `admin-financial.js`, `admin-client-creditor.js`
+- Direct inspection: `server/routes/second-round-api.js` + `server/services/secondRoundManager.js` — old approach (Zendesk-based), not the template for new work
+- Direct inspection: `MandantenPortalDesign/src/store/api/clientDetailApi.ts` — RTK Query pattern (mutation + invalidatesTags)
+- Direct inspection: `MandantenPortalDesign/src/app/types.ts` — ClientDetailData interface to extend
+- Direct inspection: `MandantenPortalDesign/src/app/App.tsx` — route structure, no new top-level routes needed
+- Direct inspection: `src/components/FinancialDataForm.tsx`, `ExtendedFinancialDataWizard.tsx` — CRA portal patterns (axios, step wizard, clientId prop)
 
-**Assumptions Based on Training Data:**
-- Gemini AI supports `application/pdf` MIME type (verified in training data for Vertex AI SDK)
-- `genai.Part.from_data()` accepts PDF bytes (standard pattern in Google AI SDKs)
-- Multi-page PDF processing is native to Gemini (no splitting required)
-
-**Unknown (Need Verification):**
-- Current Gemini API version in FastAPI service
-- Maximum page count supported
-- Token limits for large PDFs
-- Page-level vs document-level extraction behavior
+---
+*Architecture research for: 2. Anschreiben Automatisierung — v10 milestone*
+*Researched: 2026-03-02*
