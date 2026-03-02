@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 30 — Client Portal Form
 Milestone: v10 2. Anschreiben Automatisierung
-Status: In Progress (Plan 01 of 02 complete)
-Last activity: 2026-03-02 — Phase 30 Plan 01 complete: second letter form backend API
+Status: In Progress (Plan 02 Task 1 complete — awaiting checkpoint:human-verify)
+Last activity: 2026-03-02 — Phase 30 Plan 02 Task 1 complete: SecondLetterForm.tsx frontend page + App.tsx route
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -61,6 +61,7 @@ Progress: [███████████████████████
 | Phase 29-trigger-scheduler-client-notification P01 | 2 | 2 tasks | 2 files |
 | Phase 29 P02 | 2m | 2 tasks | 4 files |
 | Phase 30-client-portal-form P01 | 2 | 2 tasks | 3 files |
+| Phase 30 P02 | 3m | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 29]: EmailService is a singleton (module.exports = new EmailService()) — used directly via require in server.js, not re-instantiated
 - [Phase 29]: alreadyTriggered admin endpoint returns 200 (not 409) — idempotent by design, matching research pitfall #5
 - [Phase 30]: UUID token lookup: authenticateSecondLetterToken validates by DB lookup not JWT — matches Phase 29 which uses uuidv4()
+- [Phase 30]: Bypass api.ts interceptor: use plain axios with explicit Authorization header for second-letter-form calls (interceptor would attach wrong stored session token)
+- [Phase 30]: CSS max-height transition for conditional new creditors reveal: maxHeight 0px/600px with overflow-hidden, no JS height measurement
 
 ### v9 Context
 
@@ -200,9 +203,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 30-01-PLAN.md — second letter form backend API
+Stopped at: Completed 30-02-PLAN.md Task 1 — awaiting checkpoint:human-verify for Task 2 (end-to-end form verification)
 Resume file: None
-Next step: Phase 30 Plan 02 — Client form frontend (SecondLetterForm component)
+Next step: After human verification of SecondLetterForm, Phase 30 complete — move to Phase 31 (DOCX generation)
 
 ---
 *Last updated: 2026-03-02 (Phase 30 Plan 01 complete)*
