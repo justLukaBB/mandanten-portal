@@ -641,7 +641,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 32. DOCX Generation | 1/1 | Complete    | 2026-03-02 | - |
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
 | 34. Admin UI & Tracking | v10 | Complete    | 2026-03-02 | - |
-| 35. Bug Fixes — URL, _id, Field Names | v10 | Pending | — | — |
+| 35. Bug Fixes — URL, _id, Field Names | v10 | Complete    | 2026-03-02 | — |
 | 36. Wire Document Generator | v10 | Pending | — | — |
 | 37. Phase 30 Verification & Cleanup | v10 | Pending | — | — |
 
