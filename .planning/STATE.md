@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 32 — DOCX Generation
+Phase: 33 — Email Dispatch Workflow Completion
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-02 — Phase 32 Plan 01 complete: SecondLetterDocumentGenerator created with two-template branching and snapshot-only data source
+Last activity: 2026-03-02 — Phase 33 Plan 01 complete: SecondLetterService dispatch orchestrator and send-second-letter endpoint created
 
-Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
+Progress: [██████████████████████████░░░░░░] 28/34 phases complete (v1-v9 shipped, v10 pending)
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [███████████████████████
 | Phase 31-financial-calculation-engine P01 | 5 | 1 tasks | 1 files |
 | Phase 31 P02 | 3 | 2 tasks | 4 files |
 | Phase 32-docx-generation P01 | 3 | 2 tasks | 1 files |
+| Phase 33-email-dispatch-workflow-completion P01 | 122 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 31]: Fixed snapshot field name mismatch in secondLetterCalculationService: marital_status/number_of_dependents fallback to familienstand/anzahl_unterhaltsberechtigte
 - [Phase 32-docx-generation]: formatEuro uses toLocaleString('de-DE') not toFixed — avoids rounding bugs, produces correct German thousand separator + comma decimal format
 - [Phase 32-docx-generation]: SecondLetterDocumentGenerator DB persistence happens post-loop not inside generateForSingleCreditor — file write confirmed before MongoDB update (Pitfall 5)
+- [Phase 33-email-dispatch-workflow-completion]: SecondLetterService class replaces Phase 28 stub; route endpoint added to existing admin-second-letter.js factory; creditorEmailService required locally not injected; 409/422/207/200 HTTP response codes for status/eligibility/partial/full outcomes
 
 ### v9 Context
 
@@ -212,9 +214,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 32-01-PLAN.md — SecondLetterDocumentGenerator created with two-template branching and snapshot-only data source
+Stopped at: Completed 33-01-PLAN.md — SecondLetterService dispatch orchestrator and send-second-letter endpoint created
 Resume file: None
-Next step: Phase 33 — Email dispatch (requires DOCX template files 2.Schreiben_Ratenplan.docx + 2.Schreiben_Nullplan.docx in server/templates/)
+Next step: Phase 34 — Admin UI for 2. Anschreiben workflow (trigger button, status display, dispatch action)
 
 ---
-*Last updated: 2026-03-02 (Phase 32 Plan 01 complete)*
+*Last updated: 2026-03-02 (Phase 33 Plan 01 complete)*

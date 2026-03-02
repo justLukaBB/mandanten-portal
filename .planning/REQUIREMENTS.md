@@ -51,12 +51,12 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
 ### Versand
 
-- [ ] **SEND-01**: Resend Email pro Gläubiger mit DOCX Attachment — identische Pipeline wie 1. Anschreiben (creditorEmailService.sendSecondRoundEmail)
-- [ ] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
-- [ ] **SEND-03**: Zendesk Audit-Comment pro erfolgreichem Versand an Haupt-Ticket
-- [ ] **SEND-04**: Status-Übergang FORM_SUBMITTED → SENT nach erfolgreichem Versand aller Gläubiger-Emails
-- [ ] **SEND-05**: Error Handling: Retry 3x bei Fehler, dann Admin-Alert + Status bleibt FORM_SUBMITTED
-- [ ] **SEND-06**: Demo-Mode respektiert — Emails gehen an Test-Adresse statt echte Gläubiger
+- [x] **SEND-01**: Resend Email pro Gläubiger mit DOCX Attachment — identische Pipeline wie 1. Anschreiben (creditorEmailService.sendSecondRoundEmail)
+- [x] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
+- [x] **SEND-03**: Zendesk Audit-Comment pro erfolgreichem Versand an Haupt-Ticket
+- [x] **SEND-04**: Status-Übergang FORM_SUBMITTED → SENT nach erfolgreichem Versand aller Gläubiger-Emails
+- [x] **SEND-05**: Error Handling: Retry 3x bei Fehler, dann Admin-Alert + Status bleibt FORM_SUBMITTED
+- [x] **SEND-06**: Demo-Mode respektiert — Emails gehen an Test-Adresse statt echte Gläubiger
 
 ### Admin UI
 
@@ -116,12 +116,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOC-02 | Phase 32 | Pending |
 | DOC-03 | Phase 32 | Pending |
 | DOC-04 | Phase 32 | Pending |
-| SEND-01 | Phase 33 | Pending |
-| SEND-02 | Phase 33 | Pending |
-| SEND-03 | Phase 33 | Pending |
-| SEND-04 | Phase 33 | Pending |
-| SEND-05 | Phase 33 | Pending |
-| SEND-06 | Phase 33 | Pending |
+| SEND-01 | Phase 33 | Complete |
+| SEND-02 | Phase 33 | Complete |
+| SEND-03 | Phase 33 | Complete |
+| SEND-04 | Phase 33 | Complete |
+| SEND-05 | Phase 33 | Complete |
+| SEND-06 | Phase 33 | Complete |
 | UI-01 | Phase 34 | Pending |
 | UI-02 | Phase 34 | Pending |
 | UI-03 | Phase 34 | Pending |
