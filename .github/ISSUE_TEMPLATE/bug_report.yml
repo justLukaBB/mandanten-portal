@@ -1,0 +1,79 @@
+name: Bug Report
+description: Report a bug in the Mandanten-Portal
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the system is affected?
+      options:
+        - Frontend (React/UI)
+        - Backend (Express/API)
+        - Database (PostgreSQL)
+        - Authentication (Zendesk SSO)
+        - Document Processing (AI/Templates)
+        - Email/Notifications
+        - File Upload/Storage
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How critical is this bug?
+      options:
+        - Critical (app crashes, data loss)
+        - High (feature broken, no workaround)
+        - Medium (feature broken, workaround exists)
+        - Low (cosmetic, minor inconvenience)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What happened? What did you expect?
+      placeholder: |
+        **What happened:**
+        ...
+
+        **What I expected:**
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the bug?
+      placeholder: |
+        1. Go to ...
+        2. Click on ...
+        3. See error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: Paste relevant console logs, error messages, or screenshots.
+      placeholder: Paste logs or drag & drop screenshots here
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Production
+        - Development (local)
+    validations:
+      required: true
