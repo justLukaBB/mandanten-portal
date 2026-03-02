@@ -533,7 +533,7 @@ const createAdminReviewController = ({ Client }) => {
       if (!settings) {
         return res.json({
           success: true,
-          data: { confidence_threshold: 80, auto_assignment_enabled: false, demo_mode_enabled: false }
+          data: { confidence_threshold: 80, auto_assignment_enabled: false, demo_mode_enabled: false, test_mode_enabled: false }
         });
       }
       return res.json({
@@ -541,7 +541,8 @@ const createAdminReviewController = ({ Client }) => {
         data: {
           confidence_threshold: settings.confidence_threshold,
           auto_assignment_enabled: settings.auto_assignment_enabled,
-          demo_mode_enabled: settings.demo_mode_enabled ?? false
+          demo_mode_enabled: settings.demo_mode_enabled ?? false,
+          test_mode_enabled: settings.test_mode_enabled ?? false
         }
       });
     } catch (error) {
@@ -556,7 +557,7 @@ const createAdminReviewController = ({ Client }) => {
    */
   const updateSettings = async (req, res) => {
     try {
-      const { confidence_threshold, auto_assignment_enabled, demo_mode_enabled } = req.body;
+      const { confidence_threshold, auto_assignment_enabled, demo_mode_enabled, test_mode_enabled } = req.body;
 
       // Validate confidence_threshold
       if (confidence_threshold !== undefined) {
@@ -579,6 +580,13 @@ const createAdminReviewController = ({ Client }) => {
         }
       }
 
+      // Validate test_mode_enabled
+      if (test_mode_enabled !== undefined) {
+        if (typeof test_mode_enabled !== 'boolean') {
+          return res.status(400).json({ error: 'test_mode_enabled must be a boolean' });
+        }
+      }
+
       const updateFields = {
         updated_at: new Date(),
         updated_by: req.adminEmail || req.adminId || 'admin'
@@ -586,6 +594,7 @@ const createAdminReviewController = ({ Client }) => {
       if (confidence_threshold !== undefined) updateFields.confidence_threshold = confidence_threshold;
       if (auto_assignment_enabled !== undefined) updateFields.auto_assignment_enabled = auto_assignment_enabled;
       if (demo_mode_enabled !== undefined) updateFields.demo_mode_enabled = demo_mode_enabled;
+      if (test_mode_enabled !== undefined) updateFields.test_mode_enabled = test_mode_enabled;
 
       const settings = await ReviewSettings.findOneAndUpdate(
         {},
@@ -593,14 +602,15 @@ const createAdminReviewController = ({ Client }) => {
         { upsert: true, new: true }
       );
 
-      console.log(`✅ Admin Review Settings updated: confidence_threshold=${settings.confidence_threshold}, auto_assignment_enabled=${settings.auto_assignment_enabled}, demo_mode_enabled=${settings.demo_mode_enabled}`);
+      console.log(`✅ Admin Review Settings updated: confidence_threshold=${settings.confidence_threshold}, auto_assignment_enabled=${settings.auto_assignment_enabled}, demo_mode_enabled=${settings.demo_mode_enabled}, test_mode_enabled=${settings.test_mode_enabled}`);
 
       return res.json({
         success: true,
         data: {
           confidence_threshold: settings.confidence_threshold,
           auto_assignment_enabled: settings.auto_assignment_enabled,
-          demo_mode_enabled: settings.demo_mode_enabled ?? false
+          demo_mode_enabled: settings.demo_mode_enabled ?? false,
+          test_mode_enabled: settings.test_mode_enabled ?? false
         }
       });
     } catch (error) {
