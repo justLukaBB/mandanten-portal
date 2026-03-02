@@ -30,17 +30,17 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Client Portal Formular
 
 - [x] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
-- [ ] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
+- [x] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
 - [x] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
 - [x] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
 - [x] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
 
 ### Berechnung
 
-- [ ] **CALC-01**: Pfändbarer Betrag nach § 850c ZPO berechnet aus Snapshot-Daten (existierende garnishable_amount Logik)
-- [ ] **CALC-02**: Plan-Typ bestimmt: RATENPLAN (pfändbarer Betrag > 0) oder NULLPLAN (pfändbarer Betrag == 0)
-- [ ] **CALC-03**: Quote pro Gläubiger berechnet: (claim_amount / total_debt) * pfändbarer Betrag — mit Zero-Division-Guard
-- [ ] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
+- [x] **CALC-01**: Pfändbarer Betrag nach § 850c ZPO berechnet aus Snapshot-Daten (existierende garnishable_amount Logik)
+- [x] **CALC-02**: Plan-Typ bestimmt: RATENPLAN (pfändbarer Betrag > 0) oder NULLPLAN (pfändbarer Betrag == 0)
+- [x] **CALC-03**: Quote pro Gläubiger berechnet: (claim_amount / total_debt) * pfändbarer Betrag — mit Zero-Division-Guard
+- [x] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
 
 ### Dokument-Generierung
 
@@ -104,14 +104,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTIF-02 | Phase 29 | Complete |
 | NOTIF-03 | Phase 29 | Complete |
 | FORM-01 | Phase 30 | Complete |
-| FORM-02 | Phase 30 | Pending |
+| FORM-02 | Phase 30 | Complete |
 | FORM-03 | Phase 30 | Complete |
 | FORM-04 | Phase 30 | Complete |
 | FORM-05 | Phase 30 | Complete |
-| CALC-01 | Phase 31 | Pending |
-| CALC-02 | Phase 31 | Pending |
-| CALC-03 | Phase 31 | Pending |
-| CALC-04 | Phase 31 | Pending |
+| CALC-01 | Phase 31 | Complete |
+| CALC-02 | Phase 31 | Complete |
+| CALC-03 | Phase 31 | Complete |
+| CALC-04 | Phase 31 | Complete |
 | DOC-01 | Phase 32 | Pending |
 | DOC-02 | Phase 32 | Pending |
 | DOC-03 | Phase 32 | Pending |

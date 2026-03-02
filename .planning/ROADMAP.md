@@ -604,7 +604,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 28. State Machine Foundation | 2/2 | Complete    | 2026-03-02 | - |
 | 29. Trigger, Scheduler & Client Notification | 2/2 | Complete    | 2026-03-02 | - |
 | 30. Client Portal Form | 2/2 | Complete   | 2026-03-02 | - |
-| 31. Financial Calculation Engine | v10 | 0/2 | Not started | - |
+| 31. Financial Calculation Engine | 1/2 | In Progress|  | - |
 | 32. DOCX Generation | v10 | 0/1 | Planned | - |
 | 33. Email Dispatch & Workflow Completion | v10 | 0/1 | Not started | - |
 | 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
