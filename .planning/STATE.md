@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 28 — State Machine Foundation
+Phase: 29 — Trigger, Scheduler & Client Notification
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Complete (Plans 01 + 02 complete)
-Last activity: 2026-03-02 — Phase 28 Plan 02 complete: migration script + deprecation comments
+Status: In Progress (Plan 01 of 02 complete)
+Last activity: 2026-03-02 — Phase 29 Plan 01 complete: trigger service + email notification
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -58,6 +58,7 @@ Progress: [███████████████████████
 | v9 (27) P02 | 1 | ~4m | 4.0m |
 | v10 (28) P01 | 1 | ~2m | 2.0m |
 | Phase 28 P02 | 2 | 2 tasks | 3 files |
+| Phase 29-trigger-scheduler-client-notification P01 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Old second-round routes (second-round-api.js, secondRoundManager.js): deprecate with comment — not the pattern for new work
 - [Phase 28]: Uses $or [$exists:false, null] to catch both missing and explicitly-null second_letter_status fields — per RESEARCH.md Pitfall 1
 - [Phase 28]: Migration script uses single updateMany (not per-doc loop) — single DB round-trip, consistent with backfill-contact-status.js pattern
+- [Phase 29]: SecondLetterTriggerService exported as CLASS (not singleton) for emailService dependency injection from server.js
+- [Phase 29]: Two-step 30-day eligibility: DB elemMatch pre-filter + JS MAX(email_sent_at) — avoids complex aggregation pipeline
+- [Phase 29]: Sequential for-loop in checkAndTriggerEligible (not Promise.all) for Resend rate limit safety
 
 ### v9 Context
 
@@ -191,9 +195,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 28-02-PLAN.md — migration script + deprecation comments
+Stopped at: Completed 29-01-PLAN.md — trigger service + email notification
 Resume file: None
-Next step: Phase 29 — Trigger and Scheduler
+Next step: Phase 29 Plan 02 — Scheduler integration + Admin route
 
 ---
 *Last updated: 2026-03-02 (v10 roadmap created, Phases 28-34)*
