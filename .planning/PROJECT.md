@@ -8,17 +8,19 @@ A creditor management system for insolvency cases. Documents are processed by a 
 
 Creditor deduplication must work reliably regardless of creditor count — no silent failures, no data loss, no token limit surprises.
 
-## Current Milestone: v9 Review Dashboard
+## Current Milestone: v10 2. Anschreiben Automatisierung
 
-**Goal:** Das alte Agent-Portal Review Dashboard (`src/agent/pages/ReviewDashboard.tsx`) wird komplett neu aufgebaut und ins Admin-Portal (MandantenPortalDesign) integriert. Die bestehenden agent-review Endpoints werden für Admin-Tokens geöffnet, eine Queue-Seite mit KPI-Cards und Filtern gebaut, der Review-Workflow mit Split-Pane Workspace implementiert, und Queue-Management, Analytics und Export ergänzt.
+**Goal:** End-to-End Workflow für automatisches Erstellen und Versenden des 2. Anschreibens an Gläubiger. Scheduler triggert nach 30 Tagen oder Admin manuell, Mandant bestätigt Finanzdaten im Portal-Formular, System berechnet Pfändung/Quote/Plan-Typ, generiert DOCX-Templates (Ratenplan/Nullplan) und versendet per Resend.
 
 **Target features:**
-- Review Queue mit paginierter Liste, KPI-Cards, Prioritäts-Filter und Suche
-- Split-Pane Review Workspace (Dokument-Viewer + Korrekturformular)
-- Gläubiger-Navigation mit Bestätigen/Korrigieren/Überspringen-Workflow
-- Queue-Management: Zuweisung, Batch-Operationen, Auto-Priorität
-- PDF.js Dokument-Rendering, Analytics mit Recharts, CSV/XLSX Export
-- Real-time Queue-Polling und altes Agent-Portal Redirect
+- 30-Tage Scheduler-Trigger basierend auf MAX(email_sent_at) + manueller Admin-Button
+- Mandanten-Portal Formular (altes Portal /src/) — Finanzdaten vorausgefüllt, bestätigen/korrigieren, Snapshot
+- Pfändungsberechnung (§ 850c ZPO existiert), Plan-Typ Bestimmung (Ratenplan/Nullplan), Quote pro Gläubiger
+- DOCX-Generierung via docxtemplater — zwei Templates (Ratenplan + Nullplan), geliefert vom User
+- Versand via Resend SDK — identische Pipeline wie 1. Anschreiben
+- Admin Dashboard (MandantenPortalDesign): Trigger-Button, Status-Badge, Tracking-Ansicht
+- Separates second_letter_status Feld mit State Machine (FIRST_SENT → SECOND_PENDING → SECOND_IN_REVIEW → SECOND_SENT)
+- Email-Benachrichtigung an Mandant via Resend mit Link zum Portal-Formular
 
 ## Requirements
 
@@ -46,45 +48,60 @@ Creditor deduplication must work reliably regardless of creditor count — no si
 
 ### Active
 
-- [ ] Review Nav-Item in Sidebar, Routing, Auth-Middleware auf authenticateAdminOrAgent
-- [ ] Review Queue mit KPI-Cards, paginierter Tabelle, Prioritäts-Filter und Suche
-- [ ] Split-Pane Review Workspace mit Dokument-Viewer und Korrekturformular
-- [ ] Queue-Management: Zuweisung, Batch-Operationen, Auto-Priorität
-- [ ] PDF.js Viewer, Analytics Dashboard mit Recharts, Review-Settings
-- [ ] CSV/XLSX Export, Real-time Polling, altes Agent-Portal Redirect
+- [ ] 30-Tage Scheduler + manueller Admin-Trigger für 2. Anschreiben
+- [ ] Mandanten-Portal Formular: Finanzdaten vorausfüllen, bestätigen, Snapshot
+- [ ] Pfändungsberechnung, Plan-Typ, Quote pro Gläubiger
+- [ ] DOCX-Template Pipeline (Ratenplan + Nullplan) via docxtemplater
+- [ ] Versand via Resend — identisch zum 1. Anschreiben
+- [ ] Admin Dashboard: Trigger-Button, Status-Badge, Tracking
+- [ ] second_letter_status State Machine auf Client Model
+- [ ] Email-Benachrichtigung an Mandant mit Portal-Link
 
 ### Out of Scope
 
-- Client Portal (Mandanten-Ansicht) — eigener Milestone
-- Vollständiges Agent Portal — nur Review-Funktionalität wird migriert
+- Client Portal Redesign (neues Design-System für Mandanten) — eigener Milestone
+- Vollständiges Agent Portal Migration — nur Review-Funktionalität bisher migriert
 - User-Erstellung / Verwaltung — eigener Milestone
 - Creditor Database (globale Suche) — eigener Milestone
+- 3. Anschreiben oder weitere Anschreiben-Runden — nicht in v10
 
 ## Context
 
-Shipped v1-v7 backend features and v8 admin frontend migration (22 phases total).
-Admin portal (MandantenPortalDesign) is live with login, client list with filters, and client detail with 5 tabs wired to real backend data.
-Old Agent Portal Review Dashboard exists at `src/agent/pages/ReviewDashboard.tsx` — needs rebuilding into admin portal.
-Backend has 5 agent-review endpoints under `server/routes/agent-review.js` with `authenticateAgent` middleware.
-`authenticateAdminOrAgent` middleware already exists in `server/middleware/auth.js` — single auth change unlocks all endpoints.
-Detailed spec: `.planning/REVIEW-DASHBOARD-PLAN.md`
+Shipped v1-v8 backend + admin frontend (22 phases), v9 Review Dashboard (phases 23-27).
+Admin portal (MandantenPortalDesign) has: login, client list, client detail (5 tabs), full review dashboard.
+Old client portal (`/src/`) has: FinancialDataForm, ExtendedFinancialDataWizard, creditor confirmation flow.
+
+**1. Anschreiben Pipeline (existing, to replicate for 2. Anschreiben):**
+- Trigger: `POST /api/clients/:id/confirm-creditors` → background fire-and-forget
+- Generator: `server/services/firstRoundDocumentGenerator.js` — docxtemplater + pizzip
+- Template: `server/templates/1.Schreiben.docx` — {Name}, {Adresse}, {Creditor}, {Datum}, etc.
+- Sender: `server/services/creditorEmailService.js` — Resend SDK, DOCX attachment, 2s delay
+- Tracking: per-creditor `contact_status`, `email_sent_at`, `document_sent_at` in `final_creditor_list[]`
+
+**Financial data (already in Client model):**
+- `financial_data`: monthly_net_income, number_of_children, marital_status, garnishable_amount, recommended_plan_type
+- `extended_financial_data`: berufsstatus, arbeitgeber, unterhaltsberechtigte, sozialleistungen, vermögen, planlaufzeit
+- `determined_plan_type`: nullplan / ratenzahlung / einmalzahlung
+
+**Scheduler:** `server/scheduler.js` — plain setInterval (document reminder, login reminder, auto-confirmation, etc.)
 
 Tech stack:
-- **Backend**: Node.js/Express, MongoDB
-- **AI Service**: Python FastAPI, Google Vertex AI (Gemini 2.5 Pro), deployed on Render
-- **Old Frontend**: React (CRA), Redux/RTK Query, Tailwind 3
+- **Backend**: Node.js/Express, MongoDB (Mongoose)
+- **Old Frontend** (Client Portal): React (CRA), Redux/RTK Query, Tailwind 3
 - **Admin Portal**: React (Vite), shadcn/ui, Tailwind 4, DM Sans + JetBrains Mono, RTK Query
-- **Available UI**: ResizablePanelGroup, Table, Form, Dialog, Skeleton, Badge, Pagination, Recharts
+- **Email**: Resend SDK v6
+- **Documents**: docxtemplater + pizzip (DOCX generation)
 
 Design guidelines: `MandantenPortalDesign/guidelines/Guidelines.md`
 
 ## Constraints
 
-- **Backend-Änderungen erlaubt**: Auth-Middleware-Änderung in Phase 23, neue Endpoints ab Phase 25
-- **Design-System**: Guidelines.md einhalten (BG #FAFAFA, keine Shadows, pill Badges, max 1 orange CTA)
+- **Design-System**: Guidelines.md einhalten für Admin-Portal (BG #FAFAFA, keine Shadows, pill Badges, max 1 orange CTA)
+- **Altes Portal**: Mandanten-Formular in /src/ (CRA) — bestehende Patterns (FinancialDataForm, axios) verwenden
 - **Lokal testen**: Erstmal nur lokale Entwicklung, kein Deployment
-- **Tech stack**: Vite + React + Tailwind 4 + shadcn/ui + Recharts + PDF.js
-- **Bestehende Patterns**: RTK Query injectEndpoints, useSearchParams, motion-utils Varianten
+- **Templates**: DOCX-Templates werden vom User geliefert (nicht selbst erstellen)
+- **Bestehende Pipeline**: 1. Anschreiben Pipeline (docxtemplater, Resend, Zendesk) als Vorlage nutzen
+- **§ 850c ZPO**: Bestehende garnishable_amount Berechnung nutzen
 
 ## Key Decisions
 
@@ -101,4 +118,4 @@ Design guidelines: `MandantenPortalDesign/guidelines/Guidelines.md`
 | Use MandantenPortalDesign as new frontend base | Modern stack (Vite, Tailwind 4, shadcn/ui), professional design system | — Pending |
 
 ---
-*Last updated: 2026-02-23 after v9 milestone start*
+*Last updated: 2026-03-02 after v10 milestone start*
