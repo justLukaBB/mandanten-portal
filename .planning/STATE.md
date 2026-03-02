@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 29 — Trigger, Scheduler & Client Notification
+Phase: 30 — Client Portal Form
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Complete (Plan 02 of 02 complete)
-Last activity: 2026-03-02 — Phase 29 Plan 02 complete: admin route + scheduler wiring
+Status: In Progress (Plan 01 of 02 complete)
+Last activity: 2026-03-02 — Phase 30 Plan 01 complete: second letter form backend API
 
 Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -60,6 +60,7 @@ Progress: [███████████████████████
 | Phase 28 P02 | 2 | 2 tasks | 3 files |
 | Phase 29-trigger-scheduler-client-notification P01 | 2 | 2 tasks | 2 files |
 | Phase 29 P02 | 2m | 2 tasks | 4 files |
+| Phase 30-client-portal-form P01 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 29]: Sequential for-loop in checkAndTriggerEligible (not Promise.all) for Resend rate limit safety
 - [Phase 29]: EmailService is a singleton (module.exports = new EmailService()) — used directly via require in server.js, not re-instantiated
 - [Phase 29]: alreadyTriggered admin endpoint returns 200 (not 409) — idempotent by design, matching research pitfall #5
+- [Phase 30]: UUID token lookup: authenticateSecondLetterToken validates by DB lookup not JWT — matches Phase 29 which uses uuidv4()
 
 ### v9 Context
 
@@ -198,9 +200,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 29-02-PLAN.md — admin route + scheduler wiring
+Stopped at: Completed 30-01-PLAN.md — second letter form backend API
 Resume file: None
-Next step: Phase 30 — Client form portal for 2. Anschreiben
+Next step: Phase 30 Plan 02 — Client form frontend (SecondLetterForm component)
 
 ---
-*Last updated: 2026-03-02 (v10 roadmap created, Phases 28-34)*
+*Last updated: 2026-03-02 (Phase 30 Plan 01 complete)*

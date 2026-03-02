@@ -29,11 +29,11 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
 ### Client Portal Formular
 
-- [ ] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
+- [x] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
 - [ ] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
-- [ ] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
-- [ ] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
-- [ ] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
+- [x] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
+- [x] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
+- [x] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
 
 ### Berechnung
 
@@ -103,11 +103,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTIF-01 | Phase 29 | Complete |
 | NOTIF-02 | Phase 29 | Complete |
 | NOTIF-03 | Phase 29 | Complete |
-| FORM-01 | Phase 30 | Pending |
+| FORM-01 | Phase 30 | Complete |
 | FORM-02 | Phase 30 | Pending |
-| FORM-03 | Phase 30 | Pending |
-| FORM-04 | Phase 30 | Pending |
-| FORM-05 | Phase 30 | Pending |
+| FORM-03 | Phase 30 | Complete |
+| FORM-04 | Phase 30 | Complete |
+| FORM-05 | Phase 30 | Complete |
 | CALC-01 | Phase 31 | Pending |
 | CALC-02 | Phase 31 | Pending |
 | CALC-03 | Phase 31 | Pending |
