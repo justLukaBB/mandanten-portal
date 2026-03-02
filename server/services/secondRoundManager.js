@@ -1,3 +1,9 @@
+/**
+ * @deprecated — Phase 28 (v10): This file uses a Zendesk-centric architecture
+ * incompatible with the new 2. Anschreiben workflow. Do NOT extend or use as a pattern.
+ * Use server/services/secondLetterService.js instead.
+ */
+
 const SecondRoundDocumentService = require('./secondRoundDocumentService');
 const SecondRoundZendeskUploader = require('./secondRoundZendeskUploader');
 const SecondRoundEmailSender = require('./secondRoundEmailSender');

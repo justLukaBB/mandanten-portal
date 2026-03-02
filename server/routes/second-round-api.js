@@ -1,3 +1,9 @@
+/**
+ * @deprecated — Phase 28 (v10): These routes are deprecated.
+ * The new 2. Anschreiben workflow uses secondLetterService.js with atomic state guards.
+ * Do NOT add new routes here. Existing routes remain for backward compatibility only.
+ */
+
 const express = require('express');
 const router = express.Router();
 const SecondRoundManager = require('../services/secondRoundManager');
