@@ -1303,6 +1303,157 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 console.error('❌ Error adding manual creditor (client):', error);
                 res.status(500).json({ error: 'Fehler beim Hinzufügen des Gläubigers', details: error.message });
             }
+        },
+
+        /**
+         * GET /api/second-letter-form
+         * Returns pre-fill data for the 2. Anschreiben client form.
+         * req.clientId is set by authenticateSecondLetterToken middleware.
+         */
+        handleGetSecondLetterFormData: async (req, res) => {
+            try {
+                const client = await Client.findOne({ id: req.clientId });
+                if (!client) return res.status(404).json({ error: 'Client not found' });
+
+                return res.json({
+                    second_letter_status: client.second_letter_status,
+                    second_letter_form_submitted_at: client.second_letter_form_submitted_at ?? null,
+                    pre_fill: {
+                        monthly_net_income: client.financial_data?.monthly_net_income ?? null,
+                        marital_status: client.financial_data?.marital_status ?? client.familienstand ?? null,
+                        income_source: client.extended_financial_data?.berufsstatus ?? null,
+                        number_of_dependents: client.extended_financial_data?.anzahl_unterhaltsberechtigte ?? null,
+                        active_garnishments: client.aktuelle_pfaendung ?? false,
+                        new_creditors: false
+                    }
+                });
+            } catch (error) {
+                console.error('[SecondLetterForm] Error in handleGetSecondLetterFormData:', error);
+                return res.status(500).json({ error: 'Interner Serverfehler' });
+            }
+        },
+
+        /**
+         * POST /api/second-letter-form
+         * Accepts the 2. Anschreiben form submission:
+         * - Enforces PENDING status guard (returns 409 if not PENDING)
+         * - Validates all required FORM-02 fields
+         * - Writes second_letter_financial_snapshot (immutable)
+         * - Updates financial_data and extended_financial_data with corrections
+         * - Transitions second_letter_status from PENDING → FORM_SUBMITTED
+         * req.clientId is set by authenticateSecondLetterToken middleware.
+         */
+        handleSubmitSecondLetterForm: async (req, res) => {
+            try {
+                const client = await Client.findOne({ id: req.clientId });
+                if (!client) return res.status(404).json({ error: 'Client not found' });
+
+                // STATUS GUARD — must be first, before any data writes
+                if (client.second_letter_status !== 'PENDING') {
+                    return res.status(409).json({ error: 'Formular nicht verfügbar', code: 'NOT_PENDING' });
+                }
+
+                // Validate required FORM-02 fields
+                const {
+                    monthly_net_income,
+                    income_source,
+                    marital_status,
+                    number_of_dependents,
+                    active_garnishments,
+                    has_new_creditors,
+                    new_creditors,
+                    confirmation
+                } = req.body;
+
+                const validIncomeSource = ['angestellt', 'selbststaendig', 'arbeitslos', 'rentner', 'in_ausbildung'];
+                const fieldErrors = {};
+
+                if (monthly_net_income === undefined || monthly_net_income === null || isNaN(parseFloat(monthly_net_income))) {
+                    fieldErrors.monthly_net_income = 'Monatliches Nettoeinkommen ist erforderlich';
+                }
+                if (!income_source || !validIncomeSource.includes(income_source)) {
+                    fieldErrors.income_source = 'Einkommensquelle ist erforderlich';
+                }
+                if (!marital_status || typeof marital_status !== 'string' || marital_status.trim() === '') {
+                    fieldErrors.marital_status = 'Familienstand ist erforderlich';
+                }
+                if (number_of_dependents === undefined || number_of_dependents === null || parseInt(number_of_dependents) < 0 || isNaN(parseInt(number_of_dependents))) {
+                    fieldErrors.number_of_dependents = 'Anzahl Unterhaltspflichten ist erforderlich';
+                }
+                if (typeof active_garnishments !== 'boolean') {
+                    fieldErrors.active_garnishments = 'Lohnpfändungen aktiv ist erforderlich';
+                }
+                if (typeof has_new_creditors !== 'boolean') {
+                    fieldErrors.has_new_creditors = 'Neue Gläubiger Angabe ist erforderlich';
+                }
+                if (has_new_creditors === true) {
+                    if (!Array.isArray(new_creditors) || new_creditors.length === 0) {
+                        fieldErrors.new_creditors = 'Mindestens ein neuer Gläubiger ist erforderlich';
+                    } else {
+                        for (let i = 0; i < new_creditors.length; i++) {
+                            const cred = new_creditors[i];
+                            if (!cred.name || typeof cred.name !== 'string' || cred.name.trim() === '') {
+                                fieldErrors[`new_creditors[${i}].name`] = 'Gläubiger Name ist erforderlich';
+                            }
+                            if (cred.amount === undefined || cred.amount === null || isNaN(parseFloat(cred.amount)) || parseFloat(cred.amount) <= 0) {
+                                fieldErrors[`new_creditors[${i}].amount`] = 'Gläubiger Betrag muss größer als 0 sein';
+                            }
+                        }
+                    }
+                }
+                if (confirmation !== true) {
+                    fieldErrors.confirmation = 'Bestätigung der Richtigkeit ist erforderlich';
+                }
+
+                if (Object.keys(fieldErrors).length > 0) {
+                    return res.status(400).json({ error: 'Validierungsfehler', fields: fieldErrors });
+                }
+
+                // Atomic write via safeClientUpdate — updates financial_data, writes snapshot, transitions status
+                const updatedClient = await safeClientUpdate(client.id, async (c) => {
+                    // 1. Update financial_data with corrections
+                    c.financial_data = {
+                        ...(c.financial_data || {}),
+                        monthly_net_income: parseFloat(monthly_net_income),
+                        marital_status: marital_status
+                    };
+
+                    // 2. Update extended_financial_data with corrections
+                    c.extended_financial_data = {
+                        ...(c.extended_financial_data || {}),
+                        berufsstatus: income_source,
+                        anzahl_unterhaltsberechtigte: parseInt(number_of_dependents)
+                    };
+
+                    // 3. Update top-level garnishment field
+                    c.aktuelle_pfaendung = active_garnishments === true;
+
+                    // 4. Write immutable snapshot (DOCX generation reads exclusively from this)
+                    c.second_letter_financial_snapshot = {
+                        monthly_net_income: parseFloat(monthly_net_income),
+                        income_source: income_source,
+                        marital_status: marital_status,
+                        number_of_dependents: parseInt(number_of_dependents),
+                        has_garnishment: active_garnishments === true,
+                        new_creditors: has_new_creditors
+                            ? new_creditors.map(cred => ({ name: cred.name, amount: parseFloat(cred.amount) }))
+                            : [],
+                        snapshot_created_at: new Date()
+                    };
+
+                    // 5. Transition state machine PENDING → FORM_SUBMITTED
+                    c.second_letter_status = 'FORM_SUBMITTED';
+                    c.second_letter_form_submitted_at = new Date();
+
+                    return c;
+                });
+
+                console.log('[SecondLetterForm] Form submitted for client:', req.clientId);
+                return res.json({ success: true, submitted_at: updatedClient.second_letter_form_submitted_at });
+            } catch (error) {
+                console.error('[SecondLetterForm] Error in handleSubmitSecondLetterForm:', error);
+                return res.status(500).json({ error: 'Interner Serverfehler' });
+            }
         }
     };
 };

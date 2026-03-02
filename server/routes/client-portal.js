@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const createClientPortalController = require('../controllers/clientPortalController');
-const { authenticateClient } = require('../middleware/auth');
+const { authenticateClient, authenticateSecondLetterToken } = require('../middleware/auth');
 const { rateLimits, validateFileUpload } = require('../middleware/security');
 const { upload, uploadTimeout } = require('../middleware/upload');
 
@@ -97,6 +97,16 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
         rateLimits.general,
         authenticateClient,
         controller.handleAddCreditor
+    );
+
+    // Second Letter Form — token-authenticated routes (token is UUID from Phase 29, not regular JWT)
+    router.get('/second-letter-form',
+        authenticateSecondLetterToken,
+        controller.handleGetSecondLetterFormData
+    );
+    router.post('/second-letter-form',
+        authenticateSecondLetterToken,
+        controller.handleSubmitSecondLetterForm
     );
 
     return router;
