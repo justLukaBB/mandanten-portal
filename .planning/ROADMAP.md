@@ -485,7 +485,11 @@ Plans:
   2. Admin clicks "2. Anschreiben starten" and the client transitions to PENDING — clicking again when already PENDING produces no state change and no duplicate email (idempotency guard via atomic findOneAndUpdate)
   3. After transitioning to PENDING, the client receives a Resend email containing a direct link to the portal form — the link uses a dedicated short-lived token (not the onboarding portal_token)
   4. Every trigger action (scheduler or admin) writes an audit log entry with actor identity and timestamp
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 29-01-PLAN.md — Core trigger service (secondLetterTriggerService.js) + email notification method on emailService.js
+- [ ] 29-02-PLAN.md — Admin route/controller + scheduler integration + server.js wiring
 
 ### Phase 30: Client Portal Form
 **Goal**: Client can open the portal form from the notification email, review pre-filled financial data, make corrections, and submit — creating an immutable snapshot and transitioning status to FORM_SUBMITTED
