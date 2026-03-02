@@ -588,8 +588,10 @@ Plans:
 **Gap Closure**: Closes gaps from v10 audit
 **Depends on**: Phase 35
 
+**Plans:** 1 plan
+
 Plans:
-- [ ] 36-01-PLAN.md — Import + call SecondLetterDocumentGenerator in send workflow before dispatchSecondLetterEmails, E2E verification
+- [ ] 36-01-PLAN.md — Wire SecondLetterDocumentGenerator into send-second-letter handler + fix document path mismatch in secondLetterService
 
 ### Phase 37: Phase 30 Verification & Requirements Cleanup
 **Goal**: Formally verify Phase 30 (FORM-03 snapshot write) and update REQUIREMENTS.md checkboxes to reflect actual completion state
