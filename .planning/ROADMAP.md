@@ -11,7 +11,8 @@
 - ✅ **v6 Async Creditor Confirm** - Phase 16 (shipped 2026-02-17)
 - ✅ **v7 FastAPI Webhook Field Integration** - Phases 17-18 (shipped 2026-02-18)
 - ✅ **v8 Admin Frontend Migration** - Phases 19-22 (shipped 2026-02-18)
-- 🚧 **v9 Review Dashboard** - Phases 23-27 (in progress)
+- ✅ **v9 Review Dashboard** - Phases 23-27 (shipped 2026-03-02)
+- 🚧 **v10 2. Anschreiben Automatisierung** - Phases 28-34 (in progress)
 
 ## Phases
 
@@ -347,7 +348,7 @@ Plans:
 - [ ] 22-03-PLAN.md -- Gläubiger tab wired to real creditor data including all v7 fields (13 columns)
 - [ ] 22-04-PLAN.md -- Aktivität tab wired to real status_history with German labels and actor identification
 
-### 🚧 v9 Review Dashboard (Phases 23-27)
+### ✅ v9 Review Dashboard (Phases 23-27) — SHIPPED 2026-03-02
 
 **Milestone Goal:** Das alte Agent-Portal Review Dashboard wird komplett neu im Admin-Portal aufgebaut — Queue-Seite, Review-Workflow mit Split-Pane, Queue-Management, Analytics und Export.
 
@@ -369,7 +370,7 @@ Plans:
 Plans:
 - [x] 23-01-PLAN.md — Backend auth swap + review types + RTK Query reviewApi + sidebar nav + routing
 - [x] 23-02-PLAN.md — ReviewQueuePage with KPI cards, filterable queue table, pagination
-- [ ] 23-03-PLAN.md — Gap closure: wire search end-to-end (reviewApi + review-queue-page + backend filter)
+- [x] 23-03-PLAN.md — Gap closure: wire search end-to-end (reviewApi + review-queue-page + backend filter)
 
 **Key changes:**
 - Backend: `server/routes/agent-review.js` — `authenticateAgent` → `authenticateAdminOrAgent` on all routes
@@ -433,9 +434,9 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 26-01-PLAN.md — PDF.js document viewer rewrite with zoom/pan toolbar, image support, iframe fallback
-- [ ] 26-02-PLAN.md — Analytics backend endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
-- [ ] 26-03-PLAN.md — Settings backend endpoints + ReviewSettingsPage with confidence threshold and auto-assignment toggle
+- [x] 26-01-PLAN.md — PDF.js document viewer rewrite with zoom/pan toolbar, image support, iframe fallback
+- [x] 26-02-PLAN.md — Analytics backend endpoint + ReviewAnalyticsPage with 4 KPI cards and 4 Recharts charts
+- [x] 26-03-PLAN.md — Settings backend endpoints + ReviewSettingsPage with confidence threshold and auto-assignment toggle
 
 **Key changes:**
 - Install: pdfjs-dist
@@ -454,18 +455,100 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 27-01-PLAN.md — CSV/XLSX export: install xlsx, create export utility, add export button with dropdown to ReviewQueuePage
-- [ ] 27-02-PLAN.md — Real-time polling (30s) with new-case highlight, sidebar pending count badge, old agent portal /agent/* redirect
+- [x] 27-01-PLAN.md — CSV/XLSX export: install xlsx, create export utility, add export button with dropdown to ReviewQueuePage
+- [x] 27-02-PLAN.md — Real-time polling (30s) with new-case highlight, sidebar pending count badge, old agent portal /agent/* redirect
 
 **Key changes:**
 - Install: xlsx library for client-side export
 - Frontend: Export button + client-side CSV/XLSX generation, pollingInterval on getReviewQueue, sidebar badge
 - Old portal: redirect /agent/* → admin portal with notice page
 
+## v10 Phase Details
+
+### Phase 28: State Machine Foundation
+**Goal**: Client model has all second_letter_* schema fields and creditor tracking fields — the state machine exists and is idempotent against double-triggers before any service code runs
+**Depends on**: Phase 27 (v9 shipped)
+**Requirements**: SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04
+**Success Criteria** (what must be TRUE):
+  1. Client document in MongoDB has `second_letter_status` field with enum values IDLE/PENDING/FORM_SUBMITTED/SENT and default IDLE — existing clients are initialized to IDLE via migration
+  2. Client document has `second_letter_financial_snapshot` subdocument with all required financial fields (income, marital status, dependents, income source, garnishment, new creditors, plan type, garnishable amount, monthly rate)
+  3. Client document has three timestamp fields: `second_letter_triggered_at`, `second_letter_form_submitted_at`, `second_letter_sent_at`
+  4. Creditor subdocuments have `second_letter_sent_at`, `second_letter_email_sent_at`, and `second_letter_document_filename` fields
+**Plans**: TBD
+
+### Phase 29: Trigger, Scheduler & Client Notification
+**Goal**: Admin can manually trigger the 2. Anschreiben workflow and the scheduler auto-triggers after 30 days — both paths are idempotent and notify the client via Resend
+**Depends on**: Phase 28
+**Requirements**: TRIG-01, TRIG-02, TRIG-03, TRIG-04, NOTIF-01, NOTIF-02, NOTIF-03
+**Success Criteria** (what must be TRUE):
+  1. Scheduler runs daily and transitions eligible clients (MAX(email_sent_at) + 30 days passed AND second_letter_status == IDLE) to PENDING — clients already in PENDING or beyond are not touched
+  2. Admin clicks "2. Anschreiben starten" and the client transitions to PENDING — clicking again when already PENDING produces no state change and no duplicate email (idempotency guard via atomic findOneAndUpdate)
+  3. After transitioning to PENDING, the client receives a Resend email containing a direct link to the portal form — the link uses a dedicated short-lived token (not the onboarding portal_token)
+  4. Every trigger action (scheduler or admin) writes an audit log entry with actor identity and timestamp
+**Plans**: TBD
+
+### Phase 30: Client Portal Form
+**Goal**: Client can open the portal form from the notification email, review pre-filled financial data, make corrections, and submit — creating an immutable snapshot and transitioning status to FORM_SUBMITTED
+**Depends on**: Phase 29
+**Requirements**: FORM-01, FORM-02, FORM-03, FORM-04, FORM-05
+**Success Criteria** (what must be TRUE):
+  1. Client follows the email deep-link and sees the form pre-filled with current data from financial_data and extended_financial_data — no blank fields for data that already exists
+  2. Client can edit all required fields (net income, income source, marital status, dependents count, active garnishments boolean, new creditors boolean with conditional name/amount fields) and check the correctness confirmation checkbox before submitting
+  3. On submit, the backend writes an immutable second_letter_financial_snapshot to MongoDB and updates financial_data with any corrections the client made
+  4. After successful submit, second_letter_status transitions from PENDING to FORM_SUBMITTED — subsequent form loads show a "bereits eingereicht" state instead of the editable form
+  5. The form is only accessible (not a 404/redirect) when second_letter_status is PENDING — clients with other statuses cannot re-submit
+**Plans**: TBD
+
+### Phase 31: Financial Calculation Engine
+**Goal**: After form submission, the system calculates garnishable amount, determines plan type, and computes pro-rata quota and Tilgungsangebot per creditor — all from snapshot data only
+**Depends on**: Phase 30
+**Requirements**: CALC-01, CALC-02, CALC-03, CALC-04
+**Success Criteria** (what must be TRUE):
+  1. Garnishable amount is calculated using the existing §850c ZPO logic from germanGarnishmentCalculator.js applied to snapshot income and dependents data — not live financial_data
+  2. Plan type is determined as RATENPLAN when garnishable amount is greater than zero, NULLPLAN when it equals zero — stored in snapshot
+  3. Pro-rata quota for each creditor is calculated as (claim_amount / total_debt) * garnishable_amount with a zero-division guard when total_debt is zero or when claim_amount is null
+  4. Tilgungsangebot (monthly settlement offer) per creditor is calculated and stored in the snapshot's creditor_calculations array — all values are finite numbers (no NaN, no Infinity)
+**Plans**: TBD
+
+### Phase 32: DOCX Generation
+**Goal**: One DOCX letter per creditor is generated using the correct template (Ratenplan or Nullplan) based on plan type, with all template variables populated from snapshot data
+**Depends on**: Phase 31
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04
+**Success Criteria** (what must be TRUE):
+  1. SecondLetterDocumentGenerator produces a valid DOCX file for each creditor using docxtemplater + pizzip — the same pattern as firstRoundDocumentGenerator.js
+  2. When plan_type is RATENPLAN the Ratenplan template is used; when NULLPLAN the Nullplan template is used — no other template selection logic exists
+  3. Each generated DOCX contains all required variables populated: creditor data (name, address, Aktenzeichen, claim amount, quota, Auszahlung), debtor data (name, birthdate, marital status, dependents, income), plan data (plan type, monthly rate, start date, deadline), and law firm Aktenzeichen
+  4. Generated files are saved to the generated_documents/second_round/ directory with one file per creditor — the filename is stored on the creditor document
+**Plans**: TBD
+
+### Phase 33: Email Dispatch & Workflow Completion
+**Goal**: Admin triggers the send — each creditor receives a Resend email with the DOCX attachment, per-creditor tracking is updated, and status transitions to SENT
+**Depends on**: Phase 32
+**Requirements**: SEND-01, SEND-02, SEND-03, SEND-04, SEND-05, SEND-06
+**Success Criteria** (what must be TRUE):
+  1. Each creditor in final_creditor_list receives a Resend email with the correct DOCX attached — the same pipeline as 1. Anschreiben (creditorEmailService.sendSecondRoundEmail), with a 2-second delay between sends
+  2. After each successful send, the creditor's second_letter_sent_at, second_letter_email_sent_at, and second_letter_document_filename fields are updated in MongoDB
+  3. Each successful send appends an audit comment to the client's Zendesk ticket
+  4. When all creditor emails have been sent without error, second_letter_status transitions from FORM_SUBMITTED to SENT and second_letter_sent_at is recorded
+  5. If sending fails, the system retries up to 3 times — after 3 failures an admin alert is triggered and status remains FORM_SUBMITTED (not SENT), preventing partial-send state from being marked complete
+  6. Demo mode is respected — when the client has demo mode active, all emails are directed to the test address instead of real creditor email addresses
+**Plans**: TBD
+
+### Phase 34: Admin UI & Tracking
+**Goal**: Admin has full visibility and control of the 2. Anschreiben workflow in the admin portal — trigger button, status badges on list and detail views, TrackingCanvas 3rd column, and plan type override
+**Depends on**: Phase 33
+**Requirements**: UI-01, UI-02, UI-03, UI-04
+**Success Criteria** (what must be TRUE):
+  1. Client Detail view shows "2. Anschreiben starten" button when status is IDLE — button is disabled (not hidden) when status is PENDING, FORM_SUBMITTED, or SENT — clicking when IDLE shows a confirmation modal before triggering
+  2. Client List and Client Detail both show a second_letter_status badge: countdown display when IDLE after 1. Anschreiben was sent, "Wartet auf Formular" when PENDING, "Formular eingereicht" when FORM_SUBMITTED, "Gesendet" when SENT
+  3. TrackingCanvas has a third column showing per-creditor 2. Anschreiben status — indicating whether the letter has been sent and when
+  4. Admin can override the plan type (Ratenplan/Nullplan) via a select control in Client Detail before triggering the send — the override persists in the snapshot
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 → 26 → 27
+Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 → 31 → 32 → 33 → 34
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -491,11 +574,18 @@ Phases execute in numeric order: 1 → 22 (v1-v8 complete) → 23 → 24 → 25 
 | 20. Authentication | v8 | 2/2 | Complete | 2026-02-18 |
 | 21. Client List | v8 | 2/2 | Complete | 2026-02-18 |
 | 22. Client Detail | v8 | 4/4 | Complete | 2026-02-18 |
-| 23. Review Foundation | 3/3 | Complete    | 2026-02-23 | - |
-| 24. Core Review Flow | 2/3 | Complete    | 2026-02-23 | 2026-02-23 |
-| 25. Queue Management | 1/2 | Complete    | 2026-02-23 | - |
-| 26. Enhanced Viewer & Analytics | 3/3 | Complete    | 2026-02-23 | - |
-| 27. Polish & Migration | 2/2 | Complete    | 2026-02-23 | - |
+| 23. Review Foundation | v9 | 3/3 | Complete | 2026-03-02 |
+| 24. Core Review Flow | v9 | 3/3 | Complete | 2026-03-02 |
+| 25. Queue Management | v9 | 2/2 | Complete | 2026-03-02 |
+| 26. Enhanced Viewer & Analytics | v9 | 3/3 | Complete | 2026-03-02 |
+| 27. Polish & Migration | v9 | 2/2 | Complete | 2026-03-02 |
+| 28. State Machine Foundation | v10 | 0/TBD | Not started | - |
+| 29. Trigger, Scheduler & Client Notification | v10 | 0/TBD | Not started | - |
+| 30. Client Portal Form | v10 | 0/TBD | Not started | - |
+| 31. Financial Calculation Engine | v10 | 0/TBD | Not started | - |
+| 32. DOCX Generation | v10 | 0/TBD | Not started | - |
+| 33. Email Dispatch & Workflow Completion | v10 | 0/TBD | Not started | - |
+| 34. Admin UI & Tracking | v10 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-02-23*
+*Last updated: 2026-03-02 (v10 roadmap created)*

@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 28 — State Machine Foundation
 Milestone: v10 2. Anschreiben Automatisierung
-Status: Defining requirements
-Last activity: 2026-03-02 — Milestone v10 started
+Status: Not started
+Last activity: 2026-03-02 — Roadmap created for v10
 
-Progress: [█████████████████████████] 27/27 phases complete (v1-v9 shipped)
+Progress: [█████████████████████████░░░░░░░] 27/34 phases complete (v1-v9 shipped, v10 pending)
 
 ## Performance Metrics
 
@@ -86,6 +86,18 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 27-polish-migration]: pollingInterval: 30000 on both ReviewQueuePage and Sidebar — RTK Query deduplication prevents double-fetching
 - [Phase 27-polish-migration]: AgentRedirect handles auth internally (not ProtectedRoute) — needs custom cross-app redirect logic via window.location.href
 
+**v10 Key Decisions (established at roadmap creation):**
+- State machine: 4 states IDLE/PENDING/FORM_SUBMITTED/SENT — no IN_REVIEW gate in v10 (deferred to v2+)
+- Idempotency: atomic findOneAndUpdate with { second_letter_status: 'IDLE' } filter on all trigger entry points
+- Snapshot-first: second_letter_financial_snapshot written at form submission; DOCX generation reads exclusively from snapshot (not live data)
+- Token: dedicated second_letter_form_token (short-lived, 14 days) — NOT the onboarding portal_token
+- Scheduler: setInterval in scheduler.js (no node-cron) — consistent with existing scheduler patterns
+- Plan type: RATENPLAN when garnishable_amount > 0, NULLPLAN when == 0 — calculated from snapshot
+- Document generator: SecondLetterDocumentGenerator mirrors firstRoundDocumentGenerator class structure (docxtemplater + pizzip)
+- Email: reuse creditorEmailService.sendSecondRoundEmail() without modification (already implemented with demo mode, CC, matcher sync)
+- Portal form: in /src/ (CRA) — NOT new Vite portal (separate milestone per PROJECT.md)
+- Old second-round routes (second-round-api.js, secondRoundManager.js): deprecate with comment — not the pattern for new work
+
 ### v9 Context
 
 **Review Dashboard rebuild from old Agent Portal into admin portal.**
@@ -98,54 +110,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - GET /api/agent-review/:clientId/document/:fileIdOrName — Stream document
 
 **Auth change needed:** Complete (done in Plan 01)
-
-**v9 Plan 24-01 decisions:**
-- fetch+Blob URL for document viewer (Phase 26 upgrades to PDF.js)
-- doc.id || doc.name || doc.filename priority for streaming endpoint identifier
-- needing_review_with_docs list used if non-empty, else with_documents (handles summary-phase reviews)
-- resetReviewState dispatched on clientId change to prevent stale index
-
-**v9 Plan 23-02 decisions:**
-- getConfidenceColor(value) returns style object for red/yellow/green pill based on 50/80 thresholds
-- highPriorityCount/avgDays computed client-side from current page (not separate API calls per CONTEXT.md discretion)
-- flex-based table layout over CSS grid — simpler for 6-column proportional layout
-
-**v9 Plan 24-02 decisions:**
-- Parent-owned form state (ReviewWorkspacePage useState) so both ReviewCorrectionForm and ReviewActionBar share formValues without prop drilling
-- useRef for original AI values captures prefill on creditor change, enables green border detection (user-edited) without additional Redux state
-- Corrections diff on Korrigieren: only sends fields that differ from originalValues
-- Skip reason panel is inline (renders above action bar) rather than a modal
-- CreditorSelector expandable list auto-closes after selecting a creditor
-
-**v9 Plan 24-03 decisions:**
-- ReviewSummaryDialog calls useCompleteReviewMutation directly; parent handleComplete only handles navigation after success callback
-- handleComplete does a raw fetch (not RTK Query) for fresh queue after completion to avoid stale cache
-- Cleanup useEffect in ReviewWorkspacePage dispatches resetReviewState on unmount in addition to clientId-change reset
-- Zusammenfassung header button provides early access to summary before completing all creditors
-
-**v9 Plan 25-01 decisions:**
-- calculatePriorityScore is a standalone pure function exported alongside factory (module.exports.calculatePriorityScore) enabling reuse without instantiating the controller
-- Priority string derived from manual_priority_override first (admin override wins), then >3 days || <0.4 confidence = high thresholds matching agentReviewController
-- batchConfirm saves per-client with client.save() (not updateMany) to respect Mongoose pre-save hooks
-
-**v9 Plan 25-02 decisions:**
-- ReviewQueuePage switched from agent endpoint to useGetAdminReviewQueueQuery — admin endpoint returns priority_score and review_assignment data needed by this plan
-- BatchActionBar placed flat at components/ level (not components/review/ subdirectory) — consistent with existing review-action-bar.tsx naming convention
-- RowOverflowMenu opacity managed via JS hover handlers on motion.div rows — consistent with existing row hover background approach
-- window.confirm for batchConfirm destructive action — avoids extra Dialog dependency for simple yes/no
-
-**v9 Plan 26-02 decisions:**
-- JS-side aggregation for analytics — fetch reviewed clients, compute stats in Node.js; avoids complex MongoDB pipeline
-- Date range filter at creditor level (reviewed_at field) not client level — more precise per-creditor tracking
-- autoApprovedPercent checks both 'confirm' and 'confirmed' action variants (agentReviewController vs batchConfirm difference)
-- Agent Performance rendered as HTML table (not Recharts chart) — cleaner for multi-column tabular data
-- /review/analytics route placed before /review/:clientId in App.tsx to prevent param collision
-
-**v9 Plan 26-03 decisions:**
-- ReviewSettings model uses single-document upsert (findOneAndUpdate with {}) — one settings doc per installation
-- Debounce via useRef setTimeout/clearTimeout — no external debounce library needed
-- initialised ref flag prevents server data from overwriting in-flight user edits after first load
-- /review/settings route placed before /review/:clientId to prevent param collision
 
 **Admin Review Queue endpoints (server/routes/admin-review.js → /api/admin/review/):**
 - GET /settings — Returns confidence_threshold and auto_assignment_enabled (defaults if no doc)
@@ -164,21 +128,61 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 **Design guidelines:** BG #FAFAFA, white cards with 1px #E5E7EB border + 12px radius, no shadows, pill badges (outlined+tinted), max 1 orange CTA per section, DM Sans + JetBrains Mono
 
+### v10 Context
+
+**2. Anschreiben Automatisierung — End-to-End second creditor letter workflow.**
+
+**Existing services to reuse (confirmed by research):**
+- `server/services/firstRoundDocumentGenerator.js` — Mirror class structure for SecondLetterDocumentGenerator
+- `server/services/creditorEmailService.js` — sendSecondRoundEmail() already implemented, reuse without modification
+- `server/services/germanGarnishmentCalculator.js` — §850c ZPO, use for Phase 31 calculation
+- `server/services/creditorContactService.js` — Orchestrator pattern to follow for secondLetterService.js
+- `server/scheduler.js` — Add 30-day scheduler check using existing setInterval pattern
+
+**Files NOT to use as pattern:**
+- `server/services/secondRoundManager.js` — Zendesk-centric, architecturally incompatible
+- `server/routes/second-round-api.js` — Deprecated; add comment, do not extend
+
+**Client model fields to add (Phase 28):**
+- `second_letter_status`: enum ['IDLE','PENDING','FORM_SUBMITTED','SENT'], default 'IDLE'
+- `second_letter_financial_snapshot`: subdocument with financial fields
+- `second_letter_triggered_at`: Date
+- `second_letter_form_submitted_at`: Date
+- `second_letter_sent_at`: Date
+- Per-creditor: `second_letter_sent_at`, `second_letter_email_sent_at`, `second_letter_document_filename`
+
+**State machine transitions:**
+- IDLE → PENDING: scheduler or admin trigger (atomic findOneAndUpdate)
+- PENDING → FORM_SUBMITTED: client form submit (snapshot written)
+- FORM_SUBMITTED → SENT: admin triggers send (all creditor emails dispatched)
+
+**Portal form (Phase 30):** In /src/ (CRA) — uses axios, Redux/RTK Query, FinancialDataForm patterns. Token: second_letter_form_token (new dedicated field on Client model, 14-day expiry).
+
+**DOCX templates (Phase 32):** User supplies two template files (Ratenplan + Nullplan). Extract {VariableName} placeholders programmatically before writing generator. Enable errorLogging: true in dev.
+
+**Critical pitfalls:**
+- Double-send prevention: atomic findOneAndUpdate with status guard MUST be first operation in any trigger path
+- Schema must exist before any service code (Phase 28 is strict prerequisite)
+- NaN/Infinity guard in quota calculation: check totalDebt === 0, filter null claim_amounts, use Math.round() not toFixed()
+- Snapshot-only generation: DOCX reads from second_letter_snapshot, never live financial_data
+
 ### Pending Todos
 
 - Test PDF processing with real documents in live environment
 - Verify Gemini 2.5 Pro handles multi-page PDFs correctly in practice
+- Receive DOCX template files from user before Phase 32 can begin (hard blocker)
+- Confirm second_letter_form_token design against existing authenticateClient middleware before Phase 30
 
 ### Blockers/Concerns
 
-None.
+**Phase 32 blocker:** DOCX template files (Ratenplan + Nullplan) must be received from user before generator code can be written. Template variable names define the entire data contract. Do not start Phase 32 without templates in hand.
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Milestone v10 initialization — defining requirements
+Stopped at: v10 roadmap created — Phases 28-34 defined
 Resume file: None
-Next step: Define requirements, create roadmap
+Next step: `/gsd:plan-phase 28` — State Machine Foundation
 
 ---
-*Last updated: 2026-03-02 (Milestone v10 started)*
+*Last updated: 2026-03-02 (v10 roadmap created, Phases 28-34)*

@@ -92,46 +92,46 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| SCHEMA-03 | — | Pending |
-| SCHEMA-04 | — | Pending |
-| TRIG-01 | — | Pending |
-| TRIG-02 | — | Pending |
-| TRIG-03 | — | Pending |
-| TRIG-04 | — | Pending |
-| NOTIF-01 | — | Pending |
-| NOTIF-02 | — | Pending |
-| NOTIF-03 | — | Pending |
-| FORM-01 | — | Pending |
-| FORM-02 | — | Pending |
-| FORM-03 | — | Pending |
-| FORM-04 | — | Pending |
-| FORM-05 | — | Pending |
-| CALC-01 | — | Pending |
-| CALC-02 | — | Pending |
-| CALC-03 | — | Pending |
-| CALC-04 | — | Pending |
-| DOC-01 | — | Pending |
-| DOC-02 | — | Pending |
-| DOC-03 | — | Pending |
-| DOC-04 | — | Pending |
-| SEND-01 | — | Pending |
-| SEND-02 | — | Pending |
-| SEND-03 | — | Pending |
-| SEND-04 | — | Pending |
-| SEND-05 | — | Pending |
-| SEND-06 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| UI-04 | — | Pending |
+| SCHEMA-01 | Phase 28 | Pending |
+| SCHEMA-02 | Phase 28 | Pending |
+| SCHEMA-03 | Phase 28 | Pending |
+| SCHEMA-04 | Phase 28 | Pending |
+| TRIG-01 | Phase 29 | Pending |
+| TRIG-02 | Phase 29 | Pending |
+| TRIG-03 | Phase 29 | Pending |
+| TRIG-04 | Phase 29 | Pending |
+| NOTIF-01 | Phase 29 | Pending |
+| NOTIF-02 | Phase 29 | Pending |
+| NOTIF-03 | Phase 29 | Pending |
+| FORM-01 | Phase 30 | Pending |
+| FORM-02 | Phase 30 | Pending |
+| FORM-03 | Phase 30 | Pending |
+| FORM-04 | Phase 30 | Pending |
+| FORM-05 | Phase 30 | Pending |
+| CALC-01 | Phase 31 | Pending |
+| CALC-02 | Phase 31 | Pending |
+| CALC-03 | Phase 31 | Pending |
+| CALC-04 | Phase 31 | Pending |
+| DOC-01 | Phase 32 | Pending |
+| DOC-02 | Phase 32 | Pending |
+| DOC-03 | Phase 32 | Pending |
+| DOC-04 | Phase 32 | Pending |
+| SEND-01 | Phase 33 | Pending |
+| SEND-02 | Phase 33 | Pending |
+| SEND-03 | Phase 33 | Pending |
+| SEND-04 | Phase 33 | Pending |
+| SEND-05 | Phase 33 | Pending |
+| SEND-06 | Phase 33 | Pending |
+| UI-01 | Phase 34 | Pending |
+| UI-02 | Phase 34 | Pending |
+| UI-03 | Phase 34 | Pending |
+| UI-04 | Phase 34 | Pending |
 
 **Coverage:**
 - v10 requirements: 34 total
-- Mapped to phases: 0
-- Unmapped: 34 ⚠️
+- Mapped to phases: 34
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 — traceability complete after roadmap creation*
