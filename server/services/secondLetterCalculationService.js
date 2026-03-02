@@ -142,7 +142,7 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
         }
 
         creditorCalculations.push({
-            creditor_id: creditor._id?.toString() || '',
+            creditor_id: creditor.id || '',
             creditor_name: creditor.sender_name
                 || creditor.creditor_name
                 || creditor.glaeubiger_name
