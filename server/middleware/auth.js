@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const Client = require('../models/Client');
 
 // JWT Secret from environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -277,11 +278,47 @@ const getImpersonationMetadata = (req) => {
   }
 };
 
+// Middleware for second letter form token authentication
+// Phase 29 generates second_letter_form_token as a UUID stored in the Client model (not a JWT).
+// This middleware validates the UUID token by looking it up in the database and checking expiry.
+const authenticateSecondLetterToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Kein Token angegeben' });
+    }
+
+    const token = authHeader.split(' ')[1]; // Bearer <token>
+    if (!token) {
+      return res.status(401).json({ error: 'Kein Token angegeben' });
+    }
+
+    // Look up client by UUID token stored in the DB (set by SecondLetterTriggerService)
+    const client = await Client.findOne({ second_letter_form_token: token });
+
+    if (!client) {
+      return res.status(401).json({ error: 'Ungültiger Token' });
+    }
+
+    // Check token expiry (14-day window set in Phase 29)
+    if (!client.second_letter_form_token_expires_at || client.second_letter_form_token_expires_at < new Date()) {
+      return res.status(401).json({ error: 'Token abgelaufen' });
+    }
+
+    req.clientId = client.id;
+    next();
+  } catch (error) {
+    console.error('[authenticateSecondLetterToken] Error:', error.message);
+    return res.status(401).json({ error: 'Ungültiger Token' });
+  }
+};
+
 module.exports = {
   authenticateClient,
   authenticateAdmin,
   authenticateAdminOrAgent,
   authenticateAgent,
+  authenticateSecondLetterToken,
   generateClientToken,
   generateAdminToken,
   generateAgentToken,
