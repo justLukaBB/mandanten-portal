@@ -569,7 +569,7 @@ Plans:
 
 Plans:
 - [x] 34-01-PLAN.md — Types + RTK Query mutations + backend plan-type endpoint + Client List projection
-- [ ] 34-02-PLAN.md — Client Detail 2. Anschreiben section (trigger button, status badge, plan override, send button)
+- [x] 34-02-PLAN.md — Client Detail 2. Anschreiben section (trigger button, status badge, plan override, send button)
 - [ ] 34-03-PLAN.md — Client List badge column + TrackingCanvas 3rd column (SecondLetterNode)
 
 ## Progress
