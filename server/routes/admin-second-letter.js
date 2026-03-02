@@ -4,15 +4,29 @@ const createAdminSecondLetterController = require('../controllers/adminSecondLet
 const { authenticateAdmin } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const { calculateSecondLetterFinancials } = require('../services/secondLetterCalculationService');
+const SecondLetterService = require('../services/secondLetterService');
+const ZendeskManager = require('../services/zendeskManager');
+const creditorEmailService = require('../services/creditorEmailService');
 
 /**
  * Factory function — receives secondLetterTriggerService and Client model from server.js.
+ *
+ * creditorEmailService is required locally (NOT injected via factory) — consistent with
+ * how creditorContactService.js and secondRoundEmailSender.js require it at the top of
+ * their own files (it is not in server.js scope).
  *
  * @param {{ secondLetterTriggerService: import('../services/secondLetterTriggerService'), Client: Object }} param0
  * @returns {express.Router}
  */
 module.exports = ({ secondLetterTriggerService, Client }) => {
   const controller = createAdminSecondLetterController({ secondLetterTriggerService });
+
+  // Instantiate dispatch service with local deps (not injected via server.js)
+  const secondLetterService = new SecondLetterService({
+    Client,
+    creditorEmailService,
+    ZendeskManager
+  });
 
   // POST /api/admin/clients/:clientId/trigger-second-letter
   router.post(
@@ -76,6 +90,41 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
       res.status(500).json({ error: 'Internal server error during recalculation' });
     }
   });
+
+  // Phase 33: POST /api/admin/clients/:clientId/send-second-letter
+  // Dispatches pre-generated DOCX emails to all eligible creditors.
+  // Returns 409 for invalid status, 422 for no eligible creditors,
+  // 207 for partial failure, 200 for full success.
+  router.post('/clients/:clientId/send-second-letter',
+    authenticateAdmin,
+    async (req, res) => {
+      try {
+        const { clientId } = req.params;
+        const result = await secondLetterService.dispatchSecondLetterEmails(clientId);
+
+        if (!result.success && result.error === 'INVALID_STATUS') {
+          return res.status(409).json({ success: false, error: result.message });
+        }
+        if (!result.success && result.error === 'NO_ELIGIBLE_CREDITORS') {
+          return res.status(422).json({ success: false, error: result.error, message: result.message });
+        }
+
+        // 207 Multi-Status for partial failure; 200 when all succeeded
+        const statusCode = result.success ? 200 : 207;
+        return res.status(statusCode).json({
+          success: result.success,
+          dispatched: result.dispatched,
+          failed: result.failed,
+          skipped: result.skipped,
+          totalCreditors: result.totalCreditors,
+          status: result.status
+        });
+      } catch (error) {
+        console.error('[SecondLetter] Error dispatching second letter emails:', error);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+    }
+  );
 
   return router;
 };
