@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 36 — Wire Document Generator
+Phase: 37 — Phase 30 Verification & Requirements Cleanup
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-03 — Phase 36 Plan 01 complete: SecondLetterDocumentGenerator wired into send-second-letter endpoint; path mismatch bug fixed in secondLetterService.js
+Last activity: 2026-03-03 — Phase 37 Plan 01 complete: 30-VERIFICATION.md created with FORM-03 6/6 truths verified; REQUIREMENTS.md FORM-03 checkbox flipped to [x] and traceability updated to Complete
 
 Progress: [███████████████████████████░░░░░] 29/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -71,6 +71,8 @@ Progress: [███████████████████████
 | Phase 34-admin-ui-tracking P03 | 3 | 2 tasks | 4 files |
 | Phase 35-bug-fixes-url-id-field-names P01 | 2 | 2 tasks | 3 files |
 | Phase 36-wire-document-generator P01 | 5 | 2 tasks | 2 files |
+| Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
+| Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -141,6 +143,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 34-admin-ui-tracking]: [Phase 34-03]: SecondLetterNode dashed border for not-sent — mirrors ResponseNode waiting pattern; x-clamp minX = -(3 * COL_WIDTH * v.zoom) for 3-column reach; secondLetterStatus renders plain dash for IDLE (no badge when no workflow started)
 - [Phase 35-bug-fixes-url-id-field-names]: [Phase 35-01]: creditorSchema { _id: false } — use creditor.id throughout (never creditor._id); final_creditor_list.id filter key for positional updates; ?? for number_of_dependents fallback; SEND-02 already correct in secondLetterService.js
 - [Phase 36-wire-document-generator]: [Phase 36-01]: Route handler loads client and applies all guards (status + snapshot) before calling generator — fail-fast before expensive file I/O; dispatchSecondLetterEmails() re-loads client internally so persisted filenames are picked up automatically; both route and service retain FORM_SUBMITTED guards (defense in depth); GENERATED_DOCS_DIR includes clientId from client._id.toString() — matches SecondLetterDocumentGenerator output path second_round/{clientId}/
+- [Phase 37-phase30-verification-cleanup]: FORM-03 verification uses status: passed — backend snapshot write fully verifiable by static code inspection, no runtime test needed
+- [Phase 37-phase30-verification-cleanup]: Traceability row uses Phase 30 (verified Phase 37) to accurately record implementation history — code written Phase 30, documentation formalized Phase 37
 
 ### v9 Context
 
@@ -224,9 +228,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 36-01-PLAN.md — SecondLetterDocumentGenerator wired into send-second-letter endpoint; path mismatch bug fixed
+Stopped at: Completed 37-01-PLAN.md — Phase 30 VERIFICATION.md created, FORM-03 checkbox and traceability updated to Complete
 Resume file: None
-Next step: Phase 36 complete — E2E second-letter workflow complete. Ready for integration testing with real DOCX templates and a client in FORM_SUBMITTED state.
+Next step: Phase 37 complete — FORM-03 documentation gap closed. v10 audit cleanup done. Ready for integration testing with real DOCX templates and a client in FORM_SUBMITTED state.
 
 ---
-*Last updated: 2026-03-03 (Phase 36 Plan 01 complete)*
+*Last updated: 2026-03-03 (Phase 37 Plan 01 complete)*
