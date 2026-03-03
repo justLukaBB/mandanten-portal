@@ -608,9 +608,10 @@ Plans:
 **Requirements**: CALC-04, DOC-01, DOC-02, DOC-03, DOC-04, SEND-01, SEND-03, SEND-04
 **Gap Closure**: Closes all gaps from v10 audit (8 requirements, 2 integration, 2 flows)
 **Depends on**: Phase 37
+**Plans**: 1 plan
 
 Plans:
-- [ ] 38-01-PLAN.md — Add 5 schema fields to Client.js + verify persistence + sync REQUIREMENTS.md
+- [ ] 38-01-PLAN.md — Add 5 schema fields to Client.js snapshot subdocument + sync REQUIREMENTS.md checkboxes and traceability
 
 ## Progress
 
