@@ -5,6 +5,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 const { rateLimits } = require('../middleware/security');
 const { calculateSecondLetterFinancials } = require('../services/secondLetterCalculationService');
 const SecondLetterService = require('../services/secondLetterService');
+const SecondLetterDocumentGenerator = require('../services/secondLetterDocumentGenerator');
 const ZendeskManager = require('../services/zendeskManager');
 const creditorEmailService = require('../services/creditorEmailService');
 
@@ -91,15 +92,53 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
     }
   });
 
-  // Phase 33: POST /api/admin/clients/:clientId/send-second-letter
-  // Dispatches pre-generated DOCX emails to all eligible creditors.
-  // Returns 409 for invalid status, 422 for no eligible creditors,
+  // Phase 36: POST /api/admin/clients/:clientId/send-second-letter
+  // Generates DOCX documents for all creditors, then dispatches emails.
+  // Returns 404 for missing client, 409 for invalid status, 400 for missing snapshot,
+  // 500 if all document generations fail, 422 for no eligible creditors,
   // 207 for partial failure, 200 for full success.
   router.post('/clients/:clientId/send-second-letter',
     authenticateAdmin,
     async (req, res) => {
       try {
         const { clientId } = req.params;
+
+        // a. Load client from DB
+        const client = await Client.findById(clientId);
+        if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+        // b. Status guard BEFORE generation (fail fast — don't generate for wrong status)
+        if (client.second_letter_status !== 'FORM_SUBMITTED') {
+          return res.status(409).json({
+            success: false,
+            error: 'INVALID_STATUS',
+            message: `Status is ${client.second_letter_status}, expected FORM_SUBMITTED`
+          });
+        }
+
+        // c. Snapshot guard (check calculation_status is completed)
+        const snapshot = client.second_letter_financial_snapshot;
+        if (!snapshot || snapshot.calculation_status !== 'completed') {
+          return res.status(400).json({
+            success: false,
+            error: 'Snapshot not ready — run recalculate-second-letter first'
+          });
+        }
+
+        // d. Generate DOCX for all creditors
+        const generator = new SecondLetterDocumentGenerator();
+        const genResult = await generator.generateForAllCreditors(client, snapshot);
+        console.log(`[SecondLetter] Generation: ${genResult.total_generated} generated, ${genResult.total_failed} failed`);
+        if (genResult.total_generated === 0 && genResult.total_failed > 0) {
+          return res.status(500).json({
+            success: false,
+            error: 'Document generation failed for all creditors',
+            details: genResult.errors
+          });
+        }
+
+        // e. Dispatch emails — dispatchSecondLetterEmails re-loads client from DB internally,
+        //    picking up second_letter_document_filename values persisted by generateForAllCreditors.
         const result = await secondLetterService.dispatchSecondLetterEmails(clientId);
 
         if (!result.success && result.error === 'INVALID_STATUS') {
