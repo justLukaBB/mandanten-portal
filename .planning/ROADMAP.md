@@ -12,7 +12,7 @@
 - ✅ **v7 FastAPI Webhook Field Integration** - Phases 17-18 (shipped 2026-02-18)
 - ✅ **v8 Admin Frontend Migration** - Phases 19-22 (shipped 2026-02-18)
 - ✅ **v9 Review Dashboard** - Phases 23-27 (shipped 2026-03-02)
-- 🚧 **v10 2. Anschreiben Automatisierung** - Phases 28-37 (in progress)
+- 🚧 **v10 2. Anschreiben Automatisierung** - Phases 28-39 (in progress)
 
 ## Phases
 
@@ -613,10 +613,20 @@ Plans:
 Plans:
 - [ ] 38-01-PLAN.md — Add 5 schema fields to Client.js snapshot subdocument + sync REQUIREMENTS.md checkboxes and traceability
 
+### Phase 39: Fix Admin Trigger id/_id Mismatch
+**Goal**: Fix the last v10 gap — admin manual trigger sends MongoDB _id but secondLetterTriggerService queries UUID id field, causing silent failure
+**Requirements**: TRIG-02
+**Gap Closure**: Closes final gap from v10 audit (1 requirement, 1 integration, 1 flow)
+**Depends on**: Phase 38
+**Plans**: 1 plan
+
+Plans:
+- [ ] 39-01-PLAN.md — Change { id: clientId } to { _id: clientId } in secondLetterTriggerService.js (lines 56 and 83)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38
+Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -658,6 +668,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 36. Wire Document Generator | v10 | Complete    | 2026-03-03 | — |
 | 37. Phase 30 Verification & Cleanup | 1/1 | Complete    | 2026-03-03 | — |
 | 38. Fix Schema Gap — Persist Calculation Fields | 1/1 | Complete    | 2026-03-03 | — |
+| 39. Fix Admin Trigger id/_id Mismatch | v10 | Planned | — | — |
 
 ---
-*Last updated: 2026-03-03 (Phase 38 added — gap closure for schema integration issue)*
+*Last updated: 2026-03-03 (Phase 39 added — gap closure for admin trigger id/_id mismatch)*
