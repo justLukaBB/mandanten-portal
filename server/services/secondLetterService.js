@@ -98,7 +98,8 @@ class SecondLetterService {
     let successCount = 0;
     let failedCount = 0;
     const skippedCount = skippedCreditors.length;
-    const GENERATED_DOCS_DIR = path.join(__dirname, '../generated_documents/second_round');
+    const clientIdStr = client._id.toString();
+    const GENERATED_DOCS_DIR = path.join(__dirname, '../generated_documents/second_round', clientIdStr);
 
     for (let i = 0; i < eligibleCreditors.length; i++) {
       const creditor = eligibleCreditors[i];
