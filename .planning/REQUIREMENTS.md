@@ -40,14 +40,14 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 - [x] **CALC-01**: Pfändbarer Betrag nach § 850c ZPO berechnet aus Snapshot-Daten (existierende garnishable_amount Logik)
 - [x] **CALC-02**: Plan-Typ bestimmt: RATENPLAN (pfändbarer Betrag > 0) oder NULLPLAN (pfändbarer Betrag == 0)
 - [x] **CALC-03**: Quote pro Gläubiger berechnet: (claim_amount / total_debt) * pfändbarer Betrag — mit Zero-Division-Guard
-- [ ] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
+- [x] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
 
 ### Dokument-Generierung
 
-- [ ] **DOC-01**: SecondLetterDocumentGenerator erstellt (spiegelt FirstRoundDocumentGenerator — docxtemplater + pizzip)
-- [ ] **DOC-02**: Template-Branching: plan_type == RATENPLAN → Ratenplan-Template, sonst → Nullplan-Template
-- [ ] **DOC-03**: Template-Variablen befüllt: Gläubiger-Daten (Name, Adresse, Aktenzeichen, Forderung, Quote, Auszahlung), Schuldner-Daten (Name, Geburtsdatum, Familienstand, Unterhaltspflichtige, Einkommen), Plan-Daten (Plan-Typ, monatliche Rate, Startdatum, Frist), Kanzlei-Daten (Aktenzeichen)
-- [ ] **DOC-04**: Ein DOCX pro Gläubiger generiert, gespeichert in generated_documents/second_round/
+- [x] **DOC-01**: SecondLetterDocumentGenerator erstellt (spiegelt FirstRoundDocumentGenerator — docxtemplater + pizzip)
+- [x] **DOC-02**: Template-Branching: plan_type == RATENPLAN → Ratenplan-Template, sonst → Nullplan-Template
+- [x] **DOC-03**: Template-Variablen befüllt: Gläubiger-Daten (Name, Adresse, Aktenzeichen, Forderung, Quote, Auszahlung), Schuldner-Daten (Name, Geburtsdatum, Familienstand, Unterhaltspflichtige, Einkommen), Plan-Daten (Plan-Typ, monatliche Rate, Startdatum, Frist), Kanzlei-Daten (Aktenzeichen)
+- [x] **DOC-04**: Ein DOCX pro Gläubiger generiert, gespeichert in generated_documents/second_round/
 
 ### Versand
 
@@ -111,15 +111,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CALC-01 | Phase 31 | Complete |
 | CALC-02 | Phase 31 | Complete |
 | CALC-03 | Phase 31 | Complete |
-| CALC-04 | Phase 38 (calc logic Phase 31, persistence fix Phase 38) | Pending |
-| DOC-01 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Pending |
-| DOC-02 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Pending |
-| DOC-03 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Pending |
-| DOC-04 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Pending |
-| SEND-01 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
+| CALC-04 | Phase 38 (calc logic Phase 31, persistence fix Phase 38) | Complete |
+| DOC-01 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Complete |
+| DOC-02 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Complete |
+| DOC-03 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Complete |
+| DOC-04 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Complete |
+| SEND-01 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Complete |
 | SEND-02 | Phase 35 | Complete |
-| SEND-03 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
-| SEND-04 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
+| SEND-03 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Complete |
+| SEND-04 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Complete |
 | SEND-05 | Phase 33 | Complete |
 | SEND-06 | Phase 33 | Complete |
 | UI-01 | Phase 34 | Complete |
@@ -134,4 +134,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-03 — Phase 38 gap closure assignments + checkbox sync from v10 audit*
+*Last updated: 2026-03-03 — Phase 38 Plan 01 complete: schema fix closes 8 requirements (CALC-04, DOC-01–04, SEND-01, SEND-03, SEND-04). All 34 v10 requirements now Complete.*
