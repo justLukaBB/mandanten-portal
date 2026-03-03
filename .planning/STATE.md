@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 37 — Phase 30 Verification & Requirements Cleanup
+Phase: 38 — Fix Schema Gap: Persist Calculation Fields
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-03 — Phase 37 Plan 01 complete: 30-VERIFICATION.md created with FORM-03 6/6 truths verified; REQUIREMENTS.md FORM-03 checkbox flipped to [x] and traceability updated to Complete
+Last activity: 2026-03-03 — Phase 38 Plan 01 complete: 5 schema fields added to second_letter_financial_snapshot (creditor_calculations, calculation_status, calculation_error, calculated_at, total_debt); all 34 v10 requirements now Complete
 
-Progress: [███████████████████████████░░░░░] 29/34 phases complete (v1-v9 shipped, v10 pending)
+Progress: [████████████████████████████████] 34/34 requirements complete (v10 pipeline fully unblocked)
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [███████████████████████
 | Phase 36-wire-document-generator P01 | 5 | 2 tasks | 2 files |
 | Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
 | Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
+| Phase 38-fix-schema-gap-persist-calculation-fields P01 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 36-wire-document-generator]: [Phase 36-01]: Route handler loads client and applies all guards (status + snapshot) before calling generator — fail-fast before expensive file I/O; dispatchSecondLetterEmails() re-loads client internally so persisted filenames are picked up automatically; both route and service retain FORM_SUBMITTED guards (defense in depth); GENERATED_DOCS_DIR includes clientId from client._id.toString() — matches SecondLetterDocumentGenerator output path second_round/{clientId}/
 - [Phase 37-phase30-verification-cleanup]: FORM-03 verification uses status: passed — backend snapshot write fully verifiable by static code inspection, no runtime test needed
 - [Phase 37-phase30-verification-cleanup]: Traceability row uses Phase 30 (verified Phase 37) to accurately record implementation history — code written Phase 30, documentation formalized Phase 37
+- [Phase 38-fix-schema-gap-persist-calculation-fields]: creditor_calculations typed subdocument array, calculation_status enum no default (undefined = sentinel), calculation_error plain String no required — only schema declaration changed, no write-side code modified
 
 ### v9 Context
 
@@ -228,9 +230,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 37-01-PLAN.md — Phase 30 VERIFICATION.md created, FORM-03 checkbox and traceability updated to Complete
+Stopped at: Completed 38-01-PLAN.md — 5 schema fields added to second_letter_financial_snapshot; all 34 v10 requirements now Complete
 Resume file: None
-Next step: Phase 37 complete — FORM-03 documentation gap closed. v10 audit cleanup done. Ready for integration testing with real DOCX templates and a client in FORM_SUBMITTED state.
+Next step: Phase 38 complete — Mongoose schema gap closed. v10 2. Anschreiben pipeline fully unblocked. Ready for end-to-end integration testing: put a client in FORM_SUBMITTED state, trigger send, verify DOCX generation + email dispatch.
 
 ---
-*Last updated: 2026-03-03 (Phase 37 Plan 01 complete)*
+*Last updated: 2026-03-03 (Phase 38 Plan 01 complete)*

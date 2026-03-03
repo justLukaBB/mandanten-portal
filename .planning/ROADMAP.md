@@ -657,7 +657,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 35. Bug Fixes — URL, _id, Field Names | v10 | Complete    | 2026-03-02 | — |
 | 36. Wire Document Generator | v10 | Complete    | 2026-03-03 | — |
 | 37. Phase 30 Verification & Cleanup | 1/1 | Complete    | 2026-03-03 | — |
-| 38. Fix Schema Gap — Persist Calculation Fields | v10 | 0/1 | Planned | — |
+| 38. Fix Schema Gap — Persist Calculation Fields | 1/1 | Complete   | 2026-03-03 | — |
 
 ---
 *Last updated: 2026-03-03 (Phase 38 added — gap closure for schema integration issue)*
