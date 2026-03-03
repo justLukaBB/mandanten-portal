@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 38 — Fix Schema Gap: Persist Calculation Fields
+Phase: 39 — Fix Admin Trigger id/_id Mismatch
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-03 — Phase 38 Plan 01 complete: 5 schema fields added to second_letter_financial_snapshot (creditor_calculations, calculation_status, calculation_error, calculated_at, total_debt); all 34 v10 requirements now Complete
+Last activity: 2026-03-03 — Phase 39 Plan 01 complete: id/_id mismatch fixed in secondLetterTriggerService (findOneAndUpdate + findOne + scheduler call all use _id); TRIG-02 marked Complete; all 34 v10 requirements satisfied
 
 Progress: [████████████████████████████████] 34/34 requirements complete (v10 pipeline fully unblocked)
 
@@ -74,6 +74,7 @@ Progress: [███████████████████████
 | Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
 | Phase 37-phase30-verification-cleanup P01 | 2m | 2 tasks | 2 files |
 | Phase 38-fix-schema-gap-persist-calculation-fields P01 | 4 | 2 tasks | 2 files |
+| Phase 39-fix-admin-trigger-id-mismatch P01 | 1 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 37-phase30-verification-cleanup]: FORM-03 verification uses status: passed — backend snapshot write fully verifiable by static code inspection, no runtime test needed
 - [Phase 37-phase30-verification-cleanup]: Traceability row uses Phase 30 (verified Phase 37) to accurately record implementation history — code written Phase 30, documentation formalized Phase 37
 - [Phase 38-fix-schema-gap-persist-calculation-fields]: creditor_calculations typed subdocument array, calculation_status enum no default (undefined = sentinel), calculation_error plain String no required — only schema declaration changed, no write-side code modified
+- [Phase 39-fix-admin-trigger-id-mismatch]: triggerForClient now accepts MongoDB _id string from both admin route and scheduler — UUID id field no longer used in query filters
+- [Phase 39-fix-admin-trigger-id-mismatch]: Phase 39 closes last open v10 requirement: TRIG-02 complete, 34/34 v10 requirements satisfied
 
 ### v9 Context
 
@@ -230,9 +233,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 38-01-PLAN.md — 5 schema fields added to second_letter_financial_snapshot; all 34 v10 requirements now Complete
+Stopped at: Completed 39-01-PLAN.md — id/_id mismatch fixed in secondLetterTriggerService; TRIG-02 complete; all 34 v10 requirements satisfied
 Resume file: None
-Next step: Phase 38 complete — Mongoose schema gap closed. v10 2. Anschreiben pipeline fully unblocked. Ready for end-to-end integration testing: put a client in FORM_SUBMITTED state, trigger send, verify DOCX generation + email dispatch.
+Next step: Phase 39 complete — all 34 v10 requirements now satisfied. Ready for end-to-end integration testing: put a client in IDLE state, click admin trigger button, verify PENDING transition + notification email dispatched.
 
 ---
-*Last updated: 2026-03-03 (Phase 38 Plan 01 complete)*
+*Last updated: 2026-03-03 (Phase 39 Plan 01 complete)*
