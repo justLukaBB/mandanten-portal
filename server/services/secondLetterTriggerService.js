@@ -31,7 +31,7 @@ class SecondLetterTriggerService {
    * Idempotent: if the client is already PENDING/FORM_SUBMITTED/SENT the
    * findOneAndUpdate filter will not match and no email is sent.
    *
-   * @param {string} clientId - The client's `id` field (not _id)
+   * @param {string} clientId - The client's MongoDB `_id` (ObjectId string, from req.params.clientId)
    * @param {string} actor - 'system' for scheduler, admin identifier for manual trigger
    * @returns {Promise<{
    *   success: boolean,
@@ -53,7 +53,7 @@ class SecondLetterTriggerService {
       //    If client is already PENDING/FORM_SUBMITTED/SENT the update will
       //    match no document and return null (idempotency guard).
       const client = await Client.findOneAndUpdate(
-        { id: clientId, second_letter_status: 'IDLE' },
+        { _id: clientId, second_letter_status: 'IDLE' },
         {
           $set: {
             second_letter_status: 'PENDING',
@@ -80,7 +80,7 @@ class SecondLetterTriggerService {
 
       // 2. Null return means the status-guard blocked the update — already triggered.
       if (!client) {
-        const existing = await Client.findOne({ id: clientId }, { second_letter_status: 1 });
+        const existing = await Client.findOne({ _id: clientId }, { second_letter_status: 1 });
         return {
           success: false,
           alreadyTriggered: true,
@@ -137,7 +137,7 @@ class SecondLetterTriggerService {
           $elemMatch: { email_sent_at: { $exists: true, $ne: null } }
         }
       }
-    ).select('id aktenzeichen firstName lastName email final_creditor_list');
+    ).select('aktenzeichen firstName lastName email final_creditor_list');
 
     // Step 2: Filter in JS to find clients where the MOST RECENT first-round email
     //         is at least 30 days old. Clients who had any recent contact are excluded.
@@ -160,7 +160,7 @@ class SecondLetterTriggerService {
     // Sequential iteration — avoids Resend rate limit issues during batch runs.
     for (const client of eligible) {
       try {
-        const result = await this.triggerForClient(client.id, 'system');
+        const result = await this.triggerForClient(client._id.toString(), 'system');
         if (result.success) {
           triggered++;
         } else {
