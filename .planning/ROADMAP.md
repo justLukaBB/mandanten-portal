@@ -580,7 +580,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 35-01-PLAN.md — Fix email deep-link URL, _id→id bugs in documentGenerator + calculationService, field name fallbacks in prepareTemplateData, verify SEND-02
+- [x] 35-01-PLAN.md — Fix email deep-link URL, _id→id bugs in documentGenerator + calculationService, field name fallbacks in prepareTemplateData, verify SEND-02
 
 ### Phase 36: Wire Document Generator into Send Workflow
 **Goal**: Connect SecondLetterDocumentGenerator (Phase 32) to the send-second-letter endpoint (Phase 33) so DOCX files are generated before email dispatch — completing the E2E admin-trigger→send flow
@@ -591,7 +591,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 36-01-PLAN.md — Wire SecondLetterDocumentGenerator into send-second-letter handler + fix document path mismatch in secondLetterService
+- [x] 36-01-PLAN.md — Wire SecondLetterDocumentGenerator into send-second-letter handler + fix document path mismatch in secondLetterService
 
 ### Phase 37: Phase 30 Verification & Requirements Cleanup
 **Goal**: Formally verify Phase 30 (FORM-03 snapshot write) and update REQUIREMENTS.md checkboxes to reflect actual completion state
@@ -644,8 +644,8 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
 | 34. Admin UI & Tracking | v10 | Complete    | 2026-03-02 | - |
 | 35. Bug Fixes — URL, _id, Field Names | v10 | Complete    | 2026-03-02 | — |
-| 36. Wire Document Generator | v10 | Pending | — | — |
+| 36. Wire Document Generator | v10 | Complete | 2026-03-03 | — |
 | 37. Phase 30 Verification & Cleanup | v10 | Pending | — | — |
 
 ---
-*Last updated: 2026-03-02 (v10 roadmap created)*
+*Last updated: 2026-03-03 (Phase 36 complete — wire document generator)*

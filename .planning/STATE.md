@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 35 — Bug Fixes (URL, _id, Field Names)
+Phase: 36 — Wire Document Generator
 Milestone: v10 2. Anschreiben Automatisierung
 Status: Plan 01 complete
-Last activity: 2026-03-02 — Phase 35 Plan 01 complete: six 2. Anschreiben bugs fixed — portal deep-link URL, _id-to-id refs, positional update filters, field name fallbacks, creditor_id storage
+Last activity: 2026-03-03 — Phase 36 Plan 01 complete: SecondLetterDocumentGenerator wired into send-second-letter endpoint; path mismatch bug fixed in secondLetterService.js
 
 Progress: [███████████████████████████░░░░░] 29/34 phases complete (v1-v9 shipped, v10 pending)
 
@@ -70,6 +70,7 @@ Progress: [███████████████████████
 | Phase 34-admin-ui-tracking P02 | 2 | 1 tasks | 1 files |
 | Phase 34-admin-ui-tracking P03 | 3 | 2 tasks | 4 files |
 | Phase 35-bug-fixes-url-id-field-names P01 | 2 | 2 tasks | 3 files |
+| Phase 36-wire-document-generator P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 34-admin-ui-tracking]: [Phase 34-02]: IIFE pattern for SecondLetterSection keeps local derived state scoped in renderOverview(); SendSecondLetterResponse.failed > 0 used for partial failure detection (not a boolean partial field)
 - [Phase 34-admin-ui-tracking]: [Phase 34-03]: SecondLetterNode dashed border for not-sent — mirrors ResponseNode waiting pattern; x-clamp minX = -(3 * COL_WIDTH * v.zoom) for 3-column reach; secondLetterStatus renders plain dash for IDLE (no badge when no workflow started)
 - [Phase 35-bug-fixes-url-id-field-names]: [Phase 35-01]: creditorSchema { _id: false } — use creditor.id throughout (never creditor._id); final_creditor_list.id filter key for positional updates; ?? for number_of_dependents fallback; SEND-02 already correct in secondLetterService.js
+- [Phase 36-wire-document-generator]: [Phase 36-01]: Route handler loads client and applies all guards (status + snapshot) before calling generator — fail-fast before expensive file I/O; dispatchSecondLetterEmails() re-loads client internally so persisted filenames are picked up automatically; both route and service retain FORM_SUBMITTED guards (defense in depth); GENERATED_DOCS_DIR includes clientId from client._id.toString() — matches SecondLetterDocumentGenerator output path second_round/{clientId}/
 
 ### v9 Context
 
@@ -221,10 +223,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 35-01-PLAN.md — six 2. Anschreiben bugs fixed: portal URL, _id-to-id, positional update filters, field name fallbacks, creditor_id storage
+Last session: 2026-03-03
+Stopped at: Completed 36-01-PLAN.md — SecondLetterDocumentGenerator wired into send-second-letter endpoint; path mismatch bug fixed
 Resume file: None
-Next step: Phase 35 complete — all v10 audit bugs fixed. Ready for end-to-end integration testing.
+Next step: Phase 36 complete — E2E second-letter workflow complete. Ready for integration testing with real DOCX templates and a client in FORM_SUBMITTED state.
 
 ---
-*Last updated: 2026-03-02 (Phase 35 Plan 01 complete)*
+*Last updated: 2026-03-03 (Phase 36 Plan 01 complete)*
