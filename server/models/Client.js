@@ -674,7 +674,22 @@ const clientSchema = new mongoose.Schema({
     },
     garnishable_amount: Number,
     monthly_rate: Number,
-    snapshot_created_at: Date
+    snapshot_created_at: Date,
+    // Phase 38: calculation result fields — declared so Mongoose strict mode persists them
+    creditor_calculations: [{
+      creditor_id: String,
+      creditor_name: String,
+      claim_amount: Number,
+      tilgungsangebot: Number,
+      quota_percentage: Number
+    }],
+    calculation_status: {
+      type: String,
+      enum: ['completed', 'failed']
+    },
+    calculation_error: String,
+    calculated_at: Date,
+    total_debt: Number
   },
 
   // Timestamps
