@@ -24,7 +24,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Client Notification
 
 - [x] **NOTIF-01**: Client bekommt Email via Resend: "Bitte bestätigen Sie Ihre Daten für das 2. Anschreiben"
-- [ ] **NOTIF-02**: Email enthält Deep-Link zum Portal-Formular (mit Token für Authentifizierung)
+- [x] **NOTIF-02**: Email enthält Deep-Link zum Portal-Formular (mit Token für Authentifizierung)
 - [x] **NOTIF-03**: Keine doppelten Notifications — Guard prüft ob bereits PENDING
 
 ### Client Portal Formular
@@ -40,7 +40,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 - [x] **CALC-01**: Pfändbarer Betrag nach § 850c ZPO berechnet aus Snapshot-Daten (existierende garnishable_amount Logik)
 - [x] **CALC-02**: Plan-Typ bestimmt: RATENPLAN (pfändbarer Betrag > 0) oder NULLPLAN (pfändbarer Betrag == 0)
 - [x] **CALC-03**: Quote pro Gläubiger berechnet: (claim_amount / total_debt) * pfändbarer Betrag — mit Zero-Division-Guard
-- [x] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
+- [ ] **CALC-04**: Tilgungsangebot pro Gläubiger berechnet und im Snapshot gespeichert
 
 ### Dokument-Generierung
 
@@ -52,7 +52,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 ### Versand
 
 - [x] **SEND-01**: Resend Email pro Gläubiger mit DOCX Attachment — identische Pipeline wie 1. Anschreiben (creditorEmailService.sendSecondRoundEmail)
-- [ ] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
+- [x] **SEND-02**: Per-Creditor Tracking: second_letter_sent_at, second_letter_email_sent_at, second_letter_document_filename aktualisiert
 - [x] **SEND-03**: Zendesk Audit-Comment pro erfolgreichem Versand an Haupt-Ticket
 - [x] **SEND-04**: Status-Übergang FORM_SUBMITTED → SENT nach erfolgreichem Versand aller Gläubiger-Emails
 - [x] **SEND-05**: Error Handling: Retry 3x bei Fehler, dann Admin-Alert + Status bleibt FORM_SUBMITTED
@@ -60,10 +60,10 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
 ### Admin UI
 
-- [ ] **UI-01**: Trigger-Button "2. Anschreiben starten" in Client Detail — visible wenn IDLE, disabled wenn PENDING/FORM_SUBMITTED/SENT — mit Bestätigungs-Modal
-- [ ] **UI-02**: Status-Badge für second_letter_status im Client Detail und Client-Liste (Countdown bei IDLE nach 1. Anschreiben, Wartet bei PENDING, In Bearbeitung bei FORM_SUBMITTED, Gesendet bei SENT)
-- [ ] **UI-03**: TrackingCanvas erweitert um 3. Spalte für 2. Anschreiben Status pro Gläubiger
-- [ ] **UI-04**: Plan-Typ Admin-Override Möglichkeit in Client Detail vor Versand-Trigger
+- [x] **UI-01**: Trigger-Button "2. Anschreiben starten" in Client Detail — visible wenn IDLE, disabled wenn PENDING/FORM_SUBMITTED/SENT — mit Bestätigungs-Modal
+- [x] **UI-02**: Status-Badge für second_letter_status im Client Detail und Client-Liste (Countdown bei IDLE nach 1. Anschreiben, Wartet bei PENDING, In Bearbeitung bei FORM_SUBMITTED, Gesendet bei SENT)
+- [x] **UI-03**: TrackingCanvas erweitert um 3. Spalte für 2. Anschreiben Status pro Gläubiger
+- [x] **UI-04**: Plan-Typ Admin-Override Möglichkeit in Client Detail vor Versand-Trigger
 
 ## Future Requirements
 
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRIG-03 | Phase 29 | Complete |
 | TRIG-04 | Phase 29 | Complete |
 | NOTIF-01 | Phase 29 | Complete |
-| NOTIF-02 | Phase 35 | Pending |
+| NOTIF-02 | Phase 35 | Complete |
 | NOTIF-03 | Phase 29 | Complete |
 | FORM-01 | Phase 30 | Complete |
 | FORM-02 | Phase 30 | Complete |
@@ -111,21 +111,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CALC-01 | Phase 31 | Complete |
 | CALC-02 | Phase 31 | Complete |
 | CALC-03 | Phase 31 | Complete |
-| CALC-04 | Phase 31 | Complete |
-| DOC-01 | Phase 36 | Pending |
-| DOC-02 | Phase 36 | Pending |
-| DOC-03 | Phase 35 | Pending |
-| DOC-04 | Phase 35 | Pending |
-| SEND-01 | Phase 36 | Pending |
-| SEND-02 | Phase 35 | Pending |
-| SEND-03 | Phase 36 | Pending |
-| SEND-04 | Phase 36 | Pending |
+| CALC-04 | Phase 38 (calc logic Phase 31, persistence fix Phase 38) | Pending |
+| DOC-01 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Pending |
+| DOC-02 | Phase 38 (code Phase 32+36, schema fix Phase 38) | Pending |
+| DOC-03 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Pending |
+| DOC-04 | Phase 38 (code Phase 32+35, schema fix Phase 38) | Pending |
+| SEND-01 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
+| SEND-02 | Phase 35 | Complete |
+| SEND-03 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
+| SEND-04 | Phase 38 (code Phase 33+36, schema fix Phase 38) | Pending |
 | SEND-05 | Phase 33 | Complete |
 | SEND-06 | Phase 33 | Complete |
-| UI-01 | Phase 34 | Pending |
-| UI-02 | Phase 34 | Pending |
-| UI-03 | Phase 34 | Pending |
-| UI-04 | Phase 34 | Pending |
+| UI-01 | Phase 34 | Complete |
+| UI-02 | Phase 34 | Complete |
+| UI-03 | Phase 34 | Complete |
+| UI-04 | Phase 34 | Complete |
 
 **Coverage:**
 - v10 requirements: 34 total
@@ -134,4 +134,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 — traceability complete after roadmap creation*
+*Last updated: 2026-03-03 — Phase 38 gap closure assignments + checkbox sync from v10 audit*
