@@ -31,7 +31,7 @@ Requirements for 2. Anschreiben Automatisierung. Each maps to roadmap phases.
 
 - [x] **FORM-01**: Formular im alten Portal (/src/) mit vorausgefüllten Finanzdaten aus financial_data + extended_financial_data
 - [x] **FORM-02**: Pflichtfelder: Monatliches Nettoeinkommen, Einkommensquelle (Select), Familienstand (Select), Anzahl Unterhaltspflichten, Lohnpfändungen aktiv (Boolean), neue Gläubiger (Boolean + konditionell Name/Betrag), Bestätigung Richtigkeit (Checkbox)
-- [ ] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
+- [x] **FORM-03**: Bei Submit: financial_data in DB aktualisiert + immutabler Snapshot in second_letter_financial_snapshot erstellt
 - [x] **FORM-04**: Status-Übergang PENDING → FORM_SUBMITTED nach erfolgreichem Submit
 - [x] **FORM-05**: Formular nur sichtbar/zugänglich wenn second_letter_status == PENDING
 
@@ -105,7 +105,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTIF-03 | Phase 29 | Complete |
 | FORM-01 | Phase 30 | Complete |
 | FORM-02 | Phase 30 | Complete |
-| FORM-03 | Phase 37 | Pending |
+| FORM-03 | Phase 30 (verified Phase 37) | Complete |
 | FORM-04 | Phase 30 | Complete |
 | FORM-05 | Phase 30 | Complete |
 | CALC-01 | Phase 31 | Complete |
