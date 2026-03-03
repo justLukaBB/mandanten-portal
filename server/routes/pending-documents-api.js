@@ -92,14 +92,11 @@ router.post('/admin/clients/:clientId/send-reminder', async (req, res) => {
       });
     }
 
-    // Use the document reminder service to send reminder
-    const result = await documentReminderService.sendDocumentReminder(client);
-    
-    res.json({
+    // DISABLED: Document reminder emails deactivated (2026-03-03)
+    return res.json({
       success: true,
-      reminderSent: true,
-      reminderCount: result.reminderCount,
-      zendeskUpdated: result.zendeskUpdated
+      reminderSent: false,
+      message: 'Document reminders are currently disabled'
     });
     
   } catch (error) {

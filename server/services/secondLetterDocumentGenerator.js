@@ -208,13 +208,43 @@ class SecondLetterDocumentGenerator {
       console.warn(`⚠️  [SecondLetterDocumentGenerator] No calculation entry found for creditor ${creditorId} — using zeros`);
     }
 
+    // Euro values without " €" suffix — templates already contain the " €" after placeholders
+    const euroVal = (amount) => {
+      if (amount == null || !Number.isFinite(amount)) return '0,00';
+      return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    // Gender detection from client.geschlecht field
+    const geschlecht = (client.geschlecht || '').toLowerCase();
+    const isFemale = geschlecht === 'weiblich' || geschlecht === 'w' || geschlecht === 'female' || geschlecht === 'f';
+    const anrede = isFemale ? 'Frau' : 'Herr';
+    const pronomen = isFemale ? 'Sie' : 'Er';
+
+    // Dependents
+    const dependents = snapshot.anzahl_unterhaltsberechtigte ?? snapshot.number_of_dependents ?? 0;
+
+    // Total creditors and debt (for Nullplan template)
+    // Use effective claim: creditor_response_amount (confirmed by creditor) > claim_amount
+    const getEffectiveClaim = (c) =>
+      (c.creditor_response_amount != null && c.creditor_response_amount > 0)
+        ? c.creditor_response_amount : (c.claim_amount || 0);
+    const allCreditors = client.final_creditor_list || [];
+    const totalDebt = allCreditors.reduce((sum, c) => sum + getEffectiveClaim(c), 0);
+
+    // Kindertext for Nullplan: "ein Kind", "zwei Kinder", etc.
+    const kinderWords = ['', 'ein Kind', 'zwei Kinder', 'drei Kinder', 'vier Kinder', 'fünf Kinder'];
+    const kindertext = dependents > 0
+      ? (kinderWords[dependents] || `${dependents} Kinder`)
+      : '';
+
+    // Unterhaltsverpflichtungen = dependents + spouse (if married)
+    const familienstand = snapshot.familienstand || snapshot.marital_status || '';
+    const isMarried = /verheiratet/i.test(familienstand);
+    const unterhalt = dependents + (isMarried ? 1 : 0);
+
     return {
       // --- Creditor block ---
-      'Adresse D C': [
-        creditor.sender_name || creditor.creditor_name,
-        formatAddress(creditor.creditor_address || creditor.address || creditor.sender_address || ''),
-      ].filter(Boolean).join('\n'),
-
+      'Adresse D C': formatAddress(creditor.creditor_address || creditor.address || creditor.sender_address || ''),
       'Creditor': creditor.glaeubiger_name || creditor.sender_name || creditor.creditor_name || 'Unbekannter Gläubiger',
 
       'Aktenzeichen D C': [
@@ -224,21 +254,30 @@ class SecondLetterDocumentGenerator {
         creditor.aktenzeichen,
       ].find(r => isUsableValue(r)) || 'AZ nicht vorhanden',
 
-      'Forderung': formatEuro(calcEntry.claim_amount || creditor.claim_amount),
+      'Forderung': euroVal(calcEntry.claim_amount || getEffectiveClaim(creditor)),
       'Quote': formatPercent(calcEntry.quota_percentage),
-      'Auszahlung': formatEuro(calcEntry.tilgungsangebot || 0),
+      'Auszahlung': euroVal(calcEntry.tilgungsangebot || 0),
 
       // --- Debtor block ---
-      'Name': client.name,
+      'Name': client.name || `${client.firstName} ${client.lastName}`,
+      'Nachname': client.lastName || '',
+      'Anrede': anrede,
+      'Pronomen': pronomen,
       'Geburtstag': client.birthdate || client.dateOfBirth || 'Nicht verfügbar',
       'Adresse': this.formatClientAddress(client),
-      'Familienstand': snapshot.familienstand || snapshot.marital_status || '',
-      'Unterhaltsberechtigte': String(snapshot.anzahl_unterhaltsberechtigte ?? snapshot.number_of_dependents ?? 0),
-      'Einkommen': formatEuro(snapshot.monthly_net_income),
+      'Familienstand': familienstand,
+      'Unterhaltsberechtigte': String(dependents),
+      'Einkommen': euroVal(snapshot.monthly_net_income),
+
+      // --- Nullplan-specific totals ---
+      'Gesamtschulden': euroVal(totalDebt),
+      'Anzahl Glaeubieger': String(allCreditors.length),
+      'Kindertext': kindertext,
+      'Unterhaltsverpflichtungen': String(unterhalt),
 
       // --- Plan block ---
       'Plantyp': snapshot.plan_type === 'RATENPLAN' ? 'Ratenplan' : 'Nullplan',
-      'Monatliche Rate': formatEuro(snapshot.garnishable_amount || 0),
+      'Monatliche Rate': euroVal(snapshot.garnishable_amount || 0),
       'Startdatum': formatGermanDate(snapshot.calculated_at || today),
       'Frist': formatGermanDate(deadlineDate),
 

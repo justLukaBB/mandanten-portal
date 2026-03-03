@@ -87,9 +87,20 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
 
     // -------------------------------------------------------------------------
     // CALC-03: Creditor validation + total debt
+    // Use effective claim amount: creditor_response_amount (confirmed by
+    // creditor in 1. Anschreiben response) takes priority over claim_amount
+    // (original parsed value from letter).
     // -------------------------------------------------------------------------
+    const getEffectiveClaim = (creditor) => {
+        if (creditor.creditor_response_amount != null && creditor.creditor_response_amount > 0) {
+            return creditor.creditor_response_amount;
+        }
+        return creditor.claim_amount;
+    };
+
     for (const creditor of creditors) {
-        if (creditor.claim_amount == null) {
+        const effectiveClaim = getEffectiveClaim(creditor);
+        if (effectiveClaim == null) {
             const name = creditor.sender_name
                 || creditor.creditor_name
                 || creditor.glaeubiger_name
@@ -101,7 +112,7 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
         }
     }
 
-    const totalDebt = creditors.reduce((sum, c) => sum + c.claim_amount, 0);
+    const totalDebt = creditors.reduce((sum, c) => sum + getEffectiveClaim(c), 0);
 
     if (totalDebt === 0) {
         return {
@@ -116,19 +127,20 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
     const creditorCalculations = [];
 
     for (const creditor of creditors) {
+        const effectiveClaim = getEffectiveClaim(creditor);
         let tilgungsangebot;
         let quota_percentage;
 
         if (planType === 'NULLPLAN') {
             // Locked decision: NULLPLAN creditors get explicit 0 (uniform data structure)
             tilgungsangebot = 0;
-            quota_percentage = Math.round((creditor.claim_amount / totalDebt) * 10000) / 100;
+            quota_percentage = Math.round((effectiveClaim / totalDebt) * 10000) / 100;
         } else {
             // RATENPLAN: pro-rata share of monthly garnishable amount
             tilgungsangebot = Math.round(
-                (creditor.claim_amount / totalDebt) * garnishableAmount * 100
+                (effectiveClaim / totalDebt) * garnishableAmount * 100
             ) / 100;
-            quota_percentage = Math.round((creditor.claim_amount / totalDebt) * 10000) / 100;
+            quota_percentage = Math.round((effectiveClaim / totalDebt) * 10000) / 100;
         }
 
         // Guard: all numeric outputs must be finite — no NaN or Infinity
@@ -147,7 +159,7 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
                 || creditor.creditor_name
                 || creditor.glaeubiger_name
                 || 'Unbekannt',
-            claim_amount: creditor.claim_amount,
+            claim_amount: effectiveClaim,
             tilgungsangebot,
             quota_percentage
         });

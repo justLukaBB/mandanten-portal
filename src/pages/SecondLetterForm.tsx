@@ -98,10 +98,10 @@ const SecondLetterForm: React.FC = () => {
 
         if (second_letter_status === 'PENDING') {
           setFormData({
-            monthly_net_income: pre_fill?.monthly_net_income != null ? String(pre_fill.monthly_net_income) : '',
+            monthly_net_income: pre_fill?.monthly_net_income !== null && pre_fill?.monthly_net_income !== undefined ? String(pre_fill.monthly_net_income) : '',
             income_source: pre_fill?.income_source ?? '',
             marital_status: pre_fill?.marital_status ?? '',
-            number_of_dependents: pre_fill?.number_of_dependents != null ? String(pre_fill.number_of_dependents) : '0',
+            number_of_dependents: pre_fill?.number_of_dependents !== null && pre_fill?.number_of_dependents !== undefined ? String(pre_fill.number_of_dependents) : '0',
             active_garnishments: pre_fill?.active_garnishments === true,
             has_new_creditors: false,
             new_creditors: [{ ...EMPTY_CREDITOR }],
@@ -134,15 +134,15 @@ const SecondLetterForm: React.FC = () => {
     switch (fieldName) {
       case 'monthly_net_income': {
         const val = parseFloat(String(formData.monthly_net_income).replace(',', '.'));
-        if (!formData.monthly_net_income) return 'Monatliches Nettoeinkommen ist erforderlich';
-        if (isNaN(val) || val <= 0) return 'Bitte geben Sie einen gültigen Betrag ein (> 0)';
+        if (!formData.monthly_net_income) { return 'Monatliches Nettoeinkommen ist erforderlich'; }
+        if (isNaN(val) || val <= 0) { return 'Bitte geben Sie einen gültigen Betrag ein (> 0)'; }
         return undefined;
       }
       case 'income_source':
-        if (!formData.income_source) return 'Einkommensquelle ist erforderlich';
+        if (!formData.income_source) { return 'Einkommensquelle ist erforderlich'; }
         return undefined;
       case 'marital_status':
-        if (!formData.marital_status) return 'Familienstand ist erforderlich';
+        if (!formData.marital_status) { return 'Familienstand ist erforderlich'; }
         return undefined;
       case 'number_of_dependents': {
         const val = parseInt(formData.number_of_dependents);
@@ -152,7 +152,7 @@ const SecondLetterForm: React.FC = () => {
         return undefined;
       }
       case 'confirmation':
-        if (!formData.confirmation) return 'Bitte bestätigen Sie die Richtigkeit Ihrer Angaben';
+        if (!formData.confirmation) { return 'Bitte bestätigen Sie die Richtigkeit Ihrer Angaben'; }
         return undefined;
       default:
         return undefined;
@@ -172,7 +172,7 @@ const SecondLetterForm: React.FC = () => {
 
     for (const field of fieldsToValidate) {
       const err = validateField(field);
-      if (err) newErrors[field] = err;
+      if (err) { newErrors[field] = err; }
     }
 
     // Validate new creditors if toggle is on

@@ -8,18 +8,17 @@ class Scheduler {
     }
 
     startScheduledTasks() {
-        // Run document reminder check every hour
-        const REMINDER_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
-
-        setInterval(async () => {
-            try {
-                console.log('\n⏰ Running scheduled document reminder check...');
-                const result = await this.documentReminderService.checkAndSendReminders();
-                console.log(`✅ Document reminder check complete: ${result.remindersSent} reminders sent\n`);
-            } catch (error) {
-                console.error('❌ Error in scheduled document reminder check:', error);
-            }
-        }, REMINDER_CHECK_INTERVAL);
+        // DISABLED: Document reminder emails deactivated (2026-03-03)
+        // const REMINDER_CHECK_INTERVAL = 60 * 60 * 1000;
+        // setInterval(async () => {
+        //     try {
+        //         console.log('\n⏰ Running scheduled document reminder check...');
+        //         const result = await this.documentReminderService.checkAndSendReminders();
+        //         console.log(`✅ Document reminder check complete: ${result.remindersSent} reminders sent\n`);
+        //     } catch (error) {
+        //         console.error('❌ Error in scheduled document reminder check:', error);
+        //     }
+        // }, REMINDER_CHECK_INTERVAL);
 
         // Run delayed processing webhook check every 30 minutes
         const DELAYED_WEBHOOK_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -76,16 +75,16 @@ class Scheduler {
             }
         }, AUTO_CONFIRMATION_CHECK_INTERVAL);
 
-        // Run initial checks after 1 minute
-        setTimeout(async () => {
-            try {
-                console.log('\n⏰ Running initial document reminder check...');
-                const result = await this.documentReminderService.checkAndSendReminders();
-                console.log(`✅ Initial document reminder check complete: ${result.remindersSent} reminders sent\n`);
-            } catch (error) {
-                console.error('❌ Error in initial document reminder check:', error);
-            }
-        }, 60000); // 1 minute
+        // DISABLED: Initial document reminder check deactivated (2026-03-03)
+        // setTimeout(async () => {
+        //     try {
+        //         console.log('\n⏰ Running initial document reminder check...');
+        //         const result = await this.documentReminderService.checkAndSendReminders();
+        //         console.log(`✅ Initial document reminder check complete: ${result.remindersSent} reminders sent\n`);
+        //     } catch (error) {
+        //         console.error('❌ Error in initial document reminder check:', error);
+        //     }
+        // }, 60000);
 
         // Run initial delayed webhook check after 2 minutes
         setTimeout(async () => {
@@ -152,7 +151,7 @@ class Scheduler {
         }
 
         console.log('📅 Scheduled tasks started:');
-        console.log('  • Document reminders: every hour');
+        console.log('  • Document reminders: DISABLED');
         console.log('  • Delayed processing webhooks: every 30 minutes');
         console.log('  • Login reminders: every 6 hours (7-day cycle)');
         console.log('  • 7-day reviews: every hour');

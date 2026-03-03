@@ -57,13 +57,62 @@ const createAgentReviewController = ({ Client, getGCSFileStream, uploadsDir, zen
      * while doc.name may not, so we use flexible matching
      */
     const getDocumentsForCreditor = (creditor, allDocuments) => {
-        return allDocuments.filter(doc =>
-            creditor.document_id === doc.id ||
-            creditor.source_document === doc.name ||
-            (creditor.source_documents && creditor.source_documents.some(srcDoc =>
-                srcDoc === doc.name || srcDoc.endsWith(doc.name) || doc.name.endsWith(srcDoc)
-            ))
-        );
+        // Priority-based matching: return as soon as we find exact matches.
+        // Fuzzy matching (endsWith) is a last resort — it causes false positives
+        // when many documents share generic names like "image.jpg".
+
+        const ids = [];
+        if (creditor.document_id) ids.push(creditor.document_id);
+        if (creditor.source_document_id) ids.push(creditor.source_document_id);
+        const srcDocs = Array.isArray(creditor.source_documents) ? creditor.source_documents : [];
+
+        // Tier 1: Exact ID match (document_id, source_document_id)
+        if (ids.length > 0) {
+            const byId = allDocuments.filter(doc => ids.includes(doc.id));
+            if (byId.length > 0) return byId;
+        }
+
+        // Tier 2: source_documents contains doc.id (exact)
+        if (srcDocs.length > 0) {
+            const bySrcId = allDocuments.filter(doc => srcDocs.includes(doc.id));
+            if (bySrcId.length > 0) return bySrcId;
+        }
+
+        // Tier 3: source_documents contains doc.filename (exact)
+        if (srcDocs.length > 0) {
+            const byFilename = allDocuments.filter(doc =>
+                doc.filename && srcDocs.includes(doc.filename)
+            );
+            if (byFilename.length > 0) return byFilename;
+        }
+
+        // Tier 4: Legacy source_document === doc.name (exact)
+        if (creditor.source_document) {
+            const byName = allDocuments.filter(doc => creditor.source_document === doc.name);
+            if (byName.length > 0) return byName;
+        }
+
+        // Tier 5: source_documents exact name match
+        if (srcDocs.length > 0) {
+            const byExactName = allDocuments.filter(doc =>
+                srcDocs.includes(doc.name)
+            );
+            if (byExactName.length > 0) return byExactName;
+        }
+
+        // Tier 6 (last resort): Fuzzy filename matching via endsWith
+        // Only used when no exact match was found above
+        if (srcDocs.length > 0) {
+            const byFuzzy = allDocuments.filter(doc =>
+                srcDocs.some(srcDoc =>
+                    (doc.filename && srcDoc.endsWith(doc.filename)) ||
+                    (doc.filename && doc.filename.endsWith(srcDoc))
+                )
+            );
+            if (byFuzzy.length > 0) return byFuzzy;
+        }
+
+        return [];
     };
 
     /**
@@ -578,6 +627,11 @@ Diese E-Mail wurde automatisch generiert.
                 });
 
                 console.log(`   Creditor ${creditor.sender_name}: needsManualReview=${needsManualReview} (dbFlag=${creditor.needs_manual_review}, missingEmail=${missingEmail}, missingAddress=${missingAddress})`);
+                if (needsManualReview) {
+                    console.log(`     → document_id=${creditor.document_id}, source_document_id=${creditor.source_document_id}, source_document="${creditor.source_document}"`);
+                    console.log(`     → source_documents=${JSON.stringify(creditor.source_documents)}`);
+                    console.log(`     → matched ${creditorDocs.length} docs: [${creditorDocs.map(d => `"${d.name || d.filename}" (id=${d.id})`).join(', ')}]`);
+                }
 
                 return {
                     creditor: creditor,

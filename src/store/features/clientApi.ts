@@ -69,6 +69,21 @@ export const clientApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['SettlementPlan'],
         }),
+
+        // === Second Letter Form (inline portal) ===
+
+        getSecondLetterFormData: builder.query({
+            query: (clientId) => `/api/clients/${clientId}/second-letter-form`,
+            providesTags: ['SecondLetterForm'],
+        }),
+        submitSecondLetterForm: builder.mutation({
+            query: ({ clientId, data }) => ({
+                url: `/api/clients/${clientId}/second-letter-form`,
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: ['SecondLetterForm', 'User'],
+        }),
     }),
 });
 
@@ -85,4 +100,7 @@ export const {
     useGetSettlementPlanStatusQuery,
     useGenerateSettlementPlanMutation,
     useSendSettlementPlanMutation,
+    // Second Letter
+    useGetSecondLetterFormDataQuery,
+    useSubmitSecondLetterFormMutation,
 } = clientApi;

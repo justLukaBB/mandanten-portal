@@ -146,5 +146,48 @@ module.exports = ({ Client, documentProcessor, getGCSFileStream, getGCSFileBuffe
         }
     );
 
+    // Download generated second-round document (Zweitschreiben DOCX)
+    // Serves from disk only — no on-the-fly re-generation
+    router.get('/clients/:clientId/generated-documents/second-round/:filename',
+        rateLimits.admin,
+        authenticateAdmin,
+        async (req, res) => {
+            try {
+                const { clientId, filename } = req.params;
+
+                // Sanitize filename to prevent directory traversal
+                const safeFilename = path.basename(filename);
+                if (safeFilename !== filename) {
+                    return res.status(400).json({ error: 'Invalid filename' });
+                }
+
+                // Verify the client exists and has this creditor document
+                const client = await Client.findById(clientId);
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                const creditor = (client.final_creditor_list || []).find(
+                    c => c.second_letter_document_filename === safeFilename
+                );
+                if (!creditor) {
+                    return res.status(403).json({ error: 'Document does not belong to this client' });
+                }
+
+                const filePath = path.join(__dirname, '..', 'generated_documents', 'second_round', clientId, safeFilename);
+                if (!fs.existsSync(filePath)) {
+                    return res.status(404).json({ error: 'Document file not found on disk' });
+                }
+
+                res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+                fs.createReadStream(filePath).pipe(res);
+            } catch (err) {
+                console.error('Error downloading second-round document:', err);
+                res.status(500).json({ error: 'Failed to download document' });
+            }
+        }
+    );
+
     return router;
 };

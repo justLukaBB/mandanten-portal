@@ -131,8 +131,15 @@ class SecondLetterService {
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
+          // Dev override: route all second letter emails to a test address
+          const devOverrideEmail = process.env.SECOND_LETTER_EMAIL_OVERRIDE || null;
+          const actualRecipient = devOverrideEmail || creditor.sender_email;
+          if (devOverrideEmail) {
+            console.log(`[SecondLetterService] EMAIL OVERRIDE: ${creditor.sender_email} -> ${devOverrideEmail}`);
+          }
+
           const result = await this.creditorEmailService.sendSecondRoundEmail({
-            recipientEmail: creditor.sender_email,
+            recipientEmail: actualRecipient,
             recipientName: creditor.creditor_name || creditor.sender_name || creditor.sender_email,
             clientName: `${client.firstName} ${client.lastName}`,
             clientReference: client.aktenzeichen,
@@ -216,7 +223,7 @@ class SecondLetterService {
     if (allSucceeded) {
       const updated = await Client.findOneAndUpdate(
         { _id: client._id, second_letter_status: 'FORM_SUBMITTED' },
-        { $set: { second_letter_status: 'SENT', second_letter_sent_at: new Date() } },
+        { $set: { second_letter_status: 'SENT', second_letter_sent_at: new Date(), workflow_status: 'second_letter_sent' } },
         { new: true }
       );
 

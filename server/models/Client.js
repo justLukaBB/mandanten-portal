@@ -356,7 +356,10 @@ const clientSchema = new mongoose.Schema({
       'admin_review',
       'client_confirmation',
       'completed',
-      'creditor_contact_active'
+      'creditor_contact_active',
+      'second_letter_pending',
+      'second_letter_submitted',
+      'second_letter_sent'
     ],
     default: 'portal_access_sent'
   },

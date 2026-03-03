@@ -48,16 +48,14 @@ class AdminMaintenanceController {
      */
     triggerDocumentReminders = async (req, res) => {
         try {
-            console.log('📧 Admin triggered manual document reminder check');
-
-            const result = await this.documentReminderService.checkAndSendReminders();
-
-            res.json({
+            // DISABLED: Document reminder emails deactivated (2026-03-03)
+            console.log('📧 Admin triggered document reminder check - DISABLED');
+            return res.json({
                 success: true,
-                message: 'Document reminder check completed',
-                totalChecked: result.totalChecked,
-                remindersSent: result.remindersSent,
-                errors: result.errors
+                message: 'Document reminders are currently disabled',
+                totalChecked: 0,
+                remindersSent: 0,
+                errors: 0
             });
 
         } catch (error) {

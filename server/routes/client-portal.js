@@ -109,5 +109,15 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
         controller.handleSubmitSecondLetterForm
     );
 
+    // Second Letter Form — JWT-authenticated routes (portal inline form)
+    router.get('/clients/:clientId/second-letter-form',
+        authenticateClient,
+        controller.handleGetSecondLetterFormDataJWT
+    );
+    router.post('/clients/:clientId/second-letter-form',
+        authenticateClient,
+        controller.handleSubmitSecondLetterFormJWT
+    );
+
     return router;
 };

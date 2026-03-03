@@ -25,6 +25,7 @@ import ClientAddressForm from '../components/ClientAddressForm';
 import AddCreditorForm from '../components/AddCreditorForm';
 import ExtendedFinancialDataWizard from '../components/ExtendedFinancialDataWizard';
 import SettlementPlanStatus from '../components/SettlementPlanStatus';
+import SecondLetterInlineForm from '../components/SecondLetterInlineForm';
 import api from '../config/api';
 
 export const PersonalPortal = ({
@@ -92,6 +93,7 @@ export const PersonalPortal = ({
   const [creditorResponsePeriod, setCreditorResponsePeriod] = useState<any>(null);
   const [showingExtendedWizard, setShowingExtendedWizard] = useState(false);
   const [extendedFormSubmitted, setExtendedFormSubmitted] = useState(false);
+  const [secondLetterStatus, setSecondLetterStatus] = useState<string>('IDLE');
 
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -131,6 +133,9 @@ export const PersonalPortal = ({
 
   // Effect to process derived state from API data
   useEffect(() => {
+    if (client) {
+      setSecondLetterStatus(client.second_letter_status || 'IDLE');
+    }
     if (client && creditorConfirmationData) {
       // Show creditor confirmation logic
       const shouldShowCreditorConfirmation =
@@ -181,6 +186,12 @@ export const PersonalPortal = ({
     refetchClient();
     refetchFinancialStatus();
     refetchExtendedFormStatus();
+  };
+
+  // Handle second letter form submission
+  const handleSecondLetterFormSubmitted = () => {
+    setSecondLetterStatus('FORM_SUBMITTED');
+    refetchClient();
   };
 
   // Handle extended financial data wizard submission
@@ -507,8 +518,8 @@ export const PersonalPortal = ({
           }}
         />
 
-        {/* Creditor Response Period Status - shows during 30-day waiting period */}
-        {creditorResponsePeriod && creditorResponsePeriod.status === 'active' && (
+        {/* Creditor Response Period Status - shows during 30-day waiting period (only when second letter not yet triggered) */}
+        {creditorResponsePeriod && creditorResponsePeriod.status === 'active' && secondLetterStatus === 'IDLE' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="text-center">
               <div className="mb-4">
@@ -519,10 +530,10 @@ export const PersonalPortal = ({
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Warten auf Gläubiger-Antworten
+                Warten auf Glaubiger-Antworten
               </h3>
               <p className="text-gray-600 mb-4">
-                Wir haben alle Gläubiger kontaktiert und warten auf ihre Antworten zu den Schuldenbeträgen.
+                Wir haben alle Glaubiger kontaktiert und warten auf ihre Antworten zu den Schuldenbetregen.
               </p>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-center">
@@ -534,14 +545,80 @@ export const PersonalPortal = ({
                       {creditorResponsePeriod.days_remaining} Tage verbleibend
                     </p>
                     <p className="text-sm text-blue-700 mt-1">
-                      von 30 Tagen Antwortzeit für Gläubiger
+                      von 30 Tagen Antwortzeit fur Glaubiger
                     </p>
                   </div>
                 </div>
               </div>
               <p className="text-sm text-gray-500">
                 Sobald die 30-Tage-Frist abgelaufen ist, werden Sie aufgefordert, Ihre aktuellen Finanzdaten
-                für die Erstellung Ihres Schuldenbereinigungsplans anzugeben.
+                fur die Erstellung Ihres Schuldenbereinigungsplans anzugeben.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Second Letter: PENDING — Show inline financial form */}
+        {secondLetterStatus === 'PENDING' && (
+          <SecondLetterInlineForm
+            clientId={clientId!}
+            onFormSubmitted={handleSecondLetterFormSubmitted}
+            customColors={customColors}
+          />
+        )}
+
+        {/* Second Letter: FORM_SUBMITTED — Confirmation message */}
+        {secondLetterStatus === 'FORM_SUBMITTED' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Finanzdaten eingereicht
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Ihre aktualisierten Finanzdaten wurden erfolgreich ubermittelt. Das 2. Glaubigeranschreiben wird nun erstellt.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start justify-center">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-blue-700">
+                    Unser Team erstellt jetzt Ihr 2. Glaubigeranschreiben. Sie werden benachrichtigt, sobald es versendet wurde.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Second Letter: SENT — Completion message */}
+        {secondLetterStatus === 'SENT' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path fillRule="evenodd"
+                      d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z"
+                      clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                2. Glaubigeranschreiben versendet
+              </h3>
+              <p className="text-gray-600">
+                Das 2. Glaubigeranschreiben wurde erfolgreich an alle Glaubiger versendet
+                {client?.second_letter_sent_at && (
+                  <span> am <strong>{new Date(client.second_letter_sent_at).toLocaleDateString('de-DE')}</strong></span>
+                )}.
               </p>
             </div>
           </div>
