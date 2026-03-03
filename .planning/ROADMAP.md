@@ -621,7 +621,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 39-01-PLAN.md — Change { id: clientId } to { _id: clientId } in secondLetterTriggerService.js (lines 56 and 83)
+- [ ] 39-01-PLAN.md — Fix { id: clientId } → { _id: clientId } in both Mongoose query filters inside triggerForClient + update scheduler call to use client._id.toString()
 
 ## Progress
 
