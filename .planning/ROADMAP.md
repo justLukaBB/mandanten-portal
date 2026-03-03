@@ -588,7 +588,7 @@ Plans:
 **Gap Closure**: Closes gaps from v10 audit
 **Depends on**: Phase 35
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [x] 36-01-PLAN.md — Wire SecondLetterDocumentGenerator into send-second-letter handler + fix document path mismatch in secondLetterService
@@ -644,7 +644,7 @@ Phases execute in numeric order: 1 → 27 (v1-v9 complete) → 28 → 29 → 30 
 | 33. Email Dispatch & Workflow Completion | 1/1 | Complete    | 2026-03-02 | - |
 | 34. Admin UI & Tracking | v10 | Complete    | 2026-03-02 | - |
 | 35. Bug Fixes — URL, _id, Field Names | v10 | Complete    | 2026-03-02 | — |
-| 36. Wire Document Generator | v10 | Complete | 2026-03-03 | — |
+| 36. Wire Document Generator | v10 | Complete    | 2026-03-03 | — |
 | 37. Phase 30 Verification & Cleanup | v10 | Pending | — | — |
 
 ---
