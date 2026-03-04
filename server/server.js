@@ -27,6 +27,7 @@ const databaseService = require('./services/database');
 // =============================================================================
 const Client = require('./models/Client');
 const Agent = require('./models/Agent');
+const CreditorEmail = require('./models/CreditorEmail');
 
 // =============================================================================
 // 3. SERVICES & UTILS initialization
@@ -143,6 +144,7 @@ const createAdminClientCreditorRouter = require('./routes/admin-client-creditor'
 const createAdminFinancialRouter = require('./routes/admin-financial');
 const createAdminReviewRouter = require('./routes/admin-review');
 const createAdminSecondLetterRouter = require('./routes/admin-second-letter');
+const createAdminEmailsRouter = require('./routes/admin-emails');
 
 // Client Routes
 const createClientPortalRouter = require('./routes/client-portal');
@@ -314,8 +316,9 @@ app.use('/api/portal-webhook', createPortalWebhooksRouter({
 
 // Matcher webhook (creditor-email-matcher → portal notifications)
 const createMatcherWebhookController = require('./controllers/matcherWebhookController');
-const matcherWebhookController = createMatcherWebhookController({ Client, getIO });
+const matcherWebhookController = createMatcherWebhookController({ Client, CreditorEmail, getIO });
 app.post('/api/webhooks/matcher-response', matcherWebhookController.handleCreditorResponse);
+app.post('/api/webhooks/settlement-response', matcherWebhookController.handleSettlementResponse);
 
 // 10.3 Agent Routes
 app.use('/api/agent-auth', agentAuthRoutes);
@@ -403,6 +406,8 @@ app.use('/api/admin/review', createAdminReviewRouter({
 }));
 
 app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService, Client }));
+
+app.use('/api/admin', createAdminEmailsRouter({ CreditorEmail, Client }));
 
 // 10.7 Client Portal Global Routes
 

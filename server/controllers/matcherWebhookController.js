@@ -10,8 +10,184 @@ const { v4: uuidv4 } = require('uuid');
  * 2. "All creditors responded" detection for workflow progression
  * 3. (Future) Socket.IO push for real-time Canvas updates
  */
-const createMatcherWebhookController = ({ Client, getIO }) => {
+const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
   return {
+    /**
+     * POST /api/webhooks/settlement-response
+     *
+     * Called by creditor-email-matcher after processing a settlement response
+     * (response to 2. Anschreiben). Updates the creditor's settlement_response_*
+     * fields and creates a status_history entry.
+     */
+    handleSettlementResponse: async (req, res) => {
+      try {
+        const {
+          event,
+          client_aktenzeichen,
+          client_name,
+          creditor_name,
+          creditor_email,
+          settlement_status,
+          response_text,
+          confidence,
+          metadata,
+          processed_at,
+          email_subject,
+          email_body_preview,
+        } = req.body;
+
+        if (event !== 'settlement_response_processed') {
+          return res.status(400).json({ error: `Unknown event: ${event}` });
+        }
+
+        if (!client_aktenzeichen && !client_name) {
+          return res.status(400).json({ error: 'Missing client_aktenzeichen or client_name' });
+        }
+
+        console.log(`📨 Settlement webhook: ${creditor_name} responded (${settlement_status}) for ${client_aktenzeichen || client_name}`);
+
+        // Find client
+        let client;
+        if (client_aktenzeichen) {
+          client = await Client.findOne({ aktenzeichen: client_aktenzeichen });
+        }
+        if (!client && client_name) {
+          const parts = client_name.includes(',')
+            ? client_name.split(',').map(p => p.trim()).reverse()
+            : client_name.split(/\s+/);
+          if (parts.length >= 2) {
+            client = await Client.findOne({
+              firstName: new RegExp(`^${parts[0]}$`, 'i'),
+              lastName: new RegExp(`^${parts.slice(1).join(' ')}$`, 'i'),
+            });
+          }
+        }
+
+        if (!client) {
+          console.log(`⚠️ Settlement webhook: Client not found for ${client_aktenzeichen || client_name}`);
+          // Still save to CreditorEmail as no_match
+          try {
+            await CreditorEmail.create({
+              letter_type: 'second',
+              creditor_name,
+              creditor_email,
+              client_aktenzeichen,
+              client_name,
+              match_status: 'no_match',
+              settlement_status,
+              settlement_response_text: response_text,
+              email_subject,
+              email_body_preview,
+              review_status: 'pending',
+              needs_review: true,
+              matcher_metadata: metadata,
+              processed_at: new Date(processed_at || Date.now()),
+            });
+          } catch (emailErr) {
+            console.log(`⚠️ CreditorEmail save failed: ${emailErr.message}`);
+          }
+          return res.status(404).json({ error: 'Client not found' });
+        }
+
+        // Find matching creditor in final_creditor_list
+        const creditors = client.final_creditor_list || [];
+        const matchedCreditor = creditors.find(c => {
+          if (creditor_email && c.sender_email) {
+            return c.sender_email.toLowerCase() === creditor_email.toLowerCase();
+          }
+          if (creditor_name && (c.sender_name || c.glaeubiger_name)) {
+            const name = (c.sender_name || c.glaeubiger_name || '').toLowerCase();
+            return name === creditor_name.toLowerCase();
+          }
+          return false;
+        });
+
+        if (!matchedCreditor) {
+          console.log(`⚠️ Settlement webhook: Creditor "${creditor_name}" not found in ${client.aktenzeichen}`);
+          return res.status(404).json({ error: 'Creditor not found in client' });
+        }
+
+        // Update settlement fields
+        matchedCreditor.settlement_response_status = settlement_status;
+        matchedCreditor.settlement_response_received_at = new Date(processed_at || Date.now());
+        if (response_text) matchedCreditor.settlement_response_text = response_text;
+        if (confidence != null) matchedCreditor.settlement_acceptance_confidence = confidence;
+        if (metadata) matchedCreditor.settlement_response_metadata = metadata;
+
+        // Add status_history entry
+        const historyEntry = {
+          id: uuidv4(),
+          status: 'settlement_response_received',
+          changed_by: 'system',
+          metadata: {
+            source: 'creditor_email_matcher',
+            creditor_name,
+            creditor_email,
+            settlement_status,
+            confidence,
+          },
+          created_at: new Date(processed_at || Date.now()),
+        };
+        client.status_history.push(historyEntry);
+        client.updated_at = new Date();
+
+        await client.save({ validateModifiedOnly: true });
+
+        // Save to CreditorEmail collection for inbox dashboard
+        try {
+          await CreditorEmail.create({
+            letter_type: 'second',
+            creditor_name,
+            creditor_email,
+            client_id: client._id,
+            client_aktenzeichen: client.aktenzeichen,
+            client_name: `${client.firstName} ${client.lastName}`,
+            match_status: 'auto_matched',
+            match_confidence: confidence != null ? Math.round(confidence * 100) : null,
+            settlement_status,
+            settlement_response_text: response_text,
+            settlement_counter_offer_amount: metadata?.counter_offer_amount,
+            settlement_conditions: metadata?.conditions,
+            email_subject,
+            email_body_preview,
+            review_status: metadata?.needs_review ? 'pending' : 'reviewed',
+            needs_review: !!metadata?.needs_review,
+            matcher_metadata: metadata,
+            processed_at: new Date(processed_at || Date.now()),
+          });
+        } catch (emailErr) {
+          console.log(`⚠️ CreditorEmail save failed (non-blocking): ${emailErr.message}`);
+        }
+
+        // Push Socket.IO event
+        try {
+          const io = getIO?.();
+          if (io) {
+            io.to(`client:${client._id}`).emit('settlement_response', {
+              creditor_name,
+              settlement_status,
+              confidence,
+            });
+          }
+        } catch (socketErr) {
+          console.log(`⚠️ Socket.IO emit failed: ${socketErr.message}`);
+        }
+
+        console.log(`✅ Settlement webhook processed: ${creditor_name} → ${settlement_status} for ${client.aktenzeichen}`);
+
+        return res.json({
+          success: true,
+          client_id: client._id,
+          aktenzeichen: client.aktenzeichen,
+          history_entry_id: historyEntry.id,
+          settlement_status,
+        });
+      } catch (error) {
+        console.error('❌ Settlement webhook error:', error.message);
+        return res.status(500).json({ error: error.message });
+      }
+    },
+
     /**
      * POST /api/webhooks/matcher-response
      *
@@ -36,6 +212,8 @@ const createMatcherWebhookController = ({ Client, getIO }) => {
           needs_review,
           reference_numbers,
           processed_at,
+          email_subject,
+          email_body_preview,
         } = req.body;
 
         // Validate required fields
@@ -70,6 +248,30 @@ const createMatcherWebhookController = ({ Client, getIO }) => {
 
         if (!client) {
           console.log(`⚠️ Matcher webhook: Client not found for ${client_aktenzeichen || client_name}`);
+          // Still save to CreditorEmail as no_match
+          try {
+            await CreditorEmail.create({
+              email_id,
+              letter_type: 'first',
+              creditor_name,
+              creditor_email,
+              client_aktenzeichen,
+              client_name,
+              match_status: 'no_match',
+              match_confidence: extraction_confidence != null ? Math.round(extraction_confidence * 100) : null,
+              new_debt_amount,
+              extraction_confidence: extraction_confidence != null ? Math.round(extraction_confidence * 100) : null,
+              confidence_route,
+              reference_numbers: reference_numbers || [],
+              email_subject,
+              email_body_preview,
+              review_status: 'pending',
+              needs_review: true,
+              processed_at: new Date(processed_at || Date.now()),
+            });
+          } catch (emailErr) {
+            console.log(`⚠️ CreditorEmail save failed: ${emailErr.message}`);
+          }
           return res.status(404).json({ error: 'Client not found' });
         }
 
@@ -122,6 +324,33 @@ const createMatcherWebhookController = ({ Client, getIO }) => {
         }
 
         await client.save({ validateModifiedOnly: true });
+
+        // Save to CreditorEmail collection for inbox dashboard
+        try {
+          await CreditorEmail.create({
+            email_id,
+            letter_type: 'first',
+            creditor_name,
+            creditor_email,
+            client_id: client._id,
+            client_aktenzeichen: client.aktenzeichen,
+            client_name: `${client.firstName} ${client.lastName}`,
+            match_status: match_status || (client ? 'auto_matched' : 'no_match'),
+            match_confidence: extraction_confidence != null ? Math.round(extraction_confidence * 100) : null,
+            new_debt_amount,
+            amount_source,
+            extraction_confidence: extraction_confidence != null ? Math.round(extraction_confidence * 100) : null,
+            confidence_route,
+            reference_numbers: reference_numbers || [],
+            email_subject,
+            email_body_preview,
+            review_status: needs_review ? 'pending' : 'reviewed',
+            needs_review: !!needs_review,
+            processed_at: new Date(processed_at || Date.now()),
+          });
+        } catch (emailErr) {
+          console.log(`⚠️ CreditorEmail save failed (non-blocking): ${emailErr.message}`);
+        }
 
         // 3. Push Socket.IO event for real-time Canvas update
         try {
