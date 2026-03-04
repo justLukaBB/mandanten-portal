@@ -64,6 +64,7 @@ class CreditorEmailService {
         resend_email_id: resendEmailId,
         email_provider: 'resend',
         sent_at: new Date().toISOString(),
+        letter_type: emailType === 'second_round' ? 'second' : 'first',
         notes: `${emailType} email sent via Resend`
       };
 

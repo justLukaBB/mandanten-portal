@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const XLSX = require('xlsx');
 const { findCreditorByName } = require('../utils/creditorLookup');
 const { runAIRededup } = require('../services/aiDedupScheduler');
 
@@ -658,6 +659,72 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     error: 'Failed to skip 7-day delay',
                     details: error.message
                 });
+            }
+        },
+
+        // Admin: Export creditors as XLSX
+        exportCreditors: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+
+                let client;
+                try {
+                    client = await Client.findOne({
+                        $or: [
+                            { id: clientId },
+                            { aktenzeichen: clientId }
+                        ]
+                    });
+                    if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
+                        client = await Client.findOne({ _id: clientId });
+                    }
+                } catch (findError) {
+                    console.error('Error finding client:', findError);
+                    client = null;
+                }
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                const creditors = client.final_creditor_list || [];
+
+                const rows = creditors.map((c, i) => ({
+                    'Nr.': i + 1,
+                    'Gläubiger': c.glaeubiger_name || c.sender_name || '',
+                    'Adresse': c.glaeubiger_adresse || c.sender_address || '',
+                    'E-Mail': c.email_glaeubiger || c.sender_email || '',
+                    'Vertreter': c.glaeubigervertreter_name || '',
+                    'Vertreter Adresse': c.glaeubigervertreter_adresse || '',
+                    'Vertreter E-Mail': c.email_glaeubiger_vertreter || '',
+                    'Aktenzeichen Vertreter': c.aktenzeichen_glaeubigervertreter || '',
+                    'Forderungsbetrag': c.forderungbetrag || c.claim_amount || 0,
+                    'Dokumenttyp': c.dokumenttyp || '',
+                    'Status': c.status || '',
+                    'Erstellt am': c.created_at ? new Date(c.created_at).toLocaleDateString('de-DE') : '',
+                }));
+
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows);
+
+                // Auto-size columns
+                const colWidths = Object.keys(rows[0] || {}).map(key => ({
+                    wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length).slice(0, 50)) + 2
+                }));
+                ws['!cols'] = colWidths;
+
+                XLSX.utils.book_append_sheet(wb, ws, 'Gläubiger');
+
+                const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+                const filename = `glaeubiger_${client.aktenzeichen || clientId}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                res.send(buf);
+
+            } catch (error) {
+                console.error('Error exporting creditors:', error);
+                res.status(500).json({ error: 'Export failed', details: error.message });
             }
         },
 

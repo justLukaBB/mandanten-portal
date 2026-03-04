@@ -169,7 +169,7 @@ const creditorSchema = new mongoose.Schema({
   // Settlement plan response fields
   settlement_response_status: {
     type: String,
-    enum: ['pending', 'accepted', 'declined', 'counter_offer', 'no_response'],
+    enum: ['pending', 'accepted', 'declined', 'counter_offer', 'inquiry', 'no_clear_response', 'no_response'],
     default: 'pending'
   },
   settlement_response_received_at: Date,

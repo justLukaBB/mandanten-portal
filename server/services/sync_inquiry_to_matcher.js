@@ -26,9 +26,10 @@ const MATCHER_API_URL = process.env.MATCHER_API_URL || 'http://localhost:8000';
  * @param {Object} options.client - Full MongoDB client document
  * @param {Object} options.creditor - Creditor object from final_creditor_list
  * @param {String} options.mainTicketId - Main Zendesk ticket ID
+ * @param {String} [options.letterType='first'] - 'first' or 'second' letter
  * @returns {Promise<Object>} Created inquiry response
  */
-async function syncInquiryToMatcher({ client, creditor, mainTicketId }) {
+async function syncInquiryToMatcher({ client, creditor, mainTicketId, letterType = 'first' }) {
   try {
     // Extract client name (try different formats)
     const clientName = getClientName(client);
@@ -66,6 +67,9 @@ async function syncInquiryToMatcher({ client, creditor, mainTicketId }) {
 
       // Timing
       sent_at: creditor.email_sent_at || creditor.side_conversation_created_at || new Date().toISOString(),
+
+      // Letter type (first or second round)
+      letter_type: letterType,
 
       // Additional metadata
       contact_status: creditor.contact_status || null,

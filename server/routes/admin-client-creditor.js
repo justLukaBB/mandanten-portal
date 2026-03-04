@@ -56,5 +56,12 @@ module.exports = ({ Client, safeClientUpdate, DelayedProcessingService, aiDedupS
         controller.triggerAIReDedup
     );
 
+    // Admin: Export creditors as XLSX
+    router.get('/clients/:clientId/creditors/export',
+        securityRateLimits.admin,
+        authenticateAdmin,
+        controller.exportCreditors
+    );
+
     return router;
 };

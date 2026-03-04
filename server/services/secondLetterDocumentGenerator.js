@@ -235,7 +235,7 @@ class SecondLetterDocumentGenerator {
     const kinderWords = ['', 'ein Kind', 'zwei Kinder', 'drei Kinder', 'vier Kinder', 'fünf Kinder'];
     const kindertext = dependents > 0
       ? (kinderWords[dependents] || `${dependents} Kinder`)
-      : '';
+      : 'keine Kinder';
 
     // Unterhaltsverpflichtungen = dependents + spouse (if married)
     const familienstand = snapshot.familienstand || snapshot.marital_status || '';
@@ -263,7 +263,14 @@ class SecondLetterDocumentGenerator {
       'Nachname': client.lastName || '',
       'Anrede': anrede,
       'Pronomen': pronomen,
-      'Geburtstag': client.birthdate || client.dateOfBirth || 'Nicht verfügbar',
+      'Geburtstag': (() => {
+        // Already formatted German date (e.g. "22.12.2007")
+        if (client.geburtstag) return client.geburtstag;
+        // ISO date fields — need formatting
+        const raw = client.birthdate || client.dateOfBirth || client.personal_info?.birth_date;
+        if (raw) return formatGermanDate(raw);
+        return 'Nicht verfügbar';
+      })(),
       'Adresse': this.formatClientAddress(client),
       'Familienstand': familienstand,
       'Unterhaltsberechtigte': String(dependents),

@@ -98,6 +98,9 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
         return creditor.claim_amount;
     };
 
+    // Separate creditors into valid (have claim_amount) and skipped (missing)
+    const validCreditors = [];
+    const skippedCreditors = [];
     for (const creditor of creditors) {
         const effectiveClaim = getEffectiveClaim(creditor);
         if (effectiveClaim == null) {
@@ -105,14 +108,20 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
                 || creditor.creditor_name
                 || creditor.glaeubiger_name
                 || String(creditor._id || 'Unbekannt');
-            return {
-                success: false,
-                error: `Creditor "${name}" is missing claim_amount — calculation aborted`
-            };
+            skippedCreditors.push(name);
+        } else {
+            validCreditors.push(creditor);
         }
     }
 
-    const totalDebt = creditors.reduce((sum, c) => sum + getEffectiveClaim(c), 0);
+    if (validCreditors.length === 0) {
+        return {
+            success: false,
+            error: 'Keine Gläubiger mit gültiger Forderungssumme vorhanden'
+        };
+    }
+
+    const totalDebt = validCreditors.reduce((sum, c) => sum + getEffectiveClaim(c), 0);
 
     if (totalDebt === 0) {
         return {
@@ -126,7 +135,7 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
     // -------------------------------------------------------------------------
     const creditorCalculations = [];
 
-    for (const creditor of creditors) {
+    for (const creditor of validCreditors) {
         const effectiveClaim = getEffectiveClaim(creditor);
         let tilgungsangebot;
         let quota_percentage;
@@ -173,7 +182,8 @@ function calculateSecondLetterFinancials(snapshot, creditors) {
         garnishableAmount,
         planType,
         totalDebt,
-        creditorCalculations
+        creditorCalculations,
+        skippedCreditors: skippedCreditors.length > 0 ? skippedCreditors : undefined
     };
 }
 

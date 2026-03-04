@@ -83,7 +83,8 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
         garnishable_amount: calcResult.garnishableAmount || null,
         plan_type: calcResult.planType || null,
         total_debt: calcResult.totalDebt || null,
-        creditor_count: calcResult.creditorCalculations?.length || 0
+        creditor_count: calcResult.creditorCalculations?.length || 0,
+        skipped_creditors: calcResult.skippedCreditors || null,
       });
 
     } catch (error) {
