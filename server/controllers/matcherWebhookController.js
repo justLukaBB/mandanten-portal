@@ -21,20 +21,26 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
      */
     handleSettlementResponse: async (req, res) => {
       try {
-        const {
-          event,
-          client_aktenzeichen,
-          client_name,
-          creditor_name,
-          creditor_email,
-          settlement_status,
-          response_text,
-          confidence,
-          metadata,
-          processed_at,
-          email_subject,
-          email_body_preview,
-        } = req.body;
+        const body = req.body;
+        const event = body.event;
+        const client_aktenzeichen = body.client_aktenzeichen;
+        const client_name = body.client_name;
+        const creditor_name = body.creditor_name;
+        const creditor_email = body.creditor_email;
+        // Accept both field names (matcher sends settlement_decision, original spec used settlement_status)
+        const settlement_status = body.settlement_status || body.settlement_decision;
+        const response_text = body.response_text || body.email_body_preview;
+        const confidence = body.confidence || body.extraction_confidence;
+        const processed_at = body.processed_at;
+        const email_subject = body.email_subject;
+        const email_body_preview = body.email_body_preview;
+        // Build metadata from explicit fields or use provided metadata object
+        const metadata = body.metadata || {
+          counter_offer_amount: body.counter_offer_amount,
+          conditions: body.conditions,
+          needs_review: body.needs_review,
+          match_status: body.match_status,
+        };
 
         if (event !== 'settlement_response_processed') {
           return res.status(400).json({ error: `Unknown event: ${event}` });
