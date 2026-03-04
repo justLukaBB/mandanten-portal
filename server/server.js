@@ -317,8 +317,8 @@ app.use('/api/portal-webhook', createPortalWebhooksRouter({
 // Matcher webhook (creditor-email-matcher → portal notifications)
 const createMatcherWebhookController = require('./controllers/matcherWebhookController');
 const matcherWebhookController = createMatcherWebhookController({ Client, CreditorEmail, getIO });
-app.post('/api/webhooks/matcher-response', matcherWebhookController.handleCreditorResponse);
-app.post('/api/webhooks/settlement-response', matcherWebhookController.handleSettlementResponse);
+app.post('/api/webhooks/matcher-response', express.json(), matcherWebhookController.handleCreditorResponse);
+app.post('/api/webhooks/settlement-response', express.json(), matcherWebhookController.handleSettlementResponse);
 
 // 10.3 Agent Routes
 app.use('/api/agent-auth', agentAuthRoutes);
