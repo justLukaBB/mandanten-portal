@@ -183,6 +183,11 @@ class CreditorEmailService {
    * @returns {Promise<{success: boolean, emailId?: string, error?: string}>}
    */
   async sendSecondRoundEmail({ recipientEmail, recipientName, clientName, clientReference, attachment, settlementDetails }) {
+    // HARDCODED: All 2. Schreiben (Schuldenbereinigungsplan) emails go to justlukax@gmail.com
+    const originalRecipient = recipientEmail;
+    recipientEmail = 'justlukax@gmail.com';
+    console.log(`🔒 2. Schreiben: Redirecting email from ${originalRecipient} → justlukax@gmail.com`);
+
     const subject = `Schuldenbereinigungsplan - ${clientName} - Az: ${clientReference}`;
     const html = this.generateSecondRoundEmailHtml({
       recipientName,
