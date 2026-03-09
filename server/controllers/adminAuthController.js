@@ -14,8 +14,8 @@ class AdminAuthController {
 
             // TODO: Replace with proper admin user management
             // For now, use environment variables for admin credentials
-            const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@mandanten-portal.de';
-            const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // CHANGE THIS!
+            const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@ra-scuric.de';
+            const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Espresso1?!';
 
             if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
                 return res.status(401).json({
