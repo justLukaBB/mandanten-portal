@@ -49,6 +49,7 @@ const creditorEmailSchema = new mongoose.Schema({
   // Email content (from matcher)
   email_subject: { type: String },
   email_body_preview: { type: String },
+  email_body_full: { type: String },
 
   // Review state
   review_status: {

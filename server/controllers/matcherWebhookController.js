@@ -34,6 +34,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
         const processed_at = body.processed_at;
         const email_subject = body.email_subject;
         const email_body_preview = body.email_body_preview;
+        const email_body_full = body.email_body_full;
         // Build metadata from explicit fields or use provided metadata object
         const metadata = body.metadata || {
           counter_offer_amount: body.counter_offer_amount,
@@ -84,6 +85,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               settlement_response_text: response_text,
               email_subject,
               email_body_preview,
+              email_body_full,
               review_status: 'pending',
               needs_review: true,
               matcher_metadata: metadata,
@@ -156,6 +158,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
             settlement_conditions: metadata?.conditions,
             email_subject,
             email_body_preview,
+            email_body_full,
             review_status: metadata?.needs_review ? 'pending' : 'reviewed',
             needs_review: !!metadata?.needs_review,
             matcher_metadata: metadata,
@@ -220,6 +223,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           processed_at,
           email_subject,
           email_body_preview,
+          email_body_full,
         } = req.body;
 
         // Validate required fields
@@ -271,6 +275,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               reference_numbers: reference_numbers || [],
               email_subject,
               email_body_preview,
+              email_body_full,
               review_status: 'pending',
               needs_review: true,
               processed_at: new Date(processed_at || Date.now()),
@@ -350,6 +355,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
             reference_numbers: reference_numbers || [],
             email_subject,
             email_body_preview,
+            email_body_full,
             review_status: needs_review ? 'pending' : 'reviewed',
             needs_review: !!needs_review,
             processed_at: new Date(processed_at || Date.now()),
