@@ -124,18 +124,11 @@ class ClientCreditorController {
                 return res.status(404).json({ error: 'Client not found' });
             }
 
+            // Payment + admin approval are no longer blocking for creditor confirmation.
+            // The admin handles payment marking separately; the client should be able to
+            // confirm their creditor list as soon as it's ready for review.
             if (!client.first_payment_received) {
-                return res.status(400).json({
-                    error: 'Payment required',
-                    message: 'Die erste Rate muss bezahlt sein, bevor die Gläubigerliste bestätigt werden kann.'
-                });
-            }
-
-            if (!client.admin_approved) {
-                return res.status(400).json({
-                    error: 'Admin approval required',
-                    message: 'Die Gläubigerliste muss zuerst von unserem Team überprüft werden.'
-                });
+                console.log(`[CreditorConfirm] Warning: ${client.aktenzeichen} confirming without payment — proceeding anyway`);
             }
 
             if (client.current_status !== 'awaiting_client_confirmation') {
