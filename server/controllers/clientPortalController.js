@@ -1494,7 +1494,312 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 console.error('[SecondLetterForm] Error in handleSubmitSecondLetterFormJWT:', error);
                 return res.status(500).json({ error: 'Interner Serverfehler' });
             }
-        }
+        },
+
+        // ── Insolvenzantrag Data Collection Form ──────────────────────────
+
+        /**
+         * GET /clients/:clientId/insolvenzantrag-form
+         * Returns pre-filled data for the Insolvenzantrag data collection form.
+         */
+        handleGetInsolvenzantragForm: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                const client = await getClient(clientId);
+                if (!client) return res.status(404).json({ error: 'Client not found' });
+
+                const isAuthorized = req.clientId === client.id || req.clientId === client.aktenzeichen || req.clientId === clientId;
+                if (!isAuthorized) return res.status(403).json({ error: 'Access denied' });
+
+                // Gather pre-filled data from all available sources
+                const fd = client.financial_data || {};
+                const efd = client.extended_financial_data || {};
+                const snap = client.second_letter_financial_snapshot || {};
+
+                const formData = {
+                    // Section 1: Personal Data
+                    personal_data: {
+                        vorname: client.vorname || client.firstName || '',
+                        nachname: client.nachname || client.lastName || '',
+                        geburtsdatum: client.geburtsdatum || client.geburtstag || '',
+                        geburtsort: client.geburtsort || '',
+                        geschlecht: client.geschlecht || '',
+                    },
+                    // Section 2: Address
+                    address: {
+                        strasse: client.strasse || '',
+                        hausnummer: client.hausnummer || '',
+                        plz: client.plz || '',
+                        ort: client.ort || client.wohnort || '',
+                    },
+                    // Section 3: Contact
+                    contact: {
+                        telefon: client.telefon || client.phone || '',
+                        mobiltelefon: client.mobiltelefon || client.telefon_mobil || '',
+                        email: client.email || '',
+                    },
+                    // Section 4: Family Status
+                    family_status: {
+                        familienstand: client.familienstand || fd.marital_status || snap.marital_status || '',
+                        familienstand_seit: client.familienstand_seit || '',
+                        kinder_anzahl: client.kinder_anzahl ?? fd.number_of_children ?? snap.number_of_dependents ?? '',
+                        kinder_alter: client.kinder_alter || '',
+                    },
+                    // Section 5: Employment
+                    employment: {
+                        berufsstatus: client.berufsstatus || efd.berufsstatus || snap.income_source || '',
+                        erlernter_beruf: client.erlernter_beruf || '',
+                        derzeitige_taetigkeit: client.derzeitige_taetigkeit || client.aktuelle_taetigkeit || '',
+                        arbeitgeber_name: efd.arbeitgeber_name || '',
+                        arbeitgeber_adresse: efd.arbeitgeber_adresse || '',
+                    },
+                    // Section 6: Financial
+                    financial: {
+                        netto_einkommen: client.netto_einkommen || fd.monthly_net_income || snap.monthly_net_income || '',
+                        sonstige_einkuenfte_betrag: efd.sonstige_monatliche_einkuenfte?.betrag || '',
+                        sonstige_einkuenfte_beschreibung: efd.sonstige_monatliche_einkuenfte?.beschreibung || '',
+                        sozialleistungen_betrag: efd.sozialleistungen?.betrag || '',
+                        sozialleistungen_art: efd.sozialleistungen?.art_der_leistung || '',
+                    },
+                    // Section 7: Assets & Securities
+                    assets: {
+                        immobilieneigentum_vorhanden: efd.immobilieneigentum?.vorhanden || false,
+                        immobilieneigentum_beschreibung: efd.immobilieneigentum?.beschreibung || '',
+                        fahrzeuge_vorhanden: efd.fahrzeuge?.vorhanden || false,
+                        fahrzeuge_beschreibung: efd.fahrzeuge?.beschreibung || '',
+                        fahrzeuge_wert: efd.fahrzeuge?.geschaetzter_wert || '',
+                        sparkonten_vorhanden: efd.sparkonten?.vorhanden || false,
+                        sparkonten_wert: efd.sparkonten?.ungefaehrer_wert || '',
+                        lebensversicherungen_vorhanden: efd.lebensversicherungen?.vorhanden || false,
+                        lebensversicherungen_rueckkaufswert: efd.lebensversicherungen?.rueckkaufswert || '',
+                        buergschaften_vorhanden: efd.buergschaften?.vorhanden || false,
+                        buergschaften_details: efd.buergschaften?.details || '',
+                        pfandrechte_vorhanden: efd.pfandrechte?.vorhanden || false,
+                        pfandrechte_details: efd.pfandrechte?.details || '',
+                    },
+                };
+
+                const formMeta = client.insolvenzantrag_form || { status: 'pending', sections_completed: {} };
+
+                res.json({
+                    success: true,
+                    form_data: formData,
+                    form_meta: formMeta,
+                    client_name: `${formData.personal_data.vorname} ${formData.personal_data.nachname}`.trim(),
+                });
+            } catch (error) {
+                console.error('Error loading insolvenzantrag form:', error);
+                res.status(500).json({ error: 'Fehler beim Laden der Formulardaten' });
+            }
+        },
+
+        /**
+         * POST /clients/:clientId/insolvenzantrag-form/save-section
+         * Auto-save a single section. Body: { section: string, data: object }
+         */
+        handleSaveInsolvenzantragSection: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                const { section, data } = req.body;
+
+                if (!section || !data) {
+                    return res.status(400).json({ error: 'section and data are required' });
+                }
+
+                const validSections = ['personal_data', 'address', 'contact', 'family_status', 'employment', 'financial', 'assets'];
+                if (!validSections.includes(section)) {
+                    return res.status(400).json({ error: `Invalid section: ${section}` });
+                }
+
+                const client = await getClient(clientId);
+                if (!client) return res.status(404).json({ error: 'Client not found' });
+
+                const isAuthorized = req.clientId === client.id || req.clientId === client.aktenzeichen || req.clientId === clientId;
+                if (!isAuthorized) return res.status(403).json({ error: 'Access denied' });
+
+                const updatedClient = await safeClientUpdate(clientId, async (c) => {
+                    // Map section data to client fields
+                    switch (section) {
+                        case 'personal_data':
+                            if (data.vorname) { c.vorname = data.vorname; c.firstName = data.vorname; }
+                            if (data.nachname) { c.nachname = data.nachname; c.lastName = data.nachname; }
+                            if (data.geburtsdatum) { c.geburtsdatum = data.geburtsdatum; c.geburtstag = data.geburtsdatum; }
+                            if (data.geburtsort) c.geburtsort = data.geburtsort;
+                            if (data.geschlecht) c.geschlecht = data.geschlecht;
+                            break;
+                        case 'address':
+                            if (data.strasse) c.strasse = data.strasse;
+                            if (data.hausnummer) c.hausnummer = data.hausnummer;
+                            if (data.plz) c.plz = data.plz;
+                            if (data.ort) { c.ort = data.ort; c.wohnort = data.ort; }
+                            // Update combined address
+                            c.address = `${data.strasse || c.strasse || ''} ${data.hausnummer || c.hausnummer || ''}, ${data.plz || c.plz || ''} ${data.ort || c.ort || ''}`.trim();
+                            break;
+                        case 'contact':
+                            if (data.telefon) { c.telefon = data.telefon; c.phone = data.telefon; }
+                            if (data.mobiltelefon) { c.mobiltelefon = data.mobiltelefon; c.telefon_mobil = data.mobiltelefon; }
+                            if (data.email) c.email = data.email;
+                            break;
+                        case 'family_status':
+                            if (data.familienstand) c.familienstand = data.familienstand;
+                            if (data.familienstand_seit) c.familienstand_seit = data.familienstand_seit;
+                            if (data.kinder_anzahl !== undefined) c.kinder_anzahl = parseInt(data.kinder_anzahl) || 0;
+                            if (data.kinder_alter) c.kinder_alter = data.kinder_alter;
+                            break;
+                        case 'employment':
+                            if (data.berufsstatus) c.berufsstatus = data.berufsstatus;
+                            if (data.erlernter_beruf) c.erlernter_beruf = data.erlernter_beruf;
+                            if (data.derzeitige_taetigkeit) { c.derzeitige_taetigkeit = data.derzeitige_taetigkeit; c.aktuelle_taetigkeit = data.derzeitige_taetigkeit; }
+                            if (data.arbeitgeber_name) {
+                                if (!c.extended_financial_data) c.extended_financial_data = {};
+                                c.extended_financial_data.arbeitgeber_name = data.arbeitgeber_name;
+                            }
+                            if (data.arbeitgeber_adresse) {
+                                if (!c.extended_financial_data) c.extended_financial_data = {};
+                                c.extended_financial_data.arbeitgeber_adresse = data.arbeitgeber_adresse;
+                            }
+                            break;
+                        case 'financial':
+                            if (data.netto_einkommen !== undefined) {
+                                const income = parseFloat(String(data.netto_einkommen).replace(',', '.'));
+                                if (!isNaN(income)) {
+                                    c.netto_einkommen = income;
+                                    if (!c.financial_data) c.financial_data = {};
+                                    c.financial_data.monthly_net_income = income;
+                                }
+                            }
+                            if (!c.extended_financial_data) c.extended_financial_data = {};
+                            if (data.sonstige_einkuenfte_betrag !== undefined) {
+                                if (!c.extended_financial_data.sonstige_monatliche_einkuenfte) c.extended_financial_data.sonstige_monatliche_einkuenfte = {};
+                                c.extended_financial_data.sonstige_monatliche_einkuenfte.betrag = parseFloat(String(data.sonstige_einkuenfte_betrag).replace(',', '.')) || 0;
+                            }
+                            if (data.sonstige_einkuenfte_beschreibung) {
+                                if (!c.extended_financial_data.sonstige_monatliche_einkuenfte) c.extended_financial_data.sonstige_monatliche_einkuenfte = {};
+                                c.extended_financial_data.sonstige_monatliche_einkuenfte.beschreibung = data.sonstige_einkuenfte_beschreibung;
+                            }
+                            if (data.sozialleistungen_betrag !== undefined) {
+                                if (!c.extended_financial_data.sozialleistungen) c.extended_financial_data.sozialleistungen = {};
+                                c.extended_financial_data.sozialleistungen.betrag = parseFloat(String(data.sozialleistungen_betrag).replace(',', '.')) || 0;
+                            }
+                            if (data.sozialleistungen_art) {
+                                if (!c.extended_financial_data.sozialleistungen) c.extended_financial_data.sozialleistungen = {};
+                                c.extended_financial_data.sozialleistungen.art_der_leistung = data.sozialleistungen_art;
+                            }
+                            break;
+                        case 'assets':
+                            if (!c.extended_financial_data) c.extended_financial_data = {};
+                            c.extended_financial_data.immobilieneigentum = {
+                                vorhanden: data.immobilieneigentum_vorhanden || false,
+                                beschreibung: data.immobilieneigentum_beschreibung || '',
+                            };
+                            c.extended_financial_data.fahrzeuge = {
+                                vorhanden: data.fahrzeuge_vorhanden || false,
+                                beschreibung: data.fahrzeuge_beschreibung || '',
+                                geschaetzter_wert: parseFloat(String(data.fahrzeuge_wert || '0').replace(',', '.')) || undefined,
+                            };
+                            c.extended_financial_data.sparkonten = {
+                                vorhanden: data.sparkonten_vorhanden || false,
+                                ungefaehrer_wert: parseFloat(String(data.sparkonten_wert || '0').replace(',', '.')) || undefined,
+                            };
+                            c.extended_financial_data.lebensversicherungen = {
+                                vorhanden: data.lebensversicherungen_vorhanden || false,
+                                rueckkaufswert: parseFloat(String(data.lebensversicherungen_rueckkaufswert || '0').replace(',', '.')) || undefined,
+                            };
+                            c.extended_financial_data.buergschaften = {
+                                vorhanden: data.buergschaften_vorhanden || false,
+                                details: data.buergschaften_details || '',
+                            };
+                            c.extended_financial_data.pfandrechte = {
+                                vorhanden: data.pfandrechte_vorhanden || false,
+                                details: data.pfandrechte_details || '',
+                            };
+                            break;
+                    }
+
+                    // Update section completion tracking
+                    if (!c.insolvenzantrag_form) c.insolvenzantrag_form = { status: 'pending', sections_completed: {} };
+                    c.insolvenzantrag_form.sections_completed[section] = true;
+                    c.insolvenzantrag_form.last_saved_at = new Date();
+                    c.markModified('insolvenzantrag_form');
+                    if (section === 'financial' || section === 'assets' || section === 'employment') {
+                        c.markModified('extended_financial_data');
+                    }
+
+                    return c;
+                });
+
+                console.log(`[InsolvenzantragForm] Section "${section}" saved for ${updatedClient.aktenzeichen}`);
+
+                res.json({
+                    success: true,
+                    section,
+                    sections_completed: updatedClient.insolvenzantrag_form?.sections_completed || {},
+                });
+            } catch (error) {
+                console.error('Error saving insolvenzantrag section:', error);
+                res.status(500).json({ error: 'Fehler beim Speichern' });
+            }
+        },
+
+        /**
+         * POST /clients/:clientId/insolvenzantrag-form/submit
+         * Final submission — sets status to insolvenzantrag_ready.
+         */
+        handleSubmitInsolvenzantragForm: async (req, res) => {
+            try {
+                const { clientId } = req.params;
+                const client = await getClient(clientId);
+                if (!client) return res.status(404).json({ error: 'Client not found' });
+
+                const isAuthorized = req.clientId === client.id || req.clientId === client.aktenzeichen || req.clientId === clientId;
+                if (!isAuthorized) return res.status(403).json({ error: 'Access denied' });
+
+                // Validate required sections
+                const sc = client.insolvenzantrag_form?.sections_completed || {};
+                const requiredSections = ['personal_data', 'address', 'contact', 'family_status', 'employment', 'financial'];
+                const missingSections = requiredSections.filter(s => !sc[s]);
+
+                if (missingSections.length > 0) {
+                    return res.status(400).json({
+                        error: 'Nicht alle Pflicht-Sektionen sind ausgefuellt',
+                        missing_sections: missingSections,
+                    });
+                }
+
+                const updatedClient = await safeClientUpdate(clientId, async (c) => {
+                    c.insolvenzantrag_form = {
+                        ...c.insolvenzantrag_form,
+                        status: 'submitted',
+                        submitted_at: new Date(),
+                    };
+                    c.current_status = 'insolvenzantrag_ready';
+                    c.markModified('insolvenzantrag_form');
+
+                    // Add to status history
+                    if (!c.status_history) c.status_history = [];
+                    c.status_history.push({
+                        id: uuidv4(),
+                        status: 'insolvenzantrag_ready',
+                        created_at: new Date(),
+                        changed_by: 'client',
+                        metadata: { source: 'insolvenzantrag_form_submission' },
+                    });
+
+                    return c;
+                });
+
+                console.log(`[InsolvenzantragForm] SUBMITTED for ${updatedClient.aktenzeichen} — status → insolvenzantrag_ready`);
+
+                res.json({
+                    success: true,
+                    status: 'insolvenzantrag_ready',
+                    submitted_at: updatedClient.insolvenzantrag_form?.submitted_at,
+                });
+            } catch (error) {
+                console.error('Error submitting insolvenzantrag form:', error);
+                res.status(500).json({ error: 'Fehler beim Absenden' });
+            }
+        },
     };
 };
 
