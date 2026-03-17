@@ -91,7 +91,7 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     if (!frontendUrl) {
       frontendUrl = process.env.NODE_ENV === 'production'
         ? 'https://mandanten-portal.onrender.com'
-        : 'http://localhost:3000';
+        : 'http://localhost:4000';
     }
 
     const portalUrl = `${frontendUrl}/auth/impersonate?token=${jwtToken}`;

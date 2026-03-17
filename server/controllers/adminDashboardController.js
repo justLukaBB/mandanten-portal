@@ -143,13 +143,15 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     baseQuery.workflow_status = status;
                 }
 
-                // Search Filter
+                // Search Filter (allow "/" as alias for "_" in Aktenzeichen, e.g. 2007/255 → 2007_255)
                 if (search) {
+                    const searchNormalized = search.replace(/\//g, '_');
                     baseQuery.$or = [
                         { firstName: { $regex: search, $options: 'i' } },
                         { lastName: { $regex: search, $options: 'i' } },
                         { email: { $regex: search, $options: 'i' } },
-                        { aktenzeichen: { $regex: search, $options: 'i' } }
+                        { aktenzeichen: { $regex: search, $options: 'i' } },
+                        { aktenzeichen: { $regex: searchNormalized, $options: 'i' } }
                     ];
                 }
 
@@ -242,11 +244,13 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     }
                     if (search) {
                         const lowerSearch = search.toLowerCase();
+                        const lowerSearchNormalized = lowerSearch.replace(/\//g, '_');
                         filteredUsers = filteredUsers.filter(u =>
                             (u.firstName && u.firstName.toLowerCase().includes(lowerSearch)) ||
                             (u.lastName && u.lastName.toLowerCase().includes(lowerSearch)) ||
                             (u.email && u.email.toLowerCase().includes(lowerSearch)) ||
-                            (u.aktenzeichen && u.aktenzeichen.toLowerCase().includes(lowerSearch))
+                            (u.aktenzeichen && u.aktenzeichen.toLowerCase().includes(lowerSearch)) ||
+                            (u.aktenzeichen && u.aktenzeichen.toLowerCase().includes(lowerSearchNormalized))
                         );
                     }
 
@@ -1323,11 +1327,12 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
 
                 sanitized.updated_at = new Date();
 
-                // Find and update client
-                let client;
-                if (databaseService && databaseService.isHealthy()) {
-                    client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                // Find and update client — guard _id lookup to avoid ObjectId cast error
+                const orConditions = [{ id: clientId }, { aktenzeichen: clientId }];
+                if (clientId.match(/^[0-9a-fA-F]{24}$/)) {
+                    orConditions.unshift({ _id: clientId });
                 }
+                const client = await Client.findOne({ $or: orConditions });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });

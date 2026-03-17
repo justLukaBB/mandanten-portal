@@ -32,6 +32,7 @@ class QuickFieldMapper {
             
             // CONTACT INFORMATION - Updated mappings  
             'telefon': 'Textfeld 4',                        // "Telefon tagsüber" ✅
+            'telefon_privat': 'Textfeld 36',                 // "Telefon (privat)" ✅
             'telefon_mobil': 'Textfeld 37',                  // "Mobil Telefon" ✅
             'email': 'Textfeld 39',                          // "E-mail"
             'anwalt_name': 'Textfeld 5',                     // "Verfahrensbevollmächtigte(r)" ✅
@@ -230,9 +231,10 @@ class QuickFieldMapper {
             
             // Personal information — use real data, leave empty if not available
             completeData.telefon = formData.telefon || '';
+            completeData.telefon_privat = formData.telefon || formData.telefon_privat || '';
             completeData.anwalt_name = formData.anwalt_name || '';
             completeData.geburtsort = formData.geburtsort || '';
-            completeData.telefon_mobil = formData.telefon_mobil || '';
+            completeData.telefon_mobil = formData.telefon_mobil || formData.mobiltelefon || '';
             completeData.akademischer_grad = formData.akademischer_grad || '';
             completeData.geburtsdatum = formData.geburtsdatum || '';
 
