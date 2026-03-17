@@ -26,6 +26,7 @@ import AddCreditorForm from '../components/AddCreditorForm';
 import ExtendedFinancialDataWizard from '../components/ExtendedFinancialDataWizard';
 import SettlementPlanStatus from '../components/SettlementPlanStatus';
 import SecondLetterInlineForm from '../components/SecondLetterInlineForm';
+import InsolvenzantragDataForm from '../components/InsolvenzantragDataForm';
 import api from '../config/api';
 
 export const PersonalPortal = ({
@@ -598,8 +599,8 @@ export const PersonalPortal = ({
           </div>
         )}
 
-        {/* Second Letter: SENT — Completion message */}
-        {secondLetterStatus === 'SENT' && (
+        {/* Second Letter: SENT — Completion message (hide when Insolvenzantrag form is active) */}
+        {secondLetterStatus === 'SENT' && client?.current_status !== 'insolvenzantrag_data_pending' && client?.current_status !== 'insolvenzantrag_ready' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="text-center">
               <div className="mb-4">
@@ -622,6 +623,19 @@ export const PersonalPortal = ({
               </p>
             </div>
           </div>
+        )}
+
+        {/* Insolvenzantrag Data Collection Form - shows after 2. Anschreiben sent */}
+        {(client?.current_status === 'insolvenzantrag_data_pending' ||
+          client?.current_status === 'insolvenzantrag_ready') && (
+          <InsolvenzantragDataForm
+            clientId={clientId!}
+            client={client}
+            onFormSubmitted={() => {
+              refetchClient();
+            }}
+            customColors={customColors}
+          />
         )}
 
         {/* Financial Data Form - shows after 30-day creditor response period */}

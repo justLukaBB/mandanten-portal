@@ -119,5 +119,19 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
         controller.handleSubmitSecondLetterFormJWT
     );
 
+    // Insolvenzantrag Data Collection Form
+    router.get('/clients/:clientId/insolvenzantrag-form',
+        authenticateClient,
+        controller.handleGetInsolvenzantragForm
+    );
+    router.post('/clients/:clientId/insolvenzantrag-form/save-section',
+        authenticateClient,
+        controller.handleSaveInsolvenzantragSection
+    );
+    router.post('/clients/:clientId/insolvenzantrag-form/submit',
+        authenticateClient,
+        controller.handleSubmitInsolvenzantragForm
+    );
+
     return router;
 };

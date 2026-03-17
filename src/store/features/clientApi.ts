@@ -84,6 +84,28 @@ export const clientApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['SecondLetterForm', 'User'],
         }),
+
+        // === Insolvenzantrag Data Collection Form ===
+
+        getInsolvenzantragForm: builder.query({
+            query: (clientId) => `/api/clients/${clientId}/insolvenzantrag-form`,
+            providesTags: ['InsolvenzantragForm'],
+        }),
+        saveInsolvenzantragSection: builder.mutation({
+            query: ({ clientId, section, data }) => ({
+                url: `/api/clients/${clientId}/insolvenzantrag-form/save-section`,
+                method: 'POST',
+                body: { section, data },
+            }),
+            invalidatesTags: ['InsolvenzantragForm'],
+        }),
+        submitInsolvenzantragForm: builder.mutation({
+            query: (clientId) => ({
+                url: `/api/clients/${clientId}/insolvenzantrag-form/submit`,
+                method: 'POST',
+            }),
+            invalidatesTags: ['InsolvenzantragForm', 'User'],
+        }),
     }),
 });
 
@@ -103,4 +125,8 @@ export const {
     // Second Letter
     useGetSecondLetterFormDataQuery,
     useSubmitSecondLetterFormMutation,
+    // Insolvenzantrag Form
+    useGetInsolvenzantragFormQuery,
+    useSaveInsolvenzantragSectionMutation,
+    useSubmitInsolvenzantragFormMutation,
 } = clientApi;

@@ -223,11 +223,31 @@ class SecondLetterService {
     if (allSucceeded) {
       const updated = await Client.findOneAndUpdate(
         { _id: client._id, second_letter_status: 'FORM_SUBMITTED' },
-        { $set: { second_letter_status: 'SENT', second_letter_sent_at: new Date(), workflow_status: 'second_letter_sent' } },
+        {
+          $set: {
+            second_letter_status: 'SENT',
+            second_letter_sent_at: new Date(),
+            workflow_status: 'second_letter_sent',
+            // Auto-trigger Insolvenzantrag data collection
+            current_status: 'insolvenzantrag_data_pending',
+            'insolvenzantrag_form.status': 'pending',
+          },
+          $push: {
+            status_history: {
+              id: require('uuid').v4(),
+              status: 'insolvenzantrag_data_pending',
+              created_at: new Date(),
+              changed_by: 'system',
+              metadata: { source: 'auto_trigger_after_second_letter_sent' },
+            },
+          },
+        },
         { new: true }
       );
 
-      if (!updated) {
+      if (updated) {
+        console.log(`[SecondLetterService] Auto-triggered insolvenzantrag_data_pending for ${clientId}`);
+      } else {
         console.warn(
           `[SecondLetterService] Status guard blocked SENT transition for client ${clientId} ` +
           `— another process may have already transitioned`
