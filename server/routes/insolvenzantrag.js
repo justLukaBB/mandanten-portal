@@ -1414,7 +1414,23 @@ router.post('/trigger-data-collection/:clientId', authenticateAdmin, async (req,
         await client.save();
         console.log(`[Insolvenzantrag] Data collection triggered for ${client.aktenzeichen} by admin`);
 
-        res.json({ success: true, status: 'insolvenzantrag_data_pending' });
+        // Send notification email to client
+        let emailResult = { success: false };
+        try {
+            const emailService = require('../services/emailService');
+            const baseUrl = process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+            const portalUrl = `${baseUrl}/portal/${client.aktenzeichen}`;
+            emailResult = await emailService.sendInsolvenzantragDataCollectionEmail(
+                client.email,
+                `${client.firstName} ${client.lastName}`,
+                portalUrl,
+                client.aktenzeichen
+            );
+        } catch (emailErr) {
+            console.error('[Insolvenzantrag] Email send failed (non-blocking):', emailErr.message);
+        }
+
+        res.json({ success: true, status: 'insolvenzantrag_data_pending', emailSent: emailResult.success });
     } catch (error) {
         console.error('Error triggering insolvenzantrag data collection:', error);
         res.status(500).json({ error: 'Failed to trigger data collection' });

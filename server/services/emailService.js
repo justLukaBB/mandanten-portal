@@ -503,7 +503,7 @@ Aktenzeichen: ${aktenzeichen}
     const creditorListPlain = creditors
       .map((c, i) => {
         const refNum = c.reference_number && c.reference_number !== 'N/A' ? `\n   Referenz: ${c.reference_number}` : '';
-        return `${i + 1}. ${c.sender_name || 'Unbekannt'}\n   Forderung: €${(c.claim_amount || 0).toLocaleString('de-DE')}${refNum}`;
+        return `${i + 1}. ${c.sender_name || 'Unbekannt'}${refNum}`;
       })
       .join('\n\n');
 
@@ -517,7 +517,6 @@ Aktenzeichen: ${aktenzeichen}
             <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827; vertical-align: top;">${i + 1}.</td>
             <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
               <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${c.sender_name || 'Unbekannt'}</div>
-              <div style="font-size: 14px; color: #16a34a; font-weight: 500;">Forderung: €${(c.claim_amount || 0).toLocaleString('de-DE')}</div>
               ${refNum}
             </td>
           </tr>`;
@@ -531,8 +530,6 @@ wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus 
 
 GLÄUBIGERLISTE:
 ${creditorListPlain}
-
-Gesamtschulden: €${totalDebt.toLocaleString('de-DE')}
 
 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
@@ -580,8 +577,7 @@ Aktenzeichen: ${aktenzeichen}
           <tbody>${creditorListHtml}</tbody>
         </table>
         <div style="padding: 16px; background-color: #111827; color: #ffffff;">
-          <span style="font-weight: 600; font-size: 16px;">Gesamtschulden: </span>
-          <span style="font-weight: 700; font-size: 20px; color: #10b981;">€${totalDebt.toLocaleString('de-DE')}</span>
+          <span style="font-weight: 600; font-size: 16px;">${creditors.length} Gläubiger erfasst</span>
         </div>
       </div>
       <div style="background-color: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #78350f;">
@@ -669,6 +665,140 @@ Aktenzeichen: ${aktenzeichen}
    */
   isConfigured() {
     return !!this.resend;
+  }
+
+  // ── Insolvenzantrag Data Collection Email ──────────────────────────
+
+  generateInsolvenzantragDataCollectionHtml(clientName, portalUrl, aktenzeichen) {
+    return `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insolvenzantrag — Ihre Angaben werden benoetigt</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); padding: 40px;">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 0 0 32px; text-align: center; border-bottom: 1px solid #eee;">
+              <img src="https://www.schuldnerberatung-anwalt.de/wp-content/uploads/2024/10/Logo-T-Scuric.png" alt="RA T. Scuric" style="height: 40px; width: auto;">
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px 0 0;">
+              <h1 style="margin: 0 0 24px; font-size: 22px; font-weight: 600; color: #111827;">
+                Insolvenzantrag — Ihre Angaben werden benoetigt
+              </h1>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Sehr geehrte/r ${clientName},
+              </p>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                im Rahmen Ihres Verfahrens (Aktenzeichen: <strong>${aktenzeichen}</strong>) bereiten wir nun Ihren Insolvenzantrag vor. Dafuer benoetigen wir einige persoenliche Angaben von Ihnen.
+              </p>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Bitte loggen Sie sich in Ihr Portal ein und fuellen Sie das Formular aus. Bereits vorhandene Daten sind vorausgefuellt — pruefen Sie diese bitte auf Richtigkeit und ergaenzen Sie fehlende Angaben.
+              </p>
+              <p style="margin: 0 0 32px; font-size: 16px; line-height: 1.6; color: #374151;">
+                Das Formular umfasst Angaben zu Ihrer Person, Adresse, Familie, Beruf, Einkommen und Vermoegen. Ihre Eingaben werden automatisch gespeichert — Sie koennen jederzeit unterbrechen und spaeter fortfahren.
+              </p>
+
+              <!-- CTA Button -->
+              <div style="text-align: center; margin: 0 0 32px;">
+                <a href="${portalUrl}" style="display: inline-block; padding: 14px 28px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                  Formular ausfuellen
+                </a>
+              </div>
+
+              <p style="margin: 0; font-size: 14px; color: #9ca3af; text-align: center;">
+                Falls Sie Fragen haben, antworten Sie einfach auf diese E-Mail.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 0 0; border-top: 1px solid #eee; margin-top: 32px;">
+              <p style="margin: 0 0 8px; font-size: 12px; color: #9ca3af; text-align: center;">
+                Aktenzeichen: <strong>${aktenzeichen}</strong>
+              </p>
+              <p style="margin: 0 0 8px; font-size: 12px; color: #9ca3af; text-align: center;">
+                &copy; ${new Date().getFullYear()} Kanzlei RA T. Scuric. Alle Rechte vorbehalten.
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center;">
+                <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none;">Impressum</a>
+                <span style="color: #9ca3af;"> &bull; </span>
+                <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none;">Datenschutz</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `.trim();
+  }
+
+  generateInsolvenzantragDataCollectionText(clientName, portalUrl, aktenzeichen) {
+    return `
+Sehr geehrte/r ${clientName},
+
+im Rahmen Ihres Verfahrens (Aktenzeichen: ${aktenzeichen}) bereiten wir nun Ihren Insolvenzantrag vor. Dafuer benoetigen wir einige persoenliche Angaben von Ihnen.
+
+Bitte loggen Sie sich in Ihr Portal ein und fuellen Sie das Formular aus:
+
+${portalUrl}
+
+Das Formular umfasst Angaben zu Ihrer Person, Adresse, Familie, Beruf, Einkommen und Vermoegen. Ihre Eingaben werden automatisch gespeichert.
+
+Mit freundlichen Gruessen
+Kanzlei RA T. Scuric
+
+Aktenzeichen: ${aktenzeichen}
+    `.trim();
+  }
+
+  async sendInsolvenzantragDataCollectionEmail(email, clientName, portalUrl, aktenzeichen) {
+    const subject = 'Insolvenzantrag — Bitte fuellen Sie das Formular aus';
+    const html = this.generateInsolvenzantragDataCollectionHtml(clientName, portalUrl, aktenzeichen);
+    const text = this.generateInsolvenzantragDataCollectionText(clientName, portalUrl, aktenzeichen);
+
+    if (!this.resend) {
+      console.log('\n📧 ================================');
+      console.log('📧 INSOLVENZANTRAG DATA COLLECTION (DEV MODE)');
+      console.log('📧 ================================');
+      console.log(`📧 To: ${email}`);
+      console.log(`📧 Subject: ${subject}`);
+      console.log(`📧 Portal URL: ${portalUrl}`);
+      console.log(`📧 Aktenzeichen: ${aktenzeichen}`);
+      console.log('📧 ================================\n');
+      return { success: true, devMode: true };
+    }
+
+    try {
+      const response = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: email,
+        subject,
+        html,
+        text
+      });
+
+      const emailId = response.data?.id || response.id;
+      console.log(`✅ Insolvenzantrag data collection email sent to ${email} (ID: ${emailId})`);
+      return { success: true, emailId };
+    } catch (error) {
+      console.error(`❌ Failed to send insolvenzantrag data collection email to ${email}:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
 }
 

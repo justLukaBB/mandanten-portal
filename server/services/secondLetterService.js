@@ -247,6 +247,21 @@ class SecondLetterService {
 
       if (updated) {
         console.log(`[SecondLetterService] Auto-triggered insolvenzantrag_data_pending for ${clientId}`);
+
+        // Send notification email (non-blocking)
+        try {
+          const emailService = require('./emailService');
+          const baseUrl = process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+          const portalUrl = `${baseUrl}/portal/${updated.aktenzeichen}`;
+          await emailService.sendInsolvenzantragDataCollectionEmail(
+            updated.email,
+            `${updated.firstName} ${updated.lastName}`,
+            portalUrl,
+            updated.aktenzeichen
+          );
+        } catch (emailErr) {
+          console.error(`[SecondLetterService] Insolvenzantrag email failed (non-blocking):`, emailErr.message);
+        }
       } else {
         console.warn(
           `[SecondLetterService] Status guard blocked SENT transition for client ${clientId} ` +
