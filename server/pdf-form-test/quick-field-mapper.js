@@ -47,24 +47,48 @@ class QuickFieldMapper {
             'unterschrift_ort_datum': 'Textfeld 83',        // "(Ort, Datum)"
             'unterschrift_name': 'Textfeld 84',             // "Vorname Name" (Unterschrift)
             
-            // CREDITOR STATISTICS - Important for settlement tracking
-            'anzahl_glaeubiger_zugestimmt': 'Textfeld 85',  // "Anzahl an Gläubigern (zuge"
-            'anzahl_glaeubiger': 'Textfeld 86',             // "Anzahl an Gläubigern" 
-            'summe_zugestimmt': 'Textfeld 87',              // "Summe (Zugestimmten)"
-            'summe_gesamt': 'Textfeld 88',                  // "Summe"
-            'anzahl_ohne_antwort': 'Textfeld 89',           // "Anzahl ohne Antwort"
-            'anzahl_ablehnungen': 'Textfeld 90',            // "Anzahl an Gläubigern" (Ablehnungen)
+            // CREDITOR STATISTICS - Section 18: Scheitern des Einigungsversuchs
+            'nicht_alle_zugestimmt': 'Kontrollkästchen 35', // "Nicht alle Gläubiger haben zugestimmt"
+            // 1. Anteil der zustimmenden Gläubiger nach Köpfen:
+            'anzahl_glaeubiger_zugestimmt': 'Textfeld 85',  // X Gläubiger (zugestimmt)
+            'anzahl_glaeubiger': 'Textfeld 86',             // von Y Gläubigern (gesamt)
+            // 2. Anteil der zustimmenden Gläubiger nach Summen:
+            'summe_zugestimmt': 'Textfeld 87',              // X EUR (zugestimmt)
+            'summe_gesamt': 'Textfeld 88',                  // von Y EUR (gesamt)
+            // 3. Anteil der Gläubiger ohne Rückäußerung:
+            'anzahl_ohne_antwort': 'Textfeld 89',           // X Gläubiger (ohne Rückäußerung)
+            'anzahl_ohne_antwort_von_gesamt': 'Textfeld 90', // von Y Gläubigern (gesamt)
+            // Gründe für Ablehnung:
+            'ablehnungsgruende': 'Textfeld 91',             // Freitext
             
             // SETTLEMENT PLAN DATES - Multiple instances throughout document  
             'schuldenbereinigungsplan_datum': 'Textfeld 642',  // "Datum des Schuldenbereinigungsplans:"
             
-            // LEGAL REPRESENTATIVE DETAILS - Complete section
+            // SECTION 13: VERFAHRENSBEVOLLMÄCHTIGTE(R) — Textfeld 55-68
+            'bevollm_name': 'Textfeld 55',                  // Name
+            'bevollm_akad_grad': 'Textfeld 56',             // Akademischer Grad
+            'bevollm_vorname': 'Textfeld 57',               // Vorname
+            'bevollm_beruf': 'Textfeld 58',                 // Beruf
+            'bevollm_bezeichnung': 'Textfeld 59',           // ggf. Bezeichnung der geeigneten Stelle
+            'bevollm_strasse': 'Textfeld 60',               // Straße
+            'bevollm_hausnummer': 'Textfeld 61',            // Hausnummer
+            'bevollm_plz': 'Textfeld 62',                   // Postleitzahl
+            'bevollm_ort': 'Textfeld 63',                   // Ort
+            'bevollm_telefon': 'Textfeld 64',               // Telefon
+            'bevollm_telefax': 'Textfeld 65',               // Telefax
+            'bevollm_email': 'Textfeld 66',                 // E-Mail
+            'bevollm_geschaeftszeichen': 'Textfeld 67',     // Geschäftszeichen (Aktenzeichen)
+            'bevollm_sachbearbeiter': 'Textfeld 68',         // Sachbearbeiter(in)
+            // Vollmacht-Checkbox
+            'bevollm_verfahren_insgesamt': 'Kontrollkästchen 31u', // für das Verfahren insgesamt
+
+            // LEGAL REPRESENTATIVE DETAILS - other sections throughout document
             'anwalt_vorname_name': 'Textfeld 69',           // "Vorname Name" (Anwalt)
             'anwalt_name_detail': 'Textfeld 70',            // "Rechtsanwalt Thomas Scuric"
-            'anwalt_strasse': 'Textfeld 71',                // "Bongardstraße" ✅
-            'anwalt_hausnummer': 'Textfeld 72',             // "33" ✅
-            'anwalt_plz': 'Textfeld 73',                    // "44787" ✅
-            'anwalt_ort': 'Textfeld 74',                    // "Bochum" ✅
+            'anwalt_strasse': 'Textfeld 71',                // "Bongardstraße"
+            'anwalt_hausnummer': 'Textfeld 72',             // "33"
+            'anwalt_plz': 'Textfeld 73',                    // "44787"
+            'anwalt_ort': 'Textfeld 74',                    // "Bochum"
             
             // ADDITIONAL SETTLEMENT DATES - Multiple instances
             'schuldenbereinigungsplan_datum_2': 'Textfeld 1231', // "Datum des Schuldenbereinigungsplans:"
@@ -103,24 +127,19 @@ class QuickFieldMapper {
             'adresse_plz_ort': 'Textfeld 637',              // "Postleitzahl und Ort"
             'vollname_alt': 'Textfeld 635',                 // "Vormame und Name"
             
-            // EMPLOYMENT STATUS CHECKBOXES - Based on user requirements
-            'employment_angestellt': 'Kontrollkästchen 62',     // "Angestellt" - employment status
-            'employment_selbstaendig': 'Kontrollkästchen 63',   // Self-employed
-            'employment_arbeitslos': 'Kontrollkästchen 64',     // Unemployed
-            'employment_rentner': 'Kontrollkästchen 65',        // Retired
+            // EMPLOYMENT STATUS CHECKBOXES — currently disabled (not needed in Insolvenzantrag)
+            // 'employment_angestellt': 'Kontrollkästchen 62',
+            // 'employment_selbstaendig': 'Kontrollkästchen 63',
+            // 'employment_arbeitslos': 'Kontrollkästchen 64',
+            // 'employment_rentner': 'Kontrollkästchen 65',
 
-            // FAMILIENSTAND (MARITAL STATUS) CHECKBOXES - Section 10
-            'familienstand_ledig': 'Kontrollkästchen 46',                   // Single
-            'familienstand_verheiratet': 'Kontrollkästchen 47',             // Married
-            'familienstand_lebenspartnerschaft': 'Kontrollkästchen 48',     // Registered partnership
-            'familienstand_geschieden': 'Kontrollkästchen 49',              // Divorced
-            'familienstand_getrennt_lebend': 'Kontrollkästchen 50',         // Separated
-            'familienstand_verwitwet': 'Kontrollkästchen 51',               // Widowed
-
-            // NO OTHER CHECKBOX MAPPINGS IN THIS SECTION
-            // Main checkboxes are handled by INSOLVENZANTRAG_CONFIG
-            // The 11 checkboxes from new template are automatically applied:
-            // Kontrollkästchen 1, 2, 15, 17, 21, 25, 26, 27, 32a, 36, 333
+            // FAMILIENSTAND date fields (Kontrollkästchen 23 widgets are set in fillFinancialData)
+            'familienstand_seit_verheiratet': 'Textfeld 40',               // verheiratet seit
+            'familienstand_seit_lebenspartnerschaft': 'Textfeld 41',       // eingetragene Lebenspartnerschaft begruendet seit
+            'familienstand_seit_beendet': 'Textfeld 42',                   // (Lebenspartnerschaft) beendet seit
+            'familienstand_seit_geschieden': 'Textfeld 43',                // geschieden seit
+            'familienstand_seit_getrennt': 'Textfeld 44',                  // getrennt lebend seit
+            'familienstand_seit_verwitwet': 'Textfeld 45',                 // verwitwet seit
         };
     }
 
@@ -150,7 +169,7 @@ class QuickFieldMapper {
             completeData.name_field_main = `${formData.nachname || ''}, ${formData.vorname || ''}`;  // Textfeld 1 - "Vorname und Name" (Last, First format)
             completeData.nachname_standalone = formData.nachname || '';     // Textfeld 25 - "Name" 
             completeData.vorname_standalone = formData.vorname || '';       // Textfeld 27 - "Vorname(n)"
-            completeData.anwalt_name_field = fullName;                      // Textfeld 69 - "Vorname Name" (Anwalt)
+            completeData.anwalt_name_field = fullName;      // Textfeld 69 - Mandantenname (Anlage 2)
             completeData.unterschrift_name_field = fullName;                // Textfeld 84 - "Vorname Name" (Unterschrift)
             
             // EXISTING NAME FIELDS (keep all)
@@ -191,35 +210,61 @@ class QuickFieldMapper {
             
             // Creditor statistics if available
             if (formData.anzahl_glaeubiger) {
-                completeData.anzahl_glaeubiger = String(formData.anzahl_glaeubiger);  // Textfeld 86
-                completeData.anzahl_glaeubiger_zugestimmt = String(formData.anzahl_glaeubiger_zugestimmt || 0);  // Textfeld 85
-                completeData.anzahl_ablehnungen = String(formData.anzahl_ablehnungen || 0);  // Textfeld 90
-                completeData.anzahl_ohne_antwort = String(formData.anzahl_ohne_antwort || 0);  // Textfeld 89
+                const totalCreditors = String(formData.anzahl_glaeubiger);
+                const zugestimmt = Number(formData.anzahl_glaeubiger_zugestimmt || 0);
+                const gesamt = Number(formData.anzahl_glaeubiger);
+
+                completeData.anzahl_glaeubiger = totalCreditors;                                     // Textfeld 86
+                completeData.anzahl_glaeubiger_zugestimmt = String(zugestimmt);                      // Textfeld 85
+                completeData.anzahl_ohne_antwort = String(formData.anzahl_ohne_antwort || 0);        // Textfeld 89
+                completeData.anzahl_ohne_antwort_von_gesamt = totalCreditors;                        // Textfeld 90 — "von X Gläubigern"
+                completeData.ablehnungsgruende = formData.ablehnungsgruende || '';                   // Textfeld 91
+
+                // Kontrollkästchen 35: "Nicht alle Gläubiger haben zugestimmt"
+                completeData.nicht_alle_zugestimmt = zugestimmt < gesamt;
             }
             if (formData.gesamtschuldensumme) {
                 completeData.summe_gesamt = String(formData.gesamtschuldensumme);  // Textfeld 88
                 completeData.summe_zugestimmt = String(formData.summe_zugestimmt || formData.gesamtschuldensumme);  // Textfeld 87
             }
             
-            // Personal information fields - PROVIDE DEFAULT VALUES so they don't get skipped
-            completeData.telefon = formData.telefon || formData.phone || '0221123456';  // Textfeld 4 - provide default
-            completeData.anwalt_name = formData.anwalt_name || 'Rechtsanwalt';  // Textfeld 5 - provide default
-            completeData.geburtsort = formData.geburtsort || formData.ort || 'Deutschland';  // Textfeld 31 - use city or default
-            completeData.telefon_mobil = formData.telefon_mobil || formData.phone || '0171123456';  // Textfeld 37 - provide default
-            completeData.akademischer_grad = formData.akademischer_grad || '-';  // Textfeld 26 - use dash for empty
-            completeData.geburtsdatum = formData.geburtsdatum || '01.01.1980';  // Textfeld 30 - provide default date
-            // Keep these fields EMPTY as per user requirement (Seite 4: Erlernter Beruf & Zurzeit tätig als)
-            completeData.erlernter_beruf = '';  // Textfeld 48 - MUST BE EMPTY
-            completeData.aktuelle_taetigkeit = '';  // Textfeld 49 - MUST BE EMPTY
-            completeData.berufliche_taetigkeit = formData.berufliche_taetigkeit || '';  // Textfeld 278 - only use if explicitly provided
+            // Personal information — use real data, leave empty if not available
+            completeData.telefon = formData.telefon || '';
+            completeData.anwalt_name = formData.anwalt_name || '';
+            completeData.geburtsort = formData.geburtsort || '';
+            completeData.telefon_mobil = formData.telefon_mobil || '';
+            completeData.akademischer_grad = formData.akademischer_grad || '';
+            completeData.geburtsdatum = formData.geburtsdatum || '';
+
+            // Professional information — use real data from client
+            completeData.erlernter_beruf = formData.erlernter_beruf || '';
+            completeData.aktuelle_taetigkeit = formData.derzeitige_taetigkeit || formData.aktuelle_taetigkeit || '';
+            completeData.berufliche_taetigkeit = formData.beschaeftigungsart || formData.berufliche_taetigkeit || '';
             
-            // Legal representative details (Anwalt)
-            completeData.anwalt_vorname_name = formData.anwalt_vorname_name || fullName;  // Textfeld 69
-            completeData.anwalt_name_detail = formData.anwalt_name_detail || 'Rechtsanwalt';  // Textfeld 70
-            completeData.anwalt_strasse = formData.anwalt_strasse || '';  // Textfeld 71
-            completeData.anwalt_hausnummer = formData.anwalt_hausnummer || '';  // Textfeld 72
-            completeData.anwalt_plz = formData.anwalt_plz || '';  // Textfeld 73
-            completeData.anwalt_ort = formData.anwalt_ort || '';  // Textfeld 74
+            // Section 13: Verfahrensbevollmächtigte(r) — always Thomas Scuric
+            completeData.bevollm_name = 'Scuric';
+            completeData.bevollm_akad_grad = '';
+            completeData.bevollm_vorname = 'Thomas';
+            completeData.bevollm_beruf = 'Rechtsanwalt';
+            completeData.bevollm_bezeichnung = '';
+            completeData.bevollm_strasse = 'Bongardstraße';
+            completeData.bevollm_hausnummer = '33';
+            completeData.bevollm_plz = '44787';
+            completeData.bevollm_ort = 'Bochum';
+            completeData.bevollm_telefon = '0234 9136810';
+            completeData.bevollm_telefax = '';
+            completeData.bevollm_email = 'info@ra-scuric.de';
+            completeData.bevollm_geschaeftszeichen = formData.aktenzeichen || '';
+            completeData.bevollm_sachbearbeiter = '';
+            completeData.bevollm_verfahren_insgesamt = true;  // Kontrollkästchen 31u — immer an
+
+            // Legal representative in other sections throughout document
+            completeData.anwalt_vorname_name = fullName;  // Textfeld 69 — Mandantenname (Anlage 2 Kopf)
+            completeData.anwalt_name_detail = 'Rechtsanwalt Thomas Scuric';   // Textfeld 70
+            completeData.anwalt_strasse = 'Bongardstraße';   // Textfeld 71
+            completeData.anwalt_hausnummer = '33';            // Textfeld 72
+            completeData.anwalt_plz = '44787';                // Textfeld 73
+            completeData.anwalt_ort = 'Bochum';               // Textfeld 74
             
             // Settlement plan dates
             completeData.außergerichtlicher_plan_datum = formData.außergerichtlicher_plan_datum || currentDate;  // Textfeld 80
@@ -228,8 +273,7 @@ class QuickFieldMapper {
             completeData.schuldenbereinigungsplan_datum_3 = completeData.schuldenbereinigungsplan_datum;  // Textfeld 1234
             
             // EMPLOYMENT STATUS CHECKBOXES - Set based on client employment status
-            const berufsstatus = formData.berufsstatus || formData.employment_status || 'angestellt';  // Default to employed
-            console.log(`🔍 Employment status: ${berufsstatus}`);
+            const berufsstatus = formData.berufsstatus || formData.employment_status || '';
             
             // Set employment checkboxes (ensure they are boolean true for checking)
             completeData.employment_angestellt = (berufsstatus === 'angestellt' || berufsstatus === 'employed') ? true : false;
@@ -237,23 +281,21 @@ class QuickFieldMapper {
             completeData.employment_arbeitslos = (berufsstatus === 'arbeitslos' || berufsstatus === 'unemployed') ? true : false;
             completeData.employment_rentner = (berufsstatus === 'rentner' || berufsstatus === 'retired') ? true : false;
             
-            console.log(`📋 Employment checkboxes: angestellt=${completeData.employment_angestellt}, selbstaendig=${completeData.employment_selbstaendig}, arbeitslos=${completeData.employment_arbeitslos}, rentner=${completeData.employment_rentner}`);
+            // FAMILIENSTAND date fields — checkbox widget is set in fillFinancialData()
+            const familienstand = formData.familienstand || '';
+            const familienstandDatum = formData.familienstand_seit || '';
 
-            // FAMILIENSTAND (MARITAL STATUS) CHECKBOXES - Set based on client marital status
-            const familienstand = formData.familienstand || 'ledig';  // Default to single
-            console.log(`👫 Familienstand (Marital Status): ${familienstand}`);
-
-            // Set familienstand checkboxes (exclusive - only one should be checked)
-            completeData.familienstand_ledig = (familienstand === 'ledig');
-            completeData.familienstand_verheiratet = (familienstand === 'verheiratet');
-            completeData.familienstand_lebenspartnerschaft = (familienstand === 'lebenspartnerschaft' || familienstand === 'eingetragene_lebenspartnerschaft');
-            completeData.familienstand_geschieden = (familienstand === 'geschieden');
-            completeData.familienstand_getrennt_lebend = (familienstand === 'getrennt_lebend');
-            completeData.familienstand_verwitwet = (familienstand === 'verwitwet');
-
-            console.log(`📋 Familienstand checkboxes: ledig=${completeData.familienstand_ledig}, verheiratet=${completeData.familienstand_verheiratet}, geschieden=${completeData.familienstand_geschieden}, getrennt_lebend=${completeData.familienstand_getrennt_lebend}, verwitwet=${completeData.familienstand_verwitwet}`);
+            // Fill the "seit" date field for the matching status
+            if (familienstandDatum) {
+                if (familienstand === 'verheiratet') completeData.familienstand_seit_verheiratet = familienstandDatum;
+                if (familienstand === 'lebenspartnerschaft' || familienstand === 'eingetragene_lebenspartnerschaft') completeData.familienstand_seit_lebenspartnerschaft = familienstandDatum;
+                if (familienstand === 'geschieden') completeData.familienstand_seit_geschieden = familienstandDatum;
+                if (familienstand === 'getrennt_lebend') completeData.familienstand_seit_getrennt = familienstandDatum;
+                if (familienstand === 'verwitwet') completeData.familienstand_seit_verwitwet = familienstandDatum;
+            }
 
             // Main form checkboxes are handled by INSOLVENZANTRAG_CONFIG
+            // Familienstand checkbox (Kontrollkästchen 23 widgets) is handled in fillFinancialData()
             
             console.log('📝 Filling PDF with real field names...');
             
@@ -324,8 +366,18 @@ class QuickFieldMapper {
             });
             
             console.log(`📊 Results: ${textFieldsFilled} text fields, ${checkboxesFilled} checkboxes, ${failedFields} failed`);
+
+            // Regenerate field appearances so all viewers render the values
+            try {
+                const { StandardFonts } = require('pdf-lib');
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                form.updateFieldAppearances(font);
+            } catch (err) {
+                console.warn('Could not update field appearances:', err.message);
+            }
+
             console.log('💾 Generating improved PDF...');
-            
+
             const filledPdfBytes = await pdfDoc.save();
             return filledPdfBytes;
             

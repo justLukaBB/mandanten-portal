@@ -166,6 +166,7 @@ const createAdminCreditorDatabaseRouter = require('./routes/admin-creditor-datab
 const adminDelayedProcessingRoutes = require('./routes/admin-delayed-processing');
 const adminWebhookQueueRoutes = require('./routes/admin-webhook-queue');
 const adminDocumentQueueRoutes = require('./routes/admin-document-queue');
+const createSchufaRouter = require('./routes/schufa');
 const testRoutes = require('./routes/test-routes');
 
 // =============================================================================
@@ -408,6 +409,8 @@ app.use('/api/admin/review', createAdminReviewRouter({
 app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService, Client }));
 
 app.use('/api/admin', createAdminEmailsRouter({ CreditorEmail, Client }));
+
+app.use('/api/admin/schufa', createSchufaRouter({ Client, safeClientUpdate: clientService.safeClientUpdate.bind(clientService), getClient: clientService.getClient.bind(clientService) }));
 
 // 10.7 Client Portal Global Routes
 

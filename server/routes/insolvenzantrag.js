@@ -7,10 +7,14 @@ const axios = require('axios');
 const { authenticateClient, authenticateAdmin } = require('../middleware/auth');
 const Client = require('../models/Client');
 
-// Helper function to get client (handles both id and aktenzeichen lookups)
+// Helper function to get client (handles _id, id, and aktenzeichen lookups)
 async function getClient(clientId) {
     try {
-        // Try to find by id first, then by aktenzeichen
+        // Try MongoDB _id first (24-char hex), then UUID id, then aktenzeichen
+        if (clientId.match(/^[0-9a-fA-F]{24}$/)) {
+            const client = await Client.findById(clientId);
+            if (client) return client;
+        }
         let client = await Client.findOne({ id: clientId });
         if (!client) {
             client = await Client.findOne({ aktenzeichen: clientId });
@@ -81,32 +85,126 @@ function calculateCreditorResponseStats(client) {
     };
 }
 
-// Helper function to determine court based on ZIP code
+// Determine Insolvenzgericht based on ZIP code
+// PLZ → Amtsgericht mapping (NRW komplett, alle Großstädte, erweitert)
 function determineCourtByZipCode(zipCode) {
     if (!zipCode) return '';
 
-    const zipPrefix = zipCode.substring(0, 2);
-    const courtMapping = {
-        '44': 'Bochum',
-        '45': 'Essen',
-        '46': 'Dortmund',
-        '40': 'Düsseldorf',
-        '41': 'Düsseldorf',
-        '50': 'Köln',
-        '51': 'Köln',
-        '80': 'München',
-        '81': 'München',
-        '70': 'Stuttgart',
-        '71': 'Stuttgart',
-        '10': 'Berlin',
-        '11': 'Berlin',
-        '12': 'Berlin',
-        '20': 'Hamburg',
-        '21': 'Hamburg',
-        '22': 'Hamburg'
+    const zip3 = zipCode.substring(0, 3);
+    const zip2 = zipCode.substring(0, 2);
+
+    // 3-digit precision for areas where multiple courts share a 2-digit prefix
+    const courtMapping3 = {
+        // NRW — Ruhrgebiet & Umgebung
+        '440': 'Bochum', '441': 'Bochum', '442': 'Bochum', '443': 'Bochum',
+        '444': 'Dortmund', '445': 'Dortmund', '446': 'Dortmund', '447': 'Dortmund',
+        '448': 'Hagen', '449': 'Hagen',
+        '450': 'Essen', '451': 'Essen', '452': 'Essen', '453': 'Essen',
+        '454': 'Mülheim an der Ruhr', '455': 'Oberhausen',
+        '456': 'Oberhausen', '457': 'Gelsenkirchen', '458': 'Gelsenkirchen',
+        '459': 'Recklinghausen',
+        '460': 'Recklinghausen', '461': 'Recklinghausen',
+        '462': 'Marl', '463': 'Herne',
+        '464': 'Castrop-Rauxel', '465': 'Dorsten',
+        '466': 'Bottrop', '467': 'Gladbeck',
+        '468': 'Duisburg', '469': 'Duisburg',
+        '470': 'Duisburg', '471': 'Duisburg', '472': 'Krefeld', '473': 'Krefeld',
+        '474': 'Moers', '475': 'Wesel',
+        '476': 'Kleve', '477': 'Kleve',
+        '478': 'Emmerich',
+        '480': 'Münster', '481': 'Münster', '482': 'Münster',
+        '483': 'Warendorf', '484': 'Warendorf',
+        '485': 'Steinfurt', '486': 'Steinfurt',
+        '487': 'Coesfeld', '488': 'Coesfeld',
+        '489': 'Borken',
+        '490': 'Osnabrück', '491': 'Osnabrück',
+        // NRW — Düsseldorf & Niederrhein
+        '400': 'Düsseldorf', '401': 'Düsseldorf', '402': 'Düsseldorf',
+        '403': 'Mettmann', '404': 'Neuss',
+        '405': 'Mönchengladbach', '406': 'Mönchengladbach',
+        '407': 'Viersen', '408': 'Viersen',
+        '410': 'Krefeld', '411': 'Krefeld',
+        '412': 'Solingen', '413': 'Remscheid',
+        '414': 'Wuppertal', '415': 'Wuppertal',
+        '420': 'Wuppertal', '421': 'Wuppertal',
+        '422': 'Solingen', '423': 'Remscheid',
+        '424': 'Velbert',
+        // NRW — Köln & Rheinland
+        '500': 'Köln', '501': 'Köln', '502': 'Köln', '503': 'Köln',
+        '504': 'Brühl', '505': 'Bergisch Gladbach',
+        '506': 'Bergisch Gladbach', '507': 'Leverkusen',
+        '508': 'Kerpen', '509': 'Kerpen',
+        '510': 'Köln', '511': 'Köln', '512': 'Gummersbach',
+        '513': 'Siegburg', '514': 'Siegburg',
+        '515': 'Bonn', '516': 'Bonn', '517': 'Bonn', '518': 'Bonn',
+        '520': 'Aachen', '521': 'Aachen', '522': 'Aachen',
+        '523': 'Düren', '524': 'Düren',
+        '525': 'Euskirchen', '526': 'Euskirchen',
+        '527': 'Heinsberg',
+        // NRW — Ostwestfalen-Lippe
+        '330': 'Bielefeld', '331': 'Bielefeld', '332': 'Gütersloh',
+        '333': 'Gütersloh', '334': 'Minden',
+        '335': 'Minden', '336': 'Herford', '337': 'Herford',
+        '338': 'Paderborn', '339': 'Paderborn',
+        // NRW — Sauerland / Siegen
+        '570': 'Siegen', '571': 'Siegen', '572': 'Olpe',
+        '573': 'Meschede', '574': 'Arnsberg', '575': 'Arnsberg',
+        '576': 'Arnsberg', '577': 'Brilon',
+        '580': 'Hagen', '581': 'Iserlohn', '582': 'Iserlohn',
+        '583': 'Lüdenscheid', '584': 'Lüdenscheid',
+        '585': 'Altena', '586': 'Plettenberg',
+        '590': 'Hamm', '591': 'Hamm',
+        '592': 'Soest', '593': 'Soest', '594': 'Lippstadt',
+        '595': 'Unna', '596': 'Unna',
+        // NRW — Lippe / Detmold
+        '320': 'Detmold', '321': 'Lemgo', '322': 'Lemgo',
+        '323': 'Paderborn', '324': 'Höxter',
+        '325': 'Höxter', '326': 'Warburg',
+        '327': 'Detmold', '328': 'Bad Salzuflen',
     };
 
-    return courtMapping[zipPrefix] || 'Berlin'; // Default fallback
+    // 2-digit fallback for remaining areas (non-NRW)
+    const courtMapping2 = {
+        // Berlin
+        '10': 'Berlin-Charlottenburg', '11': 'Berlin-Charlottenburg',
+        '12': 'Berlin-Charlottenburg', '13': 'Berlin-Charlottenburg', '14': 'Potsdam',
+        // Hamburg
+        '20': 'Hamburg', '21': 'Hamburg', '22': 'Hamburg',
+        // Niedersachsen
+        '23': 'Lübeck', '24': 'Kiel', '25': 'Pinneberg',
+        '26': 'Oldenburg', '27': 'Bremen', '28': 'Bremen', '29': 'Celle',
+        '30': 'Hannover', '31': 'Hannover',
+        '34': 'Kassel', '35': 'Gießen', '36': 'Fulda', '37': 'Göttingen',
+        '38': 'Braunschweig', '39': 'Magdeburg',
+        // Sachsen-Anhalt / Thüringen / Sachsen
+        '06': 'Halle (Saale)', '07': 'Gera', '08': 'Zwickau', '09': 'Chemnitz',
+        '04': 'Leipzig',
+        '01': 'Dresden', '02': 'Görlitz', '03': 'Cottbus',
+        '98': 'Erfurt', '99': 'Erfurt',
+        // Hessen
+        '60': 'Frankfurt am Main', '61': 'Frankfurt am Main',
+        '63': 'Offenbach', '64': 'Darmstadt', '65': 'Wiesbaden',
+        // Rheinland-Pfalz / Saarland
+        '54': 'Trier', '55': 'Mainz', '56': 'Koblenz',
+        '66': 'Saarbrücken', '67': 'Ludwigshafen',
+        // Baden-Württemberg
+        '68': 'Mannheim', '69': 'Heidelberg',
+        '70': 'Stuttgart', '71': 'Stuttgart', '72': 'Tübingen', '73': 'Göppingen',
+        '74': 'Heilbronn', '75': 'Pforzheim', '76': 'Karlsruhe', '77': 'Offenburg',
+        '78': 'Villingen-Schwenningen', '79': 'Freiburg',
+        // Bayern
+        '80': 'München', '81': 'München', '82': 'München',
+        '83': 'Rosenheim', '84': 'Landshut', '85': 'Ingolstadt',
+        '86': 'Augsburg', '87': 'Kempten', '88': 'Ravensburg',
+        '89': 'Ulm',
+        '90': 'Nürnberg', '91': 'Nürnberg',
+        '92': 'Amberg', '93': 'Regensburg', '94': 'Passau',
+        '95': 'Bayreuth', '96': 'Bamberg', '97': 'Würzburg',
+        // Schleswig-Holstein / Meckl.-Vorpommern
+        '15': 'Frankfurt (Oder)', '16': 'Neuruppin', '17': 'Neubrandenburg', '18': 'Rostock', '19': 'Schwerin',
+    };
+
+    return courtMapping3[zip3] || courtMapping2[zip2] || '';
 }
 
 // Helper function to map client data to PDF form fields
@@ -129,7 +227,7 @@ function mapClientDataToPDF(client) {
     }
 
     const mappedData = {
-        // Personal information - prioritize direct field names from client
+        // Personal information
         vorname: client.vorname || client.firstName || '',
         nachname: client.nachname || client.lastName || '',
         strasse: street,
@@ -137,13 +235,18 @@ function mapClientDataToPDF(client) {
         plz: zipCode,
         ort: city,
         telefon: client.telefon || client.phone || '',
-        telefon_mobil: client.telefon_mobil || '',
+        telefon_mobil: client.telefon_mobil || client.mobiltelefon || '',
         email: client.email || '',
 
-        // Birth information
-        geburtsdatum: client.geburtsdatum || '',
+        // Birth information — geburtsdatum with geburtstag fallback
+        geburtsdatum: client.geburtsdatum || client.geburtstag || '',
         geburtsort: client.geburtsort || '',
-        geschlecht: client.geschlecht || 'maennlich',
+        geschlecht: client.geschlecht || '',
+
+        // Professional information
+        erlernter_beruf: client.erlernter_beruf || '',
+        derzeitige_taetigkeit: client.derzeitige_taetigkeit || '',
+        beschaeftigungsart: client.beschaeftigungsart || '',
 
         // Combined address fields for PDF
         strasse_hausnummer: street && houseNumber ? `${street} ${houseNumber}` : '',
@@ -154,27 +257,37 @@ function mapClientDataToPDF(client) {
 
         // Family and employment status
         familienstand: client.familienstand || client.financial_data?.marital_status || 'ledig',
-        berufsstatus: client.berufsstatus || 'angestellt',
+        berufsstatus: client.berufsstatus
+            || client.extended_financial_data?.berufsstatus
+            || client.beschaeftigungsart
+            || '',
         kinder_anzahl: String(client.kinder_anzahl || client.financial_data?.number_of_children || 0),
 
         // Financial data
-        monatliches_netto_einkommen: String(client.financial_data?.monthly_income || client.financial_data?.monthly_net_income || ''),
-        pfaendbar_amount: client.debt_settlement_plan?.pfaendbar_amount || client.financial_data?.pfaendbar_amount || 0,
+        monatliches_netto_einkommen: String(
+            client.netto_einkommen
+            || client.financial_data?.monthly_net_income
+            || client.financial_data?.monthly_income
+            || ''
+        ),
+        pfaendbar_amount: client.debt_settlement_plan?.pfaendbar_amount
+            || client.financial_data?.pfaendbar_amount
+            || client.calculated_settlement_plan?.garnishable_amount
+            || client.second_letter_financial_snapshot?.garnishable_amount
+            || 0,
 
-        // Check if client has attachable income - check both locations
+        // Check if client has attachable income
         has_pfaendbares_einkommen: !!(
             (client.debt_settlement_plan?.pfaendbar_amount && client.debt_settlement_plan.pfaendbar_amount > 0) ||
-            (client.financial_data?.pfaendbar_amount && client.financial_data.pfaendbar_amount > 0)
+            (client.financial_data?.pfaendbar_amount && client.financial_data.pfaendbar_amount > 0) ||
+            (client.calculated_settlement_plan?.garnishable_amount && client.calculated_settlement_plan.garnishable_amount > 0) ||
+            (client.second_letter_financial_snapshot?.garnishable_amount && client.second_letter_financial_snapshot.garnishable_amount > 0)
         ),
 
-        // ALWAYS ensure BOTH main Restschuldbefreiung checkboxes are set
-        restschuldbefreiung_antrag_stellen: true,                // ✓ ALWAYS CHECKED - "Ich stelle den Antrag auf Restschuldbefreiung"
-        restschuldbefreiung_bisher_nicht_gestellt: true,         // ✓ ALWAYS CHECKED - "bisher nicht gestellt habe"
-
         // Debt information
-        gesamtschuldensumme: String(client.total_debt || client.debt_settlement_plan?.total_debt || 0),
+        gesamtschuldensumme: String(client.total_debt || client.gesamt_schulden || client.debt_settlement_plan?.total_debt || client.second_letter_financial_snapshot?.total_debt || 0),
 
-        // Calculate creditor response statistics from second email round (includes anzahl_glaeubiger)
+        // Creditor response statistics
         ...calculateCreditorResponseStats(client),
 
         // Court
@@ -189,49 +302,49 @@ function mapClientDataToPDF(client) {
         anwalt_ort: 'Bochum',
     };
 
-    console.log('📋 Mapped client data for PDF:', {
-        name: mappedData.vorname_name,
-        address: mappedData.vollstaendige_adresse,
-        plz_ort: mappedData.plz_ort_kombiniert,
-        court: mappedData.amtsgericht,
-        birthDate: mappedData.geburtsdatum,
-        familyStatus: mappedData.familienstand,
-        anzahl_glaeubiger: mappedData.anzahl_glaeubiger,
-        anzahl_glaeubiger_zugestimmt: mappedData.anzahl_glaeubiger_zugestimmt,
-        anzahl_ablehnungen: mappedData.anzahl_ablehnungen,
-        anzahl_ohne_antwort: mappedData.anzahl_ohne_antwort,
-        summe_zugestimmt: mappedData.summe_zugestimmt,
-        summe_gesamt: mappedData.summe_gesamt,
-        totalDebt: mappedData.gesamtschuldensumme
-    });
+    // Track missing fields for validation report
+    const requiredFields = {
+        'Vorname': mappedData.vorname,
+        'Nachname': mappedData.nachname,
+        'Straße': mappedData.strasse,
+        'PLZ': mappedData.plz,
+        'Ort': mappedData.ort,
+        'Geburtsdatum': mappedData.geburtsdatum,
+        'Geburtsort': mappedData.geburtsort,
+        'Telefon': mappedData.telefon,
+        'E-Mail': mappedData.email,
+        'Familienstand': mappedData.familienstand,
+        'Berufsstatus': mappedData.berufsstatus,
+    };
+
+    const missingFields = Object.entries(requiredFields)
+        .filter(([, value]) => !value)
+        .map(([label]) => label);
+
+    if (missingFields.length > 0) {
+        console.warn(`Missing fields for Insolvenzantrag: ${missingFields.join(', ')}`);
+    }
+
+    mappedData._missingFields = missingFields;
 
     return mappedData;
 }
 
 // Enhanced PDF filling function with automatic checkbox application
 async function fillInsolvenzantragWithCheckboxes(formData, originalPdfPath) {
-    console.log('🔧 Starting enhanced PDF generation with automatic checkboxes...');
-
-    // First, fill the basic form fields
+    // First, fill the basic form fields (personal data, employment, marital status)
     const filledPdfBytes = await QuickFieldMapper.fillWithRealFields(formData, originalPdfPath);
 
-    // If client has pfändbares Einkommen, apply default checkboxes
-    if (formData.has_pfaendbares_einkommen) {
-        console.log('💰 Client has pfändbares Einkommen - applying default checkboxes...');
-
-        try {
-            // Apply the checkbox configuration to the PDF
-            const finalPdfBytes = await INSOLVENZANTRAG_CONFIG.applyDefaultCheckboxesToPdf(filledPdfBytes);
-
-            console.log('✅ Successfully applied default checkbox configuration');
-            return finalPdfBytes;
-
-        } catch (error) {
-            console.error('⚠️ Error applying checkboxes, using basic form:', error.message);
-            return filledPdfBytes;
-        }
-    } else {
-        console.log('📝 Client has no pfändbares Einkommen - using basic form without additional checkboxes');
+    // Always apply structural checkboxes (Antrag, Restschuldbefreiung, etc.)
+    // Pass pfändbares Einkommen flag to additionally check Kontrollkästchen 32a
+    try {
+        const finalPdfBytes = await INSOLVENZANTRAG_CONFIG.applyDefaultCheckboxesToPdf(
+            filledPdfBytes,
+            !!formData.has_pfaendbares_einkommen
+        );
+        return finalPdfBytes;
+    } catch (error) {
+        console.error('Error applying structural checkboxes, using basic form:', error.message);
         return filledPdfBytes;
     }
 }
@@ -314,16 +427,21 @@ async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const form = pdfDoc.getForm();
 
-        // ------------------- 💰 FINANCIAL DATA -------------------
-        if (client.financial_data) {
-            await fillFinancialData(pdfDoc, form, client.financial_data, options);
-        }
+        // ------------------- 💰 FINANCIAL DATA + FAMILIENSTAND -------------------
+        // Build combined data: financial_data + top-level familienstand
+        const financialDataForPdf = {
+            ...(client.financial_data || {}),
+            // Ensure marital_status is set from whichever source has it
+            marital_status: client.financial_data?.marital_status || client.familienstand || '',
+            number_of_children: client.financial_data?.number_of_children || client.kinder_anzahl || 0,
+        };
+        await fillFinancialData(pdfDoc, form, financialDataForPdf, options);
 
         const creditors = client.final_creditor_list || [];
         if (Array.isArray(creditors) && creditors.length > 0) {
             await fillAnlage6(pdfDoc, form, creditors, options);
-            // Pass a clean base of the document bytes to allow creating extra Anlage 7 pages without field name collisions
             await fillAnlage7(pdfDoc, form, creditors, { ...options, basePdfBytes: pdfBytes });
+            await fillAnlage7A(pdfDoc, form, creditors, client, options);
         }
 
         return await pdfDoc.save();
@@ -337,61 +455,61 @@ async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
 // ------------------- 📄 ANLAGE 6 -------------------
 //
 async function fillAnlage6(pdfDoc, form, creditors, options) {
-    const targetIndex = Number(options.anlage6Index ?? 23); // 0-based (page 24)
-    const startFieldNumber = Number(options.anlage6Start ?? 423);
+    // Anlage 6 has 2 pages with pre-existing fields:
+    // Page 1: Textfeld 423-534 (14 rows, 8 fields per row)
+    // Page 2: Textfeld 535-632 (up to 13 rows) + Textfeld 633 (Ort/Datum)
+    const page1Start = Number(options.anlage6Start ?? 423);
+    const page2Start = 535;
     const fieldsPerRow = 8;
-    const maxRowsPerPage = 20;
+    const maxRowsPage1 = 14;
+    const maxRowsPage2 = 13;
+    const maxTotal = maxRowsPage1 + maxRowsPage2; // 27 rows across both pages
 
-    let pageOffset = 0;
-
-    for (let i = 0; i < creditors.length; i++) {
-        const rowInPage = i % maxRowsPerPage;
-
-        // Duplicate page if needed
-        if (i > 0 && rowInPage === 0) {
-            const [dup] = await pdfDoc.copyPages(pdfDoc, [targetIndex]);
-            pdfDoc.addPage(dup);
-            pageOffset++;
-        }
-
+    for (let i = 0; i < creditors.length && i < maxTotal; i++) {
         const creditor = creditors[i];
         const principal = Number(creditor.claim_amount ?? creditor.amount ?? 0);
 
+        // Determine field start for this row
+        let rowFieldStart;
+        if (i < maxRowsPage1) {
+            rowFieldStart = page1Start + (i * fieldsPerRow);
+        } else {
+            rowFieldStart = page2Start + ((i - maxRowsPage1) * fieldsPerRow);
+        }
+
+        // Column mapping:
+        // +0: lfd. Nr.
+        // +1: Name/Kurzbezeichnung des Gläubigers
+        // +2: Hauptforderung in EUR
+        // +3: Zinsen — Höhe in EUR
+        // +4: Zinsen — berechnet bis zum
+        // +5: Kosten in EUR
+        // +6: Forderungsgrund
+        // +7: Summe aller Forderungen in EUR
+        const rowData = [
+            `${i + 1}.`,                                                    // lfd. Nr.
+            creditor.sender_name || creditor.name || 'Unbekannt',           // Name
+            `${principal.toFixed(2)}`,                                      // Hauptforderung
+            '',                                                             // Zinsen Höhe (nicht getrackt)
+            '',                                                             // Zinsen berechnet bis (nicht getrackt)
+            '',                                                             // Kosten (nicht getrackt)
+            creditor.reference_number || '',                                // Forderungsgrund
+            `${principal.toFixed(2)}`,                                      // Summe (= Hauptforderung)
+        ];
+
         for (let f = 0; f < fieldsPerRow; f++) {
-            const fieldNumber = startFieldNumber + rowInPage * fieldsPerRow + f;
-            const fieldName = `Textfeld ${fieldNumber}`;
-            let text = "";
-
-            switch (f) {
-                case 0:
-                    text = `${i + 1}.`;
-                    break;
-                case 1:
-                    text = creditor.sender_name || creditor.name || "Unbekannt";
-                    break;
-                case 2:
-                    text = `${principal.toFixed(2)} €`;
-                    break;
-                case 3:
-                case 4:
-                    text = "0";
-                    break;
-                case 5:
-                    text = `${principal.toFixed(2)} €`;
-                    break;
-                case 6:
-                    text = creditor.actual_creditor || "";
-                    break;
-                case 7:
-                    text = `${principal.toFixed(2)} €`;
-                    break;
-            }
-
+            const fieldName = `Textfeld ${rowFieldStart + f}`;
             try {
-                form.getTextField(fieldName).setText(text);
-            } catch { }
+                form.getTextField(fieldName).setText(rowData[f]);
+            } catch {}
         }
     }
+
+    // Fill Textfeld 633 (Ort, Datum) on page 2
+    try {
+        const currentDate = new Date().toLocaleDateString('de-DE');
+        form.getTextField('Textfeld 633').setText(currentDate);
+    } catch {}
 }
 
 //
@@ -485,190 +603,213 @@ async function fillAnlage6(pdfDoc, form, creditors, options) {
 //     }
 
 // }
+// Parse creditor address into street+nr and plz+city
+function parseCreditorAddress(creditor) {
+    let streetLine = '';
+    let plzOrt = '';
+
+    if (creditor.sender_address) {
+        const m = creditor.sender_address.match(/^(.+?)\s+(\d+[a-zA-Z\-\/]*),?\s*(\d{5})\s+(.+)$/);
+        if (m) {
+            streetLine = `${m[1].trim()} ${m[2].trim()}`;
+            plzOrt = `${m[3].trim()} ${m[4].trim()}`;
+        } else {
+            // Fallback: use as-is
+            streetLine = creditor.sender_address;
+        }
+    }
+    return { streetLine, plzOrt };
+}
+
 async function fillAnlage7(pdfDoc, form, creditors, options = {}) {
-    // Page indices of Anlage 7
-    const firstPageIndex = Number(options.anlage7IndexFirst ?? 25);  // page 26 (3 creditors)
-    const secondPageIndex = Number(options.anlage7IndexSecond ?? 26); // page 27 (6 creditors)
+    // Anlage 7 layout:
+    // Page 1 (page index 25): 3 creditor blocks, start Textfeld 643, 11 fields each, NO lfd. Nr. field
+    // Page 2 (page index 26): 6 creditor blocks, start Textfeld 676, 12 fields each (1 lfd.Nr + 11 data)
+    // Total: 9 creditors on 2 pre-existing pages
 
-    // Field numbering
-    const startFieldFirst = Number(options.anlage7Start ?? 643);     // Textfeld start on page 26
-    const startFieldSecond = startFieldFirst + (11 * 3);             // Textfeld start for creditor 4 block (page 27 layout)
+    const page1Start = 643;    // First creditor block on page 1
+    const page1Gap = 11;       // Fields per block on page 1
+    const page1Slots = 3;
 
-    // Counters
-    let currentFieldNumber = startFieldFirst;
-    let onSecondLikePage = false; // true when filling any page-27-like page
-    let extraAnlage7PagesInserted = 0; // number of additional page-27-like pages inserted
+    const page2Start = 676;    // First creditor block on page 2
+    const page2Gap = 12;       // Fields per block on page 2 (includes lfd. Nr.)
+    const page2Slots = 6;
 
-    // We need clean base bytes to safely clone page 27 without duplicating form field names
-    const basePdfBytes = options.basePdfBytes;
-
-    // Sum of claim amounts for percentage
-    const totalDebtAmount = creditors.reduce((sum, c) => {
-        const amount = parseFloat(c.claim_amount || c.amount || 0);
-        return sum + (isNaN(amount) ? 0 : amount);
+    const totalDebt = creditors.reduce((sum, c) => {
+        const amt = parseFloat(c.claim_amount || c.amount || 0);
+        return sum + (isNaN(amt) ? 0 : amt);
     }, 0);
 
-    // Helper: compute display row number cumulatively: 1..N
-    // Page 26 naturally shows 1..3; page 27 shows 4..9; extra pages continue 10, 11, ...
-    const getDisplayRow = (globalIndex) => globalIndex;
-
-    for (let i = 1; i <= creditors.length; i++) {
-        // Handle pagination
-        if (i === 1) {
-            // start on page 26 (already present)
-            currentFieldNumber = startFieldFirst;
-            onSecondLikePage = false;
-        } else if (i === 4) {
-            // move to original page 27 (already present)
-            currentFieldNumber = startFieldSecond;
-            onSecondLikePage = true;
-        } else if (i > 9 && ((i - 10) % 6 === 0)) {
-            // After the first 9, for each group of up to 6 creditors, we create
-            // a temporary single-page PDF cloned from the original page 27,
-            // fill its fields, flatten the form and append the page to the main PDF.
-
-            if (!basePdfBytes) {
-                console.warn('⚠️ basePdfBytes not provided; cannot safely clone page 27 with forms. Falling back to in-place copy (may cause field collisions).');
-                const [dup] = await pdfDoc.copyPages(pdfDoc, [secondPageIndex]);
-                // Insert right after original page 27, accounting for previously inserted pages
-                const insertAt = secondPageIndex + 1 + extraAnlage7PagesInserted;
-                pdfDoc.insertPage(insertAt, dup);
-                extraAnlage7PagesInserted++;
-                currentFieldNumber = startFieldSecond;
-                onSecondLikePage = true;
-            } else {
-                // Load a full base document so we can access its form and fields properly
-                const baseDoc = await PDFDocument.load(basePdfBytes);
-                const baseForm = baseDoc.getForm();
-                let tempFieldNumber = startFieldSecond;
-
-                // Fill up to 6 creditors on baseDoc's page 27
-                const end = Math.min(i + 6 - 1, creditors.length);
-                console.log(`Anlage7: preparing extra page for creditors [${i}..${end}]`);
-                for (let k = i; k <= end; k++) {
-                    const cred = creditors[k - 1];
-                    if (!cred) continue;
-
-                    const street = cred.strasse || '';
-                    const houseNumber = cred.hausnummer || '';
-                    const zipCode = cred.plz || '';
-                    const city = cred.ort || '';
-                    const claimAmount = parseFloat(cred.claim_amount || cred.amount || 0) || 0;
-                    const percentage = totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : '0.00';
-
-                    const displayRow = k; // cumulative numbering: 10,11,... on extra pages
-                    const rows = [
-                        `${cred.name || cred.sender_name || 'Unbekannt'}`,
-                        `${street} ${houseNumber}`.trim(),
-                        `${zipCode} ${city}`.trim(),
-                        `${cred.reference_number || ''}`,
-                        `${cred.actual_creditor || ''}`,
-                    ];
-                    const finalRows = [`${displayRow}.`, ...rows];
-
-                    // Fill text rows on base form (page 27 fields)
-                    finalRows.forEach((text, idx) => {
-                        const fname = `Textfeld ${tempFieldNumber + idx}`;
-                        try {
-                            baseForm.getTextField(fname).setText(text);
-                            console.log(`Anlage7 extra page field: ${fname} = ${text}`);
-                        } catch (e) {
-                            console.warn(`Anlage7 extra page missing field: ${fname}`);
-                        }
-                    });
-
-                    // Amount and percentage fields
-                    const claimFieldIndex = tempFieldNumber + finalRows.length + 4;
-                    const percentFieldIndex = claimFieldIndex + 1;
-                    try { baseForm.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`); } catch { }
-                    try { baseForm.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`); } catch { }
-
-                    // Advance to next block start (always 12 on 27-like pages)
-                    tempFieldNumber += 12;
-                }
-
-                // Flatten all fields in baseDoc so content becomes static on that page
-                try { baseForm.flatten(); } catch { }
-
-                // Copy the now-filled page 27 from baseDoc and insert into main doc
-                const [pageToAdd] = await pdfDoc.copyPages(baseDoc, [secondPageIndex]);
-                const insertAt = secondPageIndex + 1 + extraAnlage7PagesInserted;
-                pdfDoc.insertPage(insertAt, pageToAdd);
-                console.log(`Anlage7: inserted extra page at index ${insertAt}`);
-                extraAnlage7PagesInserted++;
-
-                // Prepare counters for the next creditor after this page
-                currentFieldNumber = startFieldSecond;
-                onSecondLikePage = true;
-
-                // We already filled creditors in range [i .. end] on the extra page,
-                // so advance the loop variable to 'end' and continue.
-                i = end;
-                continue;
-            }
-        }
-
-        const creditor = creditors[i - 1];
-        if (!creditor) continue;
-
-        let street = '', houseNumber = '', zipCode = '', city = '';
-
-        if (creditor?.sender_address) {
-            const addressParts = creditor.sender_address.match(
-                /^(.+?)\s+(\d+[a-zA-Z\-\/]*),?\s*(\d{5})\s+(.+)$/
-            );
-
-            if (addressParts) {
-                street = addressParts[1].trim();
-                houseNumber = addressParts[2].trim();
-                zipCode = addressParts[3].trim();
-                city = addressParts[4].trim();
-            }
-        }
-
-
+    for (let i = 0; i < creditors.length && i < page1Slots + page2Slots; i++) {
+        const creditor = creditors[i];
         const claimAmount = parseFloat(creditor.claim_amount || creditor.amount || 0) || 0;
-        const percentage = totalDebtAmount > 0 ? ((claimAmount / totalDebtAmount) * 100).toFixed(2) : '0.00';
+        const percentage = totalDebt > 0 ? ((claimAmount / totalDebt) * 100).toFixed(2) : '0.00';
+        const { streetLine, plzOrt } = parseCreditorAddress(creditor);
+        const displayName = creditor.glaeubiger_name || creditor.sender_name || creditor.name || 'Unbekannt';
 
-        // Data rows
-        const rows = [
-            `${creditor.name || creditor.sender_name || 'Unbekannt'}`,
-            `${street} ${houseNumber}`.trim(),
-            `${zipCode} ${city}`.trim(),
-            `${creditor.reference_number || ''}`,
-            `${creditor.actual_creditor || ''}`,
+        if (i < page1Slots) {
+            // Page 1: 11 fields per block, no lfd. Nr. field
+            const base = page1Start + (i * page1Gap);
+            const fields = {
+                [base]:     displayName,                                            // Name
+                [base + 1]: streetLine,                                             // Straße, Hausnummer
+                [base + 2]: plzOrt,                                                 // PLZ, Ort
+                [base + 3]: creditor.reference_number || '',                        // Geschäftszeichen
+                [base + 4]: creditor.is_representative ? (creditor.actual_creditor || '') : '', // gesetzl. vertreten durch
+                [base + 5]: '',                                                     // Bevollmächtigter Name
+                [base + 6]: '',                                                     // Bevollmächtigter Straße
+                [base + 7]: '',                                                     // Bevollmächtigter PLZ/Ort
+                [base + 8]: '',                                                     // Bevollmächtigter Geschäftszeichen
+                [base + 9]: `${claimAmount.toFixed(2)}`,                            // Summe EUR
+                [base + 10]: `${percentage}%`,                                      // Anteil %
+            };
+            for (const [fn, val] of Object.entries(fields)) {
+                try { form.getTextField(`Textfeld ${fn}`).setText(val); } catch {}
+            }
+        } else {
+            // Page 2: 12 fields per block (lfd. Nr. + 11 data)
+            const blockIdx = i - page1Slots;
+            const base = page2Start + (blockIdx * page2Gap);
+            const fields = {
+                [base]:      `${i + 1}.`,                                            // lfd. Nr.
+                [base + 1]:  displayName,                                            // Name
+                [base + 2]:  streetLine,                                             // Straße, Hausnummer
+                [base + 3]:  plzOrt,                                                 // PLZ, Ort
+                [base + 4]:  creditor.reference_number || '',                        // Geschäftszeichen
+                [base + 5]:  creditor.is_representative ? (creditor.actual_creditor || '') : '', // gesetzl. vertreten
+                [base + 6]:  '',                                                     // Bevollmächtigter Name
+                [base + 7]:  '',                                                     // Bevollmächtigter Straße
+                [base + 8]:  '',                                                     // Bevollmächtigter PLZ/Ort
+                [base + 9]:  '',                                                     // Bevollmächtigter Geschäftszeichen
+                [base + 10]: `${claimAmount.toFixed(2)}`,                            // Summe EUR
+                [base + 11]: `${percentage}%`,                                       // Anteil %
+            };
+            for (const [fn, val] of Object.entries(fields)) {
+                try { form.getTextField(`Textfeld ${fn}`).setText(val); } catch {}
+            }
+        }
+
+        console.log(`Anlage7 [${i + 1}]: ${creditor.sender_name} — ${claimAmount.toFixed(2)} EUR (${percentage}%)`);
+    }
+
+    if (creditors.length > page1Slots + page2Slots) {
+        console.warn(`Anlage 7: ${creditors.length} creditors but only ${page1Slots + page2Slots} slots. ${creditors.length - page1Slots - page2Slots} creditors not shown.`);
+    }
+}
+
+// Fill Anlage 7A — Schuldenbereinigungsplan Besonderer Teil (Musterplan mit flexiblen Raten)
+async function fillAnlage7A(pdfDoc, form, creditors, client, options = {}) {
+    const pfaendbar = client.debt_settlement_plan?.pfaendbar_amount
+        || client.financial_data?.pfaendbar_amount
+        || client.calculated_settlement_plan?.garnishable_amount
+        || client.second_letter_financial_snapshot?.garnishable_amount
+        || 0;
+    const isNullplan = pfaendbar < 1;
+    const totalDebt = creditors.reduce((s, c) => s + (parseFloat(c.claim_amount || c.amount || 0) || 0), 0);
+    const laufzeitMonate = 36;
+    const startDatum = '01.05.2026'; // TODO: make dynamic
+    const fullName = `${client.vorname || client.firstName || ''} ${client.nachname || client.lastName || ''}`;
+    const sbpDatum = client.debt_settlement_plan?.created_at
+        ? new Date(client.debt_settlement_plan.created_at).toLocaleDateString('de-DE')
+        : new Date().toLocaleDateString('de-DE');
+
+    // Header
+    try { form.getTextField('Textfeld 1002').setText(fullName); } catch {}
+    try { form.getTextField('Textfeld 1003').setText(sbpDatum); } catch {}
+    try { form.getTextField('Textfeld 1005').setText(`${totalDebt.toFixed(2)}`); } catch {}
+    try { form.getTextField('Textfeld 1006').setText(isNullplan ? '0,00' : `${pfaendbar.toFixed(2)}`); } catch {}
+    try { form.getTextField('Textfeld 1305').setText(`${laufzeitMonate}`); } catch {}
+    try { form.getTextField('Textfeld 1007').setText('1.'); } catch {}
+    try { form.getTextField('Textfeld 1009').setText(startDatum); } catch {}
+
+    // Creditor rows: Page 1 = 5 rows start 1010, Page 2 = 17 rows start 1060, gap 10
+    const page1Start = 1010, page2Start = 1060, gap = 10, page1Slots = 5;
+    const maxSlots = page1Slots + 17; // 22 total
+
+    for (let i = 0; i < creditors.length && i < maxSlots; i++) {
+        const cr = creditors[i];
+        const amt = parseFloat(cr.claim_amount || cr.amount || 0) || 0;
+        const anteilPct = totalDebt > 0 ? (amt / totalDebt) * 100 : 0;
+        const monatlicheRate = isNullplan ? 0 : (pfaendbar * anteilPct / 100);
+
+        const base = i < page1Slots
+            ? page1Start + (i * gap)
+            : page2Start + ((i - page1Slots) * gap);
+
+        const vals = [
+            `${i + 1}.`,
+            cr.sender_name || cr.name || 'Unbekannt',
+            `${amt.toFixed(2)}`,
+            '', '', '',                                     // Zinsen, Zinsen bis, Kosten
+            `${laufzeitMonate}`,                            // Anzahl Raten
+            `${monatlicheRate.toFixed(2)} EUR`,             // p.m. Betrag
+            startDatum,                                      // erstmals am
+            `${anteilPct.toFixed(2)}%`,                     // Anteil %
         ];
 
-        const displayRow = getDisplayRow(i);
-        const finalRows = displayRow >= 4 ? [`${displayRow}.`, ...rows] : rows;
-
-        // Fill text rows
-        finalRows.forEach((text, idx) => {
-            const fieldName = `Textfeld ${currentFieldNumber + idx}`;
-            try {
-                form.getTextField(fieldName).setText(text);
-            } catch {
-                console.warn(`⚠️ Missing field: ${fieldName}`);
-            }
+        vals.forEach((v, j) => {
+            try { form.getTextField(`Textfeld ${base + j}`).setText(v); } catch {}
         });
+    }
+}
 
-        // Amount and percentage fields
-        const claimFieldIndex = currentFieldNumber + finalRows.length + 4; // skip 4 fields
-        const percentFieldIndex = claimFieldIndex + 1;
-        try {
-            form.getTextField(`Textfeld ${claimFieldIndex}`).setText(`${claimAmount}`);
-        } catch {
-            console.warn(`⚠️ Missing field: Textfeld ${claimFieldIndex}`);
-        }
-        try {
-            form.getTextField(`Textfeld ${percentFieldIndex}`).setText(`${percentage}%`);
-        } catch {
-            console.warn(`⚠️ Missing field: Textfeld ${percentFieldIndex}`);
-        }
+// Helper: check a specific widget in a multi-widget checkbox field
+// Reads the actual appearance state names from the widget (not guessing 'Yes'/'On')
+function setMultiWidgetCheckbox(form, fieldName, targetWidgetIndex, debugLabel = '') {
+    let field;
+    try {
+        field = form.getFieldMaybe(fieldName) || form.getCheckBox(fieldName);
+    } catch { }
+    if (!field) {
+        console.warn(`${fieldName} not found`);
+        return;
+    }
 
-        // Advance to next block start
-        const fieldGap = displayRow >= 4 ? 12 : 11;
-        currentFieldNumber += fieldGap;
+    const acroField = field.acroField;
+    const widgets = acroField.getWidgets() || [];
+
+    // Uncheck all widgets
+    for (const widget of widgets) {
+        try { widget.setAppearanceState(PDFName.of('Off')); } catch {}
+    }
+
+    if (targetWidgetIndex < 0 || targetWidgetIndex >= widgets.length) {
+        console.warn(`${fieldName}: no widget for index ${targetWidgetIndex} (${debugLabel})`);
+        return;
+    }
+
+    const targetWidget = widgets[targetWidgetIndex];
+
+    // Find the "on" state name from the widget's appearance dictionary
+    const appearances = targetWidget.getAppearances();
+    const normalDict = appearances?.normal;
+    let onStateName = null;
+
+    if (normalDict && typeof normalDict.keys === 'function') {
+        for (const key of normalDict.keys()) {
+            const name = key.toString().replace(/^\//, '');
+            if (name !== 'Off') {
+                onStateName = name;
+                break;
+            }
+        }
+    }
+
+    if (!onStateName) {
+        // Fallback: try common names
+        onStateName = 'Yes';
+    }
+
+    try {
+        targetWidget.setAppearanceState(PDFName.of(onStateName));
+        // For multi-widget fields, set the value directly on the acroField dict
+        // (acroField.setValue with PDFName fails for radio-button-style checkboxes)
+        try {
+            acroField.dict.set(PDFName.of('V'), PDFName.of(onStateName));
+        } catch {}
+        console.log(`Checked ${fieldName} widget ${targetWidgetIndex} "${onStateName}" (${debugLabel})`);
+    } catch (err) {
+        console.warn(`Failed to check ${fieldName} widget ${targetWidgetIndex}:`, err.message);
     }
 }
 
@@ -712,140 +853,64 @@ async function fillFinancialData(pdfDoc, form, financialData = {}, options = {})
     }
 
 
-    // --- Handle Kontrollkästchen 23 (seven checkboxes for marital status) ---
-    // try {
-    //   const status = 5;
-    //   const field23 = form.getFieldMaybe('Kontrollkästchen 23') || form.getCheckBox('Kontrollkästchen 23');
-
-    //   if (!field23) {
-    //     console.warn('⚠️ Kontrollkästchen 23 not found');
-    //   } else {
-    //     const acroField = field23.acroField;
-    //     const widgets = acroField.getWidgets() || [];
-    //     console.log(`🧩 Kontrollkästchen 23 has ${widgets.length} widget(s)`);
-
-    //     // Uncheck all first
-    //     for (const widget of widgets) {
-    //       try { widget.setAppearanceState(PDFName.of('Off')); } catch {}
-    //     }
-
-    //     // Determine which one to check (1 → first, 2 → second, etc.)
-    //     const targetWidgetIndex = status > 0 && status <= widgets.length ? status - 1 : -1;
-
-    //     if (targetWidgetIndex >= 0) {
-    //       const targetWidget = widgets[targetWidgetIndex];
-    //       const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
-    //       for (const state of possibleOnStates) {
-    //         try {
-    //           targetWidget.setAppearanceState(PDFName.of(state));
-    //           acroField.setValue(PDFName.of(state));
-    //           console.log(`✅ Checked Kontrollkästchen 23 [${targetWidgetIndex + 1}] for marital_status=${status}`);
-    //           break;
-    //         } catch {}
-    //       }
-    //     } else {
-    //       console.warn(`⚠️ Invalid marital_status=${status}, no checkbox checked for Kontrollkästchen 23`);
-    //     }
-    //   }
-    // } catch (err) {
-    //   console.error('❌ Error handling Kontrollkästchen 23 logic:', err.message);
-    // }
-
-    // --- Handle Kontrollkästchen 23 (seven checkboxes for marital status) ---
+    // --- Handle Kontrollkästchen 23 (seven widgets for marital status) ---
     try {
-        // Normalize the marital status text
         const maritalStatus = (financialData.marital_status || '').toString().toLowerCase().trim();
 
-        // Map both German and English terms to checkbox positions (1–7)
+        // Map familienstand values to widget index (0-based)
         const statusMap = {
-            'ledig': 1, 'single': 1,
-            'verheiratet': 2, 'married': 2,
-            'eingetragene lebenspartnerschaft': 3, 'registered partnership': 3,
+            'ledig': 0, 'single': 0,
+            'verheiratet': 1, 'married': 1,
+            'eingetragene lebenspartnerschaft': 2, 'eingetragene_lebenspartnerschaft': 2,
+            'lebenspartnerschaft': 2, 'registered partnership': 2,
+            'beendet': 3, 'beendet seit': 3, 'partnership ended': 3,
             'geschieden': 4, 'divorced': 4,
-            'getrennt lebend': 5, 'separated': 5,
+            'getrennt lebend': 5, 'getrennt_lebend': 5, 'separated': 5,
             'verwitwet': 6, 'widowed': 6,
-            'beendet seit': 7, 'partnership ended': 7,
         };
 
-        // Try to find matching key (also works if it includes “seit” etc.)
-        let matchedKey = Object.keys(statusMap).find(k => maritalStatus.startsWith(k));
-        const status = matchedKey ? statusMap[matchedKey] : 0;
+        const targetIdx = statusMap[maritalStatus] ?? -1;
 
-        const field23 = form.getFieldMaybe('Kontrollkästchen 23') || form.getCheckBox('Kontrollkästchen 23');
-
-        if (!field23) {
-            console.warn('⚠️ Kontrollkästchen 23 not found');
-        } else {
-            const acroField = field23.acroField;
-            const widgets = acroField.getWidgets() || [];
-            console.log(`🧩 Kontrollkästchen 23 has ${widgets.length} widget(s)`);
-
-            // Uncheck all first
-            for (const widget of widgets) {
-                try { widget.setAppearanceState(PDFName.of('Off')); } catch { }
-            }
-
-            // Determine which one to check (1 → first, 2 → second, etc.)
-            const targetWidgetIndex = status > 0 && status <= widgets.length ? status - 1 : -1;
-
-            if (targetWidgetIndex >= 0) {
-                const targetWidget = widgets[targetWidgetIndex];
-                const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
-                for (const state of possibleOnStates) {
-                    try {
-                        targetWidget.setAppearanceState(PDFName.of(state));
-                        acroField.setValue(PDFName.of(state));
-                        console.log(`✅ Checked Kontrollkästchen 23 [${targetWidgetIndex + 1}] for marital_status="${maritalStatus}"`);
-                        break;
-                    } catch { }
-                }
-            } else {
-                console.warn(`⚠️ Unknown marital_status="${maritalStatus}", no checkbox checked for Kontrollkästchen 23`);
-            }
-        }
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 23', targetIdx, maritalStatus);
     } catch (err) {
-        console.error('❌ Error handling Kontrollkästchen 23 logic:', err.message);
+        console.error('Error handling Kontrollkästchen 23:', err.message);
     }
 
-
-
-    // --- Handle Kontrollkästchen 24 (two checkboxes) ---
+    // --- Handle Kontrollkästchen 24 (children: widget 0 = no, widget 1 = yes) ---
     try {
-        const field24 = form.getFieldMaybe('Kontrollkästchen 24') || form.getCheckBox('Kontrollkästchen 24');
-        if (!field24) {
-            console.warn('⚠️ Kontrollkästchen 24 not found');
-        } else {
-            const acroField = field24.acroField;
-            const widgets = acroField.getWidgets() || [];
-            console.log(`🧩 Kontrollkästchen 24 has ${widgets.length} widget(s)`);
-
-            // Uncheck all first
-            for (const widget of widgets) {
-                try { widget.setAppearanceState(PDFName.of('Off')); } catch { }
-            }
-
-            // Decide which one to check: 0 = first, 1 = second
-            const targetWidgetIndex = childrenCount > 0 ? 1 : 0;
-            const targetWidget = widgets[targetWidgetIndex];
-            if (targetWidget) {
-                const possibleOnStates = ['Yes', 'On', 'Ja', '1'];
-                for (const state of possibleOnStates) {
-                    try {
-                        targetWidget.setAppearanceState(PDFName.of(state));
-                        acroField.setValue(PDFName.of(state)); // update the field value too
-                        console.log(`✅ Checked Kontrollkästchen 24 [${targetWidgetIndex + 1}] (${state})`);
-                        break;
-                    } catch { }
-                }
-            } else {
-                console.warn(`⚠️ Could not find widget index ${targetWidgetIndex} for Kontrollkästchen 24`);
-            }
-        }
+        const targetIdx = childrenCount > 0 ? 1 : 0;
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 24', targetIdx, `children=${childrenCount}`);
     } catch (err) {
-        console.error('❌ Error handling Kontrollkästchen 24 logic:', err.message);
+        console.error('Error handling Kontrollkästchen 24:', err.message);
     }
 
+    // --- Handle Kontrollkästchen 33 (Anlage 2 Ja/Nein: widget 0 = Ja, widget 1 = Nein) ---
+    try {
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 33', 0, 'Anlage 2 Bescheinigung = Ja');
+    } catch (err) {
+        console.error('Error handling Kontrollkästchen 33:', err.message);
+    }
 
+    // --- Kontrollkästchen 37 (widget 0 = "nicht") — immer aktiviert ---
+    try {
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 37', 0, 'nicht');
+    } catch (err) {
+        console.error('Error handling Kontrollkästchen 37:', err.message);
+    }
+
+    // --- Kontrollkästchen 38 (widget 1 = "nicht aussichtsreich") — immer aktiviert ---
+    try {
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 38', 1, 'nicht aussichtsreich');
+    } catch (err) {
+        console.error('Error handling Kontrollkästchen 38:', err.message);
+    }
+
+    // --- Kontrollkästchen 361 (widget 0 = "monatlich zum") — Zahlungsweise ---
+    try {
+        setMultiWidgetCheckbox(form, 'Kontrollkästchen 361', 0, 'monatlich zum');
+    } catch (err) {
+        console.error('Error handling Kontrollkästchen 361:', err.message);
+    }
 
     // --- Regenerate appearances ---
     try {
@@ -878,10 +943,13 @@ async function checkPrerequisites(client) {
         console.warn(`⚠️ Client ${client.aktenzeichen} has partial address data`);
     }
 
-    // Check financial data - accept if completed, client_form_filled, OR calculated_settlement_plan exists
+    // Check financial data — accept any of these as proof that financial info exists
     const hasFinancialData = client.financial_data?.completed ||
         client.financial_data?.client_form_filled ||
-        client.calculated_settlement_plan;
+        client.financial_data?.monthly_net_income > 0 ||
+        client.calculated_settlement_plan ||
+        client.second_letter_financial_snapshot?.calculation_status === 'completed' ||
+        client.second_letter_status === 'SENT';
     if (!hasFinancialData) {
         errors.push('Financial information form not completed');
     }
@@ -951,9 +1019,10 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
         // Send the PDF as download
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="Insolvenzantrag_${client.lastName}_${client.firstName}.pdf"`);
+        if (formData._missingFields?.length > 0) {
+            res.setHeader('X-Missing-Fields', JSON.stringify(formData._missingFields));
+        }
         res.send(Buffer.from(mergedPdfBytes));
-
-        console.log(`✅ Insolvenzantrag generated successfully for ${client.firstName} ${client.lastName}`);
 
     } catch (error) {
         console.error('Error generating Insolvenzantrag:', error);
@@ -982,7 +1051,7 @@ router.get('/check-prerequisites/:clientId', authenticateAdmin, async (req, res)
             canGenerateInsolvenzantrag: canGenerate,
             prerequisites: {
                 hasPersonalInfo: !!(client.firstName && client.lastName && (client.address || (client.strasse && client.plz && client.ort))),
-                hasFinancialData: !!(client.financial_data?.completed || client.financial_data?.client_form_filled || client.calculated_settlement_plan),
+                hasFinancialData: !!(client.financial_data?.completed || client.financial_data?.client_form_filled || client.financial_data?.monthly_net_income > 0 || client.calculated_settlement_plan || client.second_letter_financial_snapshot?.calculation_status === 'completed' || client.second_letter_status === 'SENT'),
                 hasDebtSettlementPlan: !!(client.debt_settlement_plan?.creditors?.length > 0 || client.final_creditor_list?.length > 0 || client.calculated_settlement_plan),
                 hasCreditorList: !!(client.final_creditor_list?.length > 0)
             },

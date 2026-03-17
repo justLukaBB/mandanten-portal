@@ -1222,8 +1222,85 @@ function getRetryConfig() {
   };
 }
 
+/**
+ * Create a SCHUFA scan job on the FastAPI server.
+ * Dedicated endpoint for SCHUFA document processing.
+ *
+ * @param {Object} params
+ * @param {string} params.clientId - Client ID
+ * @param {Object} params.file - File info { filename, gcs_path, mime_type }
+ * @param {string} [params.webhookUrl] - Webhook URL for results
+ * @param {Array} [params.existingCreditors] - Existing creditors for matching [{id, name, claim_amount}]
+ * @returns {Promise<Object>} - { success, job_id, error? }
+ */
+async function createSchufaScanJob({ clientId, file, webhookUrl, existingCreditors = [] }) {
+  console.log(`\n🔵 ================================`);
+  console.log(`🔵 CALLING FASTAPI SCHUFA SCAN`);
+  console.log(`🔵 ================================`);
+  console.log(`🔗 FastAPI URL: ${FASTAPI_URL}`);
+  console.log(`👤 Client ID: ${clientId}`);
+  console.log(`📄 File: ${file.filename}`);
+  console.log(`👥 Existing creditors for matching: ${existingCreditors.length}`);
+
+  const payload = {
+    client_id: clientId,
+    file: {
+      filename: file.filename,
+      gcs_path: file.gcs_path,
+      mime_type: file.mime_type || 'application/pdf',
+    },
+    webhook_url: webhookUrl || null,
+    existing_creditors: existingCreditors,
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FASTAPI_TIMEOUT);
+
+    const response = await fetch(`${FASTAPI_URL}/schufa/scan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': FASTAPI_API_KEY,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`❌ SCHUFA scan failed: HTTP ${response.status} - ${errorText}`);
+      return {
+        success: false,
+        error: `HTTP ${response.status}: ${errorText}`,
+        statusCode: response.status,
+      };
+    }
+
+    const result = await response.json();
+    console.log(`✅ SCHUFA scan job created: ${result.job_id}`);
+
+    return {
+      success: true,
+      job_id: result.job_id,
+      status: result.status,
+      message: result.message,
+    };
+  } catch (error) {
+    console.error(`❌ SCHUFA scan request failed: ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+      errorType: error.name === 'AbortError' ? 'TIMEOUT' : 'CONNECTION_ERROR',
+    };
+  }
+}
+
 module.exports = {
   createProcessingJob,
+  createSchufaScanJob,
   getJobStatus,
   getJobResults,
   checkHealth,

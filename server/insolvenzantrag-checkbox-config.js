@@ -3,26 +3,29 @@
 // Based on: /Users/luka/Downloads/New Docus.pdf
 
 const INSOLVENZANTRAG_CONFIG = {
-  // These checkboxes are pre-checked in the new template - UPDATED FROM ULTRA DEEP ANALYSIS
-  // DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN: [
-  //   "Kontrollkästchen 1",
-  //   "Kontrollkästchen 2",
-  //   "Kontrollkästchen 15",    // ✨ NEWLY FOUND
-  //   "Kontrollkästchen 17",
-  //   "Kontrollkästchen 21",
-  //   "Kontrollkästchen 25",
-  //   "Kontrollkästchen 26",
-  //   "Kontrollkästchen 27",
-  //   "Kontrollkästchen 32a",
-  //   "Kontrollkästchen 36",
-  //   "Kontrollkästchen 62",    // ✨ EMPLOYEE CHECKBOX - "Angestellter"
-  //   "Kontrollkästchen 333"
-  // ],
+  // Default checkboxes for standard Insolvenzantrag (Verbraucherinsolvenz)
+  // These are structural/procedural checkboxes, NOT individual client data.
+  // Client-specific checkboxes (Familienstand, Beschäftigung) are set in QuickFieldMapper.
+  DEFAULT_CHECKBOXES: [
+    "Kontrollkästchen 1",     // Antrag auf Eröffnung des Insolvenzverfahrens
+    "Kontrollkästchen 2",     // Verbraucherinsolvenzverfahren
+    "Kontrollkästchen 15",    // Außergerichtlicher Einigungsversuch durchgeführt
+    "Kontrollkästchen 16",    // Ja — Plan allen Gläubigern übersandt
+    "Kontrollkästchen 17",    // Schuldenbereinigungsplan beigefügt
+    "Kontrollkästchen 21",    // Antrag auf Restschuldbefreiung
+    "Kontrollkästchen 25",    // Abtretungserklärung (§ 287 InsO)
+    "Kontrollkästchen 26",    // Versicherung an Eides statt (§ 287 Abs. 1 InsO)
+    "Kontrollkästchen 27",    // Vollständigkeit und Richtigkeit der Angaben
+    "Kontrollkästchen 34",    // (immer aktiviert)
+    "Kontrollkästchen 36",    // Anlage: Schuldenbereinigungsplan
+    "Kontrollkästchen 333",   // Gläubigerliste beigefügt
+    "Kontrollkästchen 362",   // Plan mit flexiblen Raten (Anlage 7A)
+  ],
 
-  DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN: Array.from(
-    { length: 387 },
-    (_, i) => `Kontrollkästchen ${i + 1}`
-  ),
+  // Additional checkbox for clients with pfändbares Einkommen
+  PFAENDBARES_EINKOMMEN_CHECKBOXES: [
+    "Kontrollkästchen 32a",   // Pfändbares Einkommen vorhanden
+  ],
 
   // Sample text field data from the template
   SAMPLE_TEXT_FIELDS: {
@@ -88,61 +91,51 @@ const INSOLVENZANTRAG_CONFIG = {
     "Textfeld 1234": "Datum des Schuldenbereinigungsplans:"
 },
 
-  // Apply default checkboxes for clients with attachable income
-  applyDefaultCheckboxes: function(form) {
+  // Apply structural checkboxes to a form object
+  applyDefaultCheckboxes: function(form, hasPfaendbaresEinkommen = false) {
     let appliedCount = 0;
     let errorCount = 0;
 
-    console.log('🔲 Applying NEW template checkboxes for client with pfändbares Einkommen...');
-    
-    this.DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN.forEach(fieldName => {
+    // Always apply structural defaults
+    const checkboxes = [...this.DEFAULT_CHECKBOXES];
+
+    // Add pfändbares Einkommen checkbox if applicable
+    if (hasPfaendbaresEinkommen) {
+      checkboxes.push(...this.PFAENDBARES_EINKOMMEN_CHECKBOXES);
+    }
+
+    console.log(`Applying ${checkboxes.length} structural checkboxes (pfaendbar: ${hasPfaendbaresEinkommen})...`);
+
+    checkboxes.forEach(fieldName => {
       try {
         const checkbox = form.getCheckBox(fieldName);
         checkbox.check();
-        console.log(`✅ Checked: ${fieldName}`);
         appliedCount++;
       } catch (error) {
-        console.error(`❌ Failed to check ${fieldName}:`, error.message);
+        console.error(`Failed to check ${fieldName}:`, error.message);
         errorCount++;
       }
     });
 
-    console.log(`📊 NEW template checkbox application complete: ${appliedCount} applied, ${errorCount} errors`);
+    console.log(`Checkbox application complete: ${appliedCount} applied, ${errorCount} errors`);
     return { applied: appliedCount, errors: errorCount };
   },
 
-  // Apply checkboxes to an already-filled PDF
-  applyDefaultCheckboxesToPdf: async function(pdfBytes) {
+  // Apply structural checkboxes to an already-filled PDF
+  applyDefaultCheckboxesToPdf: async function(pdfBytes, hasPfaendbaresEinkommen = false) {
     const { PDFDocument } = require('pdf-lib');
-    
+
     try {
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const form = pdfDoc.getForm();
-      
-      let appliedCount = 0;
-      let errorCount = 0;
-      
-      console.log('🔧 Applying NEW template checkboxes to PDF...');
-      
-      this.DEFAULT_CHECKBOXES_FOR_PFAENDBARES_EINKOMMEN.forEach(fieldName => {
-        try {
-          const field = form.getCheckBox(fieldName);
-          field.check();
-          appliedCount++;
-          console.log(`  ✅ Checked: ${fieldName}`);
-        } catch (error) {
-          console.log(`  ⚠️  Checkbox not found: ${fieldName}`);
-          errorCount++;
-        }
-      });
-      
-      console.log(`📊 Applied ${appliedCount} NEW template checkboxes to PDF, ${errorCount} errors`);
-      
+
+      this.applyDefaultCheckboxes(form, hasPfaendbaresEinkommen);
+
       const modifiedPdfBytes = await pdfDoc.save();
       return modifiedPdfBytes;
-      
+
     } catch (error) {
-      console.error('❌ Error applying NEW template checkboxes to PDF:', error);
+      console.error('Error applying checkboxes to PDF:', error);
       throw error;
     }
   }

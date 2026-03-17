@@ -342,6 +342,8 @@ const clientSchema = new mongoose.Schema({
       'extended_financial_data_submitted',
       'settlement_plan_generating',
       'settlement_plan_ready_for_review',
+      'insolvenzantrag_data_pending',
+      'insolvenzantrag_ready',
       'completed',
       'no_creditors_found'
     ],
@@ -693,6 +695,101 @@ const clientSchema = new mongoose.Schema({
     calculation_error: String,
     calculated_at: Date,
     total_debt: Number
+  },
+
+  // Insolvenzantrag data collection form (User Portal)
+  insolvenzantrag_form: {
+    status: {
+      type: String,
+      enum: ['pending', 'submitted'],
+      default: 'pending'
+    },
+    submitted_at: Date,
+    last_saved_at: Date,
+    sections_completed: {
+      personal_data: { type: Boolean, default: false },
+      address: { type: Boolean, default: false },
+      contact: { type: Boolean, default: false },
+      family_status: { type: Boolean, default: false },
+      employment: { type: Boolean, default: false },
+      financial: { type: Boolean, default: false },
+      assets: { type: Boolean, default: false },
+    },
+  },
+
+  // SCHUFA Report
+  schufa_report: {
+    document_id: String,
+    uploaded_at: Date,
+    processing_status: {
+      type: String,
+      enum: ['pending', 'processing', 'completed', 'error'],
+    },
+    job_id: String,
+
+    // Score
+    base_score: Number,
+    base_score_rating: String,
+    branch_scores: mongoose.Schema.Types.Mixed,
+
+    // Metadaten
+    schufa_contract_number: String,
+    report_date: Date,
+    person_name: String,
+    person_dob: String,
+    person_address: String,
+
+    // Einträge
+    entries: [{
+      entry_type: String,
+      creditor_name: String,
+      status: { type: String, enum: ['aktiv', 'erledigt', 'negativ'] },
+      original_amount: Number,
+      outstanding_amount: Number,
+      contract_number: String,
+      reference_number: String,
+      entry_date: String,
+      settlement_date: String,
+      deletion_date: String,
+      is_negative: { type: Boolean, default: false },
+      negative_feature: String,
+      // Matching
+      matched_creditor_id: String,
+      matched_creditor_name: String,
+      match_confidence: Number,
+      match_status: { type: String, enum: ['unmatched', 'matched', 'new', 'discrepancy'], default: 'unmatched' },
+      amount_discrepancy: Number,
+    }],
+
+    // Zusammenfassung
+    total_entries: Number,
+    negative_entries: Number,
+    active_entries: Number,
+    settled_entries: Number,
+    total_outstanding: Number,
+
+    // Löschfristen
+    deletable_entries: [mongoose.Schema.Types.Mixed],
+    deletion_analysis: [mongoose.Schema.Types.Mixed],
+
+    // Neue Gläubiger aus SCHUFA (nicht in Akte)
+    new_creditors: [{
+      name: String,
+      amount: Number,
+      source: { type: String, default: 'schufa' },
+      entry_type: String,
+      is_negative: Boolean,
+      added_to_creditor_list: { type: Boolean, default: false },
+      added_at: Date,
+    }],
+
+    // Creditor-Mapping
+    creditor_mapping: [mongoose.Schema.Types.Mixed],
+
+    // Processing
+    confidence: Number,
+    processing_notes: [String],
+    processed_at: Date,
   },
 
   // Timestamps
