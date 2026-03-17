@@ -6,6 +6,84 @@ const path = require('path');
 const axios = require('axios');
 const { authenticateClient, authenticateAdmin } = require('../middleware/auth');
 const Client = require('../models/Client');
+const { v4: uuidv4 } = require('uuid');
+const { uploadToGCS } = require('../services/gcs-service');
+
+/**
+ * Save generated PDF to client documents and finalize status.
+ * Called after successful PDF generation + download.
+ */
+async function saveGeneratedPdfAndFinalize(client, pdfBytes, documentType) {
+    try {
+        const typeLabels = {
+            basic: 'Insolvenzantrag',
+            'creditor-package': 'Glaeubiger-Paket',
+            complete: 'Komplett-Insolvenzantrag',
+        };
+        const label = typeLabels[documentType] || 'Insolvenzantrag';
+        const filename = `${label}_${client.lastName}_${client.firstName}.pdf`;
+
+        // Upload to GCS (or local fallback)
+        const file = {
+            originalname: filename,
+            buffer: Buffer.from(pdfBytes),
+            mimetype: 'application/pdf',
+            size: pdfBytes.length,
+        };
+        const storedUrl = await uploadToGCS(file);
+
+        // Create document record
+        const documentRecord = {
+            id: uuidv4(),
+            name: filename,
+            filename: typeof storedUrl === 'string' ? storedUrl.split('?')[0].split('/').pop() : filename,
+            type: 'application/pdf',
+            size: pdfBytes.length,
+            uploadedAt: new Date().toISOString(),
+            url: storedUrl,
+            processing_status: 'completed',
+            document_status: 'non_creditor',
+            is_creditor_document: false,
+            hidden_from_portal: false,
+            extracted_data: {
+                document_type: 'insolvenzantrag',
+                generation_type: documentType,
+                generated_at: new Date().toISOString(),
+                processing_method: 'automatic_generation',
+            },
+        };
+
+        // Save to client + finalize status
+        if (!client.documents) client.documents = [];
+        client.documents.push(documentRecord);
+
+        // Set final status
+        client.current_status = 'completed';
+        client.workflow_status = 'completed';
+
+        if (!client.status_history) client.status_history = [];
+        client.status_history.push({
+            id: uuidv4(),
+            status: 'completed',
+            created_at: new Date(),
+            changed_by: 'admin',
+            metadata: {
+                source: 'insolvenzantrag_downloaded',
+                document_type: documentType,
+                document_id: documentRecord.id,
+            },
+        });
+
+        await client.save();
+
+        console.log(`[Insolvenzantrag] PDF saved as document "${filename}" (${(pdfBytes.length / 1024).toFixed(0)} KB) + status → completed for ${client.aktenzeichen}`);
+        return documentRecord;
+    } catch (error) {
+        // Non-blocking: download still succeeds even if save fails
+        console.error('[Insolvenzantrag] Failed to save PDF to documents:', error.message);
+        return null;
+    }
+}
 
 // Helper function to get client (handles _id, id, and aktenzeichen lookups)
 async function getClient(clientId) {
@@ -257,6 +335,7 @@ function mapClientDataToPDF(client) {
 
         // Family and employment status
         familienstand: client.familienstand || client.financial_data?.marital_status || 'ledig',
+        familienstand_seit: client.familienstand_seit || '',
         berufsstatus: client.berufsstatus
             || client.extended_financial_data?.berufsstatus
             || client.beschaeftigungsart
@@ -434,6 +513,7 @@ async function injectCreditorsIntoAnlage6and7(pdfBytes, client, options = {}) {
             // Ensure marital_status is set from whichever source has it
             marital_status: client.financial_data?.marital_status || client.familienstand || '',
             number_of_children: client.financial_data?.number_of_children || client.kinder_anzahl || 0,
+            geschlecht: client.geschlecht || '',
         };
         await fillFinancialData(pdfDoc, form, financialDataForPdf, options);
 
@@ -853,6 +933,22 @@ async function fillFinancialData(pdfDoc, form, financialData = {}, options = {})
     }
 
 
+    // --- Handle Kontrollkästchen 22 (gender: widget 0 = male, 1 = female, 2 = divers) ---
+    try {
+        const geschlecht = (financialData.geschlecht || '').toString().toLowerCase().trim();
+        const genderMap = {
+            'maennlich': 0, 'männlich': 0, 'male': 0, 'm': 0,
+            'weiblich': 1, 'female': 1, 'w': 1, 'f': 1,
+            'divers': 2, 'diverse': 2, 'd': 2,
+        };
+        const genderIdx = genderMap[geschlecht] ?? -1;
+        if (genderIdx >= 0) {
+            setMultiWidgetCheckbox(form, 'Kontrollkästchen 22', genderIdx, `geschlecht=${geschlecht}`);
+        }
+    } catch (err) {
+        console.error('Error handling Kontrollkästchen 22:', err.message);
+    }
+
     // --- Handle Kontrollkästchen 23 (seven widgets for marital status) ---
     try {
         const maritalStatus = (financialData.marital_status || '').toString().toLowerCase().trim();
@@ -1024,6 +1120,9 @@ router.get('/generate/:clientId', authenticateAdmin, async (req, res) => {
         }
         res.send(Buffer.from(mergedPdfBytes));
 
+        // Save PDF to documents + finalize status (non-blocking, after response sent)
+        saveGeneratedPdfAndFinalize(client, mergedPdfBytes, 'basic');
+
     } catch (error) {
         console.error('Error generating Insolvenzantrag:', error);
         res.status(500).json({ error: 'Failed to generate Insolvenzantrag', details: error.message });
@@ -1146,6 +1245,9 @@ router.get('/generate-creditor-package/:clientId', authenticateAdmin, async (req
         res.send(pdfBuffer);
 
         console.log(`✅ Creditor document package generated successfully: ${packageResult.filename}`);
+
+        // Save PDF to documents (non-blocking, after response sent)
+        saveGeneratedPdfAndFinalize(client, pdfBuffer, 'creditor-package');
 
     } catch (error) {
         console.error('Error generating creditor document package:', error);
@@ -1270,9 +1372,52 @@ router.get('/generate-complete/:clientId', authenticateAdmin, async (req, res) =
 
         console.log(`✅ Complete Insolvenzantrag with attachments generated successfully for ${client.firstName} ${client.lastName}`);
 
+        // Save PDF to documents + finalize status (non-blocking, after response sent)
+        saveGeneratedPdfAndFinalize(client, finalPdfBytes, 'complete');
+
     } catch (error) {
         console.error('Error generating complete Insolvenzantrag:', error);
         res.status(500).json({ error: 'Failed to generate complete Insolvenzantrag', details: error.message });
+    }
+});
+
+/**
+ * POST /insolvenzantrag/trigger-data-collection/:clientId
+ * Admin triggers the Insolvenzantrag data collection form for a client.
+ * Sets current_status to 'insolvenzantrag_data_pending'.
+ */
+router.post('/trigger-data-collection/:clientId', authenticateAdmin, async (req, res) => {
+    try {
+        const client = await getClient(req.params.clientId);
+        if (!client) return res.status(404).json({ error: 'Client not found' });
+
+        if (client.current_status === 'insolvenzantrag_data_pending') {
+            return res.json({ success: true, message: 'Already in data collection mode' });
+        }
+        if (client.current_status === 'insolvenzantrag_ready') {
+            return res.json({ success: true, message: 'Data already submitted by client' });
+        }
+
+        client.current_status = 'insolvenzantrag_data_pending';
+        if (!client.insolvenzantrag_form) {
+            client.insolvenzantrag_form = { status: 'pending', sections_completed: {} };
+        }
+        if (!client.status_history) client.status_history = [];
+        client.status_history.push({
+            id: require('uuid').v4(),
+            status: 'insolvenzantrag_data_pending',
+            created_at: new Date(),
+            changed_by: 'admin',
+            metadata: { source: 'manual_trigger' },
+        });
+
+        await client.save();
+        console.log(`[Insolvenzantrag] Data collection triggered for ${client.aktenzeichen} by admin`);
+
+        res.json({ success: true, status: 'insolvenzantrag_data_pending' });
+    } catch (error) {
+        console.error('Error triggering insolvenzantrag data collection:', error);
+        res.status(500).json({ error: 'Failed to trigger data collection' });
     }
 });
 
