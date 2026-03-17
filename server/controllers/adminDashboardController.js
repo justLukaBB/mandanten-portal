@@ -588,10 +588,37 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Guard: Don't regress workflow_status if client is already past the payment decision point
-                // This covers: creditor review done, client confirmed list, Anschreiben sent, etc.
+                // Special case: admin_review + admin_approved + payment → promote to client_confirmation
+                if ((client.workflow_status === 'admin_review' || client.current_status === 'creditor_review') && client.admin_approved) {
+                    const creditors = client.final_creditor_list || [];
+                    const updateFields = {
+                        first_payment_received: true,
+                        payment_received_at: new Date(),
+                        workflow_status: 'client_confirmation',
+                        current_status: 'awaiting_client_confirmation',
+                    };
+                    await Client.findByIdAndUpdate(client._id, updateFields);
+                    console.log(`✅ markPaymentReceived: ${client.aktenzeichen} promoted admin_review → client_confirmation (payment was missing)`);
+
+                    // Send creditor confirmation email
+                    try {
+                        const emailService = require('../services/emailService');
+                        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+                        await emailService.sendCreditorConfirmationEmail(client.email, client, creditors, portalUrl, totalDebt);
+                        console.log(`📧 Creditor confirmation email sent to ${client.email}`);
+                    } catch (emailErr) {
+                        console.error(`❌ Email failed (non-blocking):`, emailErr.message);
+                    }
+
+                    return res.json({
+                        success: true,
+                        message: 'Payment received — client can now confirm creditors',
+                        workflow_status: 'client_confirmation',
+                    });
+                }
+
                 const downstreamStatuses = [
-                    'admin_review',
                     'client_confirmation',
                     'awaiting_client_confirmation',
                     'creditor_contact_active',

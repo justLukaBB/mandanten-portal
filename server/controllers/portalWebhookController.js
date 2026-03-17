@@ -446,12 +446,19 @@ ${newDocsList}
                                 if (hasCreditorsNeedingReview) {
                                     client.workflow_status = 'admin_review';
                                     console.log(`🔍 Creditors need review → workflow_status = admin_review`);
-                                } else {
+                                } else if (client.first_payment_received) {
                                     client.workflow_status = 'client_confirmation';
+                                    client.current_status = 'awaiting_client_confirmation';
                                     client.admin_approved = true;
                                     client.admin_approved_at = new Date();
                                     client.admin_approved_by = 'system_auto';
-                                    console.log(`✅ No creditors need review → workflow_status = client_confirmation (auto-approved)`);
+                                    console.log(`✅ No review needed + payment received → client_confirmation (auto-approved)`);
+                                } else {
+                                    client.workflow_status = 'admin_review';
+                                    client.admin_approved = true;
+                                    client.admin_approved_at = new Date();
+                                    client.admin_approved_by = 'system_auto';
+                                    console.log(`⏳ No review needed but payment pending → admin_review (waiting for 1. Rate)`);
                                 }
 
                                 await client.save();
