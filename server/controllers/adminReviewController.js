@@ -316,13 +316,16 @@ const createAdminReviewController = ({ Client }) => {
         });
       }
 
+      // Remove clients with 0 documents to review
+      const nonEmptyClients = queueClients.filter(c => c.review_creditor_count > 0);
+
       // Sort by priority_score descending (most urgent first)
-      queueClients.sort((a, b) => b.priority_score - a.priority_score);
+      nonEmptyClients.sort((a, b) => b.priority_score - a.priority_score);
 
       // Filter by priority string if specified
       const filteredByPriority = priorityFilter && priorityFilter !== 'all'
-        ? queueClients.filter(c => c.priority === priorityFilter)
-        : queueClients;
+        ? nonEmptyClients.filter(c => c.priority === priorityFilter)
+        : nonEmptyClients;
 
       // Filter by search term
       const filteredBySearch = searchFilter
