@@ -32,8 +32,12 @@ class ClientCreditorController {
                 return res.status(404).json({ error: 'Client not found' });
             }
 
-            // Check current_status (new field) or workflow_status (legacy field)
-            const status = client.current_status || client.workflow_status;
+            // Check both current_status and workflow_status — use the most advanced one
+            const cs = client.current_status || '';
+            const ws = client.workflow_status || '';
+            // If either status indicates client_confirmation phase, use that
+            const isConfirmationPhase = cs === 'awaiting_client_confirmation' || ws === 'client_confirmation' || ws === 'awaiting_client_confirmation';
+            const status = isConfirmationPhase ? 'awaiting_client_confirmation' : (cs || ws);
 
             console.log(`🔍 Creditor confirmation check for ${client.aktenzeichen}:`, {
                 current_status: client.current_status,
@@ -131,11 +135,17 @@ class ClientCreditorController {
                 console.log(`[CreditorConfirm] Warning: ${client.aktenzeichen} confirming without payment — proceeding anyway`);
             }
 
-            if (client.current_status !== 'awaiting_client_confirmation') {
+            const allowedForConfirmation =
+                client.current_status === 'awaiting_client_confirmation' ||
+                client.workflow_status === 'client_confirmation' ||
+                client.workflow_status === 'admin_review' ||
+                client.current_status === 'creditor_review';
+            if (!allowedForConfirmation) {
                 return res.status(400).json({
                     error: 'Invalid status',
                     message: 'Gläubigerbestätigung ist in diesem Status nicht möglich.',
-                    current_status: client.current_status
+                    current_status: client.current_status,
+                    workflow_status: client.workflow_status
                 });
             }
 
