@@ -500,10 +500,17 @@ Aktenzeichen: ${aktenzeichen}
     const { firstName, lastName, aktenzeichen } = client;
     const subject = `Ihre Gläubigerliste zur Bestätigung (${aktenzeichen})`;
 
+    const formatEuro = (amount) => {
+      if (!amount && amount !== 0) return '';
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
+    };
+
     const creditorListPlain = creditors
       .map((c, i) => {
-        const refNum = c.reference_number && c.reference_number !== 'N/A' ? `\n   Referenz: ${c.reference_number}` : '';
-        return `${i + 1}. ${c.sender_name || 'Unbekannt'}${refNum}`;
+        const amount = c.claim_amount ? `   Forderung: ${formatEuro(c.claim_amount)}` : '';
+        const refNum = c.reference_number && c.reference_number !== 'N/A' ? `   Referenz: ${c.reference_number}` : '';
+        const details = [amount, refNum].filter(Boolean).join('\n');
+        return `${i + 1}. ${c.sender_name || 'Unbekannt'}${details ? '\n' + details : ''}`;
       })
       .join('\n\n');
 
@@ -512,12 +519,16 @@ Aktenzeichen: ${aktenzeichen}
         const refNum = c.reference_number && c.reference_number !== 'N/A'
           ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Referenz: ${c.reference_number}</div>`
           : '';
+        const amount = c.claim_amount
+          ? `<div style="font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px;">${formatEuro(c.claim_amount)}</div>`
+          : '';
         return `
           <tr>
-            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827; vertical-align: top;">${i + 1}.</td>
+            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827; vertical-align: top; width: 32px;">${i + 1}.</td>
             <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
-              <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${c.sender_name || 'Unbekannt'}</div>
+              <div style="font-weight: 600; color: #111827; margin-bottom: 2px;">${c.sender_name || 'Unbekannt'}</div>
               ${refNum}
+              ${amount}
             </td>
           </tr>`;
       })
@@ -530,6 +541,8 @@ wir haben Ihre im Mandantenportal eingereichten Unterlagen gesichtet und daraus 
 
 GLÄUBIGERLISTE:
 ${creditorListPlain}
+
+${totalDebt ? `GESAMTFORDERUNG: ${formatEuro(totalDebt)}` : ''}
 
 Bitte loggen Sie sich in Ihr Mandantenportal ein, prüfen Sie die Liste sorgfältig und bestätigen Sie anschließend über den dort angezeigten Button, dass die Gläubigerliste vollständig ist.
 
@@ -576,8 +589,9 @@ Aktenzeichen: ${aktenzeichen}
         <table style="width: 100%; border-collapse: collapse;">
           <tbody>${creditorListHtml}</tbody>
         </table>
-        <div style="padding: 16px; background-color: #111827; color: #ffffff;">
+        <div style="padding: 16px; background-color: #111827; color: #ffffff; display: flex; justify-content: space-between; align-items: center;">
           <span style="font-weight: 600; font-size: 16px;">${creditors.length} Gläubiger erfasst</span>
+          ${totalDebt ? `<span style="font-weight: 600; font-size: 16px;">${formatEuro(totalDebt)}</span>` : ''}
         </div>
       </div>
       <div style="background-color: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #78350f;">
