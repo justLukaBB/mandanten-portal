@@ -73,7 +73,7 @@ class ClientCreditorController {
 
             // Show creditors conditions (documents_completed included — payment gate removed)
             if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
-                status === 'documents_completed' ||
+                status === 'documents_completed' || status === 'upload_window_active' ||
                 (status === 'creditor_review' && client.seven_day_review_triggered)) {
 
                 const validCreditors = (client.final_creditor_list || []).filter(creditor => {
@@ -139,7 +139,9 @@ class ClientCreditorController {
             const allowedForConfirmation =
                 client.current_status === 'awaiting_client_confirmation' ||
                 client.current_status === 'documents_completed' ||
+                client.current_status === 'upload_window_active' ||
                 client.workflow_status === 'client_confirmation' ||
+                client.workflow_status === 'upload_window_active' ||
                 client.workflow_status === 'admin_review' ||
                 client.current_status === 'creditor_review';
             if (!allowedForConfirmation) {

@@ -327,6 +327,7 @@ const clientSchema = new mongoose.Schema({
       'documents_uploaded',
       'documents_processing',
       'documents_completed',
+      'upload_window_active',
       'waiting_for_payment',
       'payment_confirmed',
       'creditor_review',
@@ -355,6 +356,7 @@ const clientSchema = new mongoose.Schema({
     enum: [
       'portal_access_sent',
       'documents_processing',
+      'upload_window_active',
       'admin_review',
       'client_confirmation',
       'completed',

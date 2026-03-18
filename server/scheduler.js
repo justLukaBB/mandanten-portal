@@ -1,10 +1,12 @@
 const DelayedProcessingService = require('./services/delayedProcessingService');
+const UploadWindowService = require('./services/uploadWindowService');
 
 class Scheduler {
     constructor(dependencies) {
         this.documentReminderService = dependencies.documentReminderService;
         this.loginReminderService = dependencies.loginReminderService;
         this.secondLetterTriggerService = dependencies.secondLetterTriggerService;
+        this.uploadWindowService = new UploadWindowService();
     }
 
     startScheduledTasks() {
@@ -150,12 +152,38 @@ class Scheduler {
             console.log('📅 2. Anschreiben scheduler: initial check in 10 minutes, then every 24 hours');
         }
 
+        // === Upload Window Promotion Check (daily) ===
+        const UPLOAD_WINDOW_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+        // Initial check after 8 minutes
+        setTimeout(async () => {
+            try {
+                console.log('\n⏰ Running initial upload window promotion check...');
+                const result = await this.uploadWindowService.checkAndPromoteEligible();
+                console.log(`✅ Initial upload window check: ${result.promoted} promoted, ${result.errors} errors`);
+            } catch (error) {
+                console.error('❌ Error in initial upload window check:', error);
+            }
+        }, 8 * 60 * 1000);
+
+        // Recurring check every 24 hours
+        setInterval(async () => {
+            try {
+                console.log('\n⏰ Running scheduled upload window promotion check...');
+                const result = await this.uploadWindowService.checkAndPromoteEligible();
+                console.log(`✅ Upload window check: ${result.promoted} promoted, ${result.errors} errors`);
+            } catch (error) {
+                console.error('❌ Error in scheduled upload window check:', error);
+            }
+        }, UPLOAD_WINDOW_CHECK_INTERVAL);
+
         console.log('📅 Scheduled tasks started:');
         console.log('  • Document reminders: DISABLED');
         console.log('  • Delayed processing webhooks: every 30 minutes');
         console.log('  • Login reminders: every 6 hours (7-day cycle)');
         console.log('  • 7-day reviews: every hour');
         console.log('  • Auto-confirmation: every 7 hours (7-day threshold)');
+        console.log('  • Upload window promotion: every 24 hours');
     }
 }
 

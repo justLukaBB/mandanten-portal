@@ -420,20 +420,37 @@ ${newDocsList}
                             client.final_creditor_list = mergedCreditors;
                             console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
 
-                            // Determine next step: manual review or auto-approve
+                            // Determine next step based on creditor review + 30-day upload window
                             const hasCreditorsNeedingReview = mergedCreditors.some(c => c.needs_manual_review === true);
                             if (hasCreditorsNeedingReview) {
                                 client.workflow_status = 'admin_review';
                                 client.current_status = 'creditor_review';
                                 console.log(`🔍 Creditors need review → admin_review`);
                             } else {
-                                // Auto-approve: skip directly to client confirmation
-                                client.workflow_status = 'client_confirmation';
-                                client.current_status = 'awaiting_client_confirmation';
-                                client.admin_approved = true;
-                                client.admin_approved_at = new Date();
-                                client.admin_approved_by = 'system_auto';
-                                console.log(`✅ No review needed → client_confirmation (auto-approved)`);
+                                // Check if 30-day upload window has passed
+                                const portalSentAt = client.portal_link_sent_at;
+                                const UPLOAD_WINDOW_DAYS = 30;
+                                const now = new Date();
+                                const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+
+                                if (windowExpired) {
+                                    // 30 days passed — promote directly to client confirmation
+                                    client.workflow_status = 'client_confirmation';
+                                    client.current_status = 'awaiting_client_confirmation';
+                                    client.admin_approved = true;
+                                    client.admin_approved_at = now;
+                                    client.admin_approved_by = 'system_auto';
+                                    console.log(`✅ No review needed + 30-day window expired → client_confirmation (auto-approved)`);
+                                } else {
+                                    // Upload window still open — park in upload_window_active
+                                    client.workflow_status = 'upload_window_active';
+                                    client.current_status = 'upload_window_active';
+                                    client.admin_approved = true;
+                                    client.admin_approved_at = now;
+                                    client.admin_approved_by = 'system_auto';
+                                    const daysLeft = portalSentAt ? Math.ceil(UPLOAD_WINDOW_DAYS - ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24))) : UPLOAD_WINDOW_DAYS;
+                                    console.log(`⏳ No review needed but upload window still open (${daysLeft} days left) → upload_window_active`);
+                                }
                             }
                         } else {
                             // No creditor documents — route to review for manual handling
