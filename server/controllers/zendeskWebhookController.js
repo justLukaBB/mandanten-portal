@@ -941,6 +941,25 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
+            // Guard: Don't overwrite statuses already set by portalWebhookController
+            const alreadyHandledStatuses = [
+                'upload_window_active',
+                'awaiting_client_confirmation',
+                'creditor_review',
+                'creditor_contact_initiated',
+                'creditor_contact_active',
+                'completed'
+            ];
+            if (alreadyHandledStatuses.includes(client.current_status)) {
+                console.log(`⏭️ handleProcessingComplete skipped for ${client.aktenzeichen}: already in ${client.current_status} (handled by portalWebhookController)`);
+                return res.json({
+                    success: true,
+                    message: `Client already in ${client.current_status} — skipped`,
+                    client_status: client.current_status,
+                    skipped: true
+                });
+            }
+
             console.log(
                 `📋 PAYMENT-FIRST FLOW: Found client ${client.firstName} ${client.lastName} (${client.aktenzeichen})`
             );
@@ -949,7 +968,6 @@ Diese E-Mail wurde automatisch generiert.
             );
 
             // Check if this client paid first rate and is waiting for processing
-            // For payment-first clients, we need to handle them even if payment_ticket_type is not 'processing_wait'
             const isPaymentFirstClient =
                 client.first_payment_received &&
                 (client.payment_ticket_type === "processing_wait" ||
@@ -1139,12 +1157,26 @@ Diese E-Mail wurde automatisch generiert.
                 });
                 freshClient.final_creditor_list = creditors;
 
-                // Set client status to awaiting_client_confirmation
-                freshClient.current_status = 'awaiting_client_confirmation';
-                freshClient.workflow_status = 'client_confirmation';
+                // Check 30-day upload window before promoting
+                const UPLOAD_WINDOW_DAYS = 30;
+                const portalSentAt = freshClient.portal_link_sent_at;
+                const now = new Date();
+                const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+
                 freshClient.admin_approved = true;
-                freshClient.admin_approved_at = new Date();
+                freshClient.admin_approved_at = now;
                 freshClient.admin_approved_by = 'system_auto_approve';
+
+                if (windowExpired) {
+                    freshClient.current_status = 'awaiting_client_confirmation';
+                    freshClient.workflow_status = 'client_confirmation';
+                    console.log(`✅ 30-day window expired → awaiting_client_confirmation`);
+                } else {
+                    freshClient.current_status = 'upload_window_active';
+                    freshClient.workflow_status = 'upload_window_active';
+                    const daysLeft = portalSentAt ? Math.ceil(UPLOAD_WINDOW_DAYS - ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24))) : UPLOAD_WINDOW_DAYS;
+                    console.log(`⏳ Upload window still open (${daysLeft} days left) → upload_window_active`);
+                }
 
                 // Mark all documents as reviewed
                 documents.forEach(doc => {
@@ -1375,12 +1407,24 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Update client status
-            client.current_status = "awaiting_client_confirmation";
+            // Update client status — respect 30-day upload window
+            const UPLOAD_WINDOW_DAYS = 30;
+            const portalSentAt = client.portal_link_sent_at;
+            const now = new Date();
+            const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+
             client.admin_approved = true;
-            client.admin_approved_at = new Date();
+            client.admin_approved_at = now;
             client.admin_approved_by = agent_email || "agent";
-            client.updated_at = new Date();
+            client.updated_at = now;
+
+            if (windowExpired) {
+                client.current_status = "awaiting_client_confirmation";
+            } else {
+                client.current_status = "upload_window_active";
+                client.workflow_status = "upload_window_active";
+                console.log(`⏳ Upload window still open → upload_window_active (instead of client confirmation)`);
+            }
 
             // Add status history
             client.status_history.push({

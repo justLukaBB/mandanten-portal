@@ -1442,24 +1442,36 @@ Diese E-Mail wurde automatisch generiert.
             // Update final_creditor_list with any auto-confirmations
             client.final_creditor_list = creditors;
 
-            // Update client status - AUTO APPROVE and set to awaiting_client_confirmation
-            client.current_status = 'awaiting_client_confirmation';
-            client.workflow_status = 'client_confirmation';
+            // Update client status — respect 30-day upload window
+            const UPLOAD_WINDOW_DAYS = 30;
+            const portalSentAt = client.portal_link_sent_at;
+            const now = new Date();
+            const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+
+            const newStatus = windowExpired ? 'awaiting_client_confirmation' : 'upload_window_active';
+            const newWorkflow = windowExpired ? 'client_confirmation' : 'upload_window_active';
+
+            client.current_status = newStatus;
+            client.workflow_status = newWorkflow;
             client.admin_approved = true;
-            client.admin_approved_at = new Date();
+            client.admin_approved_at = now;
             client.admin_approved_by = agentId;
-            client.updated_at = new Date();
+            client.updated_at = now;
             client.review_diffs = []; // clear diffs after completion
+
+            if (!windowExpired) {
+                console.log(`⏳ Agent review complete but upload window still open → upload_window_active`);
+            }
 
             // Add status history
             client.status_history = client.status_history || [];
             client.status_history.push({
                 id: uuidv4(),
-                status: 'awaiting_client_confirmation',
+                status: newStatus,
                 changed_by: 'agent',
                 metadata: {
                     agent_id: agentId,
-                    agent_action: 'Review completed - auto approved',
+                    agent_action: windowExpired ? 'Review completed - auto approved' : 'Review completed - parked in upload window',
                     creditors_count: creditors.length,
                     total_debt: totalDebt,
                     admin_approved: true,
