@@ -8,9 +8,8 @@ class ConditionCheckService {
   }
 
   /**
-   * Check if both conditions (payment + documents) are met and schedule 7-day review
-   * @param {string} clientId - The client ID
-   * @param {string} triggerType - 'payment' or 'document' to identify what triggered the check
+   * Check if documents are uploaded and schedule 7-day review.
+   * Payment gate has been removed — only documents matter now.
    */
   async checkAndScheduleIfBothConditionsMet(clientId, triggerType) {
     try {
@@ -28,26 +27,22 @@ class ConditionCheckService {
         };
       }
 
-      // Check both conditions
-      const hasPayment = client.first_payment_received === true;
+      // Only check for documents (payment gate removed)
       const hasDocuments = client.documents && client.documents.length > 0;
-      
+
       console.log(`🔍 Checking conditions for ${client.aktenzeichen}:`);
-      console.log(`   - Payment received: ${hasPayment}`);
       console.log(`   - Documents uploaded: ${hasDocuments} (${client.documents?.length || 0} documents)`);
       console.log(`   - Triggered by: ${triggerType}`);
 
-      if (hasPayment && hasDocuments) {
-        console.log(`✅ Both conditions met for ${client.aktenzeichen}! Scheduling 7-day review...`);
-        
-        // Add to status history
+      if (hasDocuments) {
+        console.log(`✅ Documents present for ${client.aktenzeichen}! Scheduling 7-day review...`);
+
         client.status_history.push({
           id: uuidv4(),
-          status: 'both_conditions_met',
+          status: 'documents_condition_met',
           changed_by: 'system',
           metadata: {
             trigger_type: triggerType,
-            payment_received: hasPayment,
             documents_count: client.documents.length,
             timestamp: new Date()
           }
@@ -57,7 +52,7 @@ class ConditionCheckService {
 
         // Schedule the 7-day review
         const result = await this.delayedProcessingService.scheduleSevenDayReview(clientId);
-        
+
         return {
           bothConditionsMet: true,
           scheduled: true,
@@ -68,7 +63,6 @@ class ConditionCheckService {
 
       return {
         bothConditionsMet: false,
-        hasPayment,
         hasDocuments,
         documentsCount: client.documents?.length || 0
       };
@@ -80,71 +74,62 @@ class ConditionCheckService {
   }
 
   /**
-   * Handle payment confirmation and check if both conditions are met
+   * Handle payment confirmation — legacy no-op (payment gate removed).
+   * Still schedules 7-day review if documents exist.
    */
   async handlePaymentConfirmed(clientId) {
-    console.log(`💰 Payment confirmed for client ${clientId}, checking if both conditions are met...`);
+    console.log(`💰 Payment confirmed for client ${clientId} (payment gate removed, checking documents only)...`);
     return await this.checkAndScheduleIfBothConditionsMet(clientId, 'payment');
   }
 
   /**
-   * Handle document upload and check if both conditions are met
+   * Handle document upload and check if conditions are met
    */
   async handleDocumentUploaded(clientId) {
-    console.log(`📄 Document uploaded for client ${clientId}, checking if both conditions are met...`);
-    
+    console.log(`📄 Document uploaded for client ${clientId}, checking conditions...`);
+
     const client = await Client.findOne({ id: clientId });
     if (!client) {
       throw new Error(`Client ${clientId} not found`);
     }
 
-    // Special case: Documents uploaded after Phase 13 no-documents email
-    if (client.first_payment_received && client.no_documents_email_sent) {
-      console.log(`[auto-continuation] Documents uploaded after no-documents email for ${client.aktenzeichen}. Auto-continuation will be triggered by processing-complete webhook.`);
+    // Special case: Documents uploaded after no-documents email
+    if (client.no_documents_email_sent) {
+      console.log(`[auto-continuation] Documents uploaded after no-documents email for ${client.aktenzeichen}.`);
 
-      // Add status history for this specific scenario
       client.status_history.push({
         id: uuidv4(),
         status: 'documents_uploaded_after_no_documents_email',
         changed_by: 'system',
         metadata: {
-          payment_received_first: true,
           no_documents_email_sent_at: client.no_documents_email_sent_at,
           documents_uploaded_at: new Date()
         }
       });
 
       await client.save();
-
-      // Continue to standard condition check (the actual auto-continuation
-      // is handled by portalWebhookController.handleDocumentProcessingComplete
-      // -> triggerProcessingCompleteWebhook -> handleProcessingComplete)
       return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document_after_no_documents_email');
     }
 
-    // Special case: If payment was received first and documents uploaded after reminder
-    if (client.first_payment_received && client.document_reminder_sent_via_side_conversation) {
-      console.log(`🎯 Documents uploaded after payment + reminder for ${client.aktenzeichen}. Starting 7-day delay...`);
-      
-      // Add status history for this specific scenario
+    // Special case: Documents uploaded after reminder
+    if (client.document_reminder_sent_via_side_conversation) {
+      console.log(`🎯 Documents uploaded after reminder for ${client.aktenzeichen}. Starting 7-day delay...`);
+
       client.status_history.push({
         id: require('uuid').v4(),
-        status: 'documents_uploaded_after_payment_reminder',
+        status: 'documents_uploaded_after_reminder',
         changed_by: 'system',
         metadata: {
-          payment_received_first: true,
           reminder_sent_at: client.document_reminder_side_conversation_at,
           documents_uploaded_at: new Date(),
           side_conversation_id: client.document_reminder_side_conversation_id
         }
       });
-      
+
       await client.save();
-      
-      // Now check if both conditions are met (they should be)
       return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document_after_reminder');
     }
-    
+
     return await this.checkAndScheduleIfBothConditionsMet(clientId, 'document');
   }
 }

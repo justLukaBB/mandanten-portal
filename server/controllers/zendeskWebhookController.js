@@ -444,30 +444,28 @@ class ZendeskWebhookController {
         }
     }
 
-    // Zendesk Webhook: User Payment Confirmed (Phase 2)
+    // Zendesk Webhook: User Payment Confirmed
+    // Payment gate removed — this handler now only marks the flag for bookkeeping.
+    // Workflow progression happens in handleDocumentProcessingComplete instead.
     async handleUserPaymentConfirmed(req, res) {
         try {
             console.log(
-                "💰 Zendesk Webhook: User-Payment-Confirmed received",
+                "💰 Zendesk Webhook: User-Payment-Confirmed received (payment gate removed — flag-only)",
                 req.body
             );
 
             // Handle both Zendesk webhook format and direct format
-            let email, aktenzeichen, name, agent_email, user_id;
+            let email, aktenzeichen, user_id, agent_email;
 
             if (req.body.ticket && req.body.ticket.requester) {
-                // Zendesk webhook format
                 const requester = req.body.ticket.requester;
                 email = requester.email;
                 aktenzeichen = requester.aktenzeichen || requester.external_id;
-                name = requester.name;
                 user_id = requester.id;
                 agent_email = req.body.agent_email;
             } else {
-                // Direct format (legacy)
                 email = req.body.email;
                 aktenzeichen = req.body.external_id || req.body.aktenzeichen;
-                name = req.body.name;
                 user_id = req.body.user_id;
                 agent_email = req.body.agent_email;
             }
@@ -475,16 +473,9 @@ class ZendeskWebhookController {
             if (!aktenzeichen && !email) {
                 return res.status(400).json({
                     error: "Missing required field: aktenzeichen or email",
-                    received: {
-                        aktenzeichen,
-                        email,
-                        has_ticket: !!req.body.ticket,
-                        has_requester: !!(req.body.ticket && req.body.ticket.requester)
-                    }
                 });
             }
 
-            // Find client by aktenzeichen or email
             const client = await Client.findOne({
                 $or: [{ aktenzeichen: aktenzeichen }, { email: email }],
             });
@@ -492,350 +483,42 @@ class ZendeskWebhookController {
             if (!client) {
                 return res.status(404).json({
                     error: "Client not found",
-                    aktenzeichen: aktenzeichen,
-                    email: email,
+                    aktenzeichen,
+                    email,
                 });
             }
 
-            // Guard: Don't overwrite downstream statuses (e.g., after agent review completed)
-            // Check both current_status AND workflow_status to prevent regression
-            const downstreamCurrentStatuses = [
-                'creditor_review',
-                'manual_review_complete',
-                'awaiting_client_confirmation',
-                'creditor_contact_initiated',
-                'creditor_contact_active',
-                'creditor_contact_failed',
-                'completed'
-            ];
-            const downstreamWorkflowStatuses = [
-                'admin_review',
-                'client_confirmation',
-                'awaiting_client_confirmation',
-                'creditor_contact_active',
-                'completed'
-            ];
-            if (downstreamCurrentStatuses.includes(client.current_status) || downstreamWorkflowStatuses.includes(client.workflow_status)) {
-                console.log(`⏭️ Payment webhook skipped for ${client.aktenzeichen}: already in downstream status (current='${client.current_status}', workflow='${client.workflow_status}')`);
-                // Still mark payment as received if not yet set, just don't regress the status
-                if (!client.first_payment_received) {
-                    client.first_payment_received = true;
-                    client.payment_received_at = new Date();
-                    await client.save({ validateModifiedOnly: true });
-                    console.log(`💰 Marked first_payment_received=true for ${client.aktenzeichen} (status preserved)`);
-                }
-                return res.json({
-                    success: true,
-                    message: `Client already in downstream status: ${client.current_status}`,
-                    client_status: client.current_status,
-                    workflow_status: client.workflow_status,
-                    skipped: true
-                });
-            }
+            // Mark payment as received (bookkeeping only — no status progression)
+            if (!client.first_payment_received) {
+                client.first_payment_received = true;
+                client.payment_received_at = new Date();
+                client.updated_at = new Date();
 
-            console.log(
-                `📋 Processing user payment confirmation for: ${client.firstName} ${client.lastName}`
-            );
-
-            // Wait for dedup to complete if documents were recently processed
-            // This prevents evaluating stale creditor data before dedup merges
-            const freshClient = await this.waitForDedupIfNeeded(client, Client);
-
-            // Update client status
-            freshClient.first_payment_received = true;
-            freshClient.current_status = "payment_confirmed";
-            freshClient.updated_at = new Date();
-
-            // Add status history
-            freshClient.status_history.push({
-                id: uuidv4(),
-                status: "payment_confirmed",
-                changed_by: "agent",
-                zendesk_user_id: user_id,
-                metadata: {
-                    agent_email: agent_email || "system",
-                    agent_action: "erste_rate_bezahlt_user checkbox on user profile",
-                    payment_date: new Date(),
-                },
-            });
-
-            // Check if both conditions (payment + documents) are met for 7-day review
-            const conditionCheckResult =
-                await this.conditionCheckService.handlePaymentConfirmed(freshClient.id);
-            console.log(`🔍 Condition check result:`, conditionCheckResult);
-
-            const documents = freshClient.documents || [];
-            const creditorDocs = documents.filter((d) => d.is_creditor_document === true);
-            const creditors = freshClient.final_creditor_list || [];
-
-            // === PHASE 13: No-documents branch ===
-            // If no creditor documents exist, send email asking for documents instead of running Gläubigeranalyse
-            if (creditorDocs.length === 0 && creditors.length === 0) {
-                console.log(`[payment-handler] No creditor documents for ${freshClient.aktenzeichen} — sending document request email instead of Gläubigeranalyse`);
-
-                // Idempotency guard: only send email once
-                if (!freshClient.no_documents_email_sent) {
-                    try {
-                        const emailService = require('../services/emailService');
-                        const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
-                        const clientName = `${freshClient.firstName} ${freshClient.lastName}`;
-
-                        const emailResult = await emailService.sendDocumentRequestEmail(
-                            freshClient.email,
-                            clientName,
-                            portalUrl
-                        );
-
-                        if (emailResult.success) {
-                            freshClient.no_documents_email_sent = true;
-                            freshClient.no_documents_email_sent_at = new Date();
-                            console.log(`✅ Document request email sent to ${freshClient.email} for ${freshClient.aktenzeichen}`);
-                        } else {
-                            console.error(`❌ Failed to send document request email to ${freshClient.email}: ${emailResult.error}`);
-                        }
-                    } catch (emailError) {
-                        console.error(`❌ Error sending document request email:`, emailError.message);
-                    }
-                } else {
-                    console.log(`⏭️ Document request email already sent for ${freshClient.aktenzeichen} at ${freshClient.no_documents_email_sent_at}`);
-                }
-
-                // Payment confirmed but can't proceed without documents
-                freshClient.current_status = "payment_confirmed";
-                freshClient.payment_ticket_type = "document_request";
-                freshClient.payment_processed_at = new Date();
-
-                await freshClient.save({ validateModifiedOnly: true });
-
-                return res.json({
-                    success: true,
-                    message: "Payment confirmed — no documents yet, email sent to client",
-                    client_status: freshClient.current_status,
-                    payment_ticket_type: "document_request",
-                    documents_count: 0,
-                    creditor_documents: 0,
-                    extracted_creditors: 0,
-                    no_documents_email_sent: freshClient.no_documents_email_sent,
-                    no_documents_email_sent_at: freshClient.no_documents_email_sent_at,
-                    manual_review_required: false,
-                    auto_approved: false,
-                    zendesk_ticket: null,
-                });
-            }
-            // === END PHASE 13: No-documents branch ===
-
-            // Helper to check if a value is missing/empty
-            const isMissingValue = (val) => {
-                if (val === undefined || val === null) return true;
-                if (typeof val === 'string') {
-                    const trimmed = val.trim().toLowerCase();
-                    if (!trimmed || trimmed === 'nicht gefunden' || trimmed === 'n/a' || trimmed === 'na') return true;
-                }
-                return false;
-            };
-
-            // Helper to check if creditor needs review (creditor flag + missing contact info)
-            const creditorNeedsManualReview = (creditor) => {
-                // Check 1: Creditor-level manual review flag (set by AI dedup)
-                if (creditor.needs_manual_review === true) {
-                    return true;
-                }
-
-                // Check 2: Missing contact fields (email, address, name)
-                const creditorEmail = creditor.sender_email || creditor.email_glaeubiger;
-                const creditorAddress = creditor.sender_address || creditor.glaeubiger_adresse;
-                const creditorName = creditor.sender_name || creditor.glaeubiger_name;
-
-                const missingEmail = isMissingValue(creditorEmail);
-                const missingAddress = isMissingValue(creditorAddress);
-                const missingName = isMissingValue(creditorName);
-
-                return missingEmail || missingAddress || missingName;
-            };
-
-            // Edge case: Empty creditor list is abnormal after payment — route to review
-            if (creditors.length === 0) {
-                console.log(`[payment-handler] No creditors found for ${freshClient.aktenzeichen} — routing to creditor_review`);
-            }
-
-            // Check which creditors need manual review (creditor.needs_manual_review flag + contact completeness)
-            const needsReview = creditors.filter(c => creditorNeedsManualReview(c));
-            const confidenceOk = creditors.filter(c => !creditorNeedsManualReview(c));
-
-            console.log(`📊 Creditor analysis for ${freshClient.aktenzeichen}:`);
-            console.log(`   Total creditors: ${creditors.length}`);
-            console.log(`   Creditors needing review: ${needsReview.length}`);
-            needsReview.forEach(c => {
-                const reasons = [];
-                if (c.needs_manual_review === true) reasons.push('needs_manual_review');
-                if (isMissingValue(c.sender_email || c.email_glaeubiger)) reasons.push('missing email');
-                if (isMissingValue(c.sender_address || c.glaeubiger_adresse)) reasons.push('missing address');
-                if (isMissingValue(c.sender_name || c.glaeubiger_name)) reasons.push('missing name');
-                console.log(`      - ${c.sender_name || c.glaeubiger_name || 'Unknown'}: ${reasons.join(', ')}`);
-            });
-            console.log(`   Creditors OK: ${confidenceOk.length}`);
-
-            // Determine if manual review is required (either creditors need review OR empty creditor list)
-            const requiresManualReview = needsReview.length > 0 || creditors.length === 0;
-            const nextAction = requiresManualReview ? "manual_review" : "auto_approved";
-            const ticketType = nextAction;
-
-            // Generate automatic review ticket content
-            const reviewTicketContent = this.generateCreditorReviewTicketContent(
-                freshClient,
-                documents,
-                creditors,
-                requiresManualReview
-            );
-
-            // Set status based on whether manual review is needed
-            let clientConfirmationEmailSent = false;
-
-            if (requiresManualReview) {
-                // Manual review needed - send to Agent Portal
-                freshClient.current_status = "creditor_review";
-                freshClient.workflow_status = "admin_review";
-                freshClient.payment_ticket_type = "manual_review";
-            } else {
-                // AUTO-APPROVED: All creditors pass review flag and contact checks
-                // Skip agent review and go directly to client confirmation
-                freshClient.current_status = "awaiting_client_confirmation";
-                freshClient.workflow_status = "client_confirmation";
-                freshClient.payment_ticket_type = "auto_approved";
-                freshClient.admin_approved = true;
-                freshClient.admin_approved_at = new Date();
-
-                // Add status history for auto-approval
-                freshClient.status_history.push({
+                client.status_history.push({
                     id: uuidv4(),
-                    status: "awaiting_client_confirmation",
-                    changed_by: "system",
+                    status: "payment_confirmed",
+                    changed_by: "agent",
+                    zendesk_user_id: user_id,
                     metadata: {
-                        reason: "Auto-approved: All creditors pass review flag and contact checks",
-                        creditors_count: creditors.length,
-                        auto_approved: true,
+                        agent_email: agent_email || "system",
+                        agent_action: "erste_rate_bezahlt_user checkbox on user profile",
+                        payment_date: new Date(),
+                        note: "Payment gate removed — flag set for bookkeeping only"
                     },
                 });
 
-                console.log(`🤖 AUTO-APPROVED: ${freshClient.aktenzeichen} - All ${creditors.length} creditors pass review flag and contact checks`);
-            }
-            freshClient.payment_processed_at = new Date();
-
-            // CREATE ZENDESK TICKET FOR AGENT REVIEW
-            let zendeskTicket = null;
-            let ticketCreationError = null;
-
-            if (this.zendeskService.isConfigured()) {
-                try {
-                    console.log(
-                        `🎫 Creating Zendesk ticket for creditor review: ${freshClient.aktenzeichen}`
-                    );
-
-                    zendeskTicket = await this.zendeskService.createTicket({
-                        subject: `Gläubiger-Review: ${freshClient.firstName} ${freshClient.lastName} (${freshClient.aktenzeichen})`,
-                        content: reviewTicketContent,
-                        requesterEmail: freshClient.email,
-                        tags: [
-                            "gläubiger-review",
-                            "payment-confirmed",
-                            requiresManualReview ? "manual-review-needed" : "auto-approved",
-                        ],
-                        priority: requiresManualReview ? "normal" : "low",
-                        type: "task",
-                    });
-
-                    console.log(
-                        `✅ Zendesk ticket created: ${zendeskTicket?.ticket_id || "unknown"}`
-                    );
-
-                    // Store ticket reference on client
-                    if (zendeskTicket?.ticket_id) {
-                        freshClient.zendesk_review_ticket_id = zendeskTicket.ticket_id;
-                    }
-                } catch (ticketError) {
-                    console.error(
-                        `⚠️ Failed to create Zendesk ticket (non-blocking):`,
-                        ticketError.message
-                    );
-                    ticketCreationError = ticketError.message;
-                }
+                await client.save({ validateModifiedOnly: true });
+                console.log(`💰 Marked first_payment_received=true for ${client.aktenzeichen}`);
             } else {
-                console.log(`⚠️ Zendesk not configured - skipping ticket creation`);
+                console.log(`⏭️ Payment already marked for ${client.aktenzeichen}`);
             }
-
-            await freshClient.save({ validateModifiedOnly: true });
-
-            // SEND CLIENT CONFIRMATION EMAIL FOR AUTO-APPROVED CASES
-            if (!requiresManualReview && zendeskTicket?.ticket_id && creditors.length > 0) {
-                try {
-                    console.log(`📧 AUTO-APPROVED: Sending creditor confirmation email to client ${freshClient.email}`);
-
-                    const portalUrl = `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/login`;
-                    const creditorsList = creditors
-                        .map((c, i) => `${i + 1}. ${c.sender_name || "Unbekannt"} - €${(c.claim_amount || 0).toLocaleString("de-DE")}`)
-                        .join("\n");
-                    const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-
-                    const emailContent = this.generateCreditorConfirmationEmailContent(
-                        freshClient,
-                        creditors,
-                        portalUrl,
-                        totalDebt
-                    );
-
-                    // Send as PUBLIC comment (goes to client as email)
-                    const emailResult = await this.zendeskService.addPublicComment(zendeskTicket.ticket_id, {
-                        content: emailContent.plainText,
-                        htmlContent: emailContent.html,
-                        tags: ["creditor-confirmation-email-sent", "auto-approved"],
-                    });
-
-                    if (emailResult?.success) {
-                        clientConfirmationEmailSent = true;
-                        console.log(`✅ Creditor confirmation email sent to ${freshClient.email}`);
-                    } else {
-                        console.error(`❌ Failed to send creditor confirmation email: ${emailResult?.error}`);
-                    }
-                } catch (emailError) {
-                    console.error(`❌ Error sending creditor confirmation email:`, emailError.message);
-                }
-            }
-
-            const reviewDashboardUrl = requiresManualReview
-                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/agent/review/${freshClient.id}`
-                : null;
-
-            const portalConfirmationUrl = !requiresManualReview
-                ? `${process.env.FRONTEND_URL || "https://mandanten-portal.onrender.com"}/portal?token=${freshClient.portal_token}`
-                : null;
-
-            console.log(
-                `✅ Payment confirmed for ${freshClient.aktenzeichen}. Ticket: ${ticketType}, Docs: ${documents.length}, Creditors: ${creditors.length}, Agent Portal: ${requiresManualReview ? 'YES' : 'NO'}, Auto-Approved: ${!requiresManualReview ? 'YES' : 'NO'}`
-            );
 
             res.json({
                 success: true,
-                message: `User payment confirmation processed - ${ticketType}`,
-                client_status: freshClient.current_status,
-                payment_ticket_type: ticketType,
-                documents_count: documents.length,
-                creditor_documents: creditorDocs.length,
-                extracted_creditors: creditors.length,
-                creditors_need_review: needsReview.length,
-                creditors_confidence_ok: confidenceOk.length,
-                manual_review_required: requiresManualReview,
-                auto_approved: !requiresManualReview,
-                client_confirmation_email_sent: clientConfirmationEmailSent,
-                zendesk_ticket: zendeskTicket
-                    ? {
-                        ticket_id: zendeskTicket.ticket_id,
-                        ticket_url: zendeskTicket.ticket_url,
-                    }
-                    : null,
-                zendesk_error: ticketCreationError,
-                review_dashboard_url: reviewDashboardUrl,
-                portal_confirmation_url: portalConfirmationUrl,
-                agent_portal_visible: requiresManualReview,
+                message: "Payment flag set (payment gate removed — no workflow progression)",
+                client_status: client.current_status,
+                workflow_status: client.workflow_status,
+                first_payment_received: true,
             });
         } catch (error) {
             console.error("❌ Error in user-payment-confirmed webhook:", error);

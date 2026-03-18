@@ -58,8 +58,8 @@ class ClientCreditorController {
                 });
             }
 
-            // Auto-approve logic check
-            const isAutoApproved = client.first_payment_received && client.seven_day_review_triggered && status === 'creditor_review';
+            // Auto-approve logic check (payment gate removed — only check review trigger)
+            const isAutoApproved = client.seven_day_review_triggered && status === 'creditor_review';
 
             if (!client.admin_approved && !isAutoApproved) {
                 return res.json({
@@ -71,9 +71,10 @@ class ClientCreditorController {
                 });
             }
 
-            // Show creditors conditions
+            // Show creditors conditions (documents_completed included — payment gate removed)
             if (status === 'awaiting_client_confirmation' || status === 'client_confirmation' || status === 'completed' ||
-                (status === 'creditor_review' && client.first_payment_received && client.seven_day_review_triggered)) {
+                status === 'documents_completed' ||
+                (status === 'creditor_review' && client.seven_day_review_triggered)) {
 
                 const validCreditors = (client.final_creditor_list || []).filter(creditor => {
                     // Hide creditors that need manual review but haven't been reviewed yet
@@ -137,6 +138,7 @@ class ClientCreditorController {
 
             const allowedForConfirmation =
                 client.current_status === 'awaiting_client_confirmation' ||
+                client.current_status === 'documents_completed' ||
                 client.workflow_status === 'client_confirmation' ||
                 client.workflow_status === 'admin_review' ||
                 client.current_status === 'creditor_review';
@@ -261,13 +263,6 @@ class ClientCreditorController {
 
             if (!client) {
                 return res.status(404).json({ error: 'Client not found' });
-            }
-
-            if (!client.first_payment_received) {
-                return res.status(400).json({
-                    error: 'Payment required',
-                    message: 'Die erste Rate muss bezahlt sein, bevor Gläubiger kontaktiert werden können.'
-                });
             }
 
             // Only allow if client has confirmed creditors or process is completed

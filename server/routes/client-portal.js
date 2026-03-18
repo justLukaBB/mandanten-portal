@@ -47,6 +47,9 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
     // Get client documents
     router.get('/clients/:clientId/documents', controller.handleGetClientDocuments);
 
+    // Upload status (30-day window)
+    router.get('/clients/:clientId/upload-status', controller.handleGetUploadStatus);
+
     // Upload documents
     router.post('/clients/:clientId/documents',
         uploadTimeout(300000), // 5 minute timeout for uploads

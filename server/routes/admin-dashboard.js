@@ -40,5 +40,8 @@ module.exports = (dependencies) => {
     router.post('/clients/:clientId/trigger-seven-day-review', rateLimits.admin, authenticateAdmin, adminDashboardController.triggerSevenDayReview);
     router.post('/clients/:clientId/generate-creditor-list', rateLimits.admin, authenticateAdmin, adminDashboardController.generateCreditorList);
 
+    // Upload deadline management
+    router.post('/clients/:clientId/extend-upload-deadline', rateLimits.admin, authenticateAdmin, adminDashboardController.extendUploadDeadline);
+
     return router;
 };

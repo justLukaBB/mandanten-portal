@@ -383,13 +383,13 @@ ${newDocsList}
                     console.log(`⚠️ Creditor documents needing manual review: ${creditorDocsNeedingReview.length}`);
 
                     if (client.current_status === 'documents_processing') {
-                        client.current_status = 'waiting_for_payment';
+                        client.current_status = 'documents_completed';
                         client.updated_at = new Date();
 
                         // Add status history
                         client.status_history.push({
                             id: uuidv4(),
-                            status: 'waiting_for_payment',
+                            status: 'documents_completed',
                             changed_by: 'system',
                             metadata: {
                                 processing_completed: new Date().toISOString(),
@@ -399,80 +399,56 @@ ${newDocsList}
                             }
                         });
 
+                        console.log(`✅ All documents processed for ${client.aktenzeichen}. Proceeding to creditor analysis (no payment gate).`);
+
+                        // Update final creditor list with deduplication
+                        if (creditorDocs.length > 0) {
+                            console.log(`📊 Document analysis: ${completedDocs.length} completed, ${creditorDocs.length} creditor docs`);
+
+                            const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
+                                creditorDocs,
+                                'highest_amount'
+                            );
+
+                            const existingCreditors = client.final_creditor_list || [];
+                            const mergedCreditors = creditorDeduplication.mergeCreditorLists(
+                                existingCreditors,
+                                deduplicatedCreditors,
+                                'highest_amount'
+                            );
+
+                            client.final_creditor_list = mergedCreditors;
+                            console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
+
+                            // Determine next step: manual review or auto-approve
+                            const hasCreditorsNeedingReview = mergedCreditors.some(c => c.needs_manual_review === true);
+                            if (hasCreditorsNeedingReview) {
+                                client.workflow_status = 'admin_review';
+                                client.current_status = 'creditor_review';
+                                console.log(`🔍 Creditors need review → admin_review`);
+                            } else {
+                                // Auto-approve: skip directly to client confirmation
+                                client.workflow_status = 'client_confirmation';
+                                client.current_status = 'awaiting_client_confirmation';
+                                client.admin_approved = true;
+                                client.admin_approved_at = new Date();
+                                client.admin_approved_by = 'system_auto';
+                                console.log(`✅ No review needed → client_confirmation (auto-approved)`);
+                            }
+                        } else {
+                            // No creditor documents — route to review for manual handling
+                            client.workflow_status = 'admin_review';
+                            client.current_status = 'creditor_review';
+                            console.log(`⚠️ No creditor documents found — routing to admin_review`);
+                        }
+
                         await client.save();
 
-                        console.log(`✅ All documents processed for ${client.aktenzeichen}. Status: waiting_for_payment`);
-
-                        // Check if client paid first rate and is waiting for processing - trigger webhook
-                        if (client.first_payment_received) {
-                            console.log(`\n🎯 ================================`);
-                            console.log(`🎯 PORTAL WEBHOOK: PAYMENT + DOCUMENTS COMPLETE`);
-                            console.log(`🎯 ================================`);
-                            console.log(`👤 Client: ${client.id} (${client.aktenzeichen || 'NO_AKTENZEICHEN'})`);
-                            console.log(`💰 Payment received: ${client.first_payment_received}`);
-                            console.log(`📄 All documents completed: ${true}`);
-                            console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
-
-                            // Update final creditor list with deduplication
-                            if (creditorDocs.length > 0) {
-                                console.log(`\n📊 PORTAL WEBHOOK DOCUMENT ANALYSIS:`);
-                                console.log(`📄 Total completed documents: ${completedDocs.length}`);
-                                console.log(`📄 Creditor documents found: ${creditorDocs.length}`);
-
-                                // Use deduplication utility
-                                const deduplicatedCreditors = creditorDeduplication.deduplicateCreditorsFromDocuments(
-                                    creditorDocs,
-                                    'highest_amount'
-                                );
-
-                                // Merge with existing final_creditor_list if any
-                                const existingCreditors = client.final_creditor_list || [];
-                                const mergedCreditors = creditorDeduplication.mergeCreditorLists(
-                                    existingCreditors,
-                                    deduplicatedCreditors,
-                                    'highest_amount'
-                                );
-
-                                client.final_creditor_list = mergedCreditors;
-
-                                console.log(`\n✅ ================================`);
-                                console.log(`✅ PORTAL WEBHOOK: FINAL CREDITOR LIST UPDATED`);
-                                console.log(`✅ ================================`);
-                                console.log(`👤 Client: ${client.id}`);
-                                console.log(`📊 Final creditor count: ${mergedCreditors.length}`);
-
-                                // Set workflow_status based on whether creditors need review
-                                const hasCreditorsNeedingReview = mergedCreditors.some(c => c.needs_manual_review === true);
-                                if (hasCreditorsNeedingReview) {
-                                    client.workflow_status = 'admin_review';
-                                    console.log(`🔍 Creditors need review → workflow_status = admin_review`);
-                                } else if (client.first_payment_received) {
-                                    client.workflow_status = 'client_confirmation';
-                                    client.current_status = 'awaiting_client_confirmation';
-                                    client.admin_approved = true;
-                                    client.admin_approved_at = new Date();
-                                    client.admin_approved_by = 'system_auto';
-                                    console.log(`✅ No review needed + payment received → client_confirmation (auto-approved)`);
-                                } else {
-                                    client.workflow_status = 'admin_review';
-                                    client.admin_approved = true;
-                                    client.admin_approved_at = new Date();
-                                    client.admin_approved_by = 'system_auto';
-                                    console.log(`⏳ No review needed but payment pending → admin_review (waiting for 1. Rate)`);
-                                }
-
-                                await client.save();
-                            } else {
-                                console.log(`⚠️ PORTAL WEBHOOK: No creditor documents found in completed documents`);
-                            }
-
-                            // Trigger the processing-complete webhook asynchronously
-                            console.log(`🎯 PAYMENT-FIRST FLOW: About to trigger processing-complete webhook for client ${client.id}`);
-                            setTimeout(async () => {
-                                console.log(`🚀 PAYMENT-FIRST FLOW: Triggering processing-complete webhook for client ${client.id}`);
-                                await triggerProcessingCompleteWebhook(client.id, document_id);
-                            }, 1000);
-                        }
+                        // Trigger the processing-complete webhook asynchronously
+                        setTimeout(async () => {
+                            console.log(`🚀 Triggering processing-complete webhook for client ${client.id}`);
+                            await triggerProcessingCompleteWebhook(client.id, document_id);
+                        }, 1000);
                     }
                 }
 

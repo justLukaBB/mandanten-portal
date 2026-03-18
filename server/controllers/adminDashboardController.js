@@ -578,7 +578,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             }
         },
 
-        // Mark Payment Received
+        // Mark Payment Received — payment gate removed, now just sets the flag for bookkeeping
         markPaymentReceived: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
@@ -588,119 +588,19 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Special case: admin_review + admin_approved + payment → promote to client_confirmation
-                if ((client.workflow_status === 'admin_review' || client.current_status === 'creditor_review') && client.admin_approved) {
-                    const creditors = client.final_creditor_list || [];
-                    const updateFields = {
-                        first_payment_received: true,
-                        payment_received_at: new Date(),
-                        workflow_status: 'client_confirmation',
-                        current_status: 'awaiting_client_confirmation',
-                    };
-                    await Client.findByIdAndUpdate(client._id, updateFields);
-                    console.log(`✅ markPaymentReceived: ${client.aktenzeichen} promoted admin_review → client_confirmation (payment was missing)`);
-
-                    // Send creditor confirmation email
-                    try {
-                        const emailService = require('../services/emailService');
-                        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
-                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-                        await emailService.sendCreditorConfirmationEmail(client.email, client, creditors, portalUrl, totalDebt);
-                        console.log(`📧 Creditor confirmation email sent to ${client.email}`);
-                    } catch (emailErr) {
-                        console.error(`❌ Email failed (non-blocking):`, emailErr.message);
-                    }
-
-                    return res.json({
-                        success: true,
-                        message: 'Payment received — client can now confirm creditors',
-                        workflow_status: 'client_confirmation',
-                    });
-                }
-
-                const downstreamStatuses = [
-                    'client_confirmation',
-                    'awaiting_client_confirmation',
-                    'creditor_contact_active',
-                    'completed'
-                ];
-                if (downstreamStatuses.includes(client.workflow_status) || downstreamStatuses.includes(client.current_status)) {
-                    console.log(`⏭️ markPaymentReceived: Skipping workflow_status change for ${client.aktenzeichen} — already in workflow='${client.workflow_status}', current='${client.current_status}'`);
-                    // Still mark payment as received, just don't regress the status
+                // Just mark the flag — no workflow progression
+                if (!client.first_payment_received) {
                     await Client.findByIdAndUpdate(client._id, {
                         first_payment_received: true,
                         payment_received_at: new Date()
                     });
-                    return res.json({
-                        success: true,
-                        message: `Payment marked as received (workflow_status kept at '${client.workflow_status}')`,
-                        workflow_status: client.workflow_status,
-                        skipped_status_change: true
-                    });
-                }
-
-                // Determine workflow_status based on creditor state
-                const creditors = client.final_creditor_list || [];
-                const hasCreditors = creditors.length > 0;
-                const hasCreditorsNeedingReview = creditors.some(c => c.needs_manual_review === true);
-
-                let newWorkflowStatus;
-                const updateFields = {
-                    first_payment_received: true,
-                    payment_received_at: new Date()
-                };
-
-                if (hasCreditors && hasCreditorsNeedingReview) {
-                    // Creditors exist but some need manual review → admin_review
-                    newWorkflowStatus = 'admin_review';
-                } else if (hasCreditors && !hasCreditorsNeedingReview) {
-                    // Creditors exist and none need review → skip to awaiting_client_confirmation
-                    newWorkflowStatus = 'awaiting_client_confirmation';
-                    updateFields.current_status = 'awaiting_client_confirmation';
-                    updateFields.admin_approved = true;
-                    updateFields.admin_approved_at = new Date();
-                    updateFields.admin_approved_by = 'system_auto';
-                    console.log(`✅ Auto-approved: No creditors need review for ${client.aktenzeichen}, skipping admin_review`);
-                } else {
-                    // No creditors yet → keep current workflow_status, wait for documents
-                    newWorkflowStatus = client.workflow_status;
-                    console.log(`⏳ Payment marked but no creditors yet for ${client.aktenzeichen}, staying in ${newWorkflowStatus}`);
-                }
-
-                updateFields.workflow_status = newWorkflowStatus;
-
-                // Update client in MongoDB
-                await Client.findByIdAndUpdate(client._id, updateFields);
-
-                // Send creditor confirmation email for auto-approved cases
-                if (newWorkflowStatus === 'awaiting_client_confirmation' && hasCreditors) {
-                    try {
-                        const emailService = require('../services/emailService');
-                        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
-                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
-
-                        const result = await emailService.sendCreditorConfirmationEmail(
-                            client.email,
-                            client,
-                            creditors,
-                            portalUrl,
-                            totalDebt
-                        );
-
-                        if (result.success) {
-                            console.log(`📧 Creditor confirmation email sent to ${client.email} for ${client.aktenzeichen}`);
-                        } else {
-                            console.error(`❌ Failed to send creditor confirmation email: ${result.error}`);
-                        }
-                    } catch (emailError) {
-                        console.error(`❌ Error sending creditor confirmation email:`, emailError.message);
-                    }
+                    console.log(`💰 markPaymentReceived: ${client.aktenzeichen} — flag set (no workflow progression)`);
                 }
 
                 res.json({
                     success: true,
-                    message: 'Payment marked as received',
-                    workflow_status: newWorkflowStatus
+                    message: 'Payment marked as received (payment gate removed — bookkeeping only)',
+                    workflow_status: client.workflow_status
                 });
             } catch (error) {
                 console.error('Error marking payment received:', error);
@@ -711,7 +611,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             }
         },
 
-        // Batch Mark Payment Received — confirm 1. Rate for multiple clients at once
+        // Batch Mark Payment Received — payment gate removed, just sets flags
         batchMarkPaymentReceived: async (req, res) => {
             try {
                 const { client_ids } = req.body;
@@ -729,50 +629,19 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                         continue;
                     }
 
-                    // Already paid — skip
                     if (client.first_payment_received) {
                         skippedCount++;
                         continue;
                     }
 
-                    // Guard: Don't regress workflow_status if client is already past the payment decision point
-                    const downstreamStatuses = ['admin_review', 'client_confirmation', 'awaiting_client_confirmation', 'creditor_contact_active', 'completed'];
-                    if (downstreamStatuses.includes(client.workflow_status) || downstreamStatuses.includes(client.current_status)) {
-                        await Client.findByIdAndUpdate(client._id, {
-                            first_payment_received: true,
-                            payment_received_at: new Date()
-                        });
-                        updatedCount++;
-                        continue;
-                    }
-
-                    // Determine workflow_status based on creditor state
-                    const creditors = client.final_creditor_list || [];
-                    const hasCreditors = creditors.length > 0;
-                    const hasCreditorsNeedingReview = creditors.some(c => c.needs_manual_review === true);
-
-                    const updateFields = {
+                    await Client.findByIdAndUpdate(client._id, {
                         first_payment_received: true,
                         payment_received_at: new Date()
-                    };
-
-                    if (hasCreditors && hasCreditorsNeedingReview) {
-                        updateFields.workflow_status = 'admin_review';
-                    } else if (hasCreditors && !hasCreditorsNeedingReview) {
-                        updateFields.workflow_status = 'awaiting_client_confirmation';
-                        updateFields.current_status = 'awaiting_client_confirmation';
-                        updateFields.admin_approved = true;
-                        updateFields.admin_approved_at = new Date();
-                        updateFields.admin_approved_by = 'system_auto';
-                    } else {
-                        updateFields.workflow_status = client.workflow_status;
-                    }
-
-                    await Client.findByIdAndUpdate(client._id, updateFields);
+                    });
                     updatedCount++;
                 }
 
-                console.log(`✅ Batch payment confirmed: ${updatedCount} updated, ${skippedCount} skipped`);
+                console.log(`💰 Batch payment flags set: ${updatedCount} updated, ${skippedCount} skipped`);
                 res.json({ success: true, updated_count: updatedCount, skipped_count: skippedCount });
             } catch (error) {
                 console.error('Error in batch mark payment received:', error);
@@ -897,7 +766,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 client.first_payment_received = false;
                 client.payment_processed_at = null;
                 client.payment_ticket_type = null;
-                client.current_status = 'waiting_for_payment';
+                client.current_status = 'portal_access_sent';
                 client.workflow_status = 'portal_access_sent';
                 client.admin_approved = false;
                 client.admin_approved_at = null;
@@ -919,10 +788,10 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
 
                 client.status_history.push({
                     id: uuidv4(),
-                    status: 'waiting_for_payment',
+                    status: 'portal_access_sent',
                     changed_by: 'admin',
                     metadata: {
-                        action: 'reset_payment_status',
+                        action: 'reset_status',
                         reason: 'Admin reset for testing',
                         reset_at: new Date().toISOString()
                     },
@@ -1060,6 +929,57 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     error: 'Failed to trigger 7-day review',
                     details: error.message
                 });
+            }
+        },
+
+        // Extend upload deadline — reset portal_link_sent_at to give client more time
+        extendUploadDeadline: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const { additional_days = 30 } = req.body;
+
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                // Calculate new deadline from now
+                const now = new Date();
+                const newSentAt = new Date(now.getTime() - ((30 - additional_days) * 24 * 60 * 60 * 1000));
+
+                const oldSentAt = client.portal_link_sent_at;
+                client.portal_link_sent_at = newSentAt;
+                client.updated_at = now;
+
+                client.status_history.push({
+                    id: require('uuid').v4(),
+                    status: 'upload_deadline_extended',
+                    changed_by: 'admin',
+                    metadata: {
+                        additional_days,
+                        old_portal_link_sent_at: oldSentAt,
+                        new_portal_link_sent_at: newSentAt,
+                        new_deadline: new Date(newSentAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+                    },
+                    created_at: now
+                });
+
+                await client.save();
+
+                const deadline = new Date(newSentAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+                const daysRemaining = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+
+                console.log(`✅ Upload deadline extended for ${client.aktenzeichen}: +${additional_days} days (${daysRemaining} days remaining)`);
+
+                res.json({
+                    success: true,
+                    message: `Upload-Deadline um ${additional_days} Tage verlängert`,
+                    new_deadline: deadline.toISOString(),
+                    days_remaining: daysRemaining
+                });
+            } catch (error) {
+                console.error('Error extending upload deadline:', error);
+                res.status(500).json({ error: 'Error extending upload deadline', details: error.message });
             }
         },
 

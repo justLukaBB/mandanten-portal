@@ -583,14 +583,12 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                     });
                 }
 
-                // Check if client has both conditions met
-                const hasPayment = client.first_payment_received === true;
+                // Check if client has documents (payment gate removed)
                 const hasDocuments = client.documents && client.documents.length > 0;
 
-                if (!hasPayment || !hasDocuments) {
+                if (!hasDocuments) {
                     return res.status(400).json({
-                        error: 'Cannot skip delay - both payment and documents are required',
-                        has_payment: hasPayment,
+                        error: 'Cannot skip delay - documents are required',
                         has_documents: hasDocuments,
                         documents_count: client.documents?.length || 0
                     });

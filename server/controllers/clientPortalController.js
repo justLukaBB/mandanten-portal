@@ -894,6 +894,46 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
             }
         },
 
+        handleGetUploadStatus: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const client = await getClient(clientId);
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                const UPLOAD_WINDOW_DAYS = 30;
+
+                if (!client.portal_link_sent_at) {
+                    // Legacy client without portal_link_sent_at — no deadline
+                    return res.json({
+                        has_deadline: false,
+                        expired: false,
+                        message: 'Kein Upload-Zeitlimit gesetzt'
+                    });
+                }
+
+                const portalSentDate = new Date(client.portal_link_sent_at);
+                const deadline = new Date(portalSentDate.getTime() + UPLOAD_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+                const now = new Date();
+                const daysRemaining = Math.max(0, Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)));
+                const expired = now > deadline;
+
+                res.json({
+                    has_deadline: true,
+                    deadline: deadline.toISOString(),
+                    days_remaining: daysRemaining,
+                    expired,
+                    portal_link_sent_at: client.portal_link_sent_at,
+                    upload_window_days: UPLOAD_WINDOW_DAYS
+                });
+            } catch (error) {
+                console.error('Error fetching upload status:', error);
+                res.status(500).json({ error: 'Error fetching upload status', details: error.message });
+            }
+        },
+
         handleUploadDocuments: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
@@ -901,6 +941,24 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
+                }
+
+                // 30-day upload window check
+                const UPLOAD_WINDOW_DAYS = 30;
+                if (client.portal_link_sent_at) {
+                    const portalSentDate = new Date(client.portal_link_sent_at);
+                    const now = new Date();
+                    const daysSinceSent = Math.floor((now - portalSentDate) / (1000 * 60 * 60 * 24));
+                    if (daysSinceSent > UPLOAD_WINDOW_DAYS) {
+                        console.log(`⛔ Upload rejected for ${client.aktenzeichen}: ${daysSinceSent} days since portal sent (limit: ${UPLOAD_WINDOW_DAYS})`);
+                        return res.status(403).json({
+                            error: 'Upload-Zeitraum abgelaufen',
+                            message: `Der Upload-Zeitraum von ${UPLOAD_WINDOW_DAYS} Tagen ist abgelaufen. Bitte kontaktieren Sie uns.`,
+                            days_since_sent: daysSinceSent,
+                            upload_window_days: UPLOAD_WINDOW_DAYS,
+                            portal_link_sent_at: client.portal_link_sent_at
+                        });
+                    }
                 }
 
                 console.log(`\n📤 ================================`);
