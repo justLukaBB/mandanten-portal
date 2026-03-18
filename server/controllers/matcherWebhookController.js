@@ -231,11 +231,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           return res.status(400).json({ error: `Unknown event: ${event}` });
         }
 
-        if (!client_aktenzeichen && !client_name) {
-          return res.status(400).json({ error: 'Missing client_aktenzeichen or client_name' });
-        }
-
-        console.log(`📨 Matcher webhook: ${creditor_name} responded for ${client_aktenzeichen || client_name}`);
+        console.log(`📨 Matcher webhook: ${creditor_name} responded for ${client_aktenzeichen || client_name || '(no client)'}`);
         console.log(`   Amount: ${new_debt_amount} EUR, Confidence: ${extraction_confidence}, Route: ${confidence_route}`);
 
         // Find client — matcher already updated final_creditor_list via direct MongoDB write
@@ -257,13 +253,13 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
         }
 
         if (!client) {
-          console.log(`⚠️ Matcher webhook: Client not found for ${client_aktenzeichen || client_name}`);
-          // Still save to CreditorEmail as no_match
+          console.log(`⚠️ Matcher webhook: Client not found for ${client_aktenzeichen || client_name || creditor_name}`);
+          // Still save to CreditorEmail as no_match so it appears in admin inbox
           try {
             await CreditorEmail.create({
               email_id,
               letter_type: 'first',
-              creditor_name,
+              creditor_name: creditor_name || creditor_email || 'unknown',
               creditor_email,
               client_aktenzeichen,
               client_name,
@@ -277,13 +273,13 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               email_body_preview,
               email_body_full,
               review_status: 'pending',
-              needs_review: true,
+              needs_review: !!(client_aktenzeichen || client_name),
               processed_at: new Date(processed_at || Date.now()),
             });
           } catch (emailErr) {
             console.log(`⚠️ CreditorEmail save failed: ${emailErr.message}`);
           }
-          return res.status(404).json({ error: 'Client not found' });
+          return res.json({ success: true, match_status: 'no_match' });
         }
 
         // 1. Add status_history entry
