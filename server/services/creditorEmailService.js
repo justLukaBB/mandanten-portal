@@ -2,6 +2,7 @@ const config = require('../config');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { convertDocxToPdf, isLibreOfficeAvailable } = require('./docxToPdf');
 
 // Matcher API URL for syncing inquiries
 const MATCHER_API_URL = config.MATCHER_API_URL || process.env.MATCHER_API_URL || 'https://creditor-email-matcher.onrender.com';
@@ -41,6 +42,38 @@ class CreditorEmailService {
       }
     } else {
       console.log('⚠️ CreditorEmailService: No RESEND_API_KEY configured - emails will be logged to console');
+    }
+  }
+
+  /**
+   * Convert DOCX attachment to PDF before sending.
+   * Falls back to DOCX if LibreOffice is unavailable or conversion fails.
+   * @private
+   */
+  async prepareAttachmentAsPdf(attachment) {
+    if (!attachment?.path) return [];
+
+    const originalPath = attachment.path;
+    const originalFilename = attachment.filename || path.basename(originalPath);
+
+    // Only convert .docx files
+    if (!originalPath.toLowerCase().endsWith('.docx')) {
+      const content = fs.readFileSync(originalPath);
+      return [{ filename: originalFilename, content }];
+    }
+
+    try {
+      const outputDir = path.dirname(originalPath);
+      const pdfPath = await convertDocxToPdf(originalPath, outputDir);
+      const content = fs.readFileSync(pdfPath);
+      const pdfFilename = originalFilename.replace(/\.docx$/i, '.pdf');
+      console.log(`📎 PDF attachment prepared: ${pdfFilename} (${Math.round(content.length / 1024)} KB)`);
+      return [{ filename: pdfFilename, content }];
+    } catch (err) {
+      console.error(`⚠️ PDF conversion failed, falling back to DOCX: ${err.message}`);
+      const content = fs.readFileSync(originalPath);
+      console.log(`📎 DOCX fallback attachment: ${originalFilename} (${Math.round(content.length / 1024)} KB)`);
+      return [{ filename: originalFilename, content }];
     }
   }
 
@@ -118,20 +151,8 @@ class CreditorEmailService {
       attachmentFilename: attachment?.filename
     });
 
-    // Prepare attachment if provided
-    let attachments = [];
-    if (attachment?.path) {
-      try {
-        const content = fs.readFileSync(attachment.path);
-        attachments.push({
-          filename: attachment.filename || path.basename(attachment.path),
-          content: content
-        });
-        console.log(`📎 Attachment prepared: ${attachment.filename} (${Math.round(content.length / 1024)} KB)`);
-      } catch (err) {
-        console.error(`❌ Failed to read attachment file: ${err.message}`);
-      }
-    }
+    // Prepare attachment as PDF (falls back to DOCX if conversion fails)
+    const attachments = await this.prepareAttachmentAsPdf(attachment);
 
     const result = await this.sendEmail({
       to: recipientEmail,
@@ -192,20 +213,8 @@ class CreditorEmailService {
       settlementDetails
     });
 
-    // Prepare attachment if provided
-    let attachments = [];
-    if (attachment?.path) {
-      try {
-        const content = fs.readFileSync(attachment.path);
-        attachments.push({
-          filename: attachment.filename || path.basename(attachment.path),
-          content: content
-        });
-        console.log(`📎 Attachment prepared: ${attachment.filename} (${Math.round(content.length / 1024)} KB)`);
-      } catch (err) {
-        console.error(`❌ Failed to read attachment file: ${err.message}`);
-      }
-    }
+    // Prepare attachment as PDF (falls back to DOCX if conversion fails)
+    const attachments = await this.prepareAttachmentAsPdf(attachment);
 
     const result = await this.sendEmail({
       to: recipientEmail,
