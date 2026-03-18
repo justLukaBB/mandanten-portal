@@ -42,6 +42,7 @@ module.exports = (dependencies) => {
 
     // Upload deadline management
     router.post('/clients/:clientId/extend-upload-deadline', rateLimits.admin, authenticateAdmin, adminDashboardController.extendUploadDeadline);
+    router.post('/clients/:clientId/skip-upload-window', rateLimits.admin, authenticateAdmin, adminDashboardController.skipUploadWindow);
 
     return router;
 };

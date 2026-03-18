@@ -932,6 +932,75 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             }
         },
 
+        // Skip upload window — promote client from upload_window_active to awaiting_client_confirmation
+        skipUploadWindow: async (req, res) => {
+            try {
+                const clientId = req.params.clientId;
+                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+
+                if (!client) {
+                    return res.status(404).json({ error: 'Client not found' });
+                }
+
+                if (client.current_status !== 'upload_window_active') {
+                    return res.status(400).json({
+                        error: 'Client ist nicht im Upload-Fenster Status',
+                        current_status: client.current_status
+                    });
+                }
+
+                // Check if creditors need review
+                const creditors = client.final_creditor_list || [];
+                const needsReview = creditors.some(c => c.needs_manual_review && !c.manually_reviewed);
+
+                if (needsReview) {
+                    client.current_status = 'creditor_review';
+                    client.workflow_status = 'admin_review';
+                } else {
+                    client.current_status = 'awaiting_client_confirmation';
+                    client.workflow_status = 'client_confirmation';
+                }
+
+                client.updated_at = new Date();
+                client.status_history.push({
+                    id: require('uuid').v4(),
+                    status: client.current_status,
+                    changed_by: 'admin',
+                    metadata: {
+                        action: 'skip_upload_window',
+                        promoted_from: 'upload_window_active',
+                        creditors_count: creditors.length
+                    },
+                    created_at: new Date()
+                });
+
+                await client.save();
+
+                // Send confirmation email if going to client confirmation
+                if (client.current_status === 'awaiting_client_confirmation' && creditors.length > 0) {
+                    try {
+                        const emailService = require('../services/emailService');
+                        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+                        const totalDebt = creditors.reduce((sum, c) => sum + (c.claim_amount || 0), 0);
+                        await emailService.sendCreditorConfirmationEmail(client.email, client, creditors, portalUrl, totalDebt);
+                        console.log(`📧 Creditor confirmation email sent to ${client.email} (upload window skipped)`);
+                    } catch (emailErr) {
+                        console.error(`❌ Email failed:`, emailErr.message);
+                    }
+                }
+
+                console.log(`✅ Upload window skipped for ${client.aktenzeichen} → ${client.current_status}`);
+                res.json({
+                    success: true,
+                    message: `Upload-Fenster übersprungen — Status: ${client.current_status}`,
+                    new_status: client.current_status
+                });
+            } catch (error) {
+                console.error('Error skipping upload window:', error);
+                res.status(500).json({ error: 'Error skipping upload window', details: error.message });
+            }
+        },
+
         // Extend upload deadline — reset portal_link_sent_at to give client more time
         extendUploadDeadline: async (req, res) => {
             try {
