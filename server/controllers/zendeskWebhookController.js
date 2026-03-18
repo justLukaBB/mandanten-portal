@@ -445,16 +445,12 @@ class ZendeskWebhookController {
     }
 
     // Zendesk Webhook: User Payment Confirmed
-    // Payment gate removed — this handler now only marks the flag for bookkeeping.
-    // Workflow progression happens in handleDocumentProcessingComplete instead.
+    // Payment confirmed — marks flag + starts 30-day upload timer.
+    // If client is already in upload_window_active, recomputes whether window is expired.
     async handleUserPaymentConfirmed(req, res) {
         try {
-            console.log(
-                "💰 Zendesk Webhook: User-Payment-Confirmed received (payment gate removed — flag-only)",
-                req.body
-            );
+            console.log("💰 Zendesk Webhook: User-Payment-Confirmed received", req.body);
 
-            // Handle both Zendesk webhook format and direct format
             let email, aktenzeichen, user_id, agent_email;
 
             if (req.body.ticket && req.body.ticket.requester) {
@@ -481,15 +477,12 @@ class ZendeskWebhookController {
             });
 
             if (!client) {
-                return res.status(404).json({
-                    error: "Client not found",
-                    aktenzeichen,
-                    email,
-                });
+                return res.status(404).json({ error: "Client not found", aktenzeichen, email });
             }
 
-            // Mark payment as received (bookkeeping only — no status progression)
-            if (!client.first_payment_received) {
+            // Mark payment + start 30-day timer
+            const alreadyPaid = client.first_payment_received;
+            if (!alreadyPaid) {
                 client.first_payment_received = true;
                 client.payment_received_at = new Date();
                 client.updated_at = new Date();
@@ -503,22 +496,30 @@ class ZendeskWebhookController {
                         agent_email: agent_email || "system",
                         agent_action: "erste_rate_bezahlt_user checkbox on user profile",
                         payment_date: new Date(),
-                        note: "Payment gate removed — flag set for bookkeeping only"
+                        note: "Payment confirmed — 30-day upload timer started"
                     },
                 });
 
-                await client.save({ validateModifiedOnly: true });
-                console.log(`💰 Marked first_payment_received=true for ${client.aktenzeichen}`);
+                console.log(`💰 Payment confirmed for ${client.aktenzeichen} — 30-day upload timer started`);
             } else {
                 console.log(`⏭️ Payment already marked for ${client.aktenzeichen}`);
             }
 
+            // If client is in upload_window_active, the payment just started the timer.
+            // The scheduler will promote after 30 days. No immediate promotion needed
+            // (payment was JUST received, so 30 days haven't passed yet).
+
+            await client.save({ validateModifiedOnly: true });
+
             res.json({
                 success: true,
-                message: "Payment flag set (payment gate removed — no workflow progression)",
+                message: alreadyPaid
+                    ? "Payment already confirmed"
+                    : "Payment confirmed — 30-day upload timer started",
                 client_status: client.current_status,
                 workflow_status: client.workflow_status,
                 first_payment_received: true,
+                payment_received_at: client.payment_received_at,
             });
         } catch (error) {
             console.error("❌ Error in user-payment-confirmed webhook:", error);
@@ -1157,11 +1158,12 @@ Diese E-Mail wurde automatisch generiert.
                 });
                 freshClient.final_creditor_list = creditors;
 
-                // Check 30-day upload window before promoting
+                // Check 30-day upload window (timer from payment_received_at)
                 const UPLOAD_WINDOW_DAYS = 30;
-                const portalSentAt = freshClient.portal_link_sent_at;
+                const paymentAt = freshClient.payment_received_at;
                 const now = new Date();
-                const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+                const hasPayment = !!paymentAt;
+                const windowExpired = hasPayment && ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
 
                 freshClient.admin_approved = true;
                 freshClient.admin_approved_at = now;
@@ -1407,11 +1409,12 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            // Update client status — respect 30-day upload window
+            // Update client status — respect 30-day upload window (timer from payment)
             const UPLOAD_WINDOW_DAYS = 30;
-            const portalSentAt = client.portal_link_sent_at;
+            const paymentAt = client.payment_received_at;
             const now = new Date();
-            const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+            const hasPayment = !!paymentAt;
+            const windowExpired = hasPayment && ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
 
             client.admin_approved = true;
             client.admin_approved_at = now;

@@ -588,19 +588,23 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Just mark the flag — no workflow progression
-                if (!client.first_payment_received) {
-                    await Client.findByIdAndUpdate(client._id, {
-                        first_payment_received: true,
-                        payment_received_at: new Date()
-                    });
-                    console.log(`💰 markPaymentReceived: ${client.aktenzeichen} — flag set (no workflow progression)`);
+                const alreadyPaid = client.first_payment_received;
+
+                if (!alreadyPaid) {
+                    client.first_payment_received = true;
+                    client.payment_received_at = new Date();
+                    client.updated_at = new Date();
+                    await client.save();
+                    console.log(`💰 markPaymentReceived: ${client.aktenzeichen} — 30-day upload timer started`);
                 }
 
                 res.json({
                     success: true,
-                    message: 'Payment marked as received (payment gate removed — bookkeeping only)',
-                    workflow_status: client.workflow_status
+                    message: alreadyPaid
+                        ? 'Payment already confirmed'
+                        : 'Payment confirmed — 30-day upload timer started',
+                    workflow_status: client.workflow_status,
+                    payment_received_at: client.payment_received_at
                 });
             } catch (error) {
                 console.error('Error marking payment received:', error);
@@ -1001,7 +1005,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             }
         },
 
-        // Extend upload deadline — reset portal_link_sent_at to give client more time
+        // Extend upload deadline — reset payment_received_at to give client more time
         extendUploadDeadline: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
@@ -1012,12 +1016,16 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // Calculate new deadline from now
-                const now = new Date();
-                const newSentAt = new Date(now.getTime() - ((30 - additional_days) * 24 * 60 * 60 * 1000));
+                if (!client.payment_received_at) {
+                    return res.status(400).json({ error: '1. Rate noch nicht bestätigt — kein Timer zum Verlängern' });
+                }
 
-                const oldSentAt = client.portal_link_sent_at;
-                client.portal_link_sent_at = newSentAt;
+                // Shift payment_received_at forward so client gets additional_days from now
+                const now = new Date();
+                const newPaymentAt = new Date(now.getTime() - ((30 - additional_days) * 24 * 60 * 60 * 1000));
+
+                const oldPaymentAt = client.payment_received_at;
+                client.payment_received_at = newPaymentAt;
                 client.updated_at = now;
 
                 client.status_history.push({
@@ -1026,16 +1034,16 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     changed_by: 'admin',
                     metadata: {
                         additional_days,
-                        old_portal_link_sent_at: oldSentAt,
-                        new_portal_link_sent_at: newSentAt,
-                        new_deadline: new Date(newSentAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+                        old_payment_received_at: oldPaymentAt,
+                        new_payment_received_at: newPaymentAt,
+                        new_deadline: new Date(newPaymentAt.getTime() + 30 * 24 * 60 * 60 * 1000),
                     },
                     created_at: now
                 });
 
                 await client.save();
 
-                const deadline = new Date(newSentAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+                const deadline = new Date(newPaymentAt.getTime() + 30 * 24 * 60 * 60 * 1000);
                 const daysRemaining = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
 
                 console.log(`✅ Upload deadline extended for ${client.aktenzeichen}: +${additional_days} days (${daysRemaining} days remaining)`);

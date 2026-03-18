@@ -1442,11 +1442,12 @@ Diese E-Mail wurde automatisch generiert.
             // Update final_creditor_list with any auto-confirmations
             client.final_creditor_list = creditors;
 
-            // Update client status — respect 30-day upload window
+            // Update client status — respect 30-day upload window (timer from payment)
             const UPLOAD_WINDOW_DAYS = 30;
-            const portalSentAt = client.portal_link_sent_at;
+            const paymentAt = client.payment_received_at;
             const now = new Date();
-            const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+            const hasPayment = !!paymentAt;
+            const windowExpired = hasPayment && ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
 
             const newStatus = windowExpired ? 'awaiting_client_confirmation' : 'upload_window_active';
             const newWorkflow = windowExpired ? 'client_confirmation' : 'upload_window_active';
@@ -1459,8 +1460,11 @@ Diese E-Mail wurde automatisch generiert.
             client.updated_at = now;
             client.review_diffs = []; // clear diffs after completion
 
-            if (!windowExpired) {
-                console.log(`⏳ Agent review complete but upload window still open → upload_window_active`);
+            if (!hasPayment) {
+                console.log(`⏳ Agent review complete but no payment yet → upload_window_active (waiting for 1. Rate)`);
+            } else if (!windowExpired) {
+                const daysLeft = Math.ceil(UPLOAD_WINDOW_DAYS - ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)));
+                console.log(`⏳ Agent review complete but payment window still open (${daysLeft} days left) → upload_window_active`);
             }
 
             // Add status history

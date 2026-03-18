@@ -436,6 +436,7 @@ const clientSchema = new mongoose.Schema({
 
   // Admin workflow
   first_payment_received: { type: Boolean, default: false },
+  payment_received_at: Date,
   admin_approved: { type: Boolean, default: false },
   admin_approved_at: Date,
   admin_approved_by: String,

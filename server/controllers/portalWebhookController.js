@@ -427,29 +427,32 @@ ${newDocsList}
                                 client.current_status = 'creditor_review';
                                 console.log(`🔍 Creditors need review → admin_review`);
                             } else {
-                                // Check if 30-day upload window has passed
-                                const portalSentAt = client.portal_link_sent_at;
+                                // Check if 30-day upload window has passed (timer starts from payment)
+                                const paymentAt = client.payment_received_at;
                                 const UPLOAD_WINDOW_DAYS = 30;
                                 const now = new Date();
-                                const windowExpired = portalSentAt && ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+                                const hasPayment = !!paymentAt;
+                                const windowExpired = hasPayment && ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)) >= UPLOAD_WINDOW_DAYS;
+
+                                client.admin_approved = true;
+                                client.admin_approved_at = now;
+                                client.admin_approved_by = 'system_auto';
 
                                 if (windowExpired) {
-                                    // 30 days passed — promote directly to client confirmation
+                                    // Payment received + 30 days passed → client confirmation
                                     client.workflow_status = 'client_confirmation';
                                     client.current_status = 'awaiting_client_confirmation';
-                                    client.admin_approved = true;
-                                    client.admin_approved_at = now;
-                                    client.admin_approved_by = 'system_auto';
-                                    console.log(`✅ No review needed + 30-day window expired → client_confirmation (auto-approved)`);
+                                    console.log(`✅ No review needed + payment 30-day window expired → client_confirmation`);
                                 } else {
-                                    // Upload window still open — park in upload_window_active
+                                    // No payment yet OR window still open → park in upload_window_active
                                     client.workflow_status = 'upload_window_active';
                                     client.current_status = 'upload_window_active';
-                                    client.admin_approved = true;
-                                    client.admin_approved_at = now;
-                                    client.admin_approved_by = 'system_auto';
-                                    const daysLeft = portalSentAt ? Math.ceil(UPLOAD_WINDOW_DAYS - ((now - new Date(portalSentAt)) / (1000 * 60 * 60 * 24))) : UPLOAD_WINDOW_DAYS;
-                                    console.log(`⏳ No review needed but upload window still open (${daysLeft} days left) → upload_window_active`);
+                                    if (!hasPayment) {
+                                        console.log(`⏳ No review needed but no payment yet → upload_window_active (waiting for 1. Rate)`);
+                                    } else {
+                                        const daysLeft = Math.ceil(UPLOAD_WINDOW_DAYS - ((now - new Date(paymentAt)) / (1000 * 60 * 60 * 24)));
+                                        console.log(`⏳ No review needed but payment window still open (${daysLeft} days left) → upload_window_active`);
+                                    }
                                 }
                             }
                         } else {

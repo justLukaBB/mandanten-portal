@@ -905,17 +905,18 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
 
                 const UPLOAD_WINDOW_DAYS = 30;
 
-                if (!client.portal_link_sent_at) {
-                    // Legacy client without portal_link_sent_at — no deadline
+                // No payment yet → no deadline, uploads allowed indefinitely
+                if (!client.payment_received_at) {
                     return res.json({
                         has_deadline: false,
                         expired: false,
-                        message: 'Kein Upload-Zeitlimit gesetzt'
+                        payment_received: false,
+                        message: 'Kein Upload-Zeitlimit — 1. Rate noch nicht bestätigt'
                     });
                 }
 
-                const portalSentDate = new Date(client.portal_link_sent_at);
-                const deadline = new Date(portalSentDate.getTime() + UPLOAD_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+                const paymentDate = new Date(client.payment_received_at);
+                const deadline = new Date(paymentDate.getTime() + UPLOAD_WINDOW_DAYS * 24 * 60 * 60 * 1000);
                 const now = new Date();
                 const daysRemaining = Math.max(0, Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)));
                 const expired = now > deadline;
@@ -925,7 +926,8 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     deadline: deadline.toISOString(),
                     days_remaining: daysRemaining,
                     expired,
-                    portal_link_sent_at: client.portal_link_sent_at,
+                    payment_received: true,
+                    payment_received_at: client.payment_received_at,
                     upload_window_days: UPLOAD_WINDOW_DAYS
                 });
             } catch (error) {
@@ -943,20 +945,21 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     return res.status(404).json({ error: 'Client not found' });
                 }
 
-                // 30-day upload window check
+                // 30-day upload window check — timer starts from payment_received_at
+                // No payment = no deadline (uploads always allowed)
                 const UPLOAD_WINDOW_DAYS = 30;
-                if (client.portal_link_sent_at) {
-                    const portalSentDate = new Date(client.portal_link_sent_at);
+                if (client.payment_received_at) {
+                    const paymentDate = new Date(client.payment_received_at);
                     const now = new Date();
-                    const daysSinceSent = Math.floor((now - portalSentDate) / (1000 * 60 * 60 * 24));
-                    if (daysSinceSent > UPLOAD_WINDOW_DAYS) {
-                        console.log(`⛔ Upload rejected for ${client.aktenzeichen}: ${daysSinceSent} days since portal sent (limit: ${UPLOAD_WINDOW_DAYS})`);
+                    const daysSincePayment = Math.floor((now - paymentDate) / (1000 * 60 * 60 * 24));
+                    if (daysSincePayment > UPLOAD_WINDOW_DAYS) {
+                        console.log(`⛔ Upload rejected for ${client.aktenzeichen}: ${daysSincePayment} days since payment (limit: ${UPLOAD_WINDOW_DAYS})`);
                         return res.status(403).json({
                             error: 'Upload-Zeitraum abgelaufen',
-                            message: `Der Upload-Zeitraum von ${UPLOAD_WINDOW_DAYS} Tagen ist abgelaufen. Bitte kontaktieren Sie uns.`,
-                            days_since_sent: daysSinceSent,
+                            message: `Der Upload-Zeitraum von ${UPLOAD_WINDOW_DAYS} Tagen nach Zahlungseingang ist abgelaufen. Bitte kontaktieren Sie uns.`,
+                            days_since_payment: daysSincePayment,
                             upload_window_days: UPLOAD_WINDOW_DAYS,
-                            portal_link_sent_at: client.portal_link_sent_at
+                            payment_received_at: client.payment_received_at
                         });
                     }
                 }
