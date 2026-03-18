@@ -224,6 +224,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           email_subject,
           email_body_preview,
           email_body_full,
+          intent,
         } = req.body;
 
         // Validate required fields
@@ -255,6 +256,9 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
         if (!client) {
           console.log(`⚠️ Matcher webhook: Client not found for ${client_aktenzeichen || client_name || creditor_name}`);
           // Still save to CreditorEmail as no_match so it appears in admin inbox
+          // Auto-dismiss auto_reply/spam — no human review needed
+          const autoDismissIntents = ['auto_reply', 'spam'];
+          const isAutoDismiss = autoDismissIntents.includes(intent);
           try {
             await CreditorEmail.create({
               email_id,
@@ -272,8 +276,9 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               email_subject,
               email_body_preview,
               email_body_full,
-              review_status: 'pending',
-              needs_review: !!(client_aktenzeichen || client_name),
+              intent,
+              review_status: isAutoDismiss ? 'dismissed' : 'pending',
+              needs_review: isAutoDismiss ? false : !!(client_aktenzeichen || client_name),
               processed_at: new Date(processed_at || Date.now()),
             });
           } catch (emailErr) {
@@ -352,6 +357,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
             email_subject,
             email_body_preview,
             email_body_full,
+            intent,
             review_status: needs_review ? 'pending' : 'reviewed',
             needs_review: !!needs_review,
             processed_at: new Date(processed_at || Date.now()),

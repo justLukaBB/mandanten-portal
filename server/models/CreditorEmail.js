@@ -62,6 +62,9 @@ const creditorEmailSchema = new mongoose.Schema({
   reviewed_by: { type: String },
   reviewed_at: { type: Date },
 
+  // Intent classification from matcher
+  intent: { type: String, index: true },
+
   // Metadata
   needs_review: { type: Boolean, default: false },
   matcher_metadata: { type: mongoose.Schema.Types.Mixed },
