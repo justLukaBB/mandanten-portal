@@ -146,6 +146,9 @@ const createAdminReviewRouter = require('./routes/admin-review');
 const createAdminSecondLetterRouter = require('./routes/admin-second-letter');
 const createAdminEmailsRouter = require('./routes/admin-emails');
 
+// SuperAdmin Routes
+const superadminRoutes = require('./routes/superadmin');
+
 // Client Routes
 const createClientPortalRouter = require('./routes/client-portal');
 const createClientCreditorRouter = require('./routes/client-creditor');
@@ -412,6 +415,9 @@ app.use('/api/admin', createAdminSecondLetterRouter({ secondLetterTriggerService
 app.use('/api/admin', createAdminEmailsRouter({ CreditorEmail, Client }));
 
 app.use('/api/admin/schufa', createSchufaRouter({ Client, safeClientUpdate: clientService.safeClientUpdate.bind(clientService), getClient: clientService.getClient.bind(clientService) }));
+
+// 10.6.1 SuperAdmin Routes
+app.use('/api/superadmin', superadminRoutes);
 
 // 10.7 Client Portal Global Routes
 
