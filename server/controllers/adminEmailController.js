@@ -1,4 +1,12 @@
 const createAdminEmailController = ({ CreditorEmail, Client }) => {
+
+  // Build tenant filter for CreditorEmail based on req.tenantFilter
+  // superadmin: {} (all), admin: { kanzleiId: "..." }
+  function emailTenantFilter(req) {
+    if (req.adminRole === 'superadmin') return {};
+    return { kanzleiId: req.kanzleiId };
+  }
+
   return {
     /**
      * GET /api/admin/emails
@@ -20,7 +28,7 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
         const pageNum = Math.max(1, parseInt(page));
         const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
 
-        const filter = {};
+        const filter = { ...emailTenantFilter(req) };
 
         if (letter_type && letter_type !== 'all') {
           filter.letter_type = letter_type;
@@ -74,6 +82,8 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
      */
     stats: async (req, res) => {
       try {
+        const tf = emailTenantFilter(req);
+
         const [
           total,
           pending,
@@ -83,18 +93,18 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
           reviewed,
           dismissed,
         ] = await Promise.all([
-          CreditorEmail.countDocuments(),
-          CreditorEmail.countDocuments({ review_status: 'pending' }),
-          CreditorEmail.countDocuments({ match_status: 'needs_review' }),
-          CreditorEmail.countDocuments({ match_status: 'auto_matched' }),
-          CreditorEmail.countDocuments({ match_status: 'no_match' }),
-          CreditorEmail.countDocuments({ review_status: 'reviewed' }),
-          CreditorEmail.countDocuments({ review_status: 'dismissed' }),
+          CreditorEmail.countDocuments({ ...tf }),
+          CreditorEmail.countDocuments({ ...tf, review_status: 'pending' }),
+          CreditorEmail.countDocuments({ ...tf, match_status: 'needs_review' }),
+          CreditorEmail.countDocuments({ ...tf, match_status: 'auto_matched' }),
+          CreditorEmail.countDocuments({ ...tf, match_status: 'no_match' }),
+          CreditorEmail.countDocuments({ ...tf, review_status: 'reviewed' }),
+          CreditorEmail.countDocuments({ ...tf, review_status: 'dismissed' }),
         ]);
 
         // Average confidence
         const avgResult = await CreditorEmail.aggregate([
-          { $match: { match_confidence: { $ne: null } } },
+          { $match: { ...tf, match_confidence: { $ne: null } } },
           { $group: { _id: null, avg: { $avg: '$match_confidence' } } },
         ]);
         const avgConfidence = avgResult[0]?.avg ? Math.round(avgResult[0].avg) : 0;
@@ -124,7 +134,7 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
      */
     detail: async (req, res) => {
       try {
-        const email = await CreditorEmail.findById(req.params.id).lean();
+        const email = await CreditorEmail.findOne({ _id: req.params.id, ...emailTenantFilter(req) }).lean();
         if (!email) {
           return res.status(404).json({ error: 'Email not found' });
         }
@@ -156,8 +166,8 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
           update.review_notes = review_notes;
         }
 
-        const email = await CreditorEmail.findByIdAndUpdate(
-          req.params.id,
+        const email = await CreditorEmail.findOneAndUpdate(
+          { _id: req.params.id, ...emailTenantFilter(req) },
           { $set: update },
           { new: true }
         ).lean();
@@ -190,13 +200,14 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
           return res.status(404).json({ error: 'Client not found' });
         }
 
-        const email = await CreditorEmail.findByIdAndUpdate(
-          req.params.id,
+        const email = await CreditorEmail.findOneAndUpdate(
+          { _id: req.params.id, ...emailTenantFilter(req) },
           {
             $set: {
               client_id: client._id,
               client_aktenzeichen: client.aktenzeichen,
               client_name: `${client.firstName} ${client.lastName}`,
+              kanzleiId: client.kanzleiId,
               match_status: 'auto_matched',
               review_status: 'reviewed',
               reviewed_at: new Date(),

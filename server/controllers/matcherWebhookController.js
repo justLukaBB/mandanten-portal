@@ -75,6 +75,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           // Still save to CreditorEmail as no_match
           try {
             await CreditorEmail.create({
+              kanzleiId: '',
               letter_type: 'second',
               creditor_name,
               creditor_email,
@@ -144,6 +145,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
         // Save to CreditorEmail collection for inbox dashboard
         try {
           await CreditorEmail.create({
+            kanzleiId: client.kanzleiId,
             letter_type: 'second',
             creditor_name,
             creditor_email,
@@ -261,6 +263,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           const isAutoDismiss = autoDismissIntents.includes(intent);
           try {
             await CreditorEmail.create({
+              kanzleiId: '',
               email_id,
               letter_type: 'first',
               creditor_name: creditor_name || creditor_email || 'unknown',
@@ -340,6 +343,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
         // Save to CreditorEmail collection for inbox dashboard
         try {
           await CreditorEmail.create({
+            kanzleiId: client.kanzleiId,
             email_id,
             letter_type: 'first',
             creditor_name,

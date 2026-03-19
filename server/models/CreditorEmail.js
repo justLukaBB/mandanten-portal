@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const creditorEmailSchema = new mongoose.Schema({
+  // Tenant isolation
+  kanzleiId: { type: String, index: true },
+
   // Matcher identification
   email_id: { type: String, index: true },
 
