@@ -8,7 +8,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Webhook secret - should match WEBHOOK_SECRET in FastAPI
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+if (!WEBHOOK_SECRET) {
+  console.warn('WARNING: WEBHOOK_SECRET not set — webhook signature verification will reject all requests');
+}
 
 // Maximum age of webhook in seconds (5 minutes)
 const MAX_WEBHOOK_AGE_SECONDS = 300;

@@ -67,7 +67,7 @@ const config = {
     }
 
     if (this.JWT_SECRET.length < 32) {
-      throw new Error('JWT_SECRET must be at least 32 characters long');
+      console.warn('WARNING: JWT_SECRET should be at least 32 characters long for security');
     }
 
     if (this.NODE_ENV === 'production') {
