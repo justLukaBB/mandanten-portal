@@ -38,7 +38,9 @@ const config = {
     'http://localhost:4000',
     'http://localhost:5173',
     'https://mandanten-portal.onrender.com',
-    'https://mandanten-portal-frontend.onrender.com'
+    'https://mandanten-portal-frontend.onrender.com',
+    'https://app-rasolv.onrender.com',
+    'https://mandanten-portal-docker.onrender.com'
   ],
   
   // Rate Limiting
