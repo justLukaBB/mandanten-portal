@@ -11,7 +11,7 @@ const multer = require('multer');
 const fs = require('fs');
 require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Import configuration and middleware
 const config = require('./config');
@@ -194,8 +194,9 @@ function setupSocket() {
 
   io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: config.CORS_ORIGINS,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
     path: '/socket.io',
   });
@@ -233,7 +234,7 @@ app.set('trust proxy', true);
 app.use(securityHeaders);
 app.use(rateLimits.general);
 app.use(cors({
-  origin: true, // Allow all origins temporarily
+  origin: config.CORS_ORIGINS,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
@@ -274,8 +275,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 10.1 Health & Static
 app.use('/api/health', healthRoutes);
-app.use('/documents', express.static(path.join(__dirname, 'documents')));
-app.use('/docs', express.static(path.join(__dirname, 'docs')));
+app.use('/documents', authenticateAdmin, express.static(path.join(__dirname, 'documents')));
+app.use('/docs', authenticateAdmin, express.static(path.join(__dirname, 'docs')));
 
 // 10.2 Webhooks
 // Create webhook controller for both HTTP routes and background worker
@@ -425,7 +426,9 @@ app.use('/api', createClientCreditorRouter({
   // clientsData passed as legacy, but should be handled by DB now
   clientsData, // FIXED: Use local clientsData
   creditorContactService,
-  sideConversationMonitor: globalSideConversationMonitor
+  sideConversationMonitor: globalSideConversationMonitor,
+  authenticateClient,
+  authenticateAdmin
 }));
 
 // 10.8 Test Routes

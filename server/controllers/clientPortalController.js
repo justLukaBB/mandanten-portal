@@ -814,7 +814,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 if (authHeader && authHeader.startsWith('Bearer ')) {
                     try {
                         const token = authHeader.split(' ')[1];
-                        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+                        const decoded = jwt.verify(token, process.env.JWT_SECRET);
                         const clientId = decoded.clientId || decoded.id || decoded.sessionId;
                         if (clientId) {
                             client = await getClient(clientId);

@@ -4,10 +4,10 @@ const config = {
   PORT: process.env.PORT || 3001,
   
   // Security
-  JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
-  
+  JWT_SECRET: process.env.JWT_SECRET,
+
   // Database
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice',
+  MONGODB_URI: process.env.MONGODB_URI,
   
   // External APIs
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
@@ -35,6 +35,8 @@ const config = {
   // CORS
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || [
     'http://localhost:3000',
+    'http://localhost:4000',
+    'http://localhost:5173',
     'https://mandanten-portal.onrender.com',
     'https://mandanten-portal-frontend.onrender.com'
   ],
@@ -53,23 +55,27 @@ const config = {
   // Agent Review Configuration
   MANUAL_REVIEW_CONFIDENCE_THRESHOLD: parseFloat(process.env.MANUAL_REVIEW_CONFIDENCE_THRESHOLD) || 0.8,
   AGENT_SESSION_TIMEOUT_HOURS: parseInt(process.env.AGENT_SESSION_TIMEOUT_HOURS) || 4,
-  AGENT_CREATION_KEY: process.env.AGENT_CREATION_KEY || 'change-me-in-production',
+  AGENT_CREATION_KEY: process.env.AGENT_CREATION_KEY,
   
   // Validation
   validate() {
     const required = ['MONGODB_URI', 'JWT_SECRET'];
     const missing = required.filter(key => !this[key]);
-    
+
     if (missing.length > 0) {
-      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}. Set them in .env or environment.`);
     }
-    
+
+    if (this.JWT_SECRET.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters long');
+    }
+
     if (this.NODE_ENV === 'production') {
-      const prodRequired = ['ANTHROPIC_API_KEY', 'GOOGLE_CLOUD_PROJECT_ID'];
+      const prodRequired = ['ANTHROPIC_API_KEY', 'GOOGLE_CLOUD_PROJECT_ID', 'AGENT_CREATION_KEY'];
       const prodMissing = prodRequired.filter(key => !this[key]);
-      
+
       if (prodMissing.length > 0) {
-        console.warn(`⚠️ Missing production environment variables: ${prodMissing.join(', ')}`);
+        console.warn(`Missing production environment variables: ${prodMissing.join(', ')}`);
       }
     }
   }

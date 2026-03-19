@@ -20,16 +20,7 @@ module.exports = ({ creditorContactService, documentReminderService, Client, saf
 
     // Process timeouts
     router.post('/admin/process-timeout-creditors',
-        // Auth is not strictly enforced in server.js but should be? 
-        // server.js line 965: no auth middleware!
-        // We should add it for safety, or keep it open if it's called by cron/webhook?
-        // It says "manual trigger". Let's assume it's safe to add auth if it's under /api/admin.
-        // However, looking at server.js, 1222 has auth. 965 does not.
-        // I will add auth to be safe, unless it breaks external triggers.
-        // Given it's a "process" endpoint, it might be triggered by a cron job service.
-        // I will Leave it optional or check logic.
-        // Let's stick to server.js behavior: NO AUTH on process-timeout-creditors (maybe used by cron?)
-        // BUT trigger-document-reminders explicitly has auth.
+        authAdminMiddleware,
         controller.processTimeoutCreditors
     );
 
@@ -52,7 +43,7 @@ module.exports = ({ creditorContactService, documentReminderService, Client, saf
     // So we should mount it at / (or handle the prefix in server.js)
     // If we mount this router at /api, then:
     router.post('/clients/:clientId/fix-creditor-contacts',
-        // No auth in server.js line 1083.
+        authAdminMiddleware,
         controller.fixCreditorContacts
     );
 

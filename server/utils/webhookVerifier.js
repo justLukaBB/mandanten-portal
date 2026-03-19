@@ -8,7 +8,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Webhook secret - should match WEBHOOK_SECRET in FastAPI
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-webhook-secret-key';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 // Maximum age of webhook in seconds (5 minutes)
 const MAX_WEBHOOK_AGE_SECONDS = 300;
@@ -55,9 +55,6 @@ function verifyWebhookSignature(payload, signature, timestamp) {
       // Allow 60 seconds clock skew into the future
       return { valid: false, error: 'Webhook timestamp is in the future' };
     }
-    console.log("================================")
-    console.log("webhook screet",WEBHOOK_SECRET)
-    console.log("================================")
     // Compute expected signature
     // FastAPI signs: timestamp + payload
     const signaturePayload = timestamp + payload;

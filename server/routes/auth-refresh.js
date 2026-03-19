@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { generateClientToken, generateAdminToken, generateAgentToken } = require('../middleware/auth');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Simple in-memory rate limiter for refresh endpoint
 const refreshAttempts = new Map(); // key: IP → { count, windowStart }

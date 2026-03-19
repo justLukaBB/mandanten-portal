@@ -3,6 +3,7 @@ const router = express.Router();
 const Client = require('../models/Client');
 const DelayedProcessingService = require('../services/delayedProcessingService');
 const LoginReminderService = require('../services/loginReminderService');
+const { authenticateAdmin } = require('../middleware/auth');
 
 const delayedProcessingService = new DelayedProcessingService();
 const loginReminderService = new LoginReminderService();
@@ -10,7 +11,7 @@ const loginReminderService = new LoginReminderService();
 /**
  * Get all clients with scheduled processing webhooks
  */
-router.get('/delayed-processing', async (req, res) => {
+router.get('/delayed-processing', authenticateAdmin, async (req, res) => {
   try {
     const pendingClients = await Client.find({
       processing_complete_webhook_scheduled: true,
@@ -69,7 +70,7 @@ router.get('/delayed-processing', async (req, res) => {
 /**
  * Trigger processing immediately for a specific client (admin override)
  */
-router.post('/delayed-processing/:clientId/trigger-now', async (req, res) => {
+router.post('/delayed-processing/:clientId/trigger-now', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
 
@@ -136,7 +137,7 @@ router.post('/delayed-processing/:clientId/trigger-now', async (req, res) => {
 /**
  * Cancel scheduled webhook for a client
  */
-router.post('/delayed-processing/:clientId/cancel', async (req, res) => {
+router.post('/delayed-processing/:clientId/cancel', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
 
@@ -176,7 +177,7 @@ router.post('/delayed-processing/:clientId/cancel', async (req, res) => {
 /**
  * Reschedule webhook with custom delay
  */
-router.post('/delayed-processing/:clientId/reschedule', async (req, res) => {
+router.post('/delayed-processing/:clientId/reschedule', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
     const { delayHours = 24 } = req.body;
@@ -221,7 +222,7 @@ router.post('/delayed-processing/:clientId/reschedule', async (req, res) => {
 /**
  * Immediate review trigger - creates Zendesk ticket instantly for any client ready for review
  */
-router.post('/immediate-review/:clientId', async (req, res) => {
+router.post('/immediate-review/:clientId', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
 
@@ -320,7 +321,7 @@ router.post('/immediate-review/:clientId', async (req, res) => {
 /**
  * Manual trigger of the delayed webhook check (for testing)
  */
-router.post('/delayed-processing/check-now', async (req, res) => {
+router.post('/delayed-processing/check-now', authenticateAdmin, async (req, res) => {
   try {
     console.log('📧 Admin triggered manual delayed webhook check');
 
@@ -347,7 +348,7 @@ router.post('/delayed-processing/check-now', async (req, res) => {
 /**
  * Manual trigger of the login reminder check (for testing)
  */
-router.post('/login-reminders/check-now', async (req, res) => {
+router.post('/login-reminders/check-now', authenticateAdmin, async (req, res) => {
   try {
     console.log('📧 Admin triggered manual login reminder check');
 
@@ -376,7 +377,7 @@ router.post('/login-reminders/check-now', async (req, res) => {
  * Get clients awaiting confirmation (for monitoring auto-confirmation)
  * TEST MODE: 3 minutes instead of 7 days
  */
-router.get('/auto-confirmation/pending', async (req, res) => {
+router.get('/auto-confirmation/pending', authenticateAdmin, async (req, res) => {
   try {
     const threeMinutesAgo = new Date();
     threeMinutesAgo.setMinutes(threeMinutesAgo.getMinutes() - 3);
@@ -437,7 +438,7 @@ router.get('/auto-confirmation/pending', async (req, res) => {
 /**
  * Manual trigger of auto-confirmation check (for testing)
  */
-router.post('/auto-confirmation/check-now', async (req, res) => {
+router.post('/auto-confirmation/check-now', authenticateAdmin, async (req, res) => {
   try {
     console.log('⏰ Admin triggered manual auto-confirmation check');
 
@@ -464,7 +465,7 @@ router.post('/auto-confirmation/check-now', async (req, res) => {
 /**
  * Force auto-confirm a specific client (admin override)
  */
-router.post('/auto-confirmation/:clientId/force-confirm', async (req, res) => {
+router.post('/auto-confirmation/:clientId/force-confirm', authenticateAdmin, async (req, res) => {
   try {
     const { clientId } = req.params;
 

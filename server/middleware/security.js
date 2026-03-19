@@ -2,12 +2,22 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const { body, validationResult } = require('express-validator');
 
-// Rate limiting configurations - temporarily disabled for IPv6 compatibility
+// Rate limiting using express-rate-limit with IPv6 compatibility
 const createRateLimit = (windowMs, max, message) => {
-  return (req, res, next) => {
-    // Skip rate limiting entirely to avoid IPv6 validation errors
-    next();
-  };
+  return rateLimit({
+    windowMs,
+    max,
+    message: { error: message },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Fix IPv6: normalize key to handle ::ffff: prefix
+    keyGenerator: (req) => {
+      const ip = req.ip || req.connection.remoteAddress || '0.0.0.0';
+      // Strip IPv6-mapped IPv4 prefix (::ffff:127.0.0.1 → 127.0.0.1)
+      return ip.replace(/^::ffff:/, '');
+    },
+    validate: false, // Disable strict IP validation to avoid IPv6 errors
+  });
 };
 
 // Different rate limits for different endpoints

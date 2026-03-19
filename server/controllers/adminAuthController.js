@@ -12,10 +12,14 @@ class AdminAuthController {
         try {
             const { email, password } = req.body;
 
-            // TODO: Replace with proper admin user management
-            // For now, use environment variables for admin credentials
-            const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@ra-scuric.de';
-            const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Espresso1?!';
+            // TODO: Replace with proper admin user management (DB-backed)
+            const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+            const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+            if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+                console.error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set');
+                return res.status(500).json({ error: 'Server-Konfigurationsfehler' });
+            }
 
             if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
                 return res.status(401).json({

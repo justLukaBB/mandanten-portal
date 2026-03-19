@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const TestDataController = require('../controllers/testDataController');
+const { authenticateAdmin } = require('../middleware/auth');
 
 /**
  * Test Data Router Factory
@@ -15,17 +16,17 @@ module.exports = ({ testDataService, creditorContactService, clientsData, Client
     });
 
     // Initialize demo data
-    router.post('/test/phase2/init-demo-client', controller.initDemoClient);
+    router.post('/test/phase2/init-demo-client', authenticateAdmin, controller.initDemoClient);
 
     // Reset test data
-    router.post('/test/phase2/reset', controller.resetTestData);
+    router.post('/test/phase2/reset', authenticateAdmin, controller.resetTestData);
 
     // Create test agent
-    router.post('/test/create-agent', controller.createTestAgent);
+    router.post('/test/create-agent', authenticateAdmin, controller.createTestAgent);
 
     // Document Debug Routes
-    router.get('/documents-list', controller.getDocumentsList);
-    router.get('/test-document', controller.testDocumentAccess);
+    router.get('/documents-list', authenticateAdmin, controller.getDocumentsList);
+    router.get('/test-document', authenticateAdmin, controller.testDocumentAccess);
 
     return router;
 };

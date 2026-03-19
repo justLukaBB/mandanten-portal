@@ -1,10 +1,11 @@
 const express = require('express');
 const Client = require('../models/Client');
+const { authenticateAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
 // GET /api/test/test-client?id=<clientIdOrAktenzeichen>
-router.get('/test-client', async (req, res) => {
+router.get('/test-client', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) {
@@ -36,7 +37,7 @@ router.get('/test-client', async (req, res) => {
 });
 
 // GET /api/test/clear-final-creditors?id=<clientIdOrAktenzeichen>
-router.get('/clear-final-creditors', async (req, res) => {
+router.get('/clear-final-creditors', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) {
@@ -72,7 +73,7 @@ router.get('/clear-final-creditors', async (req, res) => {
 });
 
 // GET /api/test/client?id=<clientIdOrAktenzeichen>
-router.get('/client', async (req, res) => {
+router.get('/client', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) {
@@ -98,7 +99,7 @@ router.get('/client', async (req, res) => {
 });
 
 // GET /api/test/mark-first-payment?id=<clientIdOrAktenzeichen>
-router.get('/mark-first-payment', async (req, res) => {
+router.get('/mark-first-payment', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) {

@@ -43,7 +43,7 @@ module.exports = ({ Client, safeClientUpdate, getClient, triggerProcessingComple
   router.post(
     '/ai-processing',
     express.raw({ type: 'application/json', limit: '10mb' }),
-    webhookVerifier.optionalMiddleware, // Temporarily allow unsigned webhooks for testing
+    webhookVerifier.middleware,
     controller.handleAiProcessing
   );
 

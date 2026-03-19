@@ -331,41 +331,4 @@ router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Debug endpoint to check password hashing (REMOVE IN PRODUCTION)
-// POST /api/agent-auth/debug-password
-router.post('/debug-password', authenticateAdmin, async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    
-    const agent = await Agent.findOne({ username: username.toLowerCase() });
-    if (!agent) {
-      return res.json({ error: 'Agent not found' });
-    }
-
-    console.log(`🔍 Debug password for ${username}:`);
-    console.log(`- Input password: "${password}"`);
-    console.log(`- Stored hash: "${agent.password_hash}"`);
-    console.log(`- Hash length: ${agent.password_hash.length}`);
-    
-    const isValid = await agent.comparePassword(password);
-    console.log(`- Password valid: ${isValid}`);
-
-    res.json({
-      username: agent.username,
-      password_provided: password,
-      hash_stored: agent.password_hash,
-      hash_length: agent.password_hash.length,
-      is_valid: isValid,
-      debug: 'This endpoint should be removed in production'
-    });
-
-  } catch (error) {
-    console.error('❌ Debug password error:', error);
-    res.status(500).json({
-      error: 'Debug failed',
-      details: error.message
-    });
-  }
-});
-
 module.exports = router;
