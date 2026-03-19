@@ -115,6 +115,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 try {
                     // First try with string fields
                     client = await Client.findOne({
+                        ...req.tenantFilter,
                         $or: [
                             { id: clientId },
                             { aktenzeichen: clientId }
@@ -123,7 +124,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                     // If not found and clientId looks like a MongoDB ObjectId, try _id
                     if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-                        client = await Client.findOne({ _id: clientId });
+                        client = await Client.findOne({ ...req.tenantFilter, _id: clientId });
                     }
                 } catch (findError) {
                     console.error('Error finding client:', findError);
@@ -250,6 +251,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 try {
                     // First try with string fields
                     client = await Client.findOne({
+                        ...req.tenantFilter,
                         $or: [
                             { id: clientId },
                             { aktenzeichen: clientId }
@@ -258,7 +260,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                     // If not found and clientId looks like a MongoDB ObjectId, try _id
                     if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-                        client = await Client.findOne({ _id: clientId });
+                        client = await Client.findOne({ ...req.tenantFilter, _id: clientId });
                     }
                 } catch (findError) {
                     console.error('Error finding client:', findError);
@@ -352,6 +354,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 try {
                     // First try with string fields
                     client = await Client.findOne({
+                        ...req.tenantFilter,
                         $or: [
                             { id: clientId },
                             { aktenzeichen: clientId }
@@ -360,7 +363,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                     // If not found and clientId looks like a MongoDB ObjectId, try _id
                     if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-                        client = await Client.findOne({ _id: clientId });
+                        client = await Client.findOne({ ...req.tenantFilter, _id: clientId });
                     }
                 } catch (findError) {
                     console.error('Error finding client:', findError);
@@ -479,6 +482,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 try {
                     // First try with string fields
                     client = await Client.findOne({
+                        ...req.tenantFilter,
                         $or: [
                             { id: clientId },
                             { aktenzeichen: clientId }
@@ -487,7 +491,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                     // If not found and clientId looks like a MongoDB ObjectId, try _id
                     if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-                        client = await Client.findOne({ _id: clientId });
+                        client = await Client.findOne({ ...req.tenantFilter, _id: clientId });
                     }
                 } catch (findError) {
                     console.error('Error finding client:', findError);
@@ -567,6 +571,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
                 try {
                     // First try with string fields
                     client = await Client.findOne({
+                        ...req.tenantFilter,
                         $or: [
                             { id: clientId },
                             { aktenzeichen: clientId }
@@ -575,7 +580,7 @@ const createAdminClientCreditorController = ({ Client, safeClientUpdate, Delayed
 
                     // If not found and clientId looks like a MongoDB ObjectId, try _id
                     if (!client && /^[0-9a-fA-F]{24}$/.test(clientId)) {
-                        client = await Client.findOne({ _id: clientId });
+                        client = await Client.findOne({ ...req.tenantFilter, _id: clientId });
                     }
                 } catch (findError) {
                     console.error('Error finding client:', findError);

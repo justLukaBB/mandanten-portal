@@ -23,13 +23,16 @@ const authenticateClient = (req, res, next) => {
     // Accept client tokens, session tokens, or any token that has a client identifier
     const hasClientId = decoded.clientId || decoded.sessionId || decoded.id;
 
-    // Allow admin tokens to access client data (admins can view any client)
+    // Allow admin tokens to access client data (scoped to their kanzlei)
     if (decoded.type === 'admin') {
       const pathMatch = req.path.match(/\/clients\/([a-zA-Z0-9_-]+)/);
       if (pathMatch) {
         req.clientId = pathMatch[1];
       }
       req.adminId = decoded.adminId;
+      req.kanzleiId = decoded.kanzleiId;
+      req.adminRole = decoded.role || 'admin';
+      req.tenantFilter = decoded.role === 'superadmin' ? {} : { kanzleiId: decoded.kanzleiId };
       req.isAdmin = true;
       req.type = 'admin';
       return next();
@@ -87,6 +90,10 @@ const authenticateAdmin = (req, res, next) => {
     }
 
     req.adminId = decoded.adminId;
+    req.kanzleiId = decoded.kanzleiId;
+    req.adminRole = decoded.role || 'admin';
+    // Tenant filter: superadmin sees all, regular admin only their kanzlei
+    req.tenantFilter = decoded.role === 'superadmin' ? {} : { kanzleiId: decoded.kanzleiId };
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -112,11 +119,13 @@ const generateClientToken = (clientId, email) => {
   );
 };
 
-// Generate JWT token for admin
-const generateAdminToken = (adminId) => {
+// Generate JWT token for admin (with tenant context)
+const generateAdminToken = (adminId, kanzleiId, role) => {
   return jwt.sign(
     {
       adminId,
+      kanzleiId,
+      role: role || 'admin',
       type: 'admin'
     },
     JWT_SECRET,

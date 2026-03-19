@@ -240,7 +240,7 @@ const createAdminCreditorController = ({ Client, documentProcessor, safeClientUp
                 const { documentId } = req.body; // Optional specific doc ID
 
                 // Use injected Client model
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ id: clientId }, { aktenzeichen: clientId }] });
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }

@@ -185,7 +185,7 @@ const createAdminEmailController = ({ CreditorEmail, Client }) => {
           return res.status(400).json({ error: 'client_id required' });
         }
 
-        const client = await Client.findById(client_id).lean();
+        const client = await Client.findOne({ _id: client_id, ...req.tenantFilter }).lean();
         if (!client) {
           return res.status(404).json({ error: 'Client not found' });
         }

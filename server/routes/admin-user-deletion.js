@@ -35,9 +35,9 @@ router.delete('/users/:userId', authenticateAdmin, async (req, res) => {
     }
 
     // Find the user - try by id first, then by aktenzeichen
-    let client = await Client.findOne({ id: userId });
+    let client = await Client.findOne({ id: userId, ...req.tenantFilter });
     if (!client) {
-      client = await Client.findOne({ aktenzeichen: userId });
+      client = await Client.findOne({ aktenzeichen: userId, ...req.tenantFilter });
     }
 
     if (!client) {

@@ -136,7 +136,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 const dateTo = req.query.dateTo;
 
                 // Build base query
-                let baseQuery = {};
+                let baseQuery = { ...req.tenantFilter };
 
                 // Status Filter
                 if (status && status !== 'all') {
@@ -296,6 +296,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
 
                 // Check if client with same aktenzeichen already exists
                 const existingClient = await Client.findOne({
+                    ...req.tenantFilter,
                     $or: [
                         { aktenzeichen: clientData.aktenzeichen },
                         { email: clientData.email }
@@ -367,6 +368,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 // Create new client in MongoDB
                 const newClient = new Client({
                     ...clientData,
+                    kanzleiId: req.kanzleiId,
                     case_source: caseSource,
                     leineweber_task_id: leineweberTaskId,
                     ...leineweberFields,
@@ -445,12 +447,12 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 }
 
                 // Get counts before deletion for confirmation
-                const clientCount = await Client.countDocuments();
+                const clientCount = await Client.countDocuments({ ...req.tenantFilter });
 
                 console.log(`📊 Found ${clientCount} clients in database`);
 
                 // Delete all clients (this will cascade delete all related data)
-                const deleteResult = await Client.deleteMany({});
+                const deleteResult = await Client.deleteMany({ ...req.tenantFilter });
 
                 console.log(`✅ Deleted ${deleteResult.deletedCount} clients from MongoDB`);
 
@@ -503,7 +505,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             try {
                 console.log('📊 Dashboard Status: Getting enhanced client statuses');
 
-                const clients = await Client.find({})
+                const clients = await Client.find({ ...req.tenantFilter })
                     .select('id firstName lastName email aktenzeichen documents final_creditor_list first_payment_received payment_ticket_type current_status workflow_status payment_processed_at document_request_sent_at all_documents_processed_at created_at updated_at last_login portal_token')
                     .sort({ updated_at: -1 })
                     .lean();
@@ -582,7 +584,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         markPaymentReceived: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -627,7 +629,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 let skippedCount = 0;
 
                 for (const clientId of client_ids) {
-                    const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                    const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
                     if (!client) {
                         skippedCount++;
                         continue;
@@ -657,7 +659,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         sendCreditorConfirmationEmail: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -717,7 +719,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         triggerPaymentHandler: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -758,7 +760,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         resetPaymentStatus: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -829,9 +831,9 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 const clientId = req.params.clientId;
 
                 // Find client by ID or Aktenzeichen
-                let client = await Client.findOne({ id: clientId });
+                let client = await Client.findOne({ ...req.tenantFilter, id: clientId });
                 if (!client) {
-                    client = await Client.findOne({ aktenzeichen: clientId });
+                    client = await Client.findOne({ ...req.tenantFilter, aktenzeichen: clientId });
                 }
 
                 if (!client) {
@@ -940,7 +942,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         skipUploadWindow: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -1011,7 +1013,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 const clientId = req.params.clientId;
                 const { additional_days = 30 } = req.body;
 
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -1065,7 +1067,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
             try {
                 const clientId = req.params.clientId;
                 const { adminName } = req.body;
-                const client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -1137,7 +1139,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 const dateFrom = req.query.dateFrom;
                 const dateTo = req.query.dateTo;
 
-                let query = {};
+                let query = { ...req.tenantFilter };
 
                 if (status && status !== 'all') {
                     query.workflow_status = status;
@@ -1356,7 +1358,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 if (clientId.match(/^[0-9a-fA-F]{24}$/)) {
                     orConditions.unshift({ _id: clientId });
                 }
-                const client = await Client.findOne({ $or: orConditions });
+                const client = await Client.findOne({ ...req.tenantFilter, $or: orConditions });
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -1384,7 +1386,7 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                 // Use database service directly if available, or Client model
                 let client;
                 if (databaseService && databaseService.isHealthy()) {
-                    client = await Client.findOne({ $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
+                    client = await Client.findOne({ ...req.tenantFilter, $or: [{ _id: clientId }, { id: clientId }, { aktenzeichen: clientId }] });
                 } else {
                     // Fallback to in-memory if needed (legacy)
                     client = Object.values(clientsData).find(c => c.id === clientId || c.aktenzeichen === clientId);

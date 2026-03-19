@@ -15,12 +15,12 @@ class AdminSettlementController {
     }
 
     // Helper to get aktenzeichen
-    async _getClientAktenzeichen(clientId) {
+    async _getClientAktenzeichen(clientId, tenantFilter = {}) {
         try {
             // Try to find by id first, then by aktenzeichen
-            let client = await Client.findOne({ id: clientId });
+            let client = await Client.findOne({ ...tenantFilter, id: clientId });
             if (!client) {
-                client = await Client.findOne({ aktenzeichen: clientId });
+                client = await Client.findOne({ ...tenantFilter, aktenzeichen: clientId });
             }
             return client ? client.aktenzeichen : null;
         } catch (error) {
@@ -38,7 +38,7 @@ class AdminSettlementController {
             const { clientId } = req.params;
 
             // Convert clientId to aktenzeichen
-            const aktenzeichen = await this._getClientAktenzeichen(clientId);
+            const aktenzeichen = await this._getClientAktenzeichen(clientId, req.tenantFilter);
             if (!aktenzeichen) {
                 return res.status(404).json({
                     success: false,
@@ -71,7 +71,7 @@ class AdminSettlementController {
             const { timeoutDays = 30 } = req.body;
 
             // Convert clientId to aktenzeichen
-            const aktenzeichen = await this._getClientAktenzeichen(clientId);
+            const aktenzeichen = await this._getClientAktenzeichen(clientId, req.tenantFilter);
             if (!aktenzeichen) {
                 return res.status(404).json({
                     success: false,
@@ -103,7 +103,7 @@ class AdminSettlementController {
             const { clientId } = req.params;
 
             // Convert clientId to aktenzeichen
-            const aktenzeichen = await this._getClientAktenzeichen(clientId);
+            const aktenzeichen = await this._getClientAktenzeichen(clientId, req.tenantFilter);
             if (!aktenzeichen) {
                 return res.status(404).json({
                     success: false,
@@ -135,7 +135,7 @@ class AdminSettlementController {
             const { clientId } = req.params;
 
             // Convert clientId to aktenzeichen
-            const aktenzeichen = await this._getClientAktenzeichen(clientId);
+            const aktenzeichen = await this._getClientAktenzeichen(clientId, req.tenantFilter);
             if (!aktenzeichen) {
                 return res.status(404).json({
                     success: false,
@@ -144,7 +144,7 @@ class AdminSettlementController {
             }
 
             // Get client data to analyze nullplan responses
-            const client = await Client.findOne({ aktenzeichen: aktenzeichen });
+            const client = await Client.findOne({ ...req.tenantFilter, aktenzeichen: aktenzeichen });
             if (!client) {
                 return res.status(404).json({
                     success: false,
@@ -200,7 +200,7 @@ class AdminSettlementController {
             }
 
             // Convert clientId to aktenzeichen if needed - creditorService methods usually take aktenzeichen
-            const aktenzeichen = await this._getClientAktenzeichen(clientId);
+            const aktenzeichen = await this._getClientAktenzeichen(clientId, req.tenantFilter);
             if (!aktenzeichen) {
                 return res.status(404).json({ error: 'Client not found' });
             }

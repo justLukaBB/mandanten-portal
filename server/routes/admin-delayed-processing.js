@@ -14,6 +14,7 @@ const loginReminderService = new LoginReminderService();
 router.get('/delayed-processing', authenticateAdmin, async (req, res) => {
   try {
     const pendingClients = await Client.find({
+      ...req.tenantFilter,
       processing_complete_webhook_scheduled: true,
       processing_complete_webhook_triggered: { $ne: true }
     })
@@ -74,7 +75,7 @@ router.post('/delayed-processing/:clientId/trigger-now', authenticateAdmin, asyn
   try {
     const { clientId } = req.params;
 
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
     if (!client) {
       return res.status(404).json({
         success: false,
@@ -141,7 +142,7 @@ router.post('/delayed-processing/:clientId/cancel', authenticateAdmin, async (re
   try {
     const { clientId } = req.params;
 
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
     if (!client) {
       return res.status(404).json({
         success: false,
@@ -182,7 +183,7 @@ router.post('/delayed-processing/:clientId/reschedule', authenticateAdmin, async
     const { clientId } = req.params;
     const { delayHours = 24 } = req.body;
 
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
     if (!client) {
       return res.status(404).json({
         success: false,
@@ -226,7 +227,7 @@ router.post('/immediate-review/:clientId', authenticateAdmin, async (req, res) =
   try {
     const { clientId } = req.params;
 
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
     if (!client) {
       return res.status(404).json({
         success: false,
@@ -384,6 +385,7 @@ router.get('/auto-confirmation/pending', authenticateAdmin, async (req, res) => 
 
     // Find clients awaiting confirmation
     const awaitingClients = await Client.find({
+      ...req.tenantFilter,
       current_status: 'awaiting_client_confirmation',
       admin_approved: true,
       client_confirmed_creditors: { $ne: true }
@@ -469,7 +471,7 @@ router.post('/auto-confirmation/:clientId/force-confirm', authenticateAdmin, asy
   try {
     const { clientId } = req.params;
 
-    const client = await Client.findOne({ id: clientId });
+    const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
     if (!client) {
       return res.status(404).json({
         success: false,

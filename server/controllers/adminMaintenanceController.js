@@ -102,7 +102,7 @@ class AdminMaintenanceController {
 
             // Get client from DB 
             // Note: server.js used clientsData[clientId] which is LEGACY. We must use DB now.
-            const client = await this.Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] });
+            const client = await this.Client.findOne({ ...req.tenantFilter, $or: [{ id: clientId }, { aktenzeichen: clientId }] });
 
             if (!client) {
                 return res.status(404).json({ error: 'Client not found' });

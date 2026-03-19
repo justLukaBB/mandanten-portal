@@ -356,6 +356,7 @@ Diese E-Mail wurde automatisch generiert.
             const searchFilter = req.query.search ? req.query.search.toLowerCase().trim() : '';
 
             const clients = await Client.find({
+              ...req.tenantFilter,
               $or: [
                 {
                   final_creditor_list: {
@@ -520,7 +521,7 @@ Diese E-Mail wurde automatisch generiert.
 
             console.log(`🔍 Agent Review: Getting review data for client ${clientId}`);
 
-            const client = await Client.findOne({ id: clientId });
+            const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
 
             if (!client) {
                 return res.status(404).json({
@@ -741,7 +742,7 @@ Diese E-Mail wurde automatisch generiert.
                 });
             }
 
-            const client = await Client.findOne({ id: clientId });
+            const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
 
             if (!client) {
                 return res.status(404).json({
@@ -1350,7 +1351,7 @@ Diese E-Mail wurde automatisch generiert.
 
             console.log(`🏁 Agent Review: Completing review session for client ${clientId}`);
 
-            const client = await Client.findOne({ id: clientId });
+            const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
 
             if (!client) {
                 return res.status(404).json({

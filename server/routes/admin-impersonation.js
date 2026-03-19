@@ -28,10 +28,10 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     }
 
     // Find the client - try by id first, then by aktenzeichen
-    let client = await Client.findOne({ id: client_id });
+    let client = await Client.findOne({ ...req.tenantFilter, id: client_id });
     if (!client) {
       console.log(`⚠️ Client not found by id: ${client_id}, trying aktenzeichen...`);
-      client = await Client.findOne({ aktenzeichen: client_id });
+      client = await Client.findOne({ ...req.tenantFilter, aktenzeichen: client_id });
     }
 
     if (!client) {

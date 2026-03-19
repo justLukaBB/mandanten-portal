@@ -343,8 +343,13 @@ class ZendeskWebhookController {
                 );
 
                 // Create new client
+                // Get default kanzlei for webhook-created clients
+                const Kanzlei = require('../models/Kanzlei');
+                const defaultKanzlei = await Kanzlei.findOne({ is_active: true }).sort({ created_at: 1 });
+
                 client = new Client({
                     id: uuidv4(),
+                    kanzleiId: defaultKanzlei?.id || 'default',
                     aktenzeichen: aktenzeichen,
                     firstName: firstName,
                     lastName: lastName,

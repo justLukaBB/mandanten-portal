@@ -43,7 +43,7 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
   router.post('/clients/:clientId/recalculate-second-letter', authenticateAdmin, async (req, res) => {
     try {
       const { clientId } = req.params;
-      const client = await Client.findById(clientId);
+      const client = await Client.findOne({ _id: clientId, ...req.tenantFilter });
 
       if (!client) {
         return res.status(404).json({ error: 'Client not found' });
@@ -75,7 +75,7 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
         calcUpdate['second_letter_financial_snapshot.calculation_error'] = calcResult.error;
       }
 
-      await Client.findByIdAndUpdate(client._id, { $set: calcUpdate });
+      await Client.findOneAndUpdate({ _id: client._id, ...req.tenantFilter }, { $set: calcUpdate });
 
       res.json({
         success: calcResult.success,
@@ -105,7 +105,7 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
         const { clientId } = req.params;
 
         // a. Load client from DB
-        const client = await Client.findById(clientId);
+        const client = await Client.findOne({ _id: clientId, ...req.tenantFilter });
         if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
 
         // b. Status guard BEFORE generation (fail fast — don't generate for wrong status)
@@ -178,7 +178,7 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
         return res.status(400).json({ error: 'plan_type must be RATENPLAN or NULLPLAN' });
       }
 
-      const client = await Client.findById(clientId);
+      const client = await Client.findOne({ _id: clientId, ...req.tenantFilter });
       if (!client) return res.status(404).json({ error: 'Client not found' });
       if (client.second_letter_status === 'SENT') {
         return res.status(400).json({ error: 'Cannot override plan_type after letters are sent' });
@@ -187,7 +187,7 @@ module.exports = ({ secondLetterTriggerService, Client }) => {
         return res.status(400).json({ error: 'No snapshot exists — client must submit form first' });
       }
 
-      await Client.findByIdAndUpdate(client._id, {
+      await Client.findOneAndUpdate({ _id: client._id, ...req.tenantFilter }, {
         $set: { 'second_letter_financial_snapshot.plan_type': plan_type }
       });
 

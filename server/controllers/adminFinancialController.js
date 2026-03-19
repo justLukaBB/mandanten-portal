@@ -22,7 +22,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
                     return res.status(400).json({ error: 'Missing required parameters: clientId and netIncome' });
                 }
 
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -71,7 +71,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
         getTotalDebt: async (req, res) => {
             try {
                 const { clientId } = req.params;
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -102,7 +102,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
                 const { clientId } = req.params;
                 const { garnishableIncome } = req.body;
 
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -160,7 +160,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
                 // Optional override parameters
                 const { netIncome, maritalStatus, numberOfChildren } = req.body;
 
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -216,7 +216,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
         getFinancialOverview: async (req, res) => {
             try {
                 const { clientId } = req.params;
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -251,7 +251,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
 
                 // Use safeClientUpdate if available, otherwise fallback to finding and saving
                 const updateFn = safeClientUpdate || (async (cid, updateCallback) => {
-                    const c = await (getClient ? getClient(cid) : Client.findOne({ $or: [{ id: cid }, { aktenzeichen: cid }] }));
+                    const c = await (getClient ? getClient(cid) : Client.findOne({ $or: [{ id: cid }, { aktenzeichen: cid }], ...req.tenantFilter }));
                     if (!c) throw new Error('Client not found');
                     const updated = await updateCallback(c);
                     await updated.save();
@@ -328,7 +328,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
                 console.log(`💾 Saving financial data for client ${clientId}`);
 
                 // Fetch client
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -390,7 +390,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
                 const { clientId } = req.params;
                 const { generated_by } = req.body;
 
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -468,7 +468,7 @@ const createAdminFinancialController = ({ Client, garnishmentCalculator, saveCli
         getSettlementPlan: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }], ...req.tenantFilter }));
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });

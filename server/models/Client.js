@@ -237,6 +237,7 @@ const statusHistorySchema = new mongoose.Schema({
 
 const clientSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  kanzleiId: { type: String, required: true, index: true },
   aktenzeichen: { type: String, required: true, unique: true },
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
@@ -837,5 +838,8 @@ clientSchema.index({ workflow_status: 1, created_at: -1 }); // Admin dashboard
 clientSchema.index({ email: 1, aktenzeichen: 1 }); // Login verification
 clientSchema.index({ 'final_creditor_list.needs_manual_review': 1, current_status: 1 }); // Agent review queue
 clientSchema.index({ id: 1 }); // Fast lookup by id field
+clientSchema.index({ kanzleiId: 1, created_at: -1 }); // Tenant-scoped listing
+clientSchema.index({ kanzleiId: 1, aktenzeichen: 1 }); // Tenant-scoped lookup
+clientSchema.index({ kanzleiId: 1, workflow_status: 1 }); // Tenant-scoped dashboard
 
 module.exports = mongoose.model('Client', clientSchema);

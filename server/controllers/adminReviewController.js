@@ -59,7 +59,7 @@ const createAdminReviewController = ({ Client }) => {
       }
 
       const client = await Client.findOneAndUpdate(
-        { id: clientId },
+        { ...req.tenantFilter, id: clientId },
         {
           $set: {
             review_assignment: {
@@ -99,7 +99,7 @@ const createAdminReviewController = ({ Client }) => {
       const { clientId } = req.params;
 
       const client = await Client.findOneAndUpdate(
-        { id: clientId },
+        { ...req.tenantFilter, id: clientId },
         { $unset: { review_assignment: 1 } },
         { new: true }
       );
@@ -134,7 +134,7 @@ const createAdminReviewController = ({ Client }) => {
       }
 
       const result = await Client.updateMany(
-        { id: { $in: client_ids } },
+        { ...req.tenantFilter, id: { $in: client_ids } },
         {
           $set: {
             review_assignment: {
@@ -177,7 +177,7 @@ const createAdminReviewController = ({ Client }) => {
       }
 
       const result = await Client.updateMany(
-        { id: { $in: client_ids } },
+        { ...req.tenantFilter, id: { $in: client_ids } },
         { $set: { manual_priority_override: priority } }
       );
 
@@ -205,7 +205,7 @@ const createAdminReviewController = ({ Client }) => {
       let confirmed_count = 0;
 
       for (const clientId of client_ids) {
-        const client = await Client.findOne({ id: clientId });
+        const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
         if (!client) continue;
 
         let changed = false;
@@ -250,6 +250,7 @@ const createAdminReviewController = ({ Client }) => {
 
       // Same query as agentReviewController.getAvailableClients
       const clients = await Client.find({
+        ...req.tenantFilter,
         $or: [
           {
             final_creditor_list: {
@@ -377,6 +378,7 @@ const createAdminReviewController = ({ Client }) => {
 
       // ── KPI: pending (uses same filter as getAvailableClients) ──────────────
       const pendingQuery = {
+        ...req.tenantFilter,
         $or: [
           { final_creditor_list: { $elemMatch: { needs_manual_review: true } } },
           { current_status: 'creditor_review' },
@@ -393,6 +395,7 @@ const createAdminReviewController = ({ Client }) => {
       // ── Build date-range filter for reviewed creditors ───────────────────────
       // We need clients that have at least one creditor with review_action set
       const reviewedClientsQuery = {
+        ...req.tenantFilter,
         final_creditor_list: {
           $elemMatch: {
             review_action: { $exists: true, $ne: null },

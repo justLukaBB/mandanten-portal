@@ -141,7 +141,7 @@ const createAdminTestController = ({ debtAmountExtractor, creditorContactService
                 const clientId = req.params.clientId;
 
                 // Flexible client retrieval (cache or DB)
-                const client = await (getClient ? getClient(clientId) : Client.findOne({ $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
+                const client = await (getClient ? getClient(clientId) : Client.findOne({ ...req.tenantFilter, $or: [{ id: clientId }, { aktenzeichen: clientId }] }));
 
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
@@ -215,7 +215,7 @@ const createAdminTestController = ({ debtAmountExtractor, creditorContactService
                 // Store the creditor calculation table in the client record using safeClientUpdate
                 // If safeClientUpdate provided use it, otherwise fallback (assume in-memory update logic not ideal but passable for test)
                 const updateFn = safeClientUpdate || (async (cid, updateCallback) => {
-                    const c = await (getClient ? getClient(cid) : Client.findOne({ $or: [{ id: cid }, { aktenzeichen: cid }] }));
+                    const c = await (getClient ? getClient(cid) : Client.findOne({ ...req.tenantFilter, $or: [{ id: cid }, { aktenzeichen: cid }] }));
                     if (!c) throw new Error('Client not found');
                     const updated = await updateCallback(c);
                     // If using mongoose save
