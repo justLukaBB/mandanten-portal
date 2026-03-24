@@ -136,7 +136,11 @@ const RULES = [
         'upload_window_active': 'upload_window_active',
         'portal_access_sent': 'portal_access_sent',
         'documents_processing': 'documents_processing',
-        'completed': 'completed'
+        'completed': 'completed',
+        // 2. Anschreiben states — respect the second letter workflow
+        'second_letter_pending': 'second_letter_pending',
+        'second_letter_submitted': 'second_letter_submitted',
+        'extended_financial_data_submitted': 'second_letter_submitted',
       };
       const expected = expectedMapping[c.current_status];
       if (!expected) return false; // No mapping defined — skip
@@ -153,7 +157,11 @@ const RULES = [
         'upload_window_active': 'upload_window_active',
         'portal_access_sent': 'portal_access_sent',
         'documents_processing': 'documents_processing',
-        'completed': 'completed'
+        'completed': 'completed',
+        // 2. Anschreiben states — respect the second letter workflow
+        'second_letter_pending': 'second_letter_pending',
+        'second_letter_submitted': 'second_letter_submitted',
+        'extended_financial_data_submitted': 'second_letter_submitted',
       };
       const expected = expectedMapping[c.current_status];
       if (expected) {
