@@ -41,14 +41,14 @@ module.exports = ({ Client, safeClientUpdate, getClient }) => {
     // Session Validation (Public/Shared)
     router.get('/portal/validate-session', controller.handleSessionValidation);
 
-    // Get client data (Shared/Client)
-    router.get('/clients/:clientId', controller.handleGetClient);
+    // Get client data (Authenticated)
+    router.get('/clients/:clientId', authenticateClient, controller.handleGetClient);
 
-    // Get client documents
-    router.get('/clients/:clientId/documents', controller.handleGetClientDocuments);
+    // Get client documents (Authenticated)
+    router.get('/clients/:clientId/documents', authenticateClient, controller.handleGetClientDocuments);
 
-    // Upload status (30-day window)
-    router.get('/clients/:clientId/upload-status', controller.handleGetUploadStatus);
+    // Upload status (Authenticated, 30-day window)
+    router.get('/clients/:clientId/upload-status', authenticateClient, controller.handleGetUploadStatus);
 
     // Upload documents
     router.post('/clients/:clientId/documents',

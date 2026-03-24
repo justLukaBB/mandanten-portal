@@ -62,9 +62,17 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
+    // Cross-tenant guard: verify the client belongs to the admin's kanzlei
+    // Strict check: both must have kanzleiId and they must match (superadmins bypass via missing kanzleiId)
+    if (req.kanzleiId && (!client.kanzleiId || client.kanzleiId !== req.kanzleiId)) {
+      console.error(`[SECURITY] Cross-tenant impersonation blocked: admin kanzlei ${req.kanzleiId}, client kanzlei ${client.kanzleiId}`);
+      return res.status(403).json({ error: 'Cannot impersonate clients from another kanzlei' });
+    }
+
     // Create impersonation token audit record
     const impersonationRecord = new ImpersonationToken({
       token: tokenString,
+      kanzleiId: client.kanzleiId || req.kanzleiId,
       client_id: client.id,
       client_email: client.email,
       admin_id: adminId,
@@ -167,13 +175,14 @@ router.get('/impersonation-audit', authenticateAdmin, async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
 
+    const filter = req.tenantFilter || {};
     const [events, total] = await Promise.all([
-      ImpersonationToken.find()
+      ImpersonationToken.find(filter)
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limit)
         .select('-token'), // Don't return actual tokens
-      ImpersonationToken.countDocuments()
+      ImpersonationToken.countDocuments(filter)
     ]);
 
     res.json({

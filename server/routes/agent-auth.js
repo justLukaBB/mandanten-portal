@@ -50,10 +50,10 @@ router.post('/login', rateLimits.auth, async (req, res) => {
     agent.last_activity = new Date();
     await agent.save();
 
-    // Generate JWT token
-    const token = generateAgentToken(agent.id, agent.username, agent.role);
+    // Generate JWT token with tenant context
+    const token = generateAgentToken(agent.id, agent.username, agent.role, agent.kanzleiId);
 
-    console.log(`✅ Agent login successful: ${agent.username} (${agent.role})`);
+    console.log(`✅ Agent login successful: ${agent.username} (${agent.role}, kanzlei: ${agent.kanzleiId || 'none'})`);
 
     res.json({
       success: true,
@@ -154,8 +154,8 @@ router.post('/create', async (req, res) => {
       admin_key 
     } = req.body;
 
-    // Simple admin key check for agent creation (allow 'test' for development)
-    if (admin_key !== process.env.AGENT_CREATION_KEY && admin_key !== 'test') {
+    // Admin key check for agent creation
+    if (!process.env.AGENT_CREATION_KEY || admin_key !== process.env.AGENT_CREATION_KEY) {
       return res.status(403).json({
         error: 'Invalid admin key'
       });
@@ -245,7 +245,8 @@ router.get('/list', authenticateAdmin, rateLimits.general, async (req, res) => {
   try {
     console.log(`👤 Admin ${req.adminId} requesting agent list`);
 
-    const agents = await Agent.find({}, {
+    const filter = req.tenantFilter || {};
+    const agents = await Agent.find(filter, {
       password_hash: 0 // Exclude password hash from response
     }).sort({ created_at: -1 });
 
@@ -293,9 +294,10 @@ router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Create new agent
+    // Create new agent — assign to admin's kanzlei
     const agent = new Agent({
       id: uuidv4(),
+      kanzleiId: req.kanzleiId || null,
       username: username.toLowerCase(),
       email: email.toLowerCase(),
       password_hash: password, // Will be hashed by pre-save hook
@@ -306,7 +308,7 @@ router.post('/create-via-admin', authenticateAdmin, async (req, res) => {
 
     await agent.save();
 
-    console.log(`✅ New agent created by admin: ${agent.username} (${agent.role})`);
+    console.log(`✅ New agent created by admin: ${agent.username} (${agent.role}, kanzlei: ${req.kanzleiId || 'none'})`);
 
     res.json({
       success: true,
