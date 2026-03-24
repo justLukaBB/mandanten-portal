@@ -9,7 +9,7 @@ const TEST_CLIENT_REFERENCE = '1w12'; // Change this to your test client
 
 async function testPrerequisites() {
     try {
-        await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice');
+        await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected to MongoDB\n');
 
         const client = await Client.findOne({ aktenzeichen: TEST_CLIENT_REFERENCE });

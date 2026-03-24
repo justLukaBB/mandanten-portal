@@ -8,7 +8,7 @@ async function testDynamicRatenplan() {
     try {
         // Connect to MongoDB (using existing connection if available)
         if (mongoose.connection.readyState === 0) {
-            await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice');
+            await mongoose.connect(process.env.MONGODB_URI);
         }
 
         // Create a comprehensive test client with all dynamic fields

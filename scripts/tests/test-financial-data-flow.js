@@ -14,7 +14,7 @@ async function testFinancialDataFlow() {
         console.log('🧪 Starting Financial Data Flow Test\n');
 
         // Connect to MongoDB
-        await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice');
+        await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected to MongoDB\n');
 
         // Find test client

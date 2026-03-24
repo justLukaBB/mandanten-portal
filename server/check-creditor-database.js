@@ -6,7 +6,7 @@ const CreditorDatabase = require('./models/CreditorDatabase');
 async function checkCreditorDatabase() {
   try {
     console.log('🔌 Connecting to MongoDB...');
-    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://justlukax:HPa1Me6NfYtzyqcO@backoffice.t0t9u7e.mongodb.net/?retryWrites=true&w=majority&appName=Backoffice';
+    const mongoUri = process.env.MONGODB_URI;
     await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB\n');
 
