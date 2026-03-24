@@ -365,10 +365,12 @@ class DelayedProcessingService {
 
           console.log(`⏰ Auto-confirming creditors for ${client.firstName} ${client.lastName} (${client.aktenzeichen}) - ${daysSinceApproval} days since approval`);
 
-          // Auto-confirm the creditors
+          // Auto-confirm the creditors — set all related fields atomically
           client.client_confirmed_creditors = true;
           client.client_confirmed_at = new Date();
           client.current_status = 'creditor_contact_initiated';
+          client.workflow_status = 'creditor_contact_active';
+          client.phase = Math.max(client.phase || 1, 2);
 
           // Add to status history
           client.status_history.push({

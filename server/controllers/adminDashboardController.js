@@ -670,12 +670,22 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     return res.status(400).json({ error: 'Client has no creditors' });
                 }
 
-                // Fix current_status if needed
+                // Guard: do NOT regress status if client already confirmed their creditors
+                if (client.client_confirmed_creditors) {
+                    return res.status(400).json({
+                        error: 'Client hat Gläubigerliste bereits bestätigt',
+                        message: `Status ist bereits ${client.current_status} — Bestätigungs-E-Mail kann nicht erneut gesendet werden.`,
+                        current_status: client.current_status,
+                        confirmed_at: client.client_confirmed_at
+                    });
+                }
+
+                // Fix current_status to awaiting_client_confirmation if needed (only for pre-confirmation statuses)
                 const statusFixed = client.current_status !== 'awaiting_client_confirmation';
                 if (statusFixed) {
                     await Client.findByIdAndUpdate(client._id, {
                         current_status: 'awaiting_client_confirmation',
-                        workflow_status: 'awaiting_client_confirmation',
+                        workflow_status: 'client_confirmation',
                         admin_approved: true,
                         admin_approved_at: client.admin_approved_at || new Date(),
                         admin_approved_by: client.admin_approved_by || 'admin_manual'

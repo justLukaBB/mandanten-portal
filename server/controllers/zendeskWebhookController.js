@@ -1600,9 +1600,13 @@ ${creditorsList}
                 });
             }
 
-            // Update client confirmation status
+            // Update client confirmation status AND advance current_status atomically
+            // to prevent inconsistency if creditor contact fails later
             client.client_confirmed_creditors = true;
             client.client_confirmed_at = confirmed_at || new Date();
+            client.current_status = "creditor_contact_initiated";
+            client.workflow_status = "creditor_contact_active";
+            client.phase = Math.max(client.phase || 1, 2);
             client.updated_at = new Date();
 
             // Add status history
@@ -1622,8 +1626,6 @@ ${creditorsList}
             await client.save();
 
             // NOW TRIGGER CREDITOR CONTACT AUTOMATICALLY
-            // We need to instantiate CreditorContactService here if not injected, or use injected one if available (class constructor has optional injection)
-            // Original code did `const creditorService = new CreditorContactService();`
             let creditorContactResult = null;
             let creditorContactError = null;
 
@@ -1640,7 +1642,6 @@ ${creditorsList}
                     await new Promise((resolve) => setTimeout(resolve, 2000));
                     this.sideConversationMonitor.startMonitoringForClient(client.aktenzeichen, 1);
 
-                    client.current_status = "creditor_contact_initiated";
                     client.creditor_contact_started = true;
                     client.creditor_contact_started_at = new Date();
                     await client.save();
