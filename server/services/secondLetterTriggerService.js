@@ -130,26 +130,41 @@ class SecondLetterTriggerService {
   async checkAndTriggerEligible() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    // Step 1: Fetch IDLE clients that have at least one creditor with email_sent_at set.
+    // Only trigger for clients whose creditor contact phase is complete.
+    // Clients still in active creditor correspondence must NOT be auto-triggered.
+    const ELIGIBLE_WORKFLOW_STATUSES = [
+      'creditor_contact_active',     // Legacy status — kept for backward compat
+      'awaiting_client_confirmation', // Client confirmed creditors
+      'payment_confirmed',            // Payment already received
+    ];
+
+    // Step 1: Fetch IDLE clients that have at least one creditor with email_sent_at set
+    //         AND whose workflow_status indicates creditor contact is complete.
     const candidates = await Client.find(
       {
         second_letter_status: 'IDLE',
+        client_confirmed_creditors: true, // Creditor list must be confirmed by client
         final_creditor_list: {
           $elemMatch: { email_sent_at: { $exists: true, $ne: null } }
         }
       }
-    ).select('aktenzeichen firstName lastName email final_creditor_list');
+    ).select('aktenzeichen firstName lastName email final_creditor_list client_confirmed_creditors workflow_status');
 
-    // Step 2: Filter in JS to find clients where the MOST RECENT first-round email
-    //         is at least 30 days old. Clients who had any recent contact are excluded.
+    // Step 2: Filter in JS — ALL creditors must have been contacted (email_sent_at set),
+    //         and the MOST RECENT email must be at least 30 days old.
+    //         Clients with any un-contacted creditors are excluded (1st round still ongoing).
     const eligible = candidates.filter((client) => {
-      const sentDates = client.final_creditor_list
-        .map((c) => c.email_sent_at)
-        .filter(Boolean)
-        .map((d) => new Date(d));
+      const creditors = client.final_creditor_list || [];
+      if (creditors.length === 0) return false;
 
-      if (sentDates.length === 0) return false;
+      // ALL creditors must have been contacted
+      const allContacted = creditors.every((c) => c.email_sent_at);
+      if (!allContacted) {
+        console.log(`⏭️ ${client.aktenzeichen}: skipped — ${creditors.filter(c => !c.email_sent_at).length}/${creditors.length} creditors not yet contacted`);
+        return false;
+      }
 
+      const sentDates = creditors.map((c) => new Date(c.email_sent_at));
       const maxSentAt = new Date(Math.max(...sentDates));
       return maxSentAt <= thirtyDaysAgo;
     });
