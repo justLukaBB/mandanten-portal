@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const { authenticateAdmin, generateImpersonationToken } = require('../middleware/auth');
 const Client = require('../models/Client');
 const ImpersonationToken = require('../models/ImpersonationToken');
+const Logger = require('../utils/logger');
+const log = new Logger('Impersonation');
 
 /**
  * POST /api/admin/impersonate
@@ -20,7 +22,7 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     const { client_id, reason } = req.body;
     const adminId = req.adminId;
 
-    console.log(`🔐 Impersonation request received:`, { client_id, adminId });
+    log.info('Impersonation request', { client_id, adminId });
 
     // Validate request
     if (!client_id) {
@@ -30,19 +32,19 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     // Find the client - try by id first, then by aktenzeichen
     let client = await Client.findOne({ ...req.tenantFilter, id: client_id });
     if (!client) {
-      console.log(`⚠️ Client not found by id: ${client_id}, trying aktenzeichen...`);
+      log.debug('Client not found by id, trying aktenzeichen', { client_id });
       client = await Client.findOne({ ...req.tenantFilter, aktenzeichen: client_id });
     }
 
     if (!client) {
-      console.log(`❌ Client not found: ${client_id}`);
+      log.warn('Client not found for impersonation', { client_id });
       return res.status(404).json({
         error: 'Client not found',
         message: `No client found with id or aktenzeichen: ${client_id}`
       });
     }
 
-    console.log(`✅ Client found:`, { id: client.id, aktenzeichen: client.aktenzeichen, email: client.email });
+    log.debug('Client found', { id: client.id, aktenzeichen: client.aktenzeichen });
 
     // Check if client has email
     if (!client.email) {
@@ -65,7 +67,7 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     // Cross-tenant guard: verify the client belongs to the admin's kanzlei
     // Strict check: both must have kanzleiId and they must match (superadmins bypass via missing kanzleiId)
     if (req.kanzleiId && (!client.kanzleiId || client.kanzleiId !== req.kanzleiId)) {
-      console.error(`[SECURITY] Cross-tenant impersonation blocked: admin kanzlei ${req.kanzleiId}, client kanzlei ${client.kanzleiId}`);
+      log.warn('Cross-tenant impersonation blocked', { adminKanzlei: req.kanzleiId, clientKanzlei: client.kanzleiId });
       return res.status(403).json({ error: 'Cannot impersonate clients from another kanzlei' });
     }
 
@@ -104,15 +106,12 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
 
     const portalUrl = `${frontendUrl}/auth/impersonate?token=${jwtToken}`;
 
-    console.log(`🌐 Generated portal URL:`, portalUrl);
-
-    // Log the impersonation event
-    console.log(`🔐 Admin impersonation initiated:`, {
-      admin: adminId,
-      client: client.id,
-      email: client.email,
+    log.info('Impersonation token created', {
+      adminId,
+      clientId: client.id,
+      aktenzeichen: client.aktenzeichen,
       reason: reason || 'Admin support',
-      expires: expiresAt
+      expires: expiresAt,
     });
 
     // Return impersonation data
@@ -130,11 +129,8 @@ router.post('/impersonate', authenticateAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error generating impersonation token:', error);
-    res.status(500).json({
-      error: 'Failed to generate impersonation token',
-      message: error.message
-    });
+    log.error('Failed to generate impersonation token', error);
+    res.status(500).json({ success: false, error: 'Failed to generate impersonation token', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -157,11 +153,8 @@ router.get('/impersonation-history/:clientId', authenticateAdmin, async (req, re
     });
 
   } catch (error) {
-    console.error('Error fetching impersonation history:', error);
-    res.status(500).json({
-      error: 'Failed to fetch impersonation history',
-      message: error.message
-    });
+    log.error('Failed to fetch impersonation history', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch impersonation history', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -197,11 +190,8 @@ router.get('/impersonation-audit', authenticateAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching impersonation audit log:', error);
-    res.status(500).json({
-      error: 'Failed to fetch audit log',
-      message: error.message
-    });
+    log.error('Failed to fetch impersonation audit log', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch audit log', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -223,11 +213,7 @@ router.post('/revoke-impersonation/:tokenId', authenticateAdmin, async (req, res
     impersonationRecord.revoked_at = new Date();
     await impersonationRecord.save();
 
-    console.log(`🚫 Impersonation token revoked:`, {
-      tokenId,
-      client: impersonationRecord.client_id,
-      admin: impersonationRecord.admin_id
-    });
+    log.info('Impersonation token revoked', { tokenId, clientId: impersonationRecord.client_id, adminId: impersonationRecord.admin_id });
 
     res.json({
       success: true,
@@ -235,11 +221,8 @@ router.post('/revoke-impersonation/:tokenId', authenticateAdmin, async (req, res
     });
 
   } catch (error) {
-    console.error('Error revoking impersonation token:', error);
-    res.status(500).json({
-      error: 'Failed to revoke impersonation token',
-      message: error.message
-    });
+    log.error('Failed to revoke impersonation token', error);
+    res.status(500).json({ success: false, error: 'Failed to revoke impersonation token', code: 'INTERNAL_ERROR' });
   }
 });
 
@@ -251,7 +234,7 @@ router.post('/cleanup-expired-tokens', authenticateAdmin, async (req, res) => {
   try {
     const deletedCount = await ImpersonationToken.cleanupExpiredTokens();
 
-    console.log(`🧹 Cleaned up ${deletedCount} expired impersonation tokens`);
+    log.info('Expired tokens cleaned up', { deletedCount });
 
     res.json({
       success: true,
@@ -260,11 +243,8 @@ router.post('/cleanup-expired-tokens', authenticateAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error cleaning up expired tokens:', error);
-    res.status(500).json({
-      error: 'Failed to cleanup expired tokens',
-      message: error.message
-    });
+    log.error('Failed to cleanup expired tokens', error);
+    res.status(500).json({ success: false, error: 'Failed to cleanup expired tokens', code: 'INTERNAL_ERROR' });
   }
 });
 

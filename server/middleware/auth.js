@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Client = require('../models/Client');
+const Logger = require('../utils/logger');
+const log = new Logger('Auth');
 
 // JWT Secret from environment variable
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -39,26 +41,16 @@ const authenticateClient = (req, res, next) => {
     }
 
     if (decoded.type !== 'client' && !hasClientId) {
-      console.log(`❌ Invalid token: missing client identifier. Token structure:`, Object.keys(decoded));
-      return res.status(403).json({
-        error: 'Invalid token type - client access required',
-        debug: {
-          tokenType: decoded.type,
-          availableFields: Object.keys(decoded),
-          hasClientId: !!decoded.clientId,
-          hasSessionId: !!decoded.sessionId,
-          hasId: !!decoded.id
-        }
-      });
+      log.warn('Invalid token: missing client identifier', { tokenType: decoded.type });
+      return res.status(403).json({ error: 'Invalid token type - client access required' });
     }
 
     // Set client ID from various possible fields
     req.clientId = decoded.clientId || decoded.sessionId || decoded.id;
     req.email = decoded.email;
-    console.log(`✅ Client authenticated: ${req.clientId} (token type: ${decoded.type || 'session'}, fields: ${Object.keys(decoded).join(', ')})`);
     next();
   } catch (error) {
-    console.log(`❌ Authentication error:`, error.message);
+    log.debug('Authentication error', { message: error.message, name: error.name });
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
@@ -158,6 +150,8 @@ const authenticateAdminOrAgent = (req, res, next) => {
       req.agentId = decoded.agentId;
       req.agentUsername = decoded.username;
       req.agentRole = decoded.role;
+      req.kanzleiId = decoded.kanzleiId || null;
+      req.tenantFilter = decoded.kanzleiId ? { kanzleiId: decoded.kanzleiId } : {};
       return next();
     }
 
@@ -196,6 +190,9 @@ const authenticateAgent = (req, res, next) => {
     req.agentId = decoded.agentId;
     req.agentUsername = decoded.username;
     req.agentRole = decoded.role;
+    req.kanzleiId = decoded.kanzleiId || null;
+    // Tenant filter: agents see only their kanzlei's data
+    req.tenantFilter = decoded.kanzleiId ? { kanzleiId: decoded.kanzleiId } : {};
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -208,13 +205,14 @@ const authenticateAgent = (req, res, next) => {
   }
 };
 
-// Generate JWT token for agent
-const generateAgentToken = (agentId, username, role) => {
+// Generate JWT token for agent (with tenant context)
+const generateAgentToken = (agentId, username, role, kanzleiId) => {
   return jwt.sign(
     {
       agentId,
       username,
       role,
+      kanzleiId: kanzleiId || null,
       type: 'agent'
     },
     JWT_SECRET,

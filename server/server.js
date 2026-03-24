@@ -449,88 +449,65 @@ app.use('/api', createTestDataRouter({
 // =============================================================================
 // 11. ERROR HANDLING
 // =============================================================================
-app.use((error, req, res, next) => {
-  console.error('❌ Express Error Handler:', error);
-  console.error('Error Type:', error.constructor.name);
-  console.error('Error Stack:', error.stack);
+const Logger = require('./utils/logger');
+const serverLog = new Logger('Server');
 
-  // Handle JSON parsing errors
+app.use((error, req, res, _next) => {
+  // JSON parsing errors
   if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
-    console.error('JSON Parse Error - Request Body:', req.body);
-    console.error('JSON Parse Error - Raw Body:', error.body);
-    return res.status(400).json({
-      error: 'Invalid JSON',
-      details: error.message,
-      type: 'JSON_PARSE_ERROR'
-    });
+    return res.status(400).json({ success: false, error: 'Invalid JSON', code: 'JSON_PARSE_ERROR' });
   }
 
-  // Enhanced Multer Error Handling
+  // Multer errors
   if (error instanceof multer.MulterError) {
-    console.error('❌ Multer Error:', {
-      code: error.code,
-      field: error.field,
-      message: error.message,
-      stack: error.stack
-    });
-
-    switch (error.code) {
-      case 'LIMIT_FILE_SIZE':
-        return res.status(400).json({
-          error: 'Datei zu groß. Maximale Größe: 10MB',
-          code: 'LIMIT_FILE_SIZE'
-        });
-      case 'LIMIT_FILE_COUNT':
-        return res.status(400).json({
-          error: 'Zu viele Dateien. Maximum: 10 Dateien pro Upload',
-          code: 'LIMIT_FILE_COUNT'
-        });
-      case 'LIMIT_UNEXPECTED_FILE':
-        return res.status(400).json({
-          error: 'Unerwartetes Dateifeld',
-          code: 'LIMIT_UNEXPECTED_FILE'
-        });
-      case 'LIMIT_PART_COUNT':
-        return res.status(400).json({
-          error: 'Zu viele Teile in der Anfrage',
-          code: 'LIMIT_PART_COUNT'
-        });
-      case 'LIMIT_FIELD_KEY':
-        return res.status(400).json({
-          error: 'Feldname zu lang',
-          code: 'LIMIT_FIELD_KEY'
-        });
-      case 'LIMIT_FIELD_VALUE':
-        return res.status(400).json({
-          error: 'Feldwert zu lang',
-          code: 'LIMIT_FIELD_VALUE'
-        });
-      case 'LIMIT_FIELD_COUNT':
-        return res.status(400).json({
-          error: 'Zu viele Felder',
-          code: 'LIMIT_FIELD_COUNT'
-        });
-      default:
-        return res.status(400).json({
-          error: `Upload-Fehler: ${error.message}`,
-          code: error.code
-        });
-    }
-  }
-
-  // Handle file filter errors (custom validation errors from multer fileFilter)
-  if (error.message && error.message.includes('Dateityp nicht unterstützt')) {
-    console.error('❌ File Type Error:', error.message);
+    const multerMessages = {
+      LIMIT_FILE_SIZE: 'Datei zu groß. Maximale Größe: 10MB',
+      LIMIT_FILE_COUNT: 'Zu viele Dateien. Maximum: 10 Dateien pro Upload',
+      LIMIT_UNEXPECTED_FILE: 'Unerwartetes Dateifeld',
+      LIMIT_PART_COUNT: 'Zu viele Teile in der Anfrage',
+      LIMIT_FIELD_KEY: 'Feldname zu lang',
+      LIMIT_FIELD_VALUE: 'Feldwert zu lang',
+      LIMIT_FIELD_COUNT: 'Zu viele Felder',
+    };
     return res.status(400).json({
-      error: error.message,
-      code: 'INVALID_FILE_TYPE'
+      success: false,
+      error: multerMessages[error.code] || `Upload-Fehler: ${error.message}`,
+      code: error.code,
     });
   }
 
-  res.status(500).json({
-    error: 'Server error',
-    details: error.message
-  });
+  // File type filter errors
+  if (error.message && error.message.includes('Dateityp nicht unterstützt')) {
+    return res.status(400).json({ success: false, error: error.message, code: 'INVALID_FILE_TYPE' });
+  }
+
+  // Mongoose validation
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({ success: false, error: 'Validierungsfehler', code: 'VALIDATION_ERROR' });
+  }
+
+  // JWT errors
+  if (error.name === 'JsonWebTokenError') {
+    return res.status(401).json({ success: false, error: 'Ungültiges Token', code: 'INVALID_TOKEN' });
+  }
+  if (error.name === 'TokenExpiredError') {
+    return res.status(401).json({ success: false, error: 'Token abgelaufen', code: 'TOKEN_EXPIRED' });
+  }
+
+  // Default 500
+  serverLog.error('Unhandled express error', error, { method: req.method, url: req.originalUrl });
+  res.status(500).json({ success: false, error: 'Interner Serverfehler', code: 'INTERNAL_ERROR' });
+});
+
+// Catch unhandled promise rejections — prevents silent server crashes
+process.on('unhandledRejection', (reason, promise) => {
+  serverLog.error('Unhandled promise rejection', reason instanceof Error ? reason : new Error(String(reason)));
+});
+
+// Catch uncaught exceptions — log then exit (let process manager restart)
+process.on('uncaughtException', (error) => {
+  serverLog.error('Uncaught exception — shutting down', error);
+  process.exit(1);
 });
 
 // =============================================================================
