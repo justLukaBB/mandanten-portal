@@ -411,6 +411,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
             c.second_letter_status = 'FORM_SUBMITTED';
             c.second_letter_form_submitted_at = new Date();
             c.workflow_status = 'second_letter_submitted';
+            c.current_status = 'extended_financial_data_submitted';
             return c;
         });
 
@@ -826,10 +827,18 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     } catch (e) { }
                 }
 
-                // 2) Find by file_number/aktenzeichen if no token or not found
+                // 2) Find by file_number/aktenzeichen ONLY if no token auth succeeded
+                // Security: without a valid JWT, require the request to come from an authenticated session
                 const fileNum = aktenzeichen || file_number;
                 if (!client && fileNum) {
-                    client = await Client.findOne({ aktenzeichen: fileNum });
+                    // Only allow unauthenticated password set if this is initial setup
+                    // (client has no password yet)
+                    const candidate = await Client.findOne({ aktenzeichen: fileNum });
+                    if (candidate && !candidate.isPasswordSet) {
+                        client = candidate;
+                    } else if (candidate) {
+                        return res.status(401).json({ error: 'Authentifizierung erforderlich' });
+                    }
                 }
 
                 if (!client) {
@@ -1008,7 +1017,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                     let cleanFilename = file.originalname;
 
                     try {
-                        gcsUrl = await uploadToGCS(file);
+                        gcsUrl = await uploadToGCS(file, { kanzleiId: client.kanzleiId, clientId: client.id });
                         console.log(`✅ Uploaded to GCS: ${gcsUrl}`);
                         cleanFilename = gcsUrl.split('?')[0].split('/').pop();
                     } catch (uploadError) {
@@ -1063,7 +1072,8 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                             webhookUrl,
                             clientName,
                             apiKey: process.env.GEMINI_API_KEY || null,
-                            priority: 5 // Default priority
+                            priority: 5,
+                            kanzleiId: client.kanzleiId
                         });
 
                         if (queueResult.success) {
@@ -1274,9 +1284,11 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
         handleResetFinancialData: async (req, res) => {
             try {
                 const clientId = req.params.clientId;
-                // Endpoint logic for simple reset (POST)
+                // Authorization: only the authenticated client or an admin can reset
                 const client = await Client.findOne({ $or: [{ _id: clientId }, { aktenzeichen: clientId }] });
                 if (!client) return res.status(404).json({ error: 'Client not found' });
+                const isAuthorized = req.isAdmin || req.clientId === client.id || req.clientId === client.aktenzeichen || req.clientId === clientId;
+                if (!isAuthorized) return res.status(403).json({ error: 'Access denied' });
 
                 client.financial_data = null;
                 client.debt_settlement_plan = null;

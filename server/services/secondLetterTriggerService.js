@@ -60,7 +60,8 @@ class SecondLetterTriggerService {
             second_letter_triggered_at: new Date(),
             second_letter_form_token: uuidv4(),
             second_letter_form_token_expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
-            workflow_status: 'second_letter_pending'
+            workflow_status: 'second_letter_pending',
+            current_status: 'second_letter_pending'
           },
           $push: {
             status_history: {
