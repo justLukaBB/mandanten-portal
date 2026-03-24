@@ -6,6 +6,38 @@ const AdminUser = require('../models/AdminUser');
  */
 class AdminAuthController {
     /**
+     * Get current admin user info (token validation + fresh data)
+     * GET /api/admin/me
+     */
+    me = async (req, res) => {
+        try {
+            const admin = await AdminUser.findOne({
+                id: req.adminId,
+                is_active: true
+            });
+
+            if (!admin) {
+                return res.status(401).json({ error: 'Admin-Benutzer nicht gefunden oder deaktiviert' });
+            }
+
+            res.json({
+                success: true,
+                user: {
+                    id: admin.id,
+                    email: admin.email,
+                    first_name: admin.first_name,
+                    last_name: admin.last_name,
+                    role: admin.role,
+                    kanzleiId: admin.kanzleiId
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching admin profile:', error);
+            res.status(500).json({ error: 'Fehler beim Laden des Profils' });
+        }
+    }
+
+    /**
      * Handle Admin Login
      * POST /api/admin/login
      */
