@@ -20,7 +20,7 @@ class AdminAuthController {
                 return res.status(401).json({ error: 'Admin-Benutzer nicht gefunden oder deaktiviert' });
             }
 
-            res.json({
+            const response = {
                 success: true,
                 user: {
                     id: admin.id,
@@ -30,7 +30,14 @@ class AdminAuthController {
                     role: admin.role,
                     kanzleiId: admin.kanzleiId
                 }
-            });
+            };
+
+            // If role or kanzleiId changed since token was issued, send a fresh token
+            if (admin.role !== req.adminRole || admin.kanzleiId !== req.kanzleiId) {
+                response.token = generateAdminToken(admin.id, admin.kanzleiId, admin.role);
+            }
+
+            res.json(response);
         } catch (error) {
             console.error('Error fetching admin profile:', error);
             res.status(500).json({ error: 'Fehler beim Laden des Profils' });
