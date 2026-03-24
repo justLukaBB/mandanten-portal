@@ -7,6 +7,23 @@ class Scheduler {
         this.loginReminderService = dependencies.loginReminderService;
         this.secondLetterTriggerService = dependencies.secondLetterTriggerService;
         this.uploadWindowService = new UploadWindowService();
+        this._running = new Set(); // Concurrency guard for scheduled tasks
+    }
+
+    /**
+     * Run a named task with concurrency guard — skips if previous run still active.
+     */
+    async _runGuarded(name, fn) {
+        if (this._running.has(name)) {
+            console.log(`⏭️  Skipping "${name}" — previous run still active`);
+            return;
+        }
+        this._running.add(name);
+        try {
+            await fn();
+        } finally {
+            this._running.delete(name);
+        }
     }
 
     startScheduledTasks() {
@@ -25,7 +42,7 @@ class Scheduler {
         // Run delayed processing webhook check every 30 minutes
         const DELAYED_WEBHOOK_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
-        setInterval(async () => {
+        setInterval(() => this._runGuarded('delayed-webhook', async () => {
             try {
                 console.log('\n⏰ Running scheduled delayed webhook check...');
                 const delayedService = new DelayedProcessingService();
@@ -34,12 +51,12 @@ class Scheduler {
             } catch (error) {
                 console.error('❌ Error in scheduled delayed webhook check:', error);
             }
-        }, DELAYED_WEBHOOK_CHECK_INTERVAL);
+        }), DELAYED_WEBHOOK_CHECK_INTERVAL);
 
         // Run login reminder check every 6 hours (for 7-day cycle checks)
         const LOGIN_REMINDER_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
-        setInterval(async () => {
+        setInterval(() => this._runGuarded('login-reminder', async () => {
             try {
                 console.log('\n⏰ Running scheduled login reminder check...');
                 const result = await this.loginReminderService.checkAndSendLoginReminders();
@@ -47,26 +64,26 @@ class Scheduler {
             } catch (error) {
                 console.error('❌ Error in scheduled login reminder check:', error);
             }
-        }, LOGIN_REMINDER_CHECK_INTERVAL);
+        }), LOGIN_REMINDER_CHECK_INTERVAL);
 
         // Run 7-day review check every hour
         const SEVEN_DAY_REVIEW_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 
-        setInterval(async () => {
+        setInterval(() => this._runGuarded('seven-day-review', async () => {
             try {
-                console.log('\n⏰ Running scheduled 3-minute review check (TEST MODE)...');
+                console.log('\n⏰ Running scheduled 7-day review check...');
                 const delayedService = new DelayedProcessingService();
                 const result = await delayedService.checkAndTriggerSevenDayReviews();
-                console.log(`✅ 3-minute review check complete: ${result.reviewsTriggered} reviews triggered\n`);
+                console.log(`✅ 7-day review check complete: ${result.reviewsTriggered} reviews triggered\n`);
             } catch (error) {
-                console.error('❌ Error in scheduled 3-minute review check:', error);
+                console.error('❌ Error in scheduled 7-day review check:', error);
             }
-        }, SEVEN_DAY_REVIEW_CHECK_INTERVAL);
+        }), SEVEN_DAY_REVIEW_CHECK_INTERVAL);
 
         // Run auto-confirmation check every 7 hours (PRODUCTION MODE)
         const AUTO_CONFIRMATION_CHECK_INTERVAL = 7 * 60 * 60 * 1000; // 7 hours in milliseconds (25200000 ms)
 
-        setInterval(async () => {
+        setInterval(() => this._runGuarded('auto-confirmation', async () => {
             try {
                 console.log('\n⏰ Running scheduled auto-confirmation check...');
                 const delayedService = new DelayedProcessingService();
@@ -75,7 +92,7 @@ class Scheduler {
             } catch (error) {
                 console.error('❌ Error in scheduled auto-confirmation check:', error);
             }
-        }, AUTO_CONFIRMATION_CHECK_INTERVAL);
+        }), AUTO_CONFIRMATION_CHECK_INTERVAL);
 
         // DISABLED: Initial document reminder check deactivated (2026-03-03)
         // setTimeout(async () => {

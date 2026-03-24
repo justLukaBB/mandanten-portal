@@ -841,5 +841,7 @@ clientSchema.index({ id: 1 }); // Fast lookup by id field
 clientSchema.index({ kanzleiId: 1, created_at: -1 }); // Tenant-scoped listing
 clientSchema.index({ kanzleiId: 1, aktenzeichen: 1 }); // Tenant-scoped lookup
 clientSchema.index({ kanzleiId: 1, workflow_status: 1 }); // Tenant-scoped dashboard
+clientSchema.index({ kanzleiId: 1, current_status: 1 }); // Tenant-scoped status filtering
+clientSchema.index({ current_status: 1, created_at: -1 }); // Status-based queries
 
 module.exports = mongoose.model('Client', clientSchema);

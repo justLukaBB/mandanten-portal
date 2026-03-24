@@ -83,7 +83,7 @@ module.exports = ({ Client, documentProcessor, getGCSFileStream, getGCSFileBuffe
                 }
 
                 // Verify the client exists and has this creditor document
-                const client = await Client.findById(clientId);
+                const client = await Client.findById(clientId).lean();
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }
@@ -162,7 +162,7 @@ module.exports = ({ Client, documentProcessor, getGCSFileStream, getGCSFileBuffe
                 }
 
                 // Verify the client exists and has this creditor document
-                const client = await Client.findById(clientId);
+                const client = await Client.findById(clientId).lean();
                 if (!client) {
                     return res.status(404).json({ error: 'Client not found' });
                 }

@@ -262,7 +262,7 @@ class CreditorEmailService {
    */
   async sendEmail({ to, toName, subject, html, text, attachments = [], cc = [], tags = [] }) {
     // DEMO MODE: If enabled in settings, redirect all emails to test address
-    const settings = await ReviewSettings.findOne({});
+    const settings = await ReviewSettings.findOne({}).lean();
     if (settings?.demo_mode_enabled) {
       const DEMO_RECIPIENT = 'justlukax@gmail.com';
       const originalRecipient = to;

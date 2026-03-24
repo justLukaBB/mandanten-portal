@@ -14,7 +14,7 @@ class AdminAuthController {
             const admin = await AdminUser.findOne({
                 id: req.adminId,
                 is_active: true
-            });
+            }).lean();
 
             if (!admin) {
                 return res.status(401).json({ error: 'Admin-Benutzer nicht gefunden oder deaktiviert' });

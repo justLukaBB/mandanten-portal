@@ -43,7 +43,7 @@ module.exports = ({ CreditorEmail, Client }) => {
     authenticateAdmin,
     async (req, res) => {
       try {
-        const email = await CreditorEmail.findById(req.params.id);
+        const email = await CreditorEmail.findById(req.params.id).lean();
         if (!email) {
           return res.status(404).json({ error: 'Email not found' });
         }

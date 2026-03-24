@@ -112,10 +112,25 @@ if (process.env.GCS_CLIENT_EMAIL && process.env.GCS_PRIVATE_KEY) {
   console.log('⚠️ GCS keys not found (no env var or file). Falling back to local storage (server/uploads).');
 }
 
-const uploadToGCS = (file) => {
+/**
+ * Upload file to GCS with optional tenant prefix.
+ * @param {Object} file - Multer file object
+ * @param {Object} [options] - Optional tenant context
+ * @param {string} [options.kanzleiId] - Tenant ID for path prefix
+ * @param {string} [options.clientId] - Client ID for path prefix
+ */
+const uploadToGCS = (file, options = {}) => {
   return new Promise((resolve, reject) => {
-    // Generate unique filename
-    const filename = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
+    // Generate unique filename with tenant prefix
+    const baseName = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
+    let filename;
+    if (options.kanzleiId && options.clientId) {
+      filename = `${options.kanzleiId}/clients/${options.clientId}/${baseName}`;
+    } else if (options.kanzleiId) {
+      filename = `${options.kanzleiId}/${baseName}`;
+    } else {
+      filename = baseName; // Backwards-compatible flat path
+    }
 
     console.log(`📤 Upload Request:`, {
       originalName: file.originalname,
@@ -128,9 +143,19 @@ const uploadToGCS = (file) => {
     // FALLBACK: Local Storage
     if (!isGCSConfigured) {
       const localPath = path.join(uploadsDir, filename);
+      // Ensure subdirectories exist for tenant-prefixed paths
+      const localDir = path.dirname(localPath);
+      if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
+      }
       console.log(`💾 GCS disabled. Saving locally to: ${localPath}`);
 
-      fs.writeFile(localPath, file.buffer, (err) => {
+      // Support both disk storage (file.path) and memory storage (file.buffer)
+      const saveLocal = file.path
+        ? (cb) => fs.copyFile(file.path, localPath, cb)
+        : (cb) => fs.writeFile(localPath, file.buffer, cb);
+
+      saveLocal((err) => {
         if (err) {
           console.error(`❌ Local save failed for ${filename}:`, err.message);
           return reject(new Error(`Failed to save file locally: ${err.message}`));
@@ -177,7 +202,12 @@ const uploadToGCS = (file) => {
       }
     });
 
-    blobStream.end(file.buffer);
+    // Support both disk storage (file.path) and memory storage (file.buffer)
+    if (file.path) {
+      fs.createReadStream(file.path).pipe(blobStream);
+    } else {
+      blobStream.end(file.buffer);
+    }
   });
 };
 
@@ -266,4 +296,45 @@ const getGCSFileBuffer = (filename) => {
   });
 };
 
-module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, bucket };
+/**
+ * Delete a file from GCS (or local fallback).
+ * Accepts a filename, GCS path, or signed URL.
+ * @param {string} filenameOrUrl - File identifier
+ * @returns {Promise<boolean>} true if deleted, false if not found
+ */
+const deleteFromGCS = async (filenameOrUrl) => {
+  if (!filenameOrUrl) return false;
+
+  // Extract base filename from signed URL
+  const baseFilename = filenameOrUrl.split('?')[0];
+  // Strip GCS public URL prefix if present
+  const gcsPrefix = `https://storage.googleapis.com/${bucketName}/`;
+  const cleanFilename = baseFilename.startsWith(gcsPrefix)
+    ? baseFilename.slice(gcsPrefix.length)
+    : baseFilename;
+
+  if (!isGCSConfigured) {
+    // Local fallback: try to delete from uploads dir
+    const localPath = path.join(uploadsDir, cleanFilename);
+    if (fs.existsSync(localPath)) {
+      fs.unlinkSync(localPath);
+      return true;
+    }
+    return false;
+  }
+
+  try {
+    const file = bucket.file(cleanFilename);
+    const [exists] = await file.exists();
+    if (exists) {
+      await file.delete();
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`[GCS] Delete failed for ${cleanFilename}:`, error.message);
+    return false;
+  }
+};
+
+module.exports = { uploadToGCS, getGCSFileStream, getGCSFileBuffer, deleteFromGCS, bucket };
