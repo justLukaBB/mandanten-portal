@@ -334,7 +334,7 @@ https://www.schuldnerberatung-anwalt.de
   /**
    * Generate HTML email template for second letter notification
    * @param {string} clientName - Client's full name
-   * @param {string} portalUrl - Deep-link URL with second_letter_form_token
+   * @param {string} portalUrl - Portal login URL
    * @param {string} aktenzeichen - Client's case reference number
    * @returns {string} HTML content
    */
@@ -386,7 +386,7 @@ https://www.schuldnerberatung-anwalt.de
               </div>
 
               <p style="margin: 0; font-size: 14px; color: #9ca3af; text-align: center;">
-                Der Link ist 14 Tage gültig. Falls Sie Fragen haben, antworten Sie einfach auf diese E-Mail.
+                Loggen Sie sich einfach im Portal ein, um das Formular auszufüllen. Falls Sie Fragen haben, antworten Sie einfach auf diese E-Mail.
               </p>
             </td>
           </tr>
@@ -419,7 +419,7 @@ https://www.schuldnerberatung-anwalt.de
   /**
    * Generate plain text email for second letter notification
    * @param {string} clientName - Client's full name
-   * @param {string} portalUrl - Deep-link URL with second_letter_form_token
+   * @param {string} portalUrl - Portal login URL
    * @param {string} aktenzeichen - Client's case reference number
    * @returns {string} Plain text content
    */
@@ -435,7 +435,7 @@ ${portalUrl}
 
 Nach Ihrer Bestätigung werden die Anschreiben erstellt und an Ihre Gläubiger versandt.
 
-Der Link ist 14 Tage gültig.
+Loggen Sie sich einfach im Portal ein, um das Formular auszufüllen.
 
 Mit freundlichen Grüßen
 Kanzlei RA T. Scuric
@@ -449,7 +449,7 @@ Aktenzeichen: ${aktenzeichen}
    * Called by SecondLetterTriggerService after successful IDLE → PENDING transition.
    * @param {string} email - Recipient email address
    * @param {string} clientName - Client's full name
-   * @param {string} portalUrl - Deep-link URL containing second_letter_form_token
+   * @param {string} portalUrl - Portal login URL
    * @param {string} aktenzeichen - Client's case reference number
    * @returns {Promise<{ success: boolean, emailId?: string, devMode?: boolean, error?: string }>}
    */
