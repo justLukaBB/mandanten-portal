@@ -124,32 +124,38 @@ class Scheduler {
         }, 300000); // 5 minutes (PRODUCTION MODE)
 
         // === 2. Anschreiben Daily Eligibility Check ===
-        const SECOND_LETTER_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
-
+        // Runs once daily at a fixed time (06:00 UTC) instead of on every server restart.
+        // This prevents accidental triggers when deploying or restarting the server.
         if (this.secondLetterTriggerService) {
-            // Initial check after 10 minutes (soft start, consistent with other initial checks)
-            setTimeout(async () => {
-                try {
-                    console.log('\n⏰ Running initial 2. Anschreiben eligibility check...');
-                    const result = await this.secondLetterTriggerService.checkAndTriggerEligible();
-                    console.log(`✅ Initial 2. Anschreiben check: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors} errors`);
-                } catch (error) {
-                    console.error('❌ Error in initial 2. Anschreiben check:', error);
-                }
-            }, 10 * 60 * 1000);
+            const SECOND_LETTER_TARGET_HOUR_UTC = 6; // 06:00 UTC = 07:00 CET / 08:00 CEST
 
-            // Recurring check every 24 hours
-            setInterval(async () => {
-                try {
-                    console.log('\n⏰ Running scheduled 2. Anschreiben eligibility check...');
-                    const result = await this.secondLetterTriggerService.checkAndTriggerEligible();
-                    console.log(`✅ 2. Anschreiben check: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors} errors`);
-                } catch (error) {
-                    console.error('❌ Error in scheduled 2. Anschreiben check:', error);
+            const scheduleNextSecondLetterCheck = () => {
+                const now = new Date();
+                const next = new Date(now);
+                next.setUTCHours(SECOND_LETTER_TARGET_HOUR_UTC, 0, 0, 0);
+                // If target time already passed today, schedule for tomorrow
+                if (next <= now) {
+                    next.setDate(next.getDate() + 1);
                 }
-            }, SECOND_LETTER_CHECK_INTERVAL);
+                const msUntilNext = next - now;
+                const hoursUntil = (msUntilNext / (1000 * 60 * 60)).toFixed(1);
 
-            console.log('📅 2. Anschreiben scheduler: initial check in 10 minutes, then every 24 hours');
+                setTimeout(async () => {
+                    try {
+                        console.log('\n⏰ Running scheduled 2. Anschreiben eligibility check...');
+                        const result = await this.secondLetterTriggerService.checkAndTriggerEligible();
+                        console.log(`✅ 2. Anschreiben check: ${result.triggered} triggered, ${result.skipped} skipped, ${result.errors} errors`);
+                    } catch (error) {
+                        console.error('❌ Error in scheduled 2. Anschreiben check:', error);
+                    }
+                    // Schedule the next run
+                    scheduleNextSecondLetterCheck();
+                }, msUntilNext);
+
+                console.log(`📅 2. Anschreiben: next check at ${next.toISOString()} (in ${hoursUntil}h)`);
+            };
+
+            scheduleNextSecondLetterCheck();
         }
 
         // === Upload Window Promotion Check (daily) ===
