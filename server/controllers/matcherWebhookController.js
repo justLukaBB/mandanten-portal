@@ -87,6 +87,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               email_subject,
               email_body_preview,
               email_body_full,
+              attachments: body.attachments || [],
               review_status: 'pending',
               needs_review: true,
               matcher_metadata: metadata,
@@ -161,6 +162,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
             email_subject,
             email_body_preview,
             email_body_full,
+            attachments: body.attachments || [],
             review_status: metadata?.needs_review ? 'pending' : 'reviewed',
             needs_review: !!metadata?.needs_review,
             matcher_metadata: metadata,
@@ -227,6 +229,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
           email_body_preview,
           email_body_full,
           intent,
+          attachments,
         } = req.body;
 
         // Validate required fields
@@ -280,6 +283,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
               email_body_preview,
               email_body_full,
               intent,
+              attachments: attachments || [],
               review_status: isAutoDismiss ? 'dismissed' : 'pending',
               needs_review: isAutoDismiss ? false : !!(client_aktenzeichen || client_name),
               processed_at: new Date(processed_at || Date.now()),
@@ -362,6 +366,7 @@ const createMatcherWebhookController = ({ Client, CreditorEmail, getIO }) => {
             email_body_preview,
             email_body_full,
             intent,
+            attachments: attachments || [],
             review_status: needs_review ? 'pending' : 'reviewed',
             needs_review: !!needs_review,
             processed_at: new Date(processed_at || Date.now()),

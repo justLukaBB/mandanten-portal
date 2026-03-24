@@ -37,5 +37,50 @@ module.exports = ({ CreditorEmail, Client }) => {
     controller.assign
   );
 
+  // Proxy download for email attachments (Resend URLs may need auth or expire)
+  router.get('/emails/:id/attachments/:index',
+    securityRateLimits.admin,
+    authenticateAdmin,
+    async (req, res) => {
+      try {
+        const email = await CreditorEmail.findById(req.params.id);
+        if (!email) {
+          return res.status(404).json({ error: 'Email not found' });
+        }
+
+        const index = parseInt(req.params.index);
+        if (!email.attachments || !email.attachments[index]) {
+          return res.status(404).json({ error: 'Attachment not found' });
+        }
+
+        const attachment = email.attachments[index];
+        if (!attachment.url) {
+          return res.status(404).json({ error: 'Attachment URL not available' });
+        }
+
+        // Proxy the download from Resend
+        const axios = require('axios');
+        const response = await axios.get(attachment.url, {
+          responseType: 'stream',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          },
+          timeout: 30000,
+        });
+
+        res.setHeader('Content-Type', attachment.content_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${(attachment.filename || 'document').replace(/"/g, '_')}"`);
+        if (attachment.size) {
+          res.setHeader('Content-Length', attachment.size);
+        }
+
+        response.data.pipe(res);
+      } catch (error) {
+        console.error('Attachment download error:', error.message);
+        res.status(500).json({ error: 'Failed to download attachment' });
+      }
+    }
+  );
+
   return router;
 };
