@@ -862,10 +862,9 @@ async function fetchWithRetry(url, options = {}, timeout = FASTAPI_TIMEOUT, retr
  * @param {string} params.clientId - Client ID from MongoDB
  * @param {Array} params.files - Array of file objects with gcs_path, filename, etc.
  * @param {string} params.webhookUrl - URL for FastAPI to send results
- * @param {string} [params.apiKey] - Optional Gemini API key
  * @returns {Promise<Object>} - Job creation response with job_id
  */
-async function createProcessingJob({ clientId, clientName, files, webhookUrl, apiKey = null }) {
+async function createProcessingJob({ clientId, clientName, files, webhookUrl }) {
   console.log(`\n🚀 ================================`);
   console.log(`🚀 CALLING FASTAPI PROCESSING`);
   console.log(`🚀 ================================`);
@@ -911,11 +910,6 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl, ap
       })),
       webhook_url: webhookUrl,
     };
-
-    // Add API key if provided
-    if (apiKey) {
-      requestBody.api_key = apiKey;
-    }
 
     console.log(`\n📤 Sending request to FastAPI...`);
 
