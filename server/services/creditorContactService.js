@@ -715,7 +715,7 @@ class CreditorContactService {
                 });
 
                 // Add internal Zendesk comment for audit trail
-                if (result.success) {
+                if (result.success && mainTicketId) {
                     try {
                         await this.zendesk.addTicketComment(
                             mainTicketId,
