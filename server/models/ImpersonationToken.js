@@ -1,10 +1,19 @@
 const mongoose = require('mongoose');
 
+const tenantPlugin = require('../plugins/tenantPlugin');
+
 const impersonationTokenSchema = new mongoose.Schema({
   token: {
     type: String,
     required: true,
     unique: true,
+    index: true
+  },
+
+  // Tenant isolation
+  kanzleiId: {
+    type: String,
+    required: true,
     index: true
   },
 
@@ -169,6 +178,8 @@ impersonationTokenSchema.statics.getAdminHistory = async function(adminId, limit
     .limit(limit)
     .select('-token'); // Don't return the actual token
 };
+
+impersonationTokenSchema.plugin(tenantPlugin);
 
 const ImpersonationToken = mongoose.model('ImpersonationToken', impersonationTokenSchema);
 

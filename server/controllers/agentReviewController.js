@@ -1289,7 +1289,7 @@ Diese E-Mail wurde automatisch generiert.
             }
 
             console.log(`💾 Saving client to database...`);
-            await client.save();
+            await client.save({ validateModifiedOnly: true });
             console.log(`✅ Client saved successfully`);
 
             console.log(`📊 Calculating review progress...`);
@@ -1483,7 +1483,7 @@ Diese E-Mail wurde automatisch generiert.
                 }
             });
 
-            await client.save();
+            await client.save({ validateModifiedOnly: true });
 
             console.log(`✅ Review complete for ${client.aktenzeichen}. Status: awaiting_client_confirmation, admin_approved: true`);
 
@@ -1543,7 +1543,7 @@ Diese E-Mail wurde automatisch generiert.
                             if (emailResult?.success) {
                                 clientEmailSent = true;
                                 client.zendesk_review_ticket_id = ticketResult.ticket_id;
-                                await client.save();
+                                await client.save({ validateModifiedOnly: true });
                                 console.log(`✅ New ticket created and email sent: ${ticketResult.ticket_id}`);
                             }
                         }

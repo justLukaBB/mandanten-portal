@@ -30,7 +30,7 @@ async function saveGeneratedPdfAndFinalize(client, pdfBytes, documentType) {
             mimetype: 'application/pdf',
             size: pdfBytes.length,
         };
-        const storedUrl = await uploadToGCS(file);
+        const storedUrl = await uploadToGCS(file, { kanzleiId: client.kanzleiId, clientId: client.id });
 
         // Create document record
         const documentRecord = {

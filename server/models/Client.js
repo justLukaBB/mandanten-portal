@@ -251,7 +251,7 @@ const clientSchema = new mongoose.Schema({
   // Persönliche Daten (Leineweber-Sync)
   geburtsort: String,
   geschlecht: String,
-  familienstand: { type: String, enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend'] },
+  familienstand: { type: String, enum: ['ledig', 'verheiratet', 'geschieden', 'verwitwet', 'getrennt_lebend', 'getrennt lebend'] },
 
   // Strukturierte Adresse
   strasse: String,

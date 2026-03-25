@@ -6,6 +6,8 @@
  */
 const mongoose = require('mongoose');
 
+const tenantPlugin = require('../plugins/tenantPlugin');
+
 const webhookJobSchema = new mongoose.Schema({
   // Unique job identifier (idempotency key)
   job_id: {
@@ -107,6 +109,8 @@ webhookJobSchema.statics.getQueueStats = async function() {
 
   return result;
 };
+
+webhookJobSchema.plugin(tenantPlugin);
 
 const WebhookJob = mongoose.model('WebhookJob', webhookJobSchema);
 

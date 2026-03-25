@@ -44,7 +44,7 @@ class DelayedProcessingService {
         }
       });
 
-      await client.save();
+      await client.save({ validateModifiedOnly: true });
 
       console.log(`⏰ Scheduled processing-complete webhook for client ${clientId} at ${scheduledTime.toISOString()}`);
       
@@ -109,7 +109,7 @@ class DelayedProcessingService {
               }
             });
 
-            await client.save();
+            await client.save({ validateModifiedOnly: true });
             successCount++;
           } else {
             errorCount++;
@@ -239,7 +239,7 @@ class DelayedProcessingService {
         }
       });
 
-      await client.save();
+      await client.save({ validateModifiedOnly: true });
 
       console.log(`⏰ Scheduled 3-minute review for client ${clientId} at ${scheduledTime.toISOString()} (TEST MODE)`);
       
@@ -298,7 +298,7 @@ class DelayedProcessingService {
           // Update status to creditor_review
           client.current_status = 'creditor_review';
 
-          await client.save();
+          await client.save({ validateModifiedOnly: true });
 
           // Trigger the review process
           await this.triggerCreditorReviewProcess(client.id);
@@ -395,7 +395,7 @@ class DelayedProcessingService {
             }
           });
 
-          await client.save();
+          await client.save({ validateModifiedOnly: true });
 
           // Trigger creditor contact process
           await this.triggerCreditorContactService(client);
@@ -555,7 +555,7 @@ class DelayedProcessingService {
         }
       });
 
-      await client.save();
+      await client.save({ validateModifiedOnly: true });
 
       console.log(`❌ Cancelled scheduled webhook for client ${clientId}`);
       

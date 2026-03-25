@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const tenantPlugin = require('../plugins/tenantPlugin');
+
 const agentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  kanzleiId: { type: String, index: true }, // Tenant isolation — null = legacy/unassigned
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   password_hash: { type: String, required: true },
@@ -81,5 +84,8 @@ agentSchema.methods.comparePassword = async function (candidatePassword) {
 // Indexes for performance
 agentSchema.index({ is_active: 1 });
 agentSchema.index({ last_activity: -1 });
+agentSchema.index({ kanzleiId: 1, is_active: 1 });
+
+agentSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Agent', agentSchema);

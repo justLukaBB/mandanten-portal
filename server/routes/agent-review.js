@@ -126,7 +126,7 @@ startxref
 
       console.log(`📄 Agent Review: Getting document ${decodedFilename} for client ${clientId}`);
 
-      const client = await Client.findOne({ id: clientId });
+      const client = await Client.findOne({ ...req.tenantFilter, id: clientId });
 
       // Log all document names for debugging
       if (client?.documents) {

@@ -93,7 +93,8 @@ class DocumentQueueService {
     webhookUrl,
     clientName = null,
     apiKey = null,
-    priority = 5
+    priority = 5,
+    kanzleiId = null
   }) {
     try {
       const jobId = `docjob_${uuidv4()}`;
@@ -112,6 +113,7 @@ class DocumentQueueService {
       // Create job
       const job = await DocumentProcessingJob.create({
         job_id: jobId,
+        kanzleiId: kanzleiId,
         client_id: clientId,
         document_id: documentId,
         file_data: fileData,

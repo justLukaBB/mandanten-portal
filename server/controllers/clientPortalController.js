@@ -593,7 +593,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 // Update client with session token and last login
                 foundClient.session_token = sessionToken;
                 foundClient.last_login = new Date().toISOString();
-                await foundClient.save();
+                await foundClient.save({ validateModifiedOnly: true });
 
                 console.log(`✅ Verification successful for ${normalizedAktenzeichen} (Client ID: ${foundClient.id})`);
 

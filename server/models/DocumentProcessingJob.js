@@ -6,12 +6,20 @@
  */
 const mongoose = require('mongoose');
 
+const tenantPlugin = require('../plugins/tenantPlugin');
+
 const documentProcessingJobSchema = new mongoose.Schema({
   // Unique job identifier
   job_id: {
     type: String,
     required: true,
     unique: true,
+    index: true
+  },
+
+  // Tenant isolation
+  kanzleiId: {
+    type: String,
     index: true
   },
 
@@ -153,6 +161,8 @@ documentProcessingJobSchema.statics.getJobsByClient = async function(clientId, l
     .limit(limit)
     .lean();
 };
+
+documentProcessingJobSchema.plugin(tenantPlugin);
 
 const DocumentProcessingJob = mongoose.model('DocumentProcessingJob', documentProcessingJobSchema);
 
