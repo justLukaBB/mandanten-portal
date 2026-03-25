@@ -1032,7 +1032,14 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                             const safeName = `${documentId}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
                             localPath = path.join(tempDir, safeName);
 
-                            await fs.writeFile(localPath, file.buffer);
+                            // Support both disk storage (file.path) and memory storage (file.buffer)
+                            if (file.path && await fs.pathExists(file.path)) {
+                                await fs.copy(file.path, localPath);
+                            } else if (file.buffer) {
+                                await fs.writeFile(localPath, file.buffer);
+                            } else {
+                                throw new Error(`No file data available — file.path=${file.path}, file.buffer=${typeof file.buffer}`);
+                            }
                             console.log(`✅ Saved to local temp file: ${localPath}`);
                             cleanFilename = file.originalname;
                         } catch (writeError) {
