@@ -672,12 +672,16 @@ const createAdminDocumentController = ({
                     try {
                         const buffer = await getGCSFileBuffer(gcsFilename);
                         // Determine a flat filename inside the ZIP (no subdirectories)
+                        // Use display name but always preserve extension from original filename
+                        const originalExt = path.extname(gcsFilename) || path.extname(doc.filename || '');
                         let entryName = (doc.name || doc.filename || `document_${doc.id}`)
                             .replace(/[/\\:*?"<>|]/g, '_');
-                        // Ensure file extension
-                        if (!path.extname(entryName) && doc.type) {
-                            const extMap = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png' };
-                            entryName += extMap[doc.type] || '';
+                        // Ensure file extension is present
+                        if (!path.extname(entryName)) {
+                            const extMap = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png',
+                                'image/jpg': '.jpg', 'application/msword': '.doc',
+                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx' };
+                            entryName += originalExt || (doc.type && extMap[doc.type]) || '.pdf';
                         }
                         // Handle duplicate names
                         const count = usedNames.get(entryName) || 0;
