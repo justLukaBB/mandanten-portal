@@ -535,7 +535,7 @@ const createAdminReviewController = ({ Client }) => {
    */
   const getSettings = async (req, res) => {
     try {
-      const settings = await ReviewSettings.findOne({});
+      const settings = await ReviewSettings.findOne({ kanzleiId: req.kanzleiId });
       if (!settings) {
         return res.json({
           success: true,
@@ -602,8 +602,9 @@ const createAdminReviewController = ({ Client }) => {
       if (demo_mode_enabled !== undefined) updateFields.demo_mode_enabled = demo_mode_enabled;
       if (test_mode_enabled !== undefined) updateFields.test_mode_enabled = test_mode_enabled;
 
+      updateFields.kanzleiId = req.kanzleiId;
       const settings = await ReviewSettings.findOneAndUpdate(
-        {},
+        { kanzleiId: req.kanzleiId },
         updateFields,
         { upsert: true, new: true }
       );
