@@ -167,10 +167,7 @@ class CreditorEmailService {
       text,
       attachments,
       cc: ['insolvenz@ra-scuric.de'],
-      tags: [
-        { name: 'type', value: 'first_round' },
-        { name: 'client_reference', value: clientReference }
-      ]
+      tags: ['first_round', `ref-${clientReference}`]
     });
 
     // Sync to matcher after successful send
@@ -234,10 +231,7 @@ class CreditorEmailService {
       html,
       text,
       attachments,
-      tags: [
-        { name: 'type', value: 'second_round' },
-        { name: 'client_reference', value: clientReference }
-      ]
+      tags: ['second_round', `ref-${clientReference}`]
     });
 
     // Sync to matcher after successful send
@@ -305,6 +299,11 @@ class CreditorEmailService {
       const response = await this.resend.emails.send(emailPayload);
 
       // Resend SDK v6.x returns { data: { id: '...' }, error: null }
+      if (response.error) {
+        console.error(`❌ Resend API error for ${to}:`, response.error.message || JSON.stringify(response.error));
+        return { success: false, error: response.error.message || 'Resend API error' };
+      }
+
       const emailId = response.data?.id || response.id;
 
       console.log(`✅ Creditor email sent to ${to} (ID: ${emailId})${attachments.length > 0 ? ` with ${attachments.length} attachment(s)` : ''}`);
