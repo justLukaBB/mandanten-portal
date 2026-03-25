@@ -885,34 +885,36 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl }) 
 
   try {
 
+    const resolvedFiles = await Promise.all(files.map(async (f) => {
+      let gcsPath = f.gcs_path;
+      // Only attempt to get signed URL if no local path is provided and no gcs path exists
+      if (!f.local_path && !gcsPath) {
+        try {
+          gcsPath = await getSignedUrl(f.filename);
+        } catch (e) {
+          console.warn("⚠️ Failed to get signed URL for", f.filename, e.message);
+        }
+      }
+
+      if (!gcsPath && !f.local_path) {
+        console.error(`❌ No file path available for ${f.filename} — skipping`);
+        return null;
+      }
+
+      return {
+        filename: f.filename,            // blob name
+        gcs_path: gcsPath || undefined,   // signed URL (omit if null)
+        local_path: f.local_path,        // local path for testing/local-dev
+        mime_type: f.mime_type || 'image/png',
+        size: f.size || 0,
+        document_id: f.document_id || f.id,
+      };
+    }));
+
     const requestBody = {
       client_id: clientId,
       client_name: clientName || null,
-      files: (await Promise.all(files.map(async (f) => {
-        let gcsPath = f.gcs_path;
-        // Only attempt to get signed URL if no local path is provided and no gcs path exists
-        if (!f.local_path && !gcsPath) {
-          try {
-            gcsPath = await getSignedUrl(f.filename);
-          } catch (e) {
-            console.warn("⚠️ Failed to get signed URL for", f.filename, e.message);
-          }
-        }
-
-        if (!gcsPath && !f.local_path) {
-          console.error(`❌ No file path available for ${f.filename} — skipping`);
-          return null;
-        }
-
-        return {
-          filename: f.filename,            // blob name
-          gcs_path: gcsPath || undefined,   // signed URL (omit if null)
-          local_path: f.local_path,        // local path for testing/local-dev
-          mime_type: f.mime_type || 'image/png',
-          size: f.size || 0,
-          document_id: f.document_id || f.id,
-        };
-      })))).filter(Boolean),
+      files: resolvedFiles.filter(Boolean),
       webhook_url: webhookUrl,
     };
 
