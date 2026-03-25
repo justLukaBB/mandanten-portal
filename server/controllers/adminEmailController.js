@@ -1,9 +1,6 @@
 const createAdminEmailController = ({ CreditorEmail, Client }) => {
 
-  // Build tenant filter for CreditorEmail based on req.tenantFilter
-  // superadmin: {} (all), admin: { kanzleiId: "..." }
   function emailTenantFilter(req) {
-    if (req.adminRole === 'superadmin') return {};
     return { kanzleiId: req.kanzleiId };
   }
 

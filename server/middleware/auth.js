@@ -34,7 +34,7 @@ const authenticateClient = (req, res, next) => {
       req.adminId = decoded.adminId;
       req.kanzleiId = decoded.kanzleiId;
       req.adminRole = decoded.role || 'admin';
-      req.tenantFilter = decoded.role === 'superadmin' ? {} : { kanzleiId: decoded.kanzleiId };
+      req.tenantFilter = { kanzleiId: decoded.kanzleiId };
       req.isAdmin = true;
       req.type = 'admin';
       return next();
@@ -84,8 +84,7 @@ const authenticateAdmin = (req, res, next) => {
     req.adminId = decoded.adminId;
     req.kanzleiId = decoded.kanzleiId;
     req.adminRole = decoded.role || 'admin';
-    // Tenant filter: superadmin sees all, regular admin only their kanzlei
-    req.tenantFilter = decoded.role === 'superadmin' ? {} : { kanzleiId: decoded.kanzleiId };
+    req.tenantFilter = { kanzleiId: decoded.kanzleiId };
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
