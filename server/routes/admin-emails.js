@@ -37,7 +37,7 @@ module.exports = ({ CreditorEmail, Client }) => {
     controller.assign
   );
 
-  // Proxy download for email attachments (Resend URLs may need auth or expire)
+  // Proxy download for email attachments (Resend URLs or base64 content)
   router.get('/emails/:id/attachments/:index',
     securityRateLimits.admin,
     authenticateAdmin,
@@ -54,30 +54,61 @@ module.exports = ({ CreditorEmail, Client }) => {
         }
 
         const attachment = email.attachments[index];
+        const safeFilename = (attachment.filename || 'document').replace(/"/g, '_');
+        const contentType = attachment.content_type || 'application/octet-stream';
+
+        // Case 1: Attachment has base64 content (from Resend inbound webhook)
+        if (attachment.content && !attachment.url) {
+          const buffer = Buffer.from(attachment.content, 'base64');
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+          res.setHeader('Content-Length', buffer.length);
+          return res.send(buffer);
+        }
+
         if (!attachment.url) {
           return res.status(404).json({ error: 'Attachment URL not available' });
         }
 
-        // Proxy the download from Resend
+        // Case 2: Proxy download from URL
         const axios = require('axios');
-        const response = await axios.get(attachment.url, {
-          responseType: 'stream',
-          headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          },
-          timeout: 30000,
-        });
+        const isResendApi = attachment.url.includes('api.resend.com');
 
-        res.setHeader('Content-Type', attachment.content_type || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${(attachment.filename || 'document').replace(/"/g, '_')}"`);
-        if (attachment.size) {
-          res.setHeader('Content-Length', attachment.size);
+        // Only send Resend auth for Resend API URLs
+        const headers = {};
+        if (isResendApi && process.env.RESEND_API_KEY) {
+          headers['Authorization'] = `Bearer ${process.env.RESEND_API_KEY}`;
         }
 
-        response.data.pipe(res);
+        const response = await axios.get(attachment.url, {
+          responseType: 'arraybuffer',
+          headers,
+          timeout: 30000,
+          maxRedirects: 5,
+          validateStatus: (status) => status >= 200 && status < 300,
+        });
+
+        // Verify we got actual file data, not an error page
+        const upstreamType = response.headers['content-type'] || '';
+        if (upstreamType.includes('text/html') || upstreamType.includes('application/json')) {
+          console.error('Attachment proxy got non-file response:', upstreamType, 'from:', attachment.url);
+          return res.status(502).json({ error: 'Upstream returned non-file response, attachment may have expired' });
+        }
+
+        // Use upstream content-type if available, fall back to stored metadata
+        const finalContentType = upstreamType || contentType;
+        res.setHeader('Content-Type', finalContentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+        res.setHeader('Content-Length', response.data.byteLength);
+        res.send(Buffer.from(response.data));
       } catch (error) {
         console.error('Attachment download error:', error.message);
-        res.status(500).json({ error: 'Failed to download attachment' });
+        if (error.response) {
+          console.error('Upstream status:', error.response.status, 'URL:', error.config?.url);
+        }
+        if (!res.headersSent) {
+          res.status(502).json({ error: 'Failed to download attachment — source may be unavailable or expired' });
+        }
       }
     }
   );
