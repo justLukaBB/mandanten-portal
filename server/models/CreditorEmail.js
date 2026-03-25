@@ -54,8 +54,12 @@ const creditorEmailSchema = new mongoose.Schema({
   email_body_preview: { type: String },
   email_body_full: { type: String },
 
-  // Attachments from creditor email (URL or base64 content)
+  // Resend email ID for on-demand attachment download
+  resend_email_id: { type: String },
+
+  // Attachments from creditor email (URL, base64 content, or Resend attachment ID)
   attachments: [{
+    id: { type: String },        // Resend attachment ID (for on-demand download)
     filename: { type: String },
     content_type: { type: String },
     size: { type: Number },

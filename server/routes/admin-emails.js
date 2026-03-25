@@ -66,13 +66,31 @@ module.exports = ({ CreditorEmail, Client }) => {
           return res.send(buffer);
         }
 
-        if (!attachment.url) {
-          return res.status(404).json({ error: 'Attachment URL not available' });
+        // Case 2: Fetch fresh download URL from Resend API using attachment ID
+        let downloadUrl = attachment.url;
+        if (!downloadUrl && attachment.id && email.resend_email_id && process.env.RESEND_API_KEY) {
+          const axios = require('axios');
+          try {
+            const resendResp = await axios.get(
+              `https://api.resend.com/emails/receiving/${email.resend_email_id}/attachments/${attachment.id}`,
+              {
+                headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}` },
+                timeout: 15000,
+              }
+            );
+            downloadUrl = resendResp.data?.download_url;
+          } catch (resendErr) {
+            console.error('Resend attachment URL fetch failed:', resendErr.message);
+          }
         }
 
-        // Case 2: Proxy download from URL
+        if (!downloadUrl) {
+          return res.status(404).json({ error: 'Attachment not available — no download URL or Resend ID' });
+        }
+
+        // Case 3: Proxy download from URL
         const axios = require('axios');
-        const isResendApi = attachment.url.includes('api.resend.com');
+        const isResendApi = downloadUrl.includes('api.resend.com') || downloadUrl.includes('resend.com');
 
         // Only send Resend auth for Resend API URLs
         const headers = {};
@@ -80,7 +98,7 @@ module.exports = ({ CreditorEmail, Client }) => {
           headers['Authorization'] = `Bearer ${process.env.RESEND_API_KEY}`;
         }
 
-        const response = await axios.get(attachment.url, {
+        const response = await axios.get(downloadUrl, {
           responseType: 'arraybuffer',
           headers,
           timeout: 30000,
@@ -91,7 +109,7 @@ module.exports = ({ CreditorEmail, Client }) => {
         // Verify we got actual file data, not an error page
         const upstreamType = response.headers['content-type'] || '';
         if (upstreamType.includes('text/html') || upstreamType.includes('application/json')) {
-          console.error('Attachment proxy got non-file response:', upstreamType, 'from:', attachment.url);
+          console.error('Attachment proxy got non-file response:', upstreamType, 'from:', downloadUrl);
           return res.status(502).json({ error: 'Upstream returned non-file response, attachment may have expired' });
         }
 
