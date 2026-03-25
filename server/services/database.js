@@ -91,6 +91,17 @@ class DatabaseService {
             continue;
           }
 
+          // Ensure kanzleiId is set
+          if (!clientData.kanzleiId) {
+            const Kanzlei = require('../models/Kanzlei');
+            const defaultKanzlei = await Kanzlei.findOne({ is_active: true }).sort({ created_at: 1 });
+            if (defaultKanzlei) {
+              clientData.kanzleiId = defaultKanzlei.id;
+            } else {
+              console.warn(`⚠️ No active kanzlei found, client ${clientId} will have no kanzleiId`);
+            }
+          }
+
           // Create new client
           const newClient = new Client(clientData);
           await newClient.save();

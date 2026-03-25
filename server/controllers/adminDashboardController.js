@@ -277,6 +277,16 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
         createClient: async (req, res) => {
             try {
                 const clientData = req.body;
+
+                // Ensure kanzleiId is always set
+                if (!req.kanzleiId) {
+                    const Kanzlei = require('../models/Kanzlei');
+                    const defaultKanzlei = await Kanzlei.findOne({ is_active: true }).sort({ created_at: 1 });
+                    if (!defaultKanzlei) {
+                        return res.status(400).json({ error: 'No active kanzlei found. Cannot create client without kanzleiId.' });
+                    }
+                    req.kanzleiId = defaultKanzlei.id;
+                }
                 console.log('📝 Received client creation request:', {
                     firstName: clientData.firstName,
                     lastName: clientData.lastName,
