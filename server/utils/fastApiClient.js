@@ -888,7 +888,7 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl }) 
     const requestBody = {
       client_id: clientId,
       client_name: clientName || null,
-      files: await Promise.all(files.map(async (f) => {
+      files: (await Promise.all(files.map(async (f) => {
         let gcsPath = f.gcs_path;
         // Only attempt to get signed URL if no local path is provided and no gcs path exists
         if (!f.local_path && !gcsPath) {
@@ -899,17 +899,27 @@ async function createProcessingJob({ clientId, clientName, files, webhookUrl }) 
           }
         }
 
+        if (!gcsPath && !f.local_path) {
+          console.error(`❌ No file path available for ${f.filename} — skipping`);
+          return null;
+        }
+
         return {
           filename: f.filename,            // blob name
-          gcs_path: gcsPath,               // signed URL
+          gcs_path: gcsPath || undefined,   // signed URL (omit if null)
           local_path: f.local_path,        // local path for testing/local-dev
           mime_type: f.mime_type || 'image/png',
           size: f.size || 0,
           document_id: f.document_id || f.id,
         };
-      })),
+      })))).filter(Boolean),
       webhook_url: webhookUrl,
     };
+
+    if (requestBody.files.length === 0) {
+      console.error('❌ No processable files — all files missing gcs_path and local_path');
+      return { success: false, error: 'No processable files (GCS upload failed and no local fallback)' };
+    }
 
     console.log(`\n📤 Sending request to FastAPI...`);
 
