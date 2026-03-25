@@ -617,6 +617,16 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     client.first_payment_received = true;
                     client.payment_received_at = new Date();
                     client.updated_at = new Date();
+
+                    // If docs already processed, move to upload_window_active
+                    const hasProcessedDocs = (client.documents || []).some(d => d.processing_status === 'completed');
+                    const hasCreditors = (client.final_creditor_list || []).length > 0;
+                    if (hasProcessedDocs && hasCreditors && client.current_status === 'portal_access_sent') {
+                        client.current_status = 'upload_window_active';
+                        client.workflow_status = 'upload_window_active';
+                        console.log(`📋 ${client.aktenzeichen} → upload_window_active (docs already processed)`);
+                    }
+
                     await client.save();
                     console.log(`💰 markPaymentReceived: ${client.aktenzeichen} — 30-day upload timer started`);
                 }

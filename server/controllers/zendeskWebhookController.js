@@ -510,9 +510,29 @@ class ZendeskWebhookController {
                 console.log(`⏭️ Payment already marked for ${client.aktenzeichen}`);
             }
 
-            // If client is in upload_window_active, the payment just started the timer.
-            // The scheduler will promote after 30 days. No immediate promotion needed
-            // (payment was JUST received, so 30 days haven't passed yet).
+            // If documents have already been uploaded and processed, move to upload_window_active
+            // so the 30-day timer scheduler can pick this client up.
+            // Without this, clients who upload docs BEFORE payment confirmation get stuck
+            // at their previous status (e.g. portal_access_sent).
+            const hasProcessedDocs = (client.documents || []).some(d => d.processing_status === 'completed');
+            const hasCreditors = (client.final_creditor_list || []).length > 0;
+
+            if (hasProcessedDocs && hasCreditors && client.current_status === 'portal_access_sent') {
+                client.current_status = 'upload_window_active';
+                client.workflow_status = 'upload_window_active';
+                client.status_history.push({
+                    id: uuidv4(),
+                    status: 'upload_window_active',
+                    changed_by: 'system',
+                    metadata: {
+                        reason: 'Payment confirmed with docs already processed — entering upload window',
+                        documents_count: client.documents.filter(d => d.processing_status === 'completed').length,
+                        creditors_count: client.final_creditor_list.length
+                    },
+                    created_at: new Date()
+                });
+                console.log(`📋 ${client.aktenzeichen} → upload_window_active (docs already processed, payment just confirmed)`);
+            }
 
             await client.save({ validateModifiedOnly: true });
 
