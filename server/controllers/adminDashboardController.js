@@ -1005,6 +1005,8 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
                     client.workflow_status = 'admin_review';
                 } else {
                     client.current_status = 'awaiting_client_confirmation';
+                    client.admin_approved = true;
+                    client.admin_approved_at = new Date();
                     client.workflow_status = 'client_confirmation';
                 }
 

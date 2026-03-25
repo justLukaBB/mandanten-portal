@@ -61,6 +61,8 @@ class UploadWindowService {
                             $set: {
                                 current_status: 'awaiting_client_confirmation',
                                 workflow_status: 'client_confirmation',
+                                admin_approved: true,
+                                admin_approved_at: new Date(),
                                 updated_at: new Date()
                             },
                             $push: {
