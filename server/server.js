@@ -235,13 +235,18 @@ app.set('trust proxy', true);
 
 // 9.1 Security & CORS
 app.use(securityHeaders);
-app.use(rateLimits.general);
 app.use(cors({
   origin: config.CORS_ORIGINS,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
+// Rate limiter AFTER cors — so OPTIONS preflight requests get proper CORS headers
+// and don't count against rate limits
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+  rateLimits.general(req, res, next);
+});
 
 // Performance Logging Middleware
 app.use((req, res, next) => {
