@@ -1,5 +1,6 @@
 const ZendeskService = require('./zendeskService');
 const SettlementResponseProcessor = require('./settlementResponseProcessor');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
 
 /**
  * Settlement Response Monitor
@@ -114,6 +115,12 @@ class SettlementResponseMonitor {
             const client = await Client.findOne({ aktenzeichen: clientReference });
             if (!client) {
                 console.warn(`⚠️ Client not found: ${clientReference}`);
+                return;
+            }
+
+            // Check Kanzlei-level Zendesk access
+            if (!(await hasZendeskForClient(client))) {
+                console.log('📋 Zendesk disabled for this Kanzlei — skipping settlement response monitoring');
                 return;
             }
 

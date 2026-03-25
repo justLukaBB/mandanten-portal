@@ -814,6 +814,169 @@ Aktenzeichen: ${aktenzeichen}
       return { success: false, error: error.message };
     }
   }
+  // ── Welcome Email ─────────────────────────────────────────────────────────
+
+  generateWelcomeEmailHtml(clientName, email, aktenzeichen, portalUrl) {
+    return `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+  <div style="padding: 16px 20px; border-bottom: 1px solid #e5e7eb;">
+    <img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Scuric Logo" style="height: 40px; display: block;">
+  </div>
+  <div style="padding: 24px 20px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="font-size: 28px; font-weight: 600; color: #111827; margin: 0 0 12px 0;">Willkommen im Mandanten Portal</h1>
+      <p style="font-size: 16px; color: #6b7280; margin: 0;">Ihr persoenlicher Zugang steht bereit</p>
+    </div>
+
+    <p style="font-size: 15px; color: #374151; line-height: 1.6; margin: 0 0 20px 0;">
+      Sehr geehrte/r <strong>${clientName}</strong>,<br><br>
+      ab sofort steht Ihnen Ihr persoenliches Mandantenportal zur Verfuegung. Hier finden Sie alle wichtigen Dokumente und Informationen – und koennen selbst Unterlagen hochladen.
+    </p>
+
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+      <div style="font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 8px;">Ihre Zugangsdaten</div>
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-weight: 500; color: #374151; font-size: 14px;">Portal-Link:</td>
+          <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-family: monospace;">
+            <a href="${portalUrl}/login" style="color: #dc2626; text-decoration: none;">${portalUrl.replace('https://', '')}/login</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-weight: 500; color: #374151; font-size: 14px;">Login-E-Mail:</td>
+          <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-family: monospace;">${email}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; font-weight: 500; color: #374151; font-size: 14px;">Aktenzeichen:</td>
+          <td style="padding: 10px 0 10px 16px; color: #111827; font-size: 14px; font-family: monospace;">${aktenzeichen}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${portalUrl}/login" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 500; font-size: 16px;">Jetzt anmelden</a>
+    </div>
+
+    <h2 style="font-size: 18px; font-weight: 600; color: #111827; margin: 24px 0 16px 0;">So nutzen Sie das Portal</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr><td style="padding: 8px 0;"><table style="width: 100%; background-color: #f9fafb; border-radius: 8px;"><tr><td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;"><div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">1</div></td><td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Oeffnen Sie den oben genannten Portal-Link</td></tr></table></td></tr>
+      <tr><td style="padding: 8px 0;"><table style="width: 100%; background-color: #f9fafb; border-radius: 8px;"><tr><td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;"><div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">2</div></td><td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Melden Sie sich mit Ihrer E-Mail-Adresse und dem Aktenzeichen an</td></tr></table></td></tr>
+      <tr><td style="padding: 8px 0;"><table style="width: 100%; background-color: #f9fafb; border-radius: 8px;"><tr><td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;"><div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">3</div></td><td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;"><strong>Sie erhalten einen Bestaetigungscode per E-Mail.</strong> Geben Sie diesen Code ein, um Ihre Identitaet zu bestaetigen.</td></tr></table></td></tr>
+      <tr><td style="padding: 8px 0;"><table style="width: 100%; background-color: #f9fafb; border-radius: 8px;"><tr><td style="width: 28px; padding: 12px 0 12px 12px; vertical-align: top;"><div style="background-color: #111827; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 600; font-size: 14px;">4</div></td><td style="padding: 16px 12px 12px 12px; color: #374151; font-size: 14px; line-height: 1.5;">Laden Sie Ihre Unterlagen im Portal hoch</td></tr></table></td></tr>
+    </table>
+
+    <h2 style="font-size: 18px; font-weight: 600; color: #111827; margin: 24px 0 16px 0;">Bitte laden Sie folgende Unterlagen hoch</h2>
+    <table style="width: 100%;">
+      <tr><td><div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;"><span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">&#10003;</span> Mahnungen oder Mahnbescheide</div></td></tr>
+      <tr><td><div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;"><span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">&#10003;</span> Inkassoschreiben</div></td></tr>
+      <tr><td><div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;"><span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">&#10003;</span> Unbezahlte Rechnungen</div></td></tr>
+      <tr><td><div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;"><span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">&#10003;</span> Anwaltliche Zahlungsaufforderungen</div></td></tr>
+      <tr><td><div style="padding: 10px 16px 10px 36px; margin: 6px 0; background-color: #f9fafb; border-radius: 8px; font-size: 14px; color: #374151; position: relative;"><span style="position: absolute; left: 14px; color: #16a34a; font-weight: 600;">&#10003;</span> Gerichtliche Schreiben</div></td></tr>
+    </table>
+
+    <div style="background-color: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 14px; color: #1e40af;">
+      <strong>Hinweis:</strong> Laden Sie bitte alle Dokumente hoch, in denen Geld von Ihnen gefordert wird. Ihr Zugang bleibt dauerhaft aktiv.
+    </div>
+
+    <p style="margin-top: 24px; color: #6b7280; font-size: 14px;">Bei Fragen stehe ich Ihnen selbstverstaendlich gerne zur Verfuegung.</p>
+
+    <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; font-size: 14px; color: #1a1a1a;">
+      <p style="margin: 0 0 12px;"><img src="https://www.anwalt-privatinsolvenz-online.de/wp-content/uploads/2015/08/Logo-T-Scuric.png" alt="Thomas Scuric Rechtsanwalt" style="display: block; max-width: 300px; height: auto;"></p>
+      <p style="margin: 0 0 4px; color: #961919; font-weight: bold;">Rechtsanwaltskanzlei Thomas Scuric</p>
+      <p style="margin: 0 0 8px; color: #1f497d;">Bongardstrasse 33<br>44787 Bochum</p>
+      <p style="margin: 0 0 12px; color: #1f497d;">Fon: 0234 913 681 0<br>Fax: 0234 913 681 29<br>E-Mail: <a href="mailto:kontakt@schuldnerberatung-anwalt.de" style="color: #0563c1; text-decoration: none;">kontakt@schuldnerberatung-anwalt.de</a></p>
+      <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #a6a6a6;">Der Inhalt dieser E-Mail ist vertraulich und ausschliesslich fuer den bezeichneten Adressaten bestimmt. Wenn Sie nicht der vorgesehene Adressat dieser E-Mail oder dessen Vertreter sein sollten, so beachten Sie bitte, dass jede Form der Kenntnisnahme, Veroeffentlichung, Vervielfaeltigung oder Weitergabe des Inhalts dieser E-Mail unzulaessig ist. Wir bitten Sie, sich in diesem Fall mit dem Absender der E-Mail in Verbindung zu setzen.<br><br>Wir weisen Sie auf unsere aktuelle <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #a0191d; text-decoration: underline;" target="_blank">Datenschutzerklaerung</a> hin.</p>
+    </div>
+
+    <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+      <div style="margin-bottom: 12px;">
+        <a href="https://www.schuldnerberatung-anwalt.de/impressum/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Impressum</a>
+        <span style="color: #9ca3af; margin: 0 12px;">&bull;</span>
+        <a href="https://www.schuldnerberatung-anwalt.de/datenschutz/" style="color: #6b7280; text-decoration: none; font-size: 13px;">Datenschutz</a>
+      </div>
+      <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; 2025 Scuric. Alle Rechte vorbehalten.</p>
+    </div>
+
+    <div style="font-size: 11px; color: #9ca3af; margin-top: 24px; padding: 12px; background-color: #f9fafb; border-radius: 6px;">
+      Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht direkt auf diese Nachricht.
+    </div>
+  </div>
+</div>`.trim();
+  }
+
+  generateWelcomeEmailText(clientName, email, aktenzeichen, portalUrl) {
+    return `
+Willkommen im Mandanten Portal
+
+Sehr geehrte/r ${clientName},
+
+ab sofort steht Ihnen Ihr persoenliches Mandantenportal zur Verfuegung.
+
+Ihre Zugangsdaten:
+- Portal-Link: ${portalUrl}/login
+- Login-E-Mail: ${email}
+- Aktenzeichen: ${aktenzeichen}
+
+So nutzen Sie das Portal:
+1. Oeffnen Sie den Portal-Link
+2. Melden Sie sich mit E-Mail und Aktenzeichen an
+3. Sie erhalten einen Bestaetigungscode per E-Mail
+4. Laden Sie Ihre Unterlagen hoch
+
+Bitte laden Sie folgende Unterlagen hoch:
+- Mahnungen oder Mahnbescheide
+- Inkassoschreiben
+- Unbezahlte Rechnungen
+- Anwaltliche Zahlungsaufforderungen
+- Gerichtliche Schreiben
+
+Hinweis: Laden Sie bitte alle Dokumente hoch, in denen Geld von Ihnen gefordert wird.
+
+Bei Fragen stehe ich Ihnen gerne zur Verfuegung.
+
+Rechtsanwaltskanzlei Thomas Scuric
+Bongardstrasse 33, 44787 Bochum
+Fon: 0234 913 681 0
+E-Mail: kontakt@schuldnerberatung-anwalt.de
+    `.trim();
+  }
+
+  async sendWelcomeEmail(recipientEmail, { firstName, lastName, email, aktenzeichen }) {
+    const portalUrl = process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com';
+    const clientName = `${firstName} ${lastName}`;
+    const subject = 'Willkommen im Mandanten Portal — Ihr Zugang steht bereit';
+    const html = this.generateWelcomeEmailHtml(clientName, email, aktenzeichen, portalUrl);
+    const text = this.generateWelcomeEmailText(clientName, email, aktenzeichen, portalUrl);
+
+    if (!this.resend) {
+      console.log('\n📧 ================================');
+      console.log('📧 WELCOME EMAIL (DEV MODE)');
+      console.log('📧 ================================');
+      console.log(`📧 To: ${recipientEmail}`);
+      console.log(`📧 Subject: ${subject}`);
+      console.log(`📧 Portal URL: ${portalUrl}/login`);
+      console.log(`📧 Aktenzeichen: ${aktenzeichen}`);
+      console.log('📧 ================================\n');
+      return { success: true, devMode: true };
+    }
+
+    try {
+      const response = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: recipientEmail,
+        subject,
+        html,
+        text
+      });
+
+      const emailId = response.data?.id || response.id;
+      console.log(`✅ Welcome email sent to ${recipientEmail} (ID: ${emailId})`);
+      return { success: true, emailId };
+    } catch (error) {
+      console.error(`❌ Failed to send welcome email to ${recipientEmail}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 // Export singleton instance

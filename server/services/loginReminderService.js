@@ -1,6 +1,9 @@
 const Client = require('../models/Client');
 const ZendeskService = require('./zendeskService');
 const { v4: uuidv4 } = require('uuid');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
+const emailService = require('./emailService');
+const activityLogService = require('./activityLogService');
 
 class LoginReminderService {
   constructor() {
@@ -102,10 +105,13 @@ class LoginReminderService {
 
       let zendeskUpdateResult = null;
 
+      // Check if this Kanzlei has Zendesk enabled
+      const hasZendesk = await hasZendeskForClient(client) && this.zendeskService.isConfigured();
+
       // Add internal comment and send email if Zendesk is configured
-      if (this.zendeskService.isConfigured() && originalTicket.ticket_id) {
+      if (hasZendesk && originalTicket.ticket_id) {
         console.log(`💬 Adding login reminder comment to ticket ${originalTicket.ticket_id}...`);
-        
+
         // Add internal comment
         zendeskUpdateResult = await this.zendeskService.addInternalComment(originalTicket.ticket_id, {
           content: reminderContent,
@@ -116,7 +122,7 @@ class LoginReminderService {
           // Send email via side conversation
           const emailSubject = `Wichtige Erinnerung: Portal-Zugang nutzen - ${client.aktenzeichen}`;
           const emailBody = this.generateLoginReminderEmailBody(client, daysSincePortalSent);
-          
+
           const sideConversationResult = await this.zendeskService.createSideConversation(
             originalTicket.ticket_id,
             {
@@ -127,17 +133,31 @@ class LoginReminderService {
               internalNote: false
             }
           );
-          
+
           if (sideConversationResult.success) {
             console.log(`✅ Login reminder email sent to ${client.email}`);
           }
         }
+      } else if (!hasZendesk) {
+        // No Zendesk — send login reminder email directly via Resend
+        console.log('📋 Zendesk disabled for this Kanzlei — sending login reminder via email');
+        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+        await emailService.sendWelcomeEmail(client.email, {
+          firstName: client.firstName,
+          lastName: client.lastName,
+          email: client.email,
+          aktenzeichen: client.aktenzeichen
+        });
+        await activityLogService.log(client.kanzleiId, client.aktenzeichen, 'login_reminder_sent', {
+          method: 'email',
+          email: client.email
+        });
       }
 
       // Update client record
       client.login_reminder_sent = true;
       client.login_reminder_sent_at = new Date();
-      
+
       // Add to status history
       client.status_history.push({
         id: uuidv4(),
@@ -147,7 +167,8 @@ class LoginReminderService {
           days_since_portal_sent: daysSincePortalSent,
           portal_sent_at: client.portal_link_sent_at,
           reminder_type: 'login_reminder',
-          zendesk_ticket_updated: zendeskUpdateResult?.success || false
+          zendesk_ticket_updated: zendeskUpdateResult?.success || false,
+          method: hasZendesk ? 'zendesk' : 'email'
         }
       });
 
@@ -187,10 +208,13 @@ class LoginReminderService {
 
       let zendeskUpdateResult = null;
 
+      // Check if this Kanzlei has Zendesk enabled
+      const hasZendesk = await hasZendeskForClient(client) && this.zendeskService.isConfigured();
+
       // Add internal comment and send email if Zendesk is configured
-      if (this.zendeskService.isConfigured() && originalTicket.ticket_id) {
+      if (hasZendesk && originalTicket.ticket_id) {
         console.log(`💬 Adding document reminder comment to ticket ${originalTicket.ticket_id}...`);
-        
+
         zendeskUpdateResult = await this.zendeskService.addInternalComment(originalTicket.ticket_id, {
           content: reminderContent,
           tags: ['document-reminder', 'login-no-upload-7-days', 'awaiting-documents']
@@ -199,7 +223,7 @@ class LoginReminderService {
         if (zendeskUpdateResult.success) {
           const emailSubject = `Dokumente benötigt: Bitte laden Sie Ihre Unterlagen hoch - ${client.aktenzeichen}`;
           const emailBody = this.generateDocumentReminderEmailBody(client, daysSinceLogin);
-          
+
           const sideConversationResult = await this.zendeskService.createSideConversation(
             originalTicket.ticket_id,
             {
@@ -210,17 +234,28 @@ class LoginReminderService {
               internalNote: false
             }
           );
-          
+
           if (sideConversationResult.success) {
             console.log(`✅ Document reminder email sent to ${client.email}`);
           }
         }
+      } else if (!hasZendesk) {
+        // No Zendesk — send document reminder email directly via Resend
+        console.log('📋 Zendesk disabled for this Kanzlei — sending document reminder via email');
+        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+        const clientName = `${client.firstName} ${client.lastName}`;
+        await emailService.sendDocumentRequestEmail(client.email, clientName, portalUrl);
+        await activityLogService.log(client.kanzleiId, client.aktenzeichen, 'document_reminder_sent', {
+          method: 'email',
+          email: client.email,
+          reminder_type: 'document_upload_after_login'
+        });
       }
 
       // Update client record
       client.login_document_reminder_sent = true;
       client.login_document_reminder_sent_at = new Date();
-      
+
       // Add to status history
       client.status_history.push({
         id: uuidv4(),
@@ -230,7 +265,8 @@ class LoginReminderService {
           days_since_login: daysSinceLogin,
           last_login: client.last_login,
           reminder_type: 'document_upload_after_login',
-          zendesk_ticket_updated: zendeskUpdateResult?.success || false
+          zendesk_ticket_updated: zendeskUpdateResult?.success || false,
+          method: hasZendesk ? 'zendesk' : 'email'
         }
       });
 

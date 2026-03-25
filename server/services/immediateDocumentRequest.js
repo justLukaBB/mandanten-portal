@@ -1,5 +1,8 @@
 const ZendeskService = require('./zendeskService');
 const { v4: uuidv4 } = require('uuid');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
+const emailService = require('./emailService');
+const activityLogService = require('./activityLogService');
 
 class ImmediateDocumentRequest {
   constructor() {
@@ -13,22 +16,25 @@ class ImmediateDocumentRequest {
   async sendImmediateDocumentRequest(client) {
     try {
       console.log(`📤 Sending immediate document request to ${client.firstName} ${client.lastName} (${client.aktenzeichen})`);
-      
+
       // Generate welcome email content
       const emailContent = this.generateWelcomeEmail(client);
-      
-      // Find the payment review ticket
-      const paymentTicket = client.zendesk_tickets?.find(
-        t => t.ticket_type === 'payment_review' || t.ticket_scenario === 'payment-confirmed'
-      );
-      
-      if (!paymentTicket?.ticket_id) {
-        console.error('❌ No payment ticket found for immediate document request');
-        return { success: false, error: 'No payment ticket found' };
-      }
 
-      // Send email via Zendesk side conversation
-      if (this.zendeskService.isConfigured()) {
+      // Check if this Kanzlei has Zendesk enabled
+      const hasZendesk = await hasZendeskForClient(client) && this.zendeskService.isConfigured();
+
+      if (hasZendesk) {
+        // Find the payment review ticket
+        const paymentTicket = client.zendesk_tickets?.find(
+          t => t.ticket_type === 'payment_review' || t.ticket_scenario === 'payment-confirmed'
+        );
+
+        if (!paymentTicket?.ticket_id) {
+          console.error('❌ No payment ticket found for immediate document request');
+          return { success: false, error: 'No payment ticket found' };
+        }
+
+        // Send email via Zendesk side conversation
         const emailResult = await this.zendeskService.createSideConversation(
           paymentTicket.ticket_id,
           {
@@ -48,7 +54,7 @@ class ImmediateDocumentRequest {
 
         // Update client record
         client.document_request_email_sent_at = new Date();
-        
+
         // Add to status history
         client.status_history.push({
           id: uuidv4(),
@@ -57,14 +63,15 @@ class ImmediateDocumentRequest {
           metadata: {
             email_sent: emailResult.success,
             trigger: 'payment_confirmation',
-            ticket_id: paymentTicket.ticket_id
+            ticket_id: paymentTicket.ticket_id,
+            method: 'zendesk'
           }
         });
 
         await client.save();
 
-        console.log(`✅ Immediate document request sent successfully`);
-        
+        console.log(`✅ Immediate document request sent successfully via Zendesk`);
+
         return {
           success: true,
           emailSent: emailResult.success,
@@ -72,7 +79,43 @@ class ImmediateDocumentRequest {
         };
       }
 
-      return { success: false, error: 'Zendesk not configured' };
+      // No Zendesk — send document request email directly via Resend
+      console.log('📋 Zendesk disabled for this Kanzlei — sending document request via email');
+      const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+      const clientName = `${client.firstName} ${client.lastName}`;
+      const emailResult = await emailService.sendDocumentRequestEmail(client.email, clientName, portalUrl);
+
+      // Log activity
+      await activityLogService.log(client.kanzleiId, client.aktenzeichen, 'document_reminder_sent', {
+        method: 'email',
+        email: client.email,
+        trigger: 'payment_confirmation'
+      });
+
+      // Update client record
+      client.document_request_email_sent_at = new Date();
+
+      // Add to status history
+      client.status_history.push({
+        id: uuidv4(),
+        status: 'immediate_document_request_sent',
+        changed_by: 'system',
+        metadata: {
+          email_sent: emailResult.success,
+          trigger: 'payment_confirmation',
+          method: 'email'
+        }
+      });
+
+      await client.save();
+
+      console.log(`✅ Immediate document request sent successfully via email`);
+
+      return {
+        success: true,
+        emailSent: emailResult.success,
+        ticketUpdated: false
+      };
       
     } catch (error) {
       console.error('❌ Error sending immediate document request:', error);

@@ -70,18 +70,25 @@ class CreditorContactService {
 
             console.log(`📋 Client: ${clientData.name} (${clientData.email})`);
 
-            // Step 1: Test Zendesk connection
-            const connectionOk = await this.zendesk.testConnection();
-            if (!connectionOk) {
-                throw new Error('Zendesk connection failed - check configuration');
-            }
+            const { hasZendeskForClient } = require('../utils/tenantConfig');
+            const activityLogService = require('./activityLogService');
+            const hasZendesk = await hasZendeskForClient(client);
 
-            // Step 2: Find existing Zendesk user for client (does not create new users)
-            const zendeskUser = await this.zendesk.findClientUser(
-                clientReference,
-                clientData.name,
-                clientData.email
-            );
+            let zendeskUser = null;
+            if (hasZendesk) {
+                // Step 1: Test Zendesk connection
+                const connectionOk = await this.zendesk.testConnection();
+                if (!connectionOk) {
+                    throw new Error('Zendesk connection failed - check configuration');
+                }
+
+                // Step 2: Find existing Zendesk user for client (does not create new users)
+                zendeskUser = await this.zendesk.findClientUser(
+                    clientReference,
+                    clientData.name,
+                    clientData.email
+                );
+            }
 
             // Step 3: Get all creditors for this client from confirmed documents
             const creditors = await this.getConfirmedCreditorsForClient(clientReference);
@@ -100,34 +107,43 @@ class CreditorContactService {
                     success: true,
                     message: 'No confirmed creditors found for contact',
                     client_reference: clientReference,
-                    zendesk_user_id: zendeskUser.id,
+                    zendesk_user_id: zendeskUser?.id || null,
                     tickets_created: 0,
                     emails_sent: 0
                 };
             }
 
             // Step 4: Create ONE main Zendesk ticket for all creditors
-            console.log(`🎫 Creating main ticket for ${creditors.length} creditors...`);
+            let mainTicket = { id: null, subject: null };
+            if (hasZendesk) {
+                console.log(`🎫 Creating main ticket for ${creditors.length} creditors...`);
 
-            const mainTicket = await this.zendesk.createMainCreditorTicket(
-                zendeskUser.id,
-                {
-                    id: clientReference,
-                    name: clientData.name,
-                    email: clientData.email,
-                    phone: clientData.phone || '',
-                    address: clientData.address || ''
-                },
-                creditors
-            );
+                mainTicket = await this.zendesk.createMainCreditorTicket(
+                    zendeskUser.id,
+                    {
+                        id: clientReference,
+                        name: clientData.name,
+                        email: clientData.email,
+                        phone: clientData.phone || '',
+                        address: clientData.address || ''
+                    },
+                    creditors
+                );
 
-            console.log(`✅ Main ticket created: ${mainTicket.subject} (ID: ${mainTicket.id})`);
+                console.log(`✅ Main ticket created: ${mainTicket.subject} (ID: ${mainTicket.id})`);
+            } else {
+                console.log(`📋 Zendesk disabled — skipping ticket creation`);
+                await activityLogService.log(client.kanzleiId, clientReference, 'creditor_contact_initiated', {
+                    creditor_count: creditors.length,
+                    creditor_names: creditors.map(c => c.creditor_name || c.sender_name),
+                });
+            }
 
             // Update our internal tracking - create contact records for all creditors with same ticket ID
             const contactRecords = [];
             for (const creditor of creditors) {
                 try {
-                    const contactRecord = await this.createCreditorContactRecord(creditor, mainTicket.id, zendeskUser.id);
+                    const contactRecord = await this.createCreditorContactRecord(creditor, mainTicket.id, zendeskUser?.id || null);
                     contactRecords.push({
                         creditor_id: creditor.id,
                         original_creditor_id: creditor.creditor_id || creditor.id,
@@ -149,7 +165,9 @@ class CreditorContactService {
             }
 
             // Step 5: Record sync status
-            await this.recordZendeskSync(clientReference, zendeskUser.id, 1); // Only 1 main ticket
+            if (hasZendesk) {
+                await this.recordZendeskSync(clientReference, zendeskUser.id, 1); // Only 1 main ticket
+            }
 
             // Step 6: Generate individual DOCX documents for each creditor
             console.log(`📄 Generating individual DOCX documents for first round...`);
@@ -179,16 +197,20 @@ class CreditorContactService {
             console.log(`✅ Generated ${documentResults.total_generated} documents`);
 
             // Step 7: Upload all documents to main Zendesk ticket and get download URLs
-            const uploadResults = await this.zendesk.uploadFirstRoundDocumentsToMainTicket(
-                mainTicket.id,
-                documentResults.documents
-            );
+            if (hasZendesk) {
+                const uploadResults = await this.zendesk.uploadFirstRoundDocumentsToMainTicket(
+                    mainTicket.id,
+                    documentResults.documents
+                );
 
-            if (!uploadResults.success) {
-                throw new Error(`Document upload failed: ${uploadResults.error}`);
+                if (!uploadResults.success) {
+                    throw new Error(`Document upload failed: ${uploadResults.error}`);
+                }
+
+                console.log(`✅ Uploaded ${uploadResults.uploaded_count} documents to main ticket`);
+            } else {
+                console.log(`📋 Zendesk disabled — skipping document upload to ticket`);
             }
-
-            console.log(`✅ Uploaded ${uploadResults.uploaded_count} documents to main ticket`);
 
             // Step 8: Send emails with document attachments via Resend
             const sideConversationResults = await this.sendFirstRoundEmailsWithDocuments(
@@ -209,7 +231,15 @@ class CreditorContactService {
                 success: result.success
             }));
 
-            await this.zendesk.addSideConversationStatusUpdate(mainTicket.id, statusUpdates);
+            if (hasZendesk) {
+                await this.zendesk.addSideConversationStatusUpdate(mainTicket.id, statusUpdates);
+            } else {
+                await activityLogService.log(client.kanzleiId, clientReference, 'first_letter_sent', {
+                    emails_sent: successfulEmails.length,
+                    total_creditors: creditors.length,
+                    results: statusUpdates,
+                });
+            }
 
             // Count creditors needing manual contact
             const creditorsNeedingManualContact = contactRecords.filter(record => {
@@ -229,7 +259,7 @@ class CreditorContactService {
             return {
                 success: true,
                 client_reference: clientReference,
-                zendesk_user_id: zendeskUser.id,
+                zendesk_user_id: zendeskUser?.id || null,
                 main_ticket_id: mainTicket.id,
                 main_ticket_subject: mainTicket.subject,
                 tickets_created: 1, // Only one main ticket

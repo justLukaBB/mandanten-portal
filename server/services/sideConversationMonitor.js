@@ -1,5 +1,6 @@
 const ZendeskService = require('./zendeskService');
 const CreditorContactService = require('./creditorContactService');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
 
 /**
  * Side Conversation Monitor
@@ -246,9 +247,17 @@ class SideConversationMonitor {
             }
 
             console.log(`🔍 Checking Side Conversations for client ${clientReference} (${session.sideConversations.length} conversations)`);
-            
+
             if (!this.zendeskService.isConfigured()) {
                 console.log('⚠️ Zendesk service not configured, skipping check');
+                return;
+            }
+
+            // Check Kanzlei-level Zendesk access
+            const Client = require('../models/Client');
+            const client = await Client.findOne({ aktenzeichen: clientReference });
+            if (client && !(await hasZendeskForClient(client))) {
+                console.log('📋 Zendesk disabled for this Kanzlei — skipping side conversation monitoring');
                 return;
             }
 

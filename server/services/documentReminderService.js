@@ -1,6 +1,9 @@
 const Client = require('../models/Client');
 const ZendeskService = require('./zendeskService');
 const { v4: uuidv4 } = require('uuid');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
+const emailService = require('./emailService');
+const activityLogService = require('./activityLogService');
 
 class DocumentReminderService {
   constructor() {
@@ -92,10 +95,13 @@ class DocumentReminderService {
 
       let zendeskUpdateResult = null;
 
+      // Check if this Kanzlei has Zendesk enabled
+      const hasZendesk = await hasZendeskForClient(client) && this.zendeskService.isConfigured();
+
       // Add internal comment to existing ticket if Zendesk is configured
-      if (this.zendeskService.isConfigured() && originalTicket.ticket_id) {
+      if (hasZendesk && originalTicket.ticket_id) {
         console.log(`💬 Adding document reminder comment to ticket ${originalTicket.ticket_id}...`);
-        
+
         // First add internal comment
         zendeskUpdateResult = await this.zendeskService.addInternalComment(originalTicket.ticket_id, {
           content: reminderContent,
@@ -104,14 +110,14 @@ class DocumentReminderService {
 
         if (zendeskUpdateResult.success) {
           console.log(`✅ Document reminder added to ticket ${originalTicket.ticket_id}`);
-          
+
           // Now send email via side conversation
           console.log(`📧 Sending reminder email via side conversation...`);
 
           const urgencyText = reminderCount >= 3 ? 'DRINGEND - LETZTE ERINNERUNG' : reminderCount >= 2 ? 'WICHTIG' : '';
           const emailSubject = `${urgencyText ? urgencyText + ' ' : ''}Erinnerung: Dokumente benötigt - Aktenzeichen ${client.aktenzeichen}`;
           const emailBody = this.generateReminderEmailBody(client, reminderCount, urgencyText);
-          
+
           const sideConversationResult = await this.zendeskService.createSideConversation(
             originalTicket.ticket_id,
             {
@@ -122,7 +128,7 @@ class DocumentReminderService {
               internalNote: false // We already added the internal note above
             }
           );
-          
+
           if (sideConversationResult.success) {
             console.log(`✅ Reminder email sent via side conversation to ${client.email}`);
           } else {
@@ -131,6 +137,17 @@ class DocumentReminderService {
         } else {
           console.error(`❌ Failed to add reminder to ticket: ${zendeskUpdateResult.error}`);
         }
+      } else if (!hasZendesk) {
+        // No Zendesk — send reminder email directly via Resend
+        console.log('📋 Zendesk disabled for this Kanzlei — sending document reminder via email');
+        const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
+        const clientName = `${client.firstName} ${client.lastName}`;
+        await emailService.sendDocumentRequestEmail(client.email, clientName, portalUrl);
+        await activityLogService.log(client.kanzleiId, client.aktenzeichen, 'document_reminder_sent', {
+          method: 'email',
+          email: client.email,
+          reminder_count: reminderCount
+        });
       }
 
       // Update client record with reminder information
@@ -340,8 +357,9 @@ Nächste Erinnerung in ${this.reminderIntervalDays} Tagen, falls keine Dokumente
 
         await client.save();
 
-        // Notify Zendesk if configured
-        if (this.zendeskService.isConfigured() && client.zendesk_ticket_id) {
+        // Notify Zendesk if configured and enabled for this Kanzlei
+        const hasZendeskForUpload = await hasZendeskForClient(client) && this.zendeskService.isConfigured();
+        if (hasZendeskForUpload && client.zendesk_ticket_id) {
           await this.zendeskService.addInternalComment(client.zendesk_ticket_id, {
             content: `✅ **DOKUMENTE HOCHGELADEN**\n\n👤 **Mandant:** ${client.firstName} ${client.lastName}\n📄 **Dokumente:** ${client.documents.length} hochgeladen\n⏱️ **Nach Erinnerungen:** ${client.document_reminder_count || 0}\n\n🔄 **Automatische Verarbeitung gestartet**\nDie AI-Analyse läuft jetzt. Sie erhalten eine Benachrichtigung wenn abgeschlossen.`,
             tags: ['documents-uploaded', 'processing-started']

@@ -403,6 +403,17 @@ const createAdminDashboardController = ({ Client, databaseService, clientsData =
 
                 console.log(`✅ Created new client: ${newClient.firstName} ${newClient.lastName} (${newClient.aktenzeichen})`);
 
+                // Send welcome email (fire-and-forget — don't block the response)
+                const emailService = require('../services/emailService');
+                emailService.sendWelcomeEmail(newClient.email, {
+                    firstName: newClient.firstName,
+                    lastName: newClient.lastName,
+                    email: newClient.email,
+                    aktenzeichen: newClient.aktenzeichen,
+                }).catch(err => {
+                    console.error(`❌ Welcome email failed for ${newClient.email}:`, err.message);
+                });
+
                 res.status(201).json({
                     id: newClient.id,
                     _id: newClient._id,

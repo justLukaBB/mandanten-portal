@@ -1,5 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const ZendeskService = require('./zendeskService');
+const { hasZendeskForClient } = require('../utils/tenantConfig');
+const emailService = require('./emailService');
 
 /**
  * Welcome Email Service
@@ -17,9 +19,32 @@ class WelcomeEmailService {
     async sendWelcomeEmail(ticketId, userData) {
         try {
             console.log(`📧 Sending welcome email to ${userData.firstName} ${userData.lastName} (${userData.email})`);
-            
+
+            // Check if this Kanzlei has Zendesk enabled
+            const hasZendesk = userData.kanzleiId
+                ? await hasZendeskForClient({ kanzleiId: userData.kanzleiId }) && this.zendeskService.isConfigured()
+                : this.zendeskService.isConfigured();
+
+            if (!hasZendesk) {
+                // No Zendesk — send welcome email directly via Resend
+                console.log('📋 Zendesk disabled for this Kanzlei — sending welcome email via Resend');
+                const result = await emailService.sendWelcomeEmail(userData.email, {
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    email: userData.email,
+                    aktenzeichen: userData.aktenzeichen
+                });
+
+                return {
+                    success: result.success,
+                    email: userData.email,
+                    method: 'resend',
+                    comment_added: false
+                };
+            }
+
             const emailSubject = "🧾 Ihr Zugang zum Mandantenportal";
-            
+
             // Generate both plain text and HTML email
             const plainTextBody = this.generatePlainTextWelcomeEmail(userData);
             const htmlBody = this.generateHTMLWelcomeEmail(userData);
@@ -36,7 +61,7 @@ class WelcomeEmailService {
             if (response.success) {
                 console.log(`✅ Welcome email sent successfully to ${userData.email} via public comment`);
                 console.log(`📝 Ticket ID: ${ticketId}`);
-                
+
                 return {
                     success: true,
                     ticket_id: ticketId,
