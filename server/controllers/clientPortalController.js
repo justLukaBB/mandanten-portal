@@ -500,7 +500,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 }
 
                 // Generate verification code
-                const { code, expiresInSeconds } = verificationCodeService.createCode(normalizedAktenzeichen, foundClient.email);
+                const { code, expiresInSeconds } = await verificationCodeService.createCode(normalizedAktenzeichen, foundClient.email);
 
                 // Send email
                 const emailResult = await emailService.sendVerificationCode(foundClient.email, code, 5);
@@ -560,7 +560,7 @@ const createClientPortalController = ({ Client, getClient, safeClientUpdate }) =
                 console.log(`🔐 Verification attempt for: ${normalizedAktenzeichen}`);
 
                 // Verify the code
-                const verificationResult = verificationCodeService.verifyCode(normalizedAktenzeichen, normalizedCode);
+                const verificationResult = await verificationCodeService.verifyCode(normalizedAktenzeichen, normalizedCode);
 
                 if (!verificationResult.valid) {
                     console.log(`❌ Verification failed for ${normalizedAktenzeichen}: ${verificationResult.error}`);

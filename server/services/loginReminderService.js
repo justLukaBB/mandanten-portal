@@ -20,14 +20,20 @@ class LoginReminderService {
       console.log('🔄 Starting login reminder check...');
       
       // Find clients who need login reminders (no login after 7 days)
+      // Exclude Zendesk-originating clients — they receive comms through Zendesk
       const clientsNeedingLoginReminder = await Client.find({
         portal_link_sent: true,
-        portal_link_sent_at: { 
-          $lte: new Date(Date.now() - this.loginReminderDays * 24 * 60 * 60 * 1000) 
+        portal_link_sent_at: {
+          $lte: new Date(Date.now() - this.loginReminderDays * 24 * 60 * 60 * 1000)
         },
         last_login: null, // Never logged in
         login_reminder_sent: { $ne: true }, // No login reminder sent yet
-        current_status: { $in: ['created', 'portal_access_sent'] }
+        current_status: { $in: ['created', 'portal_access_sent'] },
+        $or: [
+          { zendesk_ticket_id: { $exists: false } },
+          { zendesk_ticket_id: null },
+          { zendesk_ticket_id: '' }
+        ]
       });
 
       // Find clients who logged in but haven't uploaded documents (7 days after login)
@@ -138,8 +144,8 @@ class LoginReminderService {
             console.log(`✅ Login reminder email sent to ${client.email}`);
           }
         }
-      } else if (!hasZendesk) {
-        // No Zendesk — send login reminder email directly via Resend
+      } else if (!hasZendesk && !client.zendesk_ticket_id) {
+        // No Zendesk AND not a Zendesk-originating client — send login reminder via Resend
         console.log('📋 Zendesk disabled for this Kanzlei — sending login reminder via email');
         const portalUrl = `${process.env.FRONTEND_URL || 'https://mandanten-portal.onrender.com'}/login`;
         await emailService.sendWelcomeEmail(client.email, {

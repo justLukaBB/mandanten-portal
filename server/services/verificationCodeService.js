@@ -1,24 +1,17 @@
 const crypto = require('crypto');
+const VerificationCode = require('../models/VerificationCode');
 
 /**
  * VerificationCodeService
  * Manages 6-digit verification codes for login flow
- * - In-memory storage with 5-minute TTL
+ * - MongoDB storage with TTL index (survives server restarts)
  * - Max 3 verification attempts per code
- * - Auto-cleanup every 60 seconds
+ * - 5-minute expiration enforced by both app logic and MongoDB TTL
  */
 class VerificationCodeService {
   constructor() {
-    // Map: aktenzeichen -> { code, expiresAt, attempts, email }
-    this.codes = new Map();
-
-    // Configuration
     this.CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
     this.MAX_ATTEMPTS = 3;
-    this.CLEANUP_INTERVAL_MS = 60 * 1000; // 60 seconds
-
-    // Start auto-cleanup
-    this.startCleanupInterval();
   }
 
   /**
@@ -26,7 +19,6 @@ class VerificationCodeService {
    * @returns {string} 6-digit numeric code
    */
   generateCode() {
-    // crypto.randomInt generates a cryptographically secure random integer
     const code = crypto.randomInt(100000, 999999);
     return code.toString();
   }
@@ -37,19 +29,25 @@ class VerificationCodeService {
    * @param {string} email - The client's email address
    * @returns {{ code: string, expiresAt: Date, expiresInSeconds: number }}
    */
-  createCode(aktenzeichen, email) {
+  async createCode(aktenzeichen, email) {
     const code = this.generateCode();
+    const normalizedAktenzeichen = aktenzeichen.toUpperCase();
     const expiresAt = new Date(Date.now() + this.CODE_TTL_MS);
 
-    this.codes.set(aktenzeichen.toUpperCase(), {
-      code,
-      expiresAt,
-      attempts: 0,
-      email: email.toLowerCase(),
-      createdAt: new Date()
-    });
+    // Upsert: replace any existing code for this aktenzeichen
+    await VerificationCode.findOneAndUpdate(
+      { aktenzeichen: normalizedAktenzeichen },
+      {
+        aktenzeichen: normalizedAktenzeichen,
+        code,
+        email: email.toLowerCase(),
+        attempts: 0,
+        createdAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
 
-    console.log(`🔐 Verification code created for ${aktenzeichen} (expires: ${expiresAt.toISOString()})`);
+    console.log(`Verification code created for ${aktenzeichen} (expires: ${expiresAt.toISOString()})`);
 
     return {
       code,
@@ -64,9 +62,11 @@ class VerificationCodeService {
    * @param {string} code - The code to verify
    * @returns {{ valid: boolean, error?: string, attemptsRemaining?: number }}
    */
-  verifyCode(aktenzeichen, code) {
+  async verifyCode(aktenzeichen, code) {
     const normalizedAktenzeichen = aktenzeichen.toUpperCase();
-    const entry = this.codes.get(normalizedAktenzeichen);
+    const normalizedCode = String(code).trim();
+
+    const entry = await VerificationCode.findOne({ aktenzeichen: normalizedAktenzeichen });
 
     // Check if code exists
     if (!entry) {
@@ -76,9 +76,10 @@ class VerificationCodeService {
       };
     }
 
-    // Check if code is expired
-    if (new Date() > entry.expiresAt) {
-      this.codes.delete(normalizedAktenzeichen);
+    // Check if code is expired (app-level check, TTL index handles cleanup)
+    const expiresAt = new Date(entry.createdAt.getTime() + this.CODE_TTL_MS);
+    if (new Date() > expiresAt) {
+      await VerificationCode.deleteOne({ _id: entry._id });
       return {
         valid: false,
         error: 'Der Code ist abgelaufen. Bitte fordern Sie einen neuen Code an.'
@@ -87,22 +88,25 @@ class VerificationCodeService {
 
     // Check max attempts
     if (entry.attempts >= this.MAX_ATTEMPTS) {
-      this.codes.delete(normalizedAktenzeichen);
+      await VerificationCode.deleteOne({ _id: entry._id });
       return {
         valid: false,
         error: 'Maximale Anzahl an Versuchen erreicht. Bitte fordern Sie einen neuen Code an.'
       };
     }
 
-    // Increment attempts
-    entry.attempts += 1;
+    // Increment attempts atomically
+    await VerificationCode.updateOne(
+      { _id: entry._id },
+      { $inc: { attempts: 1 } }
+    );
 
     // Verify code
-    if (entry.code !== code) {
-      const attemptsRemaining = this.MAX_ATTEMPTS - entry.attempts;
+    if (entry.code !== normalizedCode) {
+      const attemptsRemaining = this.MAX_ATTEMPTS - (entry.attempts + 1);
 
       if (attemptsRemaining <= 0) {
-        this.codes.delete(normalizedAktenzeichen);
+        await VerificationCode.deleteOne({ _id: entry._id });
         return {
           valid: false,
           error: 'Maximale Anzahl an Versuchen erreicht. Bitte fordern Sie einen neuen Code an.',
@@ -118,8 +122,8 @@ class VerificationCodeService {
     }
 
     // Code is valid - remove it (one-time use)
-    this.codes.delete(normalizedAktenzeichen);
-    console.log(`✅ Verification code verified successfully for ${aktenzeichen}`);
+    await VerificationCode.deleteOne({ _id: entry._id });
+    console.log(`Verification code verified successfully for ${aktenzeichen}`);
 
     return {
       valid: true
@@ -131,12 +135,13 @@ class VerificationCodeService {
    * @param {string} aktenzeichen - The client's file number
    * @returns {boolean}
    */
-  hasActiveCode(aktenzeichen) {
-    const entry = this.codes.get(aktenzeichen.toUpperCase());
+  async hasActiveCode(aktenzeichen) {
+    const entry = await VerificationCode.findOne({ aktenzeichen: aktenzeichen.toUpperCase() });
     if (!entry) return false;
 
-    if (new Date() > entry.expiresAt) {
-      this.codes.delete(aktenzeichen.toUpperCase());
+    const expiresAt = new Date(entry.createdAt.getTime() + this.CODE_TTL_MS);
+    if (new Date() > expiresAt) {
+      await VerificationCode.deleteOne({ _id: entry._id });
       return false;
     }
 
@@ -148,13 +153,14 @@ class VerificationCodeService {
    * @param {string} aktenzeichen - The client's file number
    * @returns {number|null} Seconds until expiration, or null if no active code
    */
-  getTimeUntilExpiration(aktenzeichen) {
-    const entry = this.codes.get(aktenzeichen.toUpperCase());
+  async getTimeUntilExpiration(aktenzeichen) {
+    const entry = await VerificationCode.findOne({ aktenzeichen: aktenzeichen.toUpperCase() });
     if (!entry) return null;
 
-    const remaining = entry.expiresAt.getTime() - Date.now();
+    const expiresAt = new Date(entry.createdAt.getTime() + this.CODE_TTL_MS);
+    const remaining = expiresAt.getTime() - Date.now();
     if (remaining <= 0) {
-      this.codes.delete(aktenzeichen.toUpperCase());
+      await VerificationCode.deleteOne({ _id: entry._id });
       return null;
     }
 
@@ -162,54 +168,12 @@ class VerificationCodeService {
   }
 
   /**
-   * Remove expired codes (called periodically)
-   */
-  cleanup() {
-    const now = new Date();
-    let removed = 0;
-
-    for (const [aktenzeichen, entry] of this.codes.entries()) {
-      if (now > entry.expiresAt) {
-        this.codes.delete(aktenzeichen);
-        removed++;
-      }
-    }
-
-    if (removed > 0) {
-      console.log(`🧹 Cleaned up ${removed} expired verification code(s)`);
-    }
-  }
-
-  /**
-   * Start periodic cleanup
-   */
-  startCleanupInterval() {
-    this.cleanupInterval = setInterval(() => {
-      this.cleanup();
-    }, this.CLEANUP_INTERVAL_MS);
-
-    // Don't prevent process from exiting
-    if (this.cleanupInterval.unref) {
-      this.cleanupInterval.unref();
-    }
-  }
-
-  /**
-   * Stop the cleanup interval (for testing/shutdown)
-   */
-  stopCleanupInterval() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-  }
-
-  /**
    * Get statistics (for debugging/monitoring)
    */
-  getStats() {
+  async getStats() {
+    const activeCodesCount = await VerificationCode.countDocuments();
     return {
-      activeCodesCount: this.codes.size,
+      activeCodesCount,
       config: {
         ttlMinutes: this.CODE_TTL_MS / 60000,
         maxAttempts: this.MAX_ATTEMPTS
