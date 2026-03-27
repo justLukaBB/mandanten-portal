@@ -245,10 +245,12 @@ class ZendeskWebhookController {
                 });
             }
 
-            // Check if client already exists
-            let client = await Client.findOne({
-                $or: [{ email: email }, { aktenzeichen: aktenzeichen }],
-            });
+            // Check if client already exists — match by aktenzeichen first (primary key),
+            // only fall back to email if no aktenzeichen match found
+            let client = await Client.findOne({ aktenzeichen: aktenzeichen });
+            if (!client) {
+                client = await Client.findOne({ email: email, aktenzeichen: { $in: ['', null] } });
+            }
 
             if (client) {
                 console.log(
@@ -343,13 +345,12 @@ class ZendeskWebhookController {
                 );
 
                 // Create new client
-                // Get default kanzlei for webhook-created clients
-                const Kanzlei = require('../models/Kanzlei');
-                const defaultKanzlei = await Kanzlei.findOne({ is_active: true }).sort({ created_at: 1 });
+                // Zendesk-created clients go to RA Scuric kanzlei
+                const ZENDESK_KANZLEI_ID = '6f5fc836-72f9-4e08-8e88-062f933d77a6';
 
                 client = new Client({
                     id: uuidv4(),
-                    kanzleiId: defaultKanzlei?.id || 'default',
+                    kanzleiId: ZENDESK_KANZLEI_ID,
                     aktenzeichen: aktenzeichen,
                     firstName: firstName,
                     lastName: lastName,
